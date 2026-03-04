@@ -17,3 +17,5 @@ dist/
 **__pycache__/
 *.pyc
 IMPROVEMENT_PLAN.md
+# Lock artifacts from safe_write
+*.lock
