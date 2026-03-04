@@ -1,0 +1,1072 @@
+#!/usr/bin/env python3
+import argparse
+import hashlib
+import importlib.machinery
+import importlib.util
+import json
+import math
+import os
+import shutil
+import statistics
+import subprocess
+import sys
+import tempfile
+import time
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+EXIT_BENEFICIAL = 0
+EXIT_REGRESSION = 2
+EXIT_NEUTRAL = 3
+EXIT_INVALID_SETUP = 4
+
+EPSILON = 1e-9
+QUALITY_KEYS = ("hit1", "hitk", "mrr")
+RETRIEVAL_MODES = (
+    "legacy",
+    "two_stage",
+    "compressed_attention",
+    "scope_type_prefilter",
+    "precomputed_index",
+    "progressive_disclosure",
+    "semantic_hybrid",
+)
+EMBED_BACKENDS = ("local", "openai")
+
+SCRIPT_PATH = Path(__file__).resolve()
+ROOT_DIR = SCRIPT_PATH.parent.parent
+
+
+class InvalidSetupError(Exception):
+    pass
+
+
+@dataclass
+class LatencySummary:
+    count: int
+    min_ms: float
+    max_ms: float
+    median_ms: float
+    mean_ms: float
+    p95_ms: float
+
+    def to_dict(self) -> dict[str, float | int]:
+        return {
+            "count": self.count,
+            "min_ms": self.min_ms,
+            "max_ms": self.max_ms,
+            "median_ms": self.median_ms,
+            "mean_ms": self.mean_ms,
+            "p95_ms": self.p95_ms,
+        }
+
+
+def utc_now_iso() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def maybe_reexec_in_repo_venv() -> None:
+    if os.environ.get("COG_LEDGER_VENV_REEXEC") == "1":
+        return
+    venv_dir = ROOT_DIR / ".venv"
+    venv_python = venv_dir / "bin" / "python"
+    if not venv_python.is_file():
+        return
+    try:
+        in_target_venv = Path(sys.prefix).resolve() == venv_dir.resolve()
+    except Exception:
+        return
+    if in_target_venv:
+        return
+    env = os.environ.copy()
+    env["COG_LEDGER_VENV_REEXEC"] = "1"
+    env["VIRTUAL_ENV"] = str(venv_dir.resolve())
+    env["PATH"] = f"{venv_dir / 'bin'}:{env.get('PATH', '')}"
+    os.execve(
+        str(venv_python),
+        [str(venv_python), str(SCRIPT_PATH), *sys.argv[1:]],
+        env,
+    )
+
+
+def run_git(repo_root: Path, *args: str) -> str:
+    process = subprocess.run(
+        ["git", *args],
+        cwd=str(repo_root),
+        capture_output=True,
+        text=True,
+    )
+    if process.returncode != 0:
+        stderr = process.stderr.strip()
+        stdout = process.stdout.strip()
+        message = stderr or stdout or f"git {' '.join(args)} failed"
+        raise InvalidSetupError(message)
+    return process.stdout.strip()
+
+
+def ensure_git_available() -> None:
+    if shutil.which("git") is None:
+        raise InvalidSetupError("git is not available on PATH")
+
+
+def resolve_ref(repo_root: Path, ref: str) -> str:
+    return run_git(repo_root, "rev-parse", "--verify", ref)
+
+
+def normalize_cases_path(repo_root: Path, cases_arg: str) -> Path:
+    candidate = Path(cases_arg)
+    if candidate.is_absolute():
+        try:
+            return candidate.resolve().relative_to(repo_root.resolve())
+        except ValueError as exc:
+            raise InvalidSetupError(
+                "--cases absolute path must point inside the ledger repository"
+            ) from exc
+    return candidate
+
+
+def resolve_embed_backend(embed_backend: str | None) -> str:
+    backend = str(embed_backend or "").strip().lower() or "local"
+    if backend not in EMBED_BACKENDS:
+        raise InvalidSetupError(
+            f"Unsupported embedding backend: {backend} (expected one of {', '.join(EMBED_BACKENDS)})"
+        )
+    return backend
+
+
+def load_module_from_script(script_path: Path, module_name: str) -> Any:
+    """Load an extensionless Python script as a module."""
+    loader = importlib.machinery.SourceFileLoader(module_name, str(script_path))
+    spec = importlib.util.spec_from_file_location(module_name, str(script_path), loader=loader)
+    if spec is None or spec.loader is None:
+        raise InvalidSetupError(f"Could not load module spec from {script_path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(8192), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def collect_corpus_paths(worktree_root: Path, cases_rel_path: Path) -> list[Path]:
+    patterns = [
+        "notes/02_facts/**/*.md",
+        "notes/03_preferences/**/*.md",
+        "notes/04_goals/**/*.md",
+        "notes/05_open_loops/**/*.md",
+        "notes/06_concepts/**/*.md",
+        "notes/08_indices/aliases.json",
+    ]
+
+    files: set[Path] = set()
+    for pattern in patterns:
+        for path in sorted(worktree_root.glob(pattern)):
+            if path.is_file():
+                files.add(path.resolve())
+
+    cases_path = (worktree_root / cases_rel_path).resolve()
+    if not cases_path.is_file():
+        raise InvalidSetupError(
+            f"Cases file not found in worktree: {cases_rel_path.as_posix()}"
+        )
+    files.add(cases_path)
+
+    return sorted(files, key=lambda item: item.as_posix())
+
+
+def build_corpus_file_map(worktree_root: Path, cases_rel_path: Path) -> dict[str, str]:
+    file_map: dict[str, str] = {}
+    for path in collect_corpus_paths(worktree_root, cases_rel_path):
+        rel = path.relative_to(worktree_root.resolve()).as_posix()
+        file_map[rel] = sha256_file(path)
+    return file_map
+
+
+def compute_fingerprint(file_map: dict[str, str]) -> str:
+    digest = hashlib.sha256()
+    for rel_path in sorted(file_map):
+        digest.update(rel_path.encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(file_map[rel_path].encode("utf-8"))
+        digest.update(b"\n")
+    return digest.hexdigest()
+
+
+def compute_corpus_fingerprint(
+    worktree_root: Path, cases_rel_path: Path
+) -> dict[str, Any]:
+    file_map = build_corpus_file_map(worktree_root, cases_rel_path)
+    return {
+        "fingerprint": compute_fingerprint(file_map),
+        "file_count": len(file_map),
+        "file_map": file_map,
+    }
+
+
+def diff_file_maps(
+    baseline_map: dict[str, str], candidate_map: dict[str, str]
+) -> dict[str, Any]:
+    baseline_keys = set(baseline_map.keys())
+    candidate_keys = set(candidate_map.keys())
+
+    added = sorted(candidate_keys - baseline_keys)
+    removed = sorted(baseline_keys - candidate_keys)
+    changed = sorted(
+        key
+        for key in (baseline_keys & candidate_keys)
+        if baseline_map[key] != candidate_map[key]
+    )
+
+    changed_details = [
+        {
+            "path": key,
+            "baseline_hash": baseline_map[key],
+            "candidate_hash": candidate_map[key],
+        }
+        for key in changed
+    ]
+
+    return {
+        "added": added,
+        "removed": removed,
+        "changed": changed_details,
+        "is_equal": not (added or removed or changed),
+    }
+
+
+def summarize_latency(samples_ms: list[float]) -> LatencySummary:
+    if not samples_ms:
+        raise InvalidSetupError("No latency samples were recorded")
+
+    ordered = sorted(samples_ms)
+    p95_index = max(0, math.ceil(0.95 * len(ordered)) - 1)
+
+    return LatencySummary(
+        count=len(ordered),
+        min_ms=min(ordered),
+        max_ms=max(ordered),
+        median_ms=statistics.median(ordered),
+        mean_ms=statistics.mean(ordered),
+        p95_ms=ordered[p95_index],
+    )
+
+
+def run_quality_eval(
+    module: Any,
+    cases_path: Path,
+    k: int,
+    retrieval_mode: str,
+    embed_backend: str = "local",
+    embed_model: str | None = None,
+) -> dict[str, float | int]:
+    result = invoke_run_eval(
+        module,
+        str(cases_path),
+        k,
+        retrieval_mode,
+        embed_backend=embed_backend,
+        embed_model=embed_model,
+    )
+    return {
+        "hit1": float(result.get("hit1", 0.0)),
+        "hitk": float(result.get("hitk", 0.0)),
+        "mrr": float(result.get("mrr", 0.0)),
+        "cases": int(result.get("cases", 0)),
+        "k": int(result.get("k", k)),
+    }
+
+
+def reset_module_cache(module: Any) -> None:
+    clear_fn = getattr(module, "clear_candidate_cache", None)
+    if callable(clear_fn):
+        clear_fn()
+        return
+    if hasattr(module, "_CANDIDATE_CACHE"):
+        setattr(module, "_CANDIDATE_CACHE", None)
+
+
+def probe_eval_latency(
+    module: Any,
+    cases_path: Path,
+    k: int,
+    runs: int,
+    retrieval_mode: str,
+    embed_backend: str = "local",
+    embed_model: str | None = None,
+) -> dict[str, Any]:
+    samples: list[float] = []
+    for _ in range(runs):
+        reset_module_cache(module)
+        start = time.perf_counter_ns()
+        invoke_run_eval(
+            module,
+            str(cases_path),
+            k,
+            retrieval_mode,
+            embed_backend=embed_backend,
+            embed_model=embed_model,
+        )
+        elapsed_ms = (time.perf_counter_ns() - start) / 1_000_000.0
+        samples.append(elapsed_ms)
+
+    summary = summarize_latency(samples)
+    return {"summary": summary.to_dict(), "samples_ms": samples}
+
+
+def probe_query_latency(
+    module: Any,
+    cases_path: Path,
+    runs: int,
+    retrieval_mode: str,
+    cold_query: bool = False,
+    embed_backend: str = "local",
+    embed_model: str | None = None,
+) -> dict[str, Any]:
+    cases = module.parse_eval_cases(str(cases_path))
+    if not cases:
+        raise InvalidSetupError("No eval cases found for query latency probe")
+
+    samples: list[float] = []
+    for _ in range(runs):
+        if not cold_query:
+            reset_module_cache(module)
+        for case in cases:
+            query = case.get("query", "")
+            scope = case.get("scope", "all")
+            if cold_query:
+                reset_module_cache(module)
+            start = time.perf_counter_ns()
+            invoke_rank_query(
+                module,
+                query,
+                scope,
+                50,
+                retrieval_mode,
+                embed_backend=embed_backend,
+                embed_model=embed_model,
+            )
+            elapsed_ms = (time.perf_counter_ns() - start) / 1_000_000.0
+            samples.append(elapsed_ms)
+
+    summary = summarize_latency(samples)
+    return {
+        "summary": summary.to_dict(),
+        "samples_ms": samples,
+        "case_count": len(cases),
+        "runs": runs,
+        "cold_query": bool(cold_query),
+    }
+
+
+def invoke_run_eval(
+    module: Any,
+    cases_path: str,
+    k: int,
+    retrieval_mode: str,
+    embed_backend: str = "local",
+    embed_model: str | None = None,
+) -> Any:
+    try:
+        return module.run_eval(
+            cases_path,
+            k=k,
+            retrieval_mode=retrieval_mode,
+            embed_backend=embed_backend,
+            embed_model=embed_model,
+        )
+    except TypeError as exc:
+        message = str(exc)
+        if ("embed_backend" in message) or ("embed_model" in message):
+            try:
+                return module.run_eval(cases_path, k=k, retrieval_mode=retrieval_mode)
+            except TypeError as legacy_exc:
+                if "retrieval_mode" not in str(legacy_exc):
+                    raise
+                return module.run_eval(cases_path, k=k)
+        if "retrieval_mode" in message:
+            return module.run_eval(cases_path, k=k)
+        raise
+
+
+def invoke_rank_query(
+    module: Any,
+    query: str,
+    scope: str,
+    limit: int,
+    retrieval_mode: str,
+    embed_backend: str = "local",
+    embed_model: str | None = None,
+) -> Any:
+    try:
+        return module.rank_query(
+            query,
+            scope=scope,
+            limit=limit,
+            retrieval_mode=retrieval_mode,
+            embed_backend=embed_backend,
+            embed_model=embed_model,
+        )
+    except TypeError as exc:
+        message = str(exc)
+        if ("embed_backend" in message) or ("embed_model" in message):
+            try:
+                return module.rank_query(
+                    query,
+                    scope=scope,
+                    limit=limit,
+                    retrieval_mode=retrieval_mode,
+                )
+            except TypeError as legacy_exc:
+                if "retrieval_mode" not in str(legacy_exc):
+                    raise
+                return module.rank_query(query, scope=scope, limit=limit)
+        if "retrieval_mode" in message:
+            return module.rank_query(query, scope=scope, limit=limit)
+        raise
+
+
+def maybe_build_semantic_index(
+    module: Any,
+    retrieval_mode: str,
+    embed_backend: str,
+    embed_model: str | None,
+    side_label: str,
+) -> dict[str, Any]:
+    if retrieval_mode != "semantic_hybrid":
+        return {
+            "enabled": False,
+            "reason": "retrieval_mode_not_semantic_hybrid",
+        }
+
+    backend = resolve_embed_backend(embed_backend)
+    embeddings = None
+    load_fn = getattr(module, "load_embeddings_module", None)
+    if callable(load_fn):
+        try:
+            embeddings = load_fn()
+        except Exception as exc:
+            raise InvalidSetupError(
+                f"{side_label}: failed to load embeddings module for semantic_hybrid: {exc}"
+            ) from exc
+    else:
+        module_file = Path(getattr(module, "__file__", "")).resolve()
+        embeddings_path = module_file.parent / "ledger_embeddings.py"
+        if not embeddings_path.is_file():
+            raise InvalidSetupError(
+                f"{side_label}: semantic_hybrid requires {embeddings_path} in tested ref"
+            )
+        embeddings = load_module_from_script(
+            embeddings_path, f"ledger_embeddings_{side_label}_module"
+        )
+
+    resolved_model = str(embed_model).strip() if embed_model else embeddings.default_model_for_backend(backend)
+    try:
+        payload = embeddings.build_indices(
+            target="ledger",
+            backend=backend,
+            model=resolved_model,
+            write_manifest=False,
+            append_timeline=False,
+        )
+    except Exception as exc:
+        raise InvalidSetupError(
+            f"{side_label}: failed to build semantic index ({backend}/{resolved_model}): {exc}"
+        ) from exc
+
+    result = (payload.get("results") or [{}])[0]
+    return {
+        "enabled": True,
+        "backend": backend,
+        "model": str(result.get("model", resolved_model)),
+        "item_count": int(result.get("item_count", 0)),
+        "dims": int(result.get("dims", 0)),
+        "embedded_count": int(result.get("embedded_count", 0)),
+        "reused_count": int(result.get("reused_count", 0)),
+        "removed_count": int(result.get("removed_count", 0)),
+        "built_at": str(result.get("built_at", "")),
+    }
+
+
+def decide_outcome(
+    baseline_quality: dict[str, float],
+    candidate_quality: dict[str, float],
+    baseline_eval_p95_ms: float,
+    candidate_eval_p95_ms: float,
+    baseline_query_p95_ms: float,
+    candidate_query_p95_ms: float,
+    latency_tol_pct: float,
+    latency_tol_ms: float,
+) -> dict[str, Any]:
+    deltas = {
+        key: float(candidate_quality[key]) - float(baseline_quality[key])
+        for key in QUALITY_KEYS
+    }
+
+    regressed = [key for key in QUALITY_KEYS if deltas[key] < -EPSILON]
+    improved = [key for key in QUALITY_KEYS if deltas[key] > EPSILON]
+
+    if regressed:
+        return {
+            "decision": "regression",
+            "reason": f"quality regression detected in: {', '.join(regressed)}",
+            "exit_code": EXIT_REGRESSION,
+            "quality_deltas": deltas,
+            "regressed_metrics": regressed,
+            "improved_metrics": improved,
+            "latency": None,
+        }
+
+    if improved:
+        return {
+            "decision": "beneficial",
+            "reason": f"quality improved in: {', '.join(improved)}",
+            "exit_code": EXIT_BENEFICIAL,
+            "quality_deltas": deltas,
+            "regressed_metrics": regressed,
+            "improved_metrics": improved,
+            "latency": None,
+        }
+
+    eval_threshold = baseline_eval_p95_ms * (1.0 + latency_tol_pct) + latency_tol_ms
+    query_threshold = baseline_query_p95_ms * (1.0 + latency_tol_pct) + latency_tol_ms
+    eval_ok = candidate_eval_p95_ms <= (eval_threshold + EPSILON)
+    query_ok = candidate_query_p95_ms <= (query_threshold + EPSILON)
+
+    latency_info = {
+        "eval": {
+            "baseline_p95_ms": baseline_eval_p95_ms,
+            "candidate_p95_ms": candidate_eval_p95_ms,
+            "threshold_ms": eval_threshold,
+            "passed": eval_ok,
+        },
+        "query": {
+            "baseline_p95_ms": baseline_query_p95_ms,
+            "candidate_p95_ms": candidate_query_p95_ms,
+            "threshold_ms": query_threshold,
+            "passed": query_ok,
+        },
+    }
+
+    if eval_ok and query_ok:
+        return {
+            "decision": "beneficial",
+            "reason": "quality tied and candidate met latency tie-break thresholds",
+            "exit_code": EXIT_BENEFICIAL,
+            "quality_deltas": deltas,
+            "regressed_metrics": regressed,
+            "improved_metrics": improved,
+            "latency": latency_info,
+        }
+
+    return {
+        "decision": "neutral",
+        "reason": "quality tied but candidate failed latency tie-break thresholds",
+        "exit_code": EXIT_NEUTRAL,
+        "quality_deltas": deltas,
+        "regressed_metrics": regressed,
+        "improved_metrics": improved,
+        "latency": latency_info,
+    }
+
+
+def write_json(path: Path, payload: dict[str, Any]) -> None:
+    path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
+def format_ms(value: float) -> str:
+    return f"{value:.3f}"
+
+
+def build_markdown_report(payload: dict[str, Any]) -> str:
+    lines: list[str] = []
+    lines.append("# Ledger A/B Evaluation")
+    lines.append("")
+    lines.append(f"Generated: `{payload['generated_at']}`")
+    lines.append("")
+
+    decision = payload.get("decision", {})
+    lines.append(f"**Decision:** `{decision.get('decision', 'invalid_setup')}`")
+    lines.append(f"**Reason:** {decision.get('reason', 'n/a')}")
+    lines.append("")
+
+    baseline = payload.get("baseline", {})
+    candidate = payload.get("candidate", {})
+
+    lines.append("## Refs")
+    lines.append("")
+    lines.append("| Side | Ref | Commit | Mode | Embed |")
+    lines.append("| --- | --- | --- | --- | --- |")
+    baseline_embed = (
+        f"{baseline.get('embed_backend', 'local')}/{baseline.get('embed_model') or '(default)'}"
+    )
+    candidate_embed = (
+        f"{candidate.get('embed_backend', 'local')}/{candidate.get('embed_model') or '(default)'}"
+    )
+    lines.append(
+        f"| Baseline | `{baseline.get('ref', '')}` | `{baseline.get('commit', '')}` | `{baseline.get('retrieval_mode', 'legacy')}` | `{baseline_embed}` |"
+    )
+    lines.append(
+        f"| Candidate | `{candidate.get('ref', '')}` | `{candidate.get('commit', '')}` | `{candidate.get('retrieval_mode', 'legacy')}` | `{candidate_embed}` |"
+    )
+    lines.append("")
+
+    if baseline.get("quality") and candidate.get("quality"):
+        lines.append("## Quality")
+        lines.append("")
+        lines.append("| Metric | Baseline | Candidate | Delta |")
+        lines.append("| --- | ---: | ---: | ---: |")
+        quality_deltas = decision.get("quality_deltas", {})
+        for metric in QUALITY_KEYS:
+            b_val = float(baseline["quality"].get(metric, 0.0))
+            c_val = float(candidate["quality"].get(metric, 0.0))
+            delta = float(quality_deltas.get(metric, c_val - b_val))
+            lines.append(
+                f"| {metric} | {b_val:.6f} | {c_val:.6f} | {delta:+.6f} |"
+            )
+        lines.append("")
+
+    if baseline.get("latency") and candidate.get("latency"):
+        lines.append("## Latency")
+        lines.append("")
+        lines.append("| Probe | Baseline p95 (ms) | Candidate p95 (ms) | Threshold (ms) | Pass |")
+        lines.append("| --- | ---: | ---: | ---: | --- |")
+
+        tie = decision.get("latency") or {}
+        eval_tie = tie.get("eval", {})
+        query_tie = tie.get("query", {})
+
+        base_eval_p95 = float(baseline["latency"]["eval"]["summary"]["p95_ms"])
+        cand_eval_p95 = float(candidate["latency"]["eval"]["summary"]["p95_ms"])
+        base_query_p95 = float(baseline["latency"]["query"]["summary"]["p95_ms"])
+        cand_query_p95 = float(candidate["latency"]["query"]["summary"]["p95_ms"])
+
+        eval_threshold = float(eval_tie.get("threshold_ms", 0.0))
+        query_threshold = float(query_tie.get("threshold_ms", 0.0))
+
+        eval_pass = "yes" if eval_tie.get("passed") else "no"
+        query_pass = "yes" if query_tie.get("passed") else "no"
+
+        lines.append(
+            "| eval run | "
+            f"{format_ms(base_eval_p95)} | {format_ms(cand_eval_p95)} | "
+            f"{format_ms(eval_threshold)} | {eval_pass} |"
+        )
+        lines.append(
+            "| query run | "
+            f"{format_ms(base_query_p95)} | {format_ms(cand_query_p95)} | "
+            f"{format_ms(query_threshold)} | {query_pass} |"
+        )
+        lines.append("")
+
+    if payload.get("corpus_diff"):
+        corpus_diff = payload["corpus_diff"]
+        lines.append("## Corpus")
+        lines.append("")
+        lines.append(
+            f"Fingerprints equal: **{'yes' if corpus_diff.get('is_equal') else 'no'}**"
+        )
+
+        added = corpus_diff.get("added", [])
+        removed = corpus_diff.get("removed", [])
+        changed = corpus_diff.get("changed", [])
+
+        if added:
+            lines.append("")
+            lines.append("Added paths in candidate:")
+            for item in added:
+                lines.append(f"- `{item}`")
+
+        if removed:
+            lines.append("")
+            lines.append("Removed paths from baseline:")
+            for item in removed:
+                lines.append(f"- `{item}`")
+
+        if changed:
+            lines.append("")
+            lines.append("Changed paths:")
+            for item in changed:
+                lines.append(f"- `{item['path']}`")
+
+        lines.append("")
+
+    lines.append("## Gate")
+    lines.append("")
+    lines.append(
+        "- Fail as `regression` if any of `hit1`, `hitk`, `mrr` decreases by more than 1e-9."
+    )
+    lines.append(
+        "- If quality improves on any metric (with no regressions), mark `beneficial`."
+    )
+    lines.append(
+        "- If quality ties, require candidate p95 for both eval/query to stay within threshold."
+    )
+
+    return "\n".join(lines) + "\n"
+
+
+def write_markdown(path: Path, payload: dict[str, Any]) -> None:
+    path.write_text(build_markdown_report(payload), encoding="utf-8")
+
+
+def create_worktree(repo_root: Path, ref: str, target_path: Path) -> None:
+    run_git(repo_root, "worktree", "add", "--detach", str(target_path), ref)
+
+
+def remove_worktree(repo_root: Path, target_path: Path) -> None:
+    try:
+        run_git(repo_root, "worktree", "remove", "--force", str(target_path))
+    except InvalidSetupError:
+        pass
+
+
+def build_argument_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="A/B harness for Cognitive Ledger retrieval quality and latency"
+    )
+    parser.add_argument("--baseline-ref", default="main")
+    parser.add_argument("--candidate-ref", default="HEAD")
+    parser.add_argument("--baseline-mode", choices=RETRIEVAL_MODES, default="legacy")
+    parser.add_argument("--candidate-mode", choices=RETRIEVAL_MODES, default="legacy")
+    parser.add_argument(
+        "--baseline-embed-backend",
+        choices=EMBED_BACKENDS,
+        default="local",
+        help="Embedding backend used when baseline mode is semantic_hybrid",
+    )
+    parser.add_argument(
+        "--candidate-embed-backend",
+        choices=EMBED_BACKENDS,
+        default="local",
+        help="Embedding backend used when candidate mode is semantic_hybrid",
+    )
+    parser.add_argument(
+        "--baseline-embed-model",
+        default=None,
+        help="Optional embedding model override for baseline semantic_hybrid",
+    )
+    parser.add_argument(
+        "--candidate-embed-model",
+        default=None,
+        help="Optional embedding model override for candidate semantic_hybrid",
+    )
+    parser.add_argument(
+        "--cases",
+        default="notes/08_indices/retrieval_eval_cases.yaml",
+        help="Repo-relative path to retrieval eval cases",
+    )
+    parser.add_argument("--k", type=int, default=3)
+    parser.add_argument(
+        "--runs",
+        type=int,
+        help="Set both --eval-runs and --query-runs to the same value",
+    )
+    parser.add_argument("--eval-runs", type=int, default=5)
+    parser.add_argument("--query-runs", type=int, default=3)
+    parser.add_argument("--allow-corpus-diff", action="store_true")
+    parser.add_argument(
+        "--cold-query",
+        action="store_true",
+        help="Reset candidate cache before every query case (cold query latency probe)",
+    )
+    parser.add_argument("--latency-tol-pct", type=float, default=0.05)
+    parser.add_argument("--latency-tol-ms", type=float, default=2.0)
+    parser.add_argument("--out-dir", help="Output directory for ab_eval.json and ab_eval.md")
+    return parser
+
+
+def run_harness(args: argparse.Namespace) -> int:
+    ensure_git_available()
+
+    script_path = Path(__file__).resolve()
+    repo_root = script_path.parent.parent.resolve()
+
+    eval_runs = args.eval_runs
+    query_runs = args.query_runs
+    if args.runs is not None:
+        eval_runs = args.runs
+        query_runs = args.runs
+
+    if args.k <= 0:
+        raise InvalidSetupError("--k must be > 0")
+    if eval_runs <= 0:
+        raise InvalidSetupError("--eval-runs must be > 0")
+    if query_runs <= 0:
+        raise InvalidSetupError("--query-runs must be > 0")
+    if args.latency_tol_pct < 0:
+        raise InvalidSetupError("--latency-tol-pct must be >= 0")
+    if args.latency_tol_ms < 0:
+        raise InvalidSetupError("--latency-tol-ms must be >= 0")
+
+    baseline_embed_backend = resolve_embed_backend(args.baseline_embed_backend)
+    candidate_embed_backend = resolve_embed_backend(args.candidate_embed_backend)
+    baseline_embed_model = (
+        str(args.baseline_embed_model).strip() if args.baseline_embed_model else None
+    )
+    candidate_embed_model = (
+        str(args.candidate_embed_model).strip() if args.candidate_embed_model else None
+    )
+
+    out_dir = Path(args.out_dir).resolve() if args.out_dir else Path(
+        tempfile.mkdtemp(prefix="ledger-ab-")
+    ).resolve()
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    json_path = out_dir / "ab_eval.json"
+    markdown_path = out_dir / "ab_eval.md"
+
+    report: dict[str, Any] = {
+        "generated_at": utc_now_iso(),
+        "repo_root": str(repo_root),
+        "baseline": {
+            "ref": args.baseline_ref,
+            "retrieval_mode": args.baseline_mode,
+            "embed_backend": baseline_embed_backend,
+            "embed_model": baseline_embed_model,
+        },
+        "candidate": {
+            "ref": args.candidate_ref,
+            "retrieval_mode": args.candidate_mode,
+            "embed_backend": candidate_embed_backend,
+            "embed_model": candidate_embed_model,
+        },
+        "settings": {
+            "cases": args.cases,
+            "k": args.k,
+            "runs": args.runs,
+            "eval_runs": eval_runs,
+            "query_runs": query_runs,
+            "baseline_mode": args.baseline_mode,
+            "candidate_mode": args.candidate_mode,
+            "baseline_embed_backend": baseline_embed_backend,
+            "candidate_embed_backend": candidate_embed_backend,
+            "baseline_embed_model": baseline_embed_model,
+            "candidate_embed_model": candidate_embed_model,
+            "allow_corpus_diff": args.allow_corpus_diff,
+            "cold_query": args.cold_query,
+            "latency_tol_pct": args.latency_tol_pct,
+            "latency_tol_ms": args.latency_tol_ms,
+        },
+    }
+
+    worktree_paths: list[Path] = []
+    temp_worktree_root: Path | None = None
+
+    try:
+        baseline_commit = resolve_ref(repo_root, args.baseline_ref)
+        candidate_commit = resolve_ref(repo_root, args.candidate_ref)
+        report["baseline"]["commit"] = baseline_commit
+        report["candidate"]["commit"] = candidate_commit
+
+        cases_rel = normalize_cases_path(repo_root, args.cases)
+
+        temp_worktree_root = Path(tempfile.mkdtemp(prefix="ledger-ab-worktrees-"))
+        baseline_wt = temp_worktree_root / "baseline"
+        candidate_wt = temp_worktree_root / "candidate"
+
+        create_worktree(repo_root, args.baseline_ref, baseline_wt)
+        worktree_paths.append(baseline_wt)
+
+        create_worktree(repo_root, args.candidate_ref, candidate_wt)
+        worktree_paths.append(candidate_wt)
+
+        baseline_module = load_module_from_script(
+            baseline_wt / "scripts" / "ledger", "ledger_baseline_module"
+        )
+        candidate_module = load_module_from_script(
+            candidate_wt / "scripts" / "ledger", "ledger_candidate_module"
+        )
+
+        baseline_corpus = compute_corpus_fingerprint(baseline_wt, cases_rel)
+        candidate_corpus = compute_corpus_fingerprint(candidate_wt, cases_rel)
+
+        report["baseline"]["corpus"] = {
+            "fingerprint": baseline_corpus["fingerprint"],
+            "file_count": baseline_corpus["file_count"],
+        }
+        report["candidate"]["corpus"] = {
+            "fingerprint": candidate_corpus["fingerprint"],
+            "file_count": candidate_corpus["file_count"],
+        }
+
+        corpus_diff = diff_file_maps(
+            baseline_corpus["file_map"], candidate_corpus["file_map"]
+        )
+        report["corpus_diff"] = corpus_diff
+
+        if not args.allow_corpus_diff and not corpus_diff["is_equal"]:
+            report["decision"] = {
+                "decision": "invalid_setup",
+                "reason": "corpus fingerprints differ between baseline and candidate; rerun with --allow-corpus-diff to override",
+                "exit_code": EXIT_INVALID_SETUP,
+            }
+            write_json(json_path, report)
+            write_markdown(markdown_path, report)
+            print("A/B harness failed: corpus mismatch between refs")
+            print(f"JSON report: {json_path}")
+            print(f"Markdown report: {markdown_path}")
+            return EXIT_INVALID_SETUP
+
+        baseline_cases_path = (baseline_wt / cases_rel).resolve()
+        candidate_cases_path = (candidate_wt / cases_rel).resolve()
+
+        report["baseline"]["semantic_index"] = maybe_build_semantic_index(
+            baseline_module,
+            args.baseline_mode,
+            baseline_embed_backend,
+            baseline_embed_model,
+            "baseline",
+        )
+        report["candidate"]["semantic_index"] = maybe_build_semantic_index(
+            candidate_module,
+            args.candidate_mode,
+            candidate_embed_backend,
+            candidate_embed_model,
+            "candidate",
+        )
+        if report["baseline"]["semantic_index"].get("enabled"):
+            report["baseline"]["embed_model"] = report["baseline"]["semantic_index"].get(
+                "model", baseline_embed_model
+            )
+        if report["candidate"]["semantic_index"].get("enabled"):
+            report["candidate"]["embed_model"] = report["candidate"]["semantic_index"].get(
+                "model", candidate_embed_model
+            )
+
+        reset_module_cache(baseline_module)
+        baseline_quality = run_quality_eval(
+            baseline_module,
+            baseline_cases_path,
+            args.k,
+            args.baseline_mode,
+            embed_backend=baseline_embed_backend,
+            embed_model=report["baseline"].get("embed_model"),
+        )
+        reset_module_cache(candidate_module)
+        candidate_quality = run_quality_eval(
+            candidate_module,
+            candidate_cases_path,
+            args.k,
+            args.candidate_mode,
+            embed_backend=candidate_embed_backend,
+            embed_model=report["candidate"].get("embed_model"),
+        )
+
+        baseline_eval_latency = probe_eval_latency(
+            baseline_module,
+            baseline_cases_path,
+            args.k,
+            eval_runs,
+            args.baseline_mode,
+            embed_backend=baseline_embed_backend,
+            embed_model=report["baseline"].get("embed_model"),
+        )
+        candidate_eval_latency = probe_eval_latency(
+            candidate_module,
+            candidate_cases_path,
+            args.k,
+            eval_runs,
+            args.candidate_mode,
+            embed_backend=candidate_embed_backend,
+            embed_model=report["candidate"].get("embed_model"),
+        )
+
+        baseline_query_latency = probe_query_latency(
+            baseline_module,
+            baseline_cases_path,
+            query_runs,
+            args.baseline_mode,
+            cold_query=args.cold_query,
+            embed_backend=baseline_embed_backend,
+            embed_model=report["baseline"].get("embed_model"),
+        )
+        candidate_query_latency = probe_query_latency(
+            candidate_module,
+            candidate_cases_path,
+            query_runs,
+            args.candidate_mode,
+            cold_query=args.cold_query,
+            embed_backend=candidate_embed_backend,
+            embed_model=report["candidate"].get("embed_model"),
+        )
+
+        report["baseline"]["quality"] = baseline_quality
+        report["candidate"]["quality"] = candidate_quality
+        report["baseline"]["latency"] = {
+            "eval": baseline_eval_latency,
+            "query": baseline_query_latency,
+        }
+        report["candidate"]["latency"] = {
+            "eval": candidate_eval_latency,
+            "query": candidate_query_latency,
+        }
+
+        decision = decide_outcome(
+            baseline_quality=baseline_quality,
+            candidate_quality=candidate_quality,
+            baseline_eval_p95_ms=baseline_eval_latency["summary"]["p95_ms"],
+            candidate_eval_p95_ms=candidate_eval_latency["summary"]["p95_ms"],
+            baseline_query_p95_ms=baseline_query_latency["summary"]["p95_ms"],
+            candidate_query_p95_ms=candidate_query_latency["summary"]["p95_ms"],
+            latency_tol_pct=args.latency_tol_pct,
+            latency_tol_ms=args.latency_tol_ms,
+        )
+        report["decision"] = decision
+
+        report["deltas"] = {
+            "quality": decision.get("quality_deltas", {}),
+            "latency_p95_ms": {
+                "eval": candidate_eval_latency["summary"]["p95_ms"]
+                - baseline_eval_latency["summary"]["p95_ms"],
+                "query": candidate_query_latency["summary"]["p95_ms"]
+                - baseline_query_latency["summary"]["p95_ms"],
+            },
+        }
+
+        write_json(json_path, report)
+        write_markdown(markdown_path, report)
+
+        print(
+            f"decision={decision['decision']} reason={decision['reason']} exit_code={decision['exit_code']}"
+        )
+        print(f"JSON report: {json_path}")
+        print(f"Markdown report: {markdown_path}")
+
+        return int(decision["exit_code"])
+
+    except InvalidSetupError as exc:
+        report["decision"] = {
+            "decision": "invalid_setup",
+            "reason": str(exc),
+            "exit_code": EXIT_INVALID_SETUP,
+        }
+        write_json(json_path, report)
+        write_markdown(markdown_path, report)
+        print(f"A/B harness failed: {exc}")
+        print(f"JSON report: {json_path}")
+        print(f"Markdown report: {markdown_path}")
+        return EXIT_INVALID_SETUP
+
+    finally:
+        for worktree in reversed(worktree_paths):
+            remove_worktree(repo_root, worktree)
+        if temp_worktree_root is not None:
+            shutil.rmtree(temp_worktree_root, ignore_errors=True)
+
+
+def main() -> int:
+    parser = build_argument_parser()
+    args = parser.parse_args()
+    return run_harness(args)
+
+
+if __name__ == "__main__":
+    maybe_reexec_in_repo_venv()
+    raise SystemExit(main())

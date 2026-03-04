@@ -1,0 +1,961 @@
+#!/usr/bin/env -S deno run -A
+/// <reference lib="deno.ns" />
+/**
+ * obsidian_import
+ *
+ * Opinionated, heuristic importer from an Obsidian vault (or any markdown tree)
+ * into a Cognitive Ledger repo.
+ *
+ * Design goals:
+ * - Non-destructive: Obsidian is source-of-truth; cognitive-ledger receives curated projections.
+ * - Incremental: checkpointed state, resumable.
+ * - High-signal only: extracts only durable items (prefs/decisions/concepts/open-loops).
+ * - Grep-friendly outputs: atomic markdown notes + provenance blocks + timeline append.
+ * - No LLM required: uses heuristics/regex; later you can plug in an LLM step.
+ *
+ * Usage:
+ *   ./obsidian_import scan  <source-notes-root> [--out notes/08_indices/obsidian_scan.md]  # vaultRoot can be any folder
+ *   ./obsidian_import apply <source-notes-root> [--max-files 50] [--max-notes 100] [--min-confidence 0.75]  # vaultRoot can be any folder
+ *   ./obsidian_import resume
+ *
+ * Notes:
+ * - This tool assumes it is run from anywhere; it will operate on the ledger_root.
+ * - By default, ledger_root is <ledger-root>.
+ */
+
+import { walk } from "jsr:@std/fs@1/walk"
+import { ensureDir } from "jsr:@std/fs@1/ensure-dir"
+import { join, resolve, dirname, relative, SEPARATOR } from "jsr:@std/path@1"
+import { encodeHex } from "jsr:@std/encoding@1/hex"
+
+type Cmd = "scan" | "apply" | "resume" | "help"
+
+type Source = "user" | "tool" | "assistant" | "inferred"
+
+type ArtifactKind = "pref" | "fact" | "goal" | "concept" | "loop"
+
+type Scope = "home" | "work" | "dev" | "personal" | "meta"
+
+type Lang = "en" | "no" | "mixed"
+
+interface ImportState {
+  version: number
+  ledger_root: string
+  vault_root?: string
+  last_run?: string // ISO
+  processed_files: Record<string, { mtimeMs: number; size: number; hash: string }> // by abs path
+  imported_keys: Record<string, { ts: string; note_path: string; origin: string }> // by stable key
+}
+
+interface ScanRow {
+  path_abs: string
+  path_rel: string
+  mtimeMs: number
+  size: number
+  words: number
+  headings: number
+  tasks: number
+  signal_score: number
+  yield_hint: number
+  scope: Scope
+}
+
+interface Candidate {
+  kind: ArtifactKind
+  statement: string
+  context?: string
+  confidence: number
+  tags: string[]
+}
+
+interface Args {
+  cmd: Cmd
+  vaultRoot?: string
+  ledgerRoot: string
+  out?: string
+  statePath: string
+  logPath: string
+  timelinePath: string
+  maxFiles: number
+  maxNotes: number
+  minConfidence: number
+  minScore: number
+  maxScore: number
+  noBucketCaps: boolean
+  dryRun: boolean
+  verbose: boolean
+}
+
+const DEFAULT_LEDGER_ROOT = resolve(Deno.env.get("HOME") ?? "~", "Code", "cog-led")
+
+function die(msg: string, code = 1): never {
+  console.error(msg)
+  Deno.exit(code)
+}
+
+function nowIso(): string {
+  return new Date().toISOString()
+}
+
+async function sha1(text: string): Promise<string> {
+  const data = new TextEncoder().encode(text)
+  const hashBuffer = await crypto.subtle.digest("SHA-1", data)
+  return encodeHex(hashBuffer)
+}
+
+function slugify(input: string): string {
+  return input
+    .trim()
+    .toLowerCase()
+    .replace(/['"`]/g, "")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 80) || "untitled"
+}
+
+function countWords(s: string): number {
+  const m = s.trim().match(/\S+/g)
+  return m ? m.length : 0
+}
+
+function inferScopeFromPath(p: string): Scope {
+  // Deterministic path-based mapping for the user's vault layout.
+  // Priority is explicit top-level buckets like 01-home, 02-work, 03-community, 04-dev.
+  const parts = p.split(SEPARATOR).filter(Boolean).map((x) => x.toLowerCase())
+
+  // Look for top-level bucket markers anywhere in the path.
+  if (parts.includes("01-home") || parts.includes("home")) return "home"
+  if (parts.includes("02-work") || parts.includes("work")) return "work"
+  if (parts.includes("04-dev") || parts.includes("dev")) return "dev"
+
+  // Community/volunteer bucket: treat as personal by default (can be changed later).
+  if (parts.includes("03-community") || parts.includes("community") || parts.includes("volunteer") || parts.includes("redcross")) return "personal"
+
+  // Meta / system buckets.
+  if (parts.includes("91-opt") || parts.includes("opt") || parts.includes("meta") || parts.includes("system")) return "meta"
+
+  // Journal/archive are personal.
+  if (parts.includes("90-journal") || parts.includes("journal")) return "personal"
+  if (parts.includes("92-archive") || parts.includes("archive")) return "personal"
+
+  return "personal"
+}
+
+function isPromptFile(pathAbs: string): boolean {
+  const p = pathAbs.replace(/\\/g, "/").toLowerCase()
+  return p.includes("/prompts/") || p.includes("/copilot-custom-prompts/")
+}
+
+function isJournalArchive(pathAbs: string): boolean {
+  const p = pathAbs.replace(/\\/g, "/").toLowerCase()
+  return p.includes("/90-journal/archive/")
+}
+
+function isJournalFile(pathAbs: string): boolean {
+  const p = pathAbs.replace(/\\/g, "/").toLowerCase()
+  return p.includes("/90-journal/")
+}
+
+function isMeetingLike(pathAbs: string, content: string): boolean {
+  const p = pathAbs.replace(/\\/g, "/").toLowerCase()
+  if (/(meeting|meetings|mom|minutes-of-meeting|minutes|møte|mote|samtale|call|check-?in|1-1|1:1|one-on-one|standup|sync|retro|retrospective|status)/i.test(p)) return true
+  return /^(#|##)\s*(meeting|mom|minutes of meeting|minutes-of-meeting|minutes|møte|1:1|one-on-one|standup|sync|retro|retrospective|agenda|participants|attendees|deltakere)\b/mi.test(content)
+}
+
+const STRATEGIC_VERB_EN = /(decide|design|investigate|figure out|revisit|plan|define|choose|evaluate|implement|prototype)/i
+const STRATEGIC_VERB_NO = /(bestemme|designe|undersøke|finne ut|ta opp igjen|planlegge|definere|velge|evaluere|implementere|prototype)/i
+
+const DECISION_SECTION_RE = /^\s*#+\s*(decision|decisions|avgjørelse|avgjørelser|outcome|conclusion)\b/i
+const ACTION_SECTION_RE = /^\s*#+\s*(next steps|next actions|action items|actions|oppfølging|oppfolging|tiltak)\b/i
+const CONCEPT_HEADING_RE_EN = /^#+\s*(?:Definition|Concept|Framework|Principle|Rule|Guideline|Pattern|Heuristic|Policy):\s*(.+)$/gmi
+const CONCEPT_HEADING_RE_NO = /^#+\s*(?:Definisjon|Konsept|Rammeverk|Prinsipp|Regel|Retningslinje|Mønster|Heuristikk|Policy):\s*(.+)$/gmi
+const MIN_DECISION_WORDS = 4
+const MIN_ACTION_WORDS = 4
+
+function loopHasStrongMarker(stmt: string): boolean {
+  // Allow explicit markers or an obvious temporal anchor.
+  return /(#openloop|#loop|@loop|@openloop)/i.test(stmt) ||
+    /\b(20\d{2}-\d{2}-\d{2}|q[1-4]|uke\s?\d{1,2}|week\s?\d{1,2})\b/i.test(stmt)
+}
+
+function loopHasOwnershipSignal(stmt: string): boolean {
+  return /\b(i will|i'll|i should|i need to|we will|we should|we need to|owner|assignee|responsible)\b/i.test(stmt) ||
+    /\b(jeg skal|jeg vil|jeg må|vi skal|vi må|eier|ansvar|ansvarlig)\b/i.test(stmt)
+}
+
+function loopHasDecisionPendingSignal(stmt: string): boolean {
+  return /\b(decide|decision|need to decide|open question|pending|tbd|unsure|not sure|to be decided)\b/i.test(stmt) ||
+    /\b(må bestemme|avgjørelse|åpent spørsmål|uavklart|usikker|ikke sikker|må avklare)\b/i.test(stmt)
+}
+
+function hasStrategicVerb(stmt: string): boolean {
+  return STRATEGIC_VERB_EN.test(stmt) || STRATEGIC_VERB_NO.test(stmt)
+}
+
+function modalLineLooksActionable(stmt: string): boolean {
+  return /^(?:We should|We must|We aim to)\s+\w+\b(?:\s+\w+){1,}/i.test(stmt) ||
+    /^(?:Vi bør|Vi må|Vi har som mål)\s+\w+\b(?:\s+\w+){1,}/i.test(stmt)
+}
+
+function inferLang(content: string): Lang {
+  // Very lightweight heuristic; default to mixed if uncertain.
+  const hasNo = /\b(og|ikke|jeg|du|vi|skal|med|uten|hvor|hva|hvis)\b/i.test(content)
+  const hasEn = /\b(and|not|i|you|we|should|with|without|what|if)\b/i.test(content)
+  if (hasNo && hasEn) return "mixed"
+  if (hasNo) return "no"
+  if (hasEn) return "en"
+  return "mixed"
+}
+
+function countMatches(re: RegExp, content: string): number {
+  const m = content.match(re)
+  return m ? m.length : 0
+}
+
+function extractSectionItems(content: string, headingRe: RegExp): string[] {
+  const lines = content.split(/\r?\n/)
+  const out: string[] = []
+  let active = false
+  for (const raw of lines) {
+    const line = raw.trimEnd()
+    if (headingRe.test(line)) {
+      active = true
+      continue
+    }
+    if (/^\s*#+\s+/.test(line)) {
+      active = false
+      continue
+    }
+    if (!active) continue
+
+    const task = line.match(/^\s*[-*+]\s*\[\s*\]\s+(.+)$/)
+    const bullet = line.match(/^\s*[-*+]\s+(.+)$/)
+    const numbered = line.match(/^\s*\d+\.\s+(.+)$/)
+    const stmt = (task ?? bullet ?? numbered)?.[1]?.trim()
+    if (stmt) out.push(stmt)
+  }
+  return out
+}
+
+function yieldHint(content: string): number {
+  const pref = countMatches(/^(?:-\s*)?(?:I prefer|I want you to|Going forward|From now on)\b/gmi, content) +
+    countMatches(/^(?:-\s*)?(?:Jeg foretrekker|Jeg vil|Fremover|Fra nå av)\b/gmi, content)
+  const decision = countMatches(/^(?:-\s*)?(?:Decision:|Decided:|We will|We should|We must|We aim to|I decided)\b/gmi, content) +
+    countMatches(/^(?:-\s*)?(?:Avgjørelse:|Bestemt:|Vi skal|Vi bør|Vi må|Vi har som mål|Jeg bestemte)\b/gmi, content)
+  const definition = countMatches(/^#+\s*(?:Definition|Concept|Framework|Principle|Rule|Guideline|Pattern|Heuristic|Policy):/gmi, content) +
+    countMatches(/^#+\s*(?:Definisjon|Konsept|Rammeverk|Prinsipp|Regel|Retningslinje|Mønster|Heuristikk|Policy):/gmi, content)
+  const decisionHeads = countMatches(/^\s*#+\s*(decision|decisions|avgjørelse|avgjørelser|outcome|conclusion)\b/gmi, content)
+  const actionHeads = countMatches(/^\s*#+\s*(next steps|next actions|action items|actions|oppfølging|oppfolging|tiltak)\b/gmi, content)
+
+  let strategicTasks = 0
+  for (const m of content.matchAll(/^(?:-\s*)?\[\s*\]\s+(.+)$/gmi)) {
+    const stmt = m[1].trim()
+    if (STRATEGIC_VERB_EN.test(stmt) || STRATEGIC_VERB_NO.test(stmt)) strategicTasks++
+  }
+
+  let score = 0
+  score += Math.min(3, pref) * 2
+  score += Math.min(3, decision) * 2
+  score += Math.min(3, definition) * 2
+  score += Math.min(2, decisionHeads) * 1.5
+  score += Math.min(2, actionHeads) * 1.0
+  score += Math.min(5, strategicTasks) * 1.5
+  return score
+}
+
+function parseArgs(argv: string[]): Args {
+  // Check for help flags first
+  if (argv.length === 0 || argv[0] === "-h" || argv[0] === "--help") {
+    return {
+      cmd: "help",
+      vaultRoot: undefined,
+      ledgerRoot: DEFAULT_LEDGER_ROOT,
+      out: undefined,
+      statePath: "",
+      logPath: "",
+      timelinePath: "",
+      maxFiles: 50,
+      maxNotes: 100,
+      minConfidence: 0.75,
+      minScore: 1.5,
+      maxScore: 20.0,
+      noBucketCaps: false,
+      dryRun: false,
+      verbose: false,
+    }
+  }
+
+  const cmd = argv[0] as Cmd
+  const vaultRoot = cmd === "scan" || cmd === "apply" ? argv[1] : undefined
+
+  // defaults
+  let ledgerRoot = DEFAULT_LEDGER_ROOT
+  let out: string | undefined
+  let maxFiles = 50
+  let maxNotes = 100
+  let minConfidence = 0.75
+  let minScore = 1.5
+  let maxScore = 20.0
+  let noBucketCaps = false
+  let dryRun = false
+  let verbose = false
+
+  // global flags after positional args
+  const rest = argv.slice(cmd === "scan" || cmd === "apply" ? 2 : 1)
+  for (let i = 0; i < rest.length; i++) {
+    const a = rest[i]
+    if (a === "--ledger-root") ledgerRoot = resolve(rest[++i] ?? die("Missing value for --ledger-root"))
+    else if (a === "--out") out = rest[++i] ?? die("Missing value for --out")
+    else if (a === "--max-files") maxFiles = Number(rest[++i] ?? die("Missing value for --max-files"))
+    else if (a === "--max-notes") maxNotes = Number(rest[++i] ?? die("Missing value for --max-notes"))
+    else if (a === "--min-confidence") minConfidence = Number(rest[++i] ?? die("Missing value for --min-confidence"))
+    else if (a === "--min-score") minScore = Number(rest[++i] ?? die("Missing value for --min-score"))
+    else if (a === "--max-score") maxScore = Number(rest[++i] ?? die("Missing value for --max-score"))
+    else if (a === "--no-bucket-caps") noBucketCaps = true
+    else if (a === "--dry-run") dryRun = true
+    else if (a === "--verbose") verbose = true
+    else if (a === "-h" || a === "--help") return {
+      cmd: "help",
+      vaultRoot,
+      ledgerRoot,
+      out,
+      statePath: "",
+      logPath: "",
+      timelinePath: "",
+      maxFiles,
+      maxNotes,
+      minConfidence,
+      minScore,
+      maxScore,
+      noBucketCaps,
+      dryRun,
+      verbose,
+    }
+    else die(`Unknown argument: ${a}`)
+  }
+
+  const statePath = join(ledgerRoot, "notes", "08_indices", "obsidian_import_state.json")
+  const logPath = join(ledgerRoot, "notes", "08_indices", "obsidian_import_log.md")
+  const timelinePath = join(ledgerRoot, "notes", "08_indices", "timeline.md")
+
+  return {
+    cmd,
+    vaultRoot: vaultRoot ? resolve(vaultRoot) : undefined,
+    ledgerRoot,
+    out,
+    statePath,
+    logPath,
+    timelinePath,
+    maxFiles,
+    maxNotes,
+    minConfidence,
+    minScore,
+    maxScore,
+    noBucketCaps,
+    dryRun,
+    verbose,
+  }
+}
+
+function help(): void {
+  console.log("DEPRECATED: use the Python CLI `ledger-obsidian` for new setups.")
+  console.log("Example: pipx install cognitive-ledger && ledger-obsidian init --vault <path>")
+  console.log("")
+  console.log(`obsidian_import (Deno)
+
+Usage:
+  obsidian_import scan  <vaultRoot> [--out <path>] [--ledger-root <path>] [--verbose]
+  obsidian_import apply <vaultRoot> [--max-files N] [--max-notes N] [--min-confidence X] [--min-score S] [--max-score S] [--no-bucket-caps] [--dry-run] [--ledger-root <path>] [--verbose]
+  obsidian_import resume              [--max-files N] [--max-notes N] [--min-confidence X] [--min-score S] [--max-score S] [--no-bucket-caps] [--dry-run] [--ledger-root <path>] [--verbose]
+
+Defaults:
+  ledger_root: ${DEFAULT_LEDGER_ROOT}
+  --max-files: 50
+  --max-notes: 100
+  --min-confidence: 0.75
+  --min-score: 1.5
+  --max-score: 20.0
+
+Notes:
+  - scan is read-only and produces a report.
+  - apply/resume may write notes + indices + timeline unless --dry-run.
+`)
+}
+
+async function readText(path: string): Promise<string> {
+  return await Deno.readTextFile(path)
+}
+
+async function fileHash(path: string): Promise<string> {
+  const data = await Deno.readFile(path)
+  const hashBuffer = await crypto.subtle.digest("SHA-1", data)
+  return encodeHex(hashBuffer)
+}
+
+async function loadState(args: Args): Promise<ImportState> {
+  try {
+    const raw = await readText(args.statePath)
+    const s = JSON.parse(raw) as ImportState
+    // basic sanity
+    if (!s.processed_files) s.processed_files = {}
+    if (!s.imported_keys) s.imported_keys = {}
+    return s
+  } catch {
+    return {
+      version: 1,
+      ledger_root: args.ledgerRoot,
+      processed_files: {},
+      imported_keys: {},
+    }
+  }
+}
+
+async function saveState(args: Args, state: ImportState): Promise<void> {
+  await ensureDir(dirname(args.statePath))
+  await Deno.writeTextFile(args.statePath, JSON.stringify(state, null, 2) + "\n")
+}
+
+async function appendLog(args: Args, lines: string[]): Promise<void> {
+  await ensureDir(dirname(args.logPath))
+  const ts = nowIso()
+  const block = [
+    "\n---\n",
+    `## ${ts}`,
+    "",
+    ...lines,
+    "",
+  ].join("\n")
+  if (args.dryRun) return
+  await Deno.writeTextFile(args.logPath, (await safeRead(args.logPath)) + block)
+}
+
+async function appendTimeline(args: Args, entries: string[]): Promise<void> {
+  await ensureDir(dirname(args.timelinePath))
+  const prefix = (await safeRead(args.timelinePath))
+  const out = prefix + (prefix.endsWith("\n") ? "" : "\n") + entries.join("\n") + "\n"
+  if (args.dryRun) return
+  await Deno.writeTextFile(args.timelinePath, out)
+}
+
+async function safeRead(path: string): Promise<string> {
+  try {
+    return await Deno.readTextFile(path)
+  } catch {
+    return ""
+  }
+}
+
+function scoreSignal(content: string): { headings: number; tasks: number; score: number } {
+  const headings = (content.match(/^#+\s+/gm) ?? []).length
+  const tasks = (content.match(/^\s*-\s*\[[ xX]\]\s+/gm) ?? []).length
+
+  const strong = [
+    /\b(i prefer|i want you to|going forward)\b/i,
+    /\b(jeg foretrekker|jeg vil|fremover|fra nå av)\b/i,
+    /\b(decided|decision|we will|commit to|rule:)\b/i,
+    /\b(bestemt|besluttet|avgjort|avjørelse:|vi skal|forplikte|forpliktelse|regel:)\b/i,
+    /\b(open question|revisit|not sure yet|need to decide)\b/i,
+    /\b(åpent spørsmål|ta opp igjen|ikke sikker|må bestemme)\b/i,
+    /\b(definition|means:|framework|concept)\b/i,
+    /\b(definisjon|betyr:|rammeverk|konsept)\b/i,
+  ]
+
+  let score = headings * 0.2 + tasks * 0.1
+  for (const r of strong) if (r.test(content)) score += 3
+
+  // penalize very short notes (often ephemeral)
+  const words = countWords(content)
+  if (words < 40) score -= 1
+
+  return { headings, tasks, score }
+}
+
+function extractCandidates(content: string): Candidate[] {
+  const c: Candidate[] = []
+
+  // Preferences (durable, first-person, instruction to assistant)
+  for (const m of content.matchAll(/^(?:-\s*)?(?:I prefer|I want you to|Going forward|From now on)\s+(.+)$/gmi)) {
+    const stmt = m[0].replace(/^\s*-\s*/g, "").trim()
+    c.push({ kind: "pref", statement: stmt, confidence: 0.8, tags: ["imported", "preference"] })
+  }
+
+  // Norwegian: keep it strict (first-person / policy), avoid polite UI strings
+  for (const m of content.matchAll(/^(?:-\s*)?(?:Jeg foretrekker|Jeg vil|Fremover|Fra nå av)\s+(.+)$/gmi)) {
+    const stmt = m[0].replace(/^\s*-\s*/g, "").trim()
+    c.push({ kind: "pref", statement: stmt, confidence: 0.8, tags: ["imported", "preference"] })
+  }
+
+  // Decisions / commitments
+  for (const m of content.matchAll(/^(?:-\s*)?(?:Decision:|Decided:|We will|I decided)\s+(.+)$/gmi)) {
+    const stmt = m[0].replace(/^\s*-\s*/g, "").trim()
+    if (countWords(stmt) < MIN_DECISION_WORDS) continue
+    c.push({ kind: "fact", statement: stmt, confidence: 0.75, tags: ["imported", "decision"] })
+  }
+  for (const m of content.matchAll(/^(?:-\s*)?(?:We should|We must|We aim to)\s+(.+)$/gmi)) {
+    const stmt = m[0].replace(/^\s*-\s*/g, "").trim()
+    if (!modalLineLooksActionable(stmt)) continue
+    if (countWords(stmt) < MIN_DECISION_WORDS) continue
+    c.push({ kind: "fact", statement: stmt, confidence: 0.75, tags: ["imported", "decision"] })
+  }
+  for (const m of content.matchAll(/^(?:-\s*)?(?:Avgjørelse:|Bestemt:|Vi skal|Jeg bestemte)\s+(.+)$/gmi)) {
+    const stmt = m[0].replace(/^\s*-\s*/g, "").trim()
+    if (countWords(stmt) < MIN_DECISION_WORDS) continue
+    c.push({ kind: "fact", statement: stmt, confidence: 0.75, tags: ["imported", "decision"] })
+  }
+  for (const m of content.matchAll(/^(?:-\s*)?(?:Vi bør|Vi må|Vi har som mål)\s+(.+)$/gmi)) {
+    const stmt = m[0].replace(/^\s*-\s*/g, "").trim()
+    if (!modalLineLooksActionable(stmt)) continue
+    if (countWords(stmt) < MIN_DECISION_WORDS) continue
+    c.push({ kind: "fact", statement: stmt, confidence: 0.75, tags: ["imported", "decision"] })
+  }
+
+  // Concepts (simple patterns)
+  CONCEPT_HEADING_RE_EN.lastIndex = 0
+  for (const m of content.matchAll(CONCEPT_HEADING_RE_EN)) {
+    const title = m[1].trim()
+    if (title.length >= 3) {
+      c.push({ kind: "concept", statement: `Definition: ${title}`, confidence: 0.75, tags: ["imported", "concept"] })
+    }
+  }
+  CONCEPT_HEADING_RE_NO.lastIndex = 0
+  for (const m of content.matchAll(CONCEPT_HEADING_RE_NO)) {
+    const title = m[1].trim()
+    if (title.length >= 3) {
+      c.push({ kind: "concept", statement: `Definisjon: ${title}`, confidence: 0.75, tags: ["imported", "concept"] })
+    }
+  }
+
+  // Decision blocks: list items under decision headings
+  for (const stmt of extractSectionItems(content, DECISION_SECTION_RE)) {
+    if (countWords(stmt) < MIN_DECISION_WORDS) continue
+    c.push({ kind: "fact", statement: stmt, confidence: 0.75, tags: ["imported", "decision"] })
+  }
+
+  // Action blocks: list items under action headings
+  for (const stmt of extractSectionItems(content, ACTION_SECTION_RE)) {
+    if (countWords(stmt) < MIN_ACTION_WORDS && !hasStrategicVerb(stmt)) continue
+    c.push({ kind: "loop", statement: stmt, confidence: 0.75, tags: ["imported", "open_loop"] })
+  }
+
+  // Open loops: durable tasks/questions
+  for (const m of content.matchAll(/^(?:-\s*)?\[\s*\]\s+(.+)$/gmi)) {
+    const stmt = m[1].trim()
+    // Heuristic: filter out trivial very short tasks
+    if (stmt.length < 18) continue
+    // Heuristic: prefer tasks that look strategic
+    const looksStrategic = STRATEGIC_VERB_EN.test(stmt) || STRATEGIC_VERB_NO.test(stmt)
+    if (!looksStrategic) continue
+    c.push({ kind: "loop", statement: stmt, confidence: 0.75, tags: ["imported", "open_loop"] })
+  }
+
+  // De-dupe identical statements within a file
+  const seen = new Set<string>()
+  return c.filter((x) => {
+    const k = `${x.kind}::${x.statement.toLowerCase()}`
+    if (seen.has(k)) return false
+    seen.add(k)
+    return true
+  })
+}
+
+function kindToFolder(kind: ArtifactKind): string {
+  switch (kind) {
+    case "pref": return "notes/03_preferences"
+    case "fact": return "notes/02_facts"
+    case "goal": return "notes/04_goals"
+    case "concept": return "notes/06_concepts"
+    case "loop": return "notes/05_open_loops"
+  }
+}
+
+function kindToPrefix(kind: ArtifactKind): string {
+  switch (kind) {
+    case "pref": return "pref"
+    case "fact": return "fact"
+    case "goal": return "goal"
+    case "concept": return "concept"
+    case "loop": return "loop"
+  }
+}
+
+function buildFrontmatter(opts: {
+  created: string
+  updated: string
+  tags: string[]
+  confidence: number
+  source: Source
+  scope: Scope
+  lang: Lang
+  status?: string
+}): string {
+  const tags = `[${opts.tags.map((t) => t.trim()).filter(Boolean).join(", ")}]`
+  const lines: string[] = ["---", `created: ${opts.created}`, `updated: ${opts.updated}`, `tags: ${tags}`, `confidence: ${opts.confidence}`, `source: ${opts.source}`, `scope: ${opts.scope}`, `lang: ${opts.lang}`]
+  if (opts.status) lines.push(`status: ${opts.status}`)
+  lines.push("---")
+  return lines.join("\n")
+}
+
+function noteBody(opts: {
+  title: string
+  statement: string
+  originRel: string
+  originHeading?: string
+  importedTs: string
+}): string {
+  const origin = opts.originHeading ? `${opts.originRel}#${opts.originHeading}` : opts.originRel
+  return [
+    `# ${opts.title}`,
+    "",
+    "## Statement",
+    opts.statement,
+    "",
+    "## Provenance",
+    `Origin: ${origin}`,
+    `Imported: ${opts.importedTs}`,
+    "",
+    "## Links",
+    "- ",
+    "",
+  ].join("\n")
+}
+
+async function scanVault(args: Args, vaultRoot: string): Promise<ScanRow[]> {
+  const rows: ScanRow[] = []
+  for await (const e of walk(vaultRoot, {
+    includeDirs: false,
+    exts: [".md"],
+    followSymlinks: false,
+    skip: [
+      /\/\.obsidian\//,
+      /\/\.smart-env\//,
+      /\/\.smartchats\//,
+      /\/\.trash\//,
+      /\/00-tmp\//,
+      /\/91-opt\//,
+      /\/91-opt\/attachments\//,
+    ],
+  })) {
+    const st = await Deno.stat(e.path)
+    const content = await readText(e.path)
+    const { headings, tasks, score } = scoreSignal(content)
+    const hint = yieldHint(content)
+    rows.push({
+      path_abs: e.path,
+      path_rel: relative(vaultRoot, e.path),
+      mtimeMs: st.mtime?.getTime() ?? 0,
+      size: st.size,
+      words: countWords(content),
+      headings,
+      tasks,
+      signal_score: score,
+      yield_hint: hint,
+      scope: inferScopeFromPath(e.path),
+    })
+  }
+  rows.sort((a, b) => (b.yield_hint - a.yield_hint) || (b.signal_score - a.signal_score))
+  return rows
+}
+
+function scanReport(rows: ScanRow[], vaultRoot: string): string {
+  const ts = nowIso()
+  const byScope = new Map<Scope, number>()
+  for (const r of rows) byScope.set(r.scope, (byScope.get(r.scope) ?? 0) + 1)
+
+  const top = rows.slice(0, 50)
+
+  const lines: string[] = []
+  lines.push(`# Obsidian Scan Report`)
+  lines.push("")
+  lines.push(`- Scanned: ${rows.length} files`)
+  lines.push(`- Vault: ${vaultRoot}`)
+  lines.push(`- Generated: ${ts}`)
+  lines.push("")
+  lines.push("## Files by scope")
+  for (const s of ["home", "work", "dev", "personal", "meta"] as Scope[]) {
+    lines.push(`- ${s}: ${byScope.get(s) ?? 0}`)
+  }
+  lines.push("")
+  lines.push("## Top candidates (by yield hint, then signal score)")
+  lines.push("Format: yield | score | scope | path | words | tasks | headings")
+  for (const r of top) {
+    lines.push(`- ${r.yield_hint.toFixed(2)} | ${r.signal_score.toFixed(2)} | ${r.scope} | ${r.path_rel} | ${r.words} | ${r.tasks} | ${r.headings}`)
+  }
+  lines.push("")
+  lines.push("## Notes")
+  lines.push("- This report does not write to the ledger.")
+  lines.push("- Use `apply` to import high-signal items incrementally.")
+  return lines.join("\n") + "\n"
+}
+
+async function writeNoteIfNew(args: Args, state: ImportState, vaultRoot: string, originAbs: string, candidate: Candidate, fileContent: string): Promise<{ created: boolean; noteRelPath: string } | null> {
+  const originRel = relative(vaultRoot, originAbs)
+  const importedTs = nowIso()
+
+  const scope = inferScopeFromPath(originAbs)
+  const lang = inferLang(fileContent)
+
+  const keyBase = `${candidate.kind}|${scope}|${candidate.statement.trim().toLowerCase()}`
+  const key = await sha1(keyBase)
+
+  if (state.imported_keys[key]) {
+    return null
+  }
+
+  const folderRel = kindToFolder(candidate.kind)
+  const prefix = kindToPrefix(candidate.kind)
+  const title = candidate.kind === "loop" ? `Loop: ${candidate.statement}` : candidate.statement
+  const slug = slugify(candidate.statement)
+  const filename = `${prefix}__${slug}.md`
+
+  const noteAbsDir = join(args.ledgerRoot, folderRel)
+  await ensureDir(noteAbsDir)
+
+  const noteAbs = join(noteAbsDir, filename)
+  const noteRelPath = join(folderRel, filename).replace(/\\/g, "/")
+
+  const fm = buildFrontmatter({
+    created: importedTs,
+    updated: importedTs,
+    tags: candidate.tags,
+    confidence: candidate.confidence,
+    source: "inferred",
+    scope,
+    lang,
+    status: candidate.kind === "loop" ? "open" : undefined,
+  })
+
+  const body = noteBody({
+    title: candidate.kind === "loop" ? `Loop: ${candidate.statement}` : candidate.statement,
+    statement: candidate.statement,
+    originRel: join(vaultRoot, originRel).replace(/\\/g, "/"),
+    importedTs,
+  })
+
+  const full = `${fm}\n\n${body}`
+
+  if (!args.dryRun) {
+    // If file already exists, avoid overwriting; write a suffixed name.
+    let target = noteAbs
+    let targetRel = noteRelPath
+    if (await exists(target)) {
+      const suffix = (await sha1(importedTs)).slice(0, 6)
+      target = join(noteAbsDir, `${prefix}__${slug}__${suffix}.md`)
+      targetRel = join(folderRel, `${prefix}__${slug}__${suffix}.md`).replace(/\\/g, "/")
+    }
+    await Deno.writeTextFile(target, full)
+    state.imported_keys[key] = { ts: importedTs, note_path: targetRel, origin: originRel }
+    return { created: true, noteRelPath: targetRel }
+  } else {
+    // dry-run: pretend created
+    state.imported_keys[key] = { ts: importedTs, note_path: noteRelPath, origin: originRel }
+    return { created: true, noteRelPath: noteRelPath }
+  }
+}
+
+async function exists(path: string): Promise<boolean> {
+  try {
+    await Deno.stat(path)
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function applyImport(args: Args, state: ImportState, vaultRoot: string): Promise<void> {
+  const rows = await scanVault(args, vaultRoot)
+
+  // Only consider files with score >= minScore and with changes since last run.
+  const candidates = rows.filter(
+    (r) => r.signal_score >= args.minScore && r.signal_score <= args.maxScore,
+  )
+
+  // Prefer higher yield hints, then recency, then signal score to reduce 0-candidate files.
+  candidates.sort((a, b) =>
+    (b.yield_hint - a.yield_hint) ||
+    (b.mtimeMs - a.mtimeMs) ||
+    (b.signal_score - a.signal_score)
+  )
+
+  const selected: ScanRow[] = []
+
+  // Prevent one subtree (especially journal archives) from dominating selection.
+  const bucketCount = new Map<string, number>()
+  const bucketCaps: Record<string, number> = args.noBucketCaps ? {} : {
+    "journal-archive": 5,
+    "journal": 20,
+    // others are unlimited
+  }
+
+  function bucketOf(pathRel: string): string {
+    const p = pathRel.replace(/\\/g, "/")
+    if (p.startsWith("90-journal/archive/")) return "journal-archive"
+    if (p.startsWith("90-journal/")) return "journal"
+    if (p.startsWith("02-work/")) return "work"
+    if (p.startsWith("04-dev/")) return "dev"
+    if (p.startsWith("01-home/")) return "home"
+    if (p.startsWith("03-community/")) return "community"
+    if (p.startsWith("92-archive/")) return "archive"
+    return "other"
+  }
+
+  for (const r of candidates) {
+    if (selected.length >= args.maxFiles) break
+
+    const b = bucketOf(r.path_rel)
+    const n = bucketCount.get(b) ?? 0
+    if (!args.noBucketCaps) {
+      const cap = bucketCaps[b] ?? Number.POSITIVE_INFINITY
+      if (n >= cap) continue
+    }
+
+    const abs = r.path_abs
+    const st = await Deno.stat(abs)
+    const hash = await fileHash(abs)
+
+    const prev = state.processed_files[abs]
+    if (prev && prev.hash === hash && prev.size === st.size) {
+      continue // unchanged
+    }
+
+    selected.push(r)
+    bucketCount.set(b, n + 1)
+  }
+
+  const createdNotes: { path: string; origin: string }[] = []
+  const logLines: string[] = []
+
+  let notesWritten = 0
+  for (const r of selected) {
+    if (notesWritten >= args.maxNotes) break
+
+    const abs = r.path_abs
+    const st = await Deno.stat(abs)
+    const hash = await fileHash(abs)
+    const content = await readText(abs)
+    const processedRecord = { mtimeMs: st.mtime?.getTime() ?? 0, size: st.size, hash }
+
+    let fileCandidates = extractCandidates(content)
+      .filter((c) => c.confidence >= args.minConfidence)
+
+    // Prompt/template files are meta-instructions; allow only concepts to be imported.
+    if (isPromptFile(abs)) {
+      fileCandidates = fileCandidates.filter((c) => c.kind === "concept")
+    }
+
+    // Journal archives are valuable but can contain very stale TODOs.
+    // Allow loops only when explicitly marked or temporally anchored.
+    if (isJournalArchive(abs)) {
+      fileCandidates = fileCandidates.filter((c) => {
+        if (c.kind !== "loop") return true
+        return loopHasStrongMarker(c.statement)
+      })
+    }
+
+    // For journals and meeting-like notes, require durable loop signals.
+    if (isJournalFile(abs) || isMeetingLike(abs, content)) {
+      fileCandidates = fileCandidates.filter((c) => {
+        if (c.kind !== "loop") return true
+        return loopHasOwnershipSignal(c.statement) || loopHasDecisionPendingSignal(c.statement)
+      })
+    }
+
+    if (fileCandidates.length === 0) {
+      state.processed_files[abs] = processedRecord
+      continue
+    }
+
+    if (args.verbose) {
+      console.log(
+        `[file] ${r.path_rel} candidates=${fileCandidates.length} hint=${r.yield_hint.toFixed(2)} score=${r.signal_score.toFixed(2)} prompt=${isPromptFile(abs)}`,
+      )
+    }
+
+    for (const cand of fileCandidates) {
+      if (notesWritten >= args.maxNotes) break
+      const res = await writeNoteIfNew(args, state, vaultRoot, abs, cand, content)
+      if (!res) continue
+      createdNotes.push({ path: res.noteRelPath, origin: r.path_rel })
+      notesWritten++
+    }
+
+    state.processed_files[abs] = processedRecord
+  }
+
+  state.vault_root = vaultRoot
+  state.last_run = nowIso()
+
+  // Write state + logs
+  const ts = nowIso()
+  logLines.push(`- Vault: ${vaultRoot}`)
+  logLines.push(`- Selected files: ${selected.length}`)
+  logLines.push(`- Notes created: ${createdNotes.length}`)
+  if (args.dryRun) logLines.push(`- Mode: dry-run (no files written)`)
+
+  if (createdNotes.length > 0) {
+    logLines.push("\n### Created notes")
+    for (const n of createdNotes) logLines.push(`- ${n.path} (from ${n.origin})`)
+  }
+
+  // Timeline entries (only for created notes + state/log changes)
+  const timeline: string[] = []
+  for (const n of createdNotes) {
+    timeline.push(`- ${ts} | created | ${n.path} | imported from Obsidian`)
+  }
+
+  if (!args.dryRun) {
+    await saveState(args, state)
+    await appendLog(args, logLines)
+    if (timeline.length) await appendTimeline(args, timeline)
+  } else {
+    // In dry-run, still print summary
+    console.log(logLines.join("\n"))
+  }
+}
+
+async function main() {
+  console.error("warning: obsidian_import is legacy. Prefer `ledger-obsidian` for new Obsidian integrations.")
+  const args = parseArgs(Deno.args)
+  if (args.cmd === "help" || args.cmd === undefined) {
+    help()
+    return
+  }
+
+  // Validate ledger root
+  if (!(await exists(args.ledgerRoot))) {
+    die(`Ledger root does not exist: ${args.ledgerRoot}\nUse --ledger-root to point to your cog-led repo.`)
+  }
+
+  const state = await loadState(args)
+
+  if (args.cmd === "scan") {
+    if (!args.vaultRoot) die("scan requires <vaultRoot>")
+    const rows = await scanVault(args, args.vaultRoot)
+    const report = scanReport(rows, args.vaultRoot)
+    if (args.out) {
+      const outAbs = resolve(args.ledgerRoot, args.out)
+      await ensureDir(dirname(outAbs))
+      await Deno.writeTextFile(outAbs, report)
+      console.log(`Wrote scan report: ${outAbs}`)
+    } else {
+      console.log(report)
+    }
+    return
+  }
+
+  if (args.cmd === "apply") {
+    if (!args.vaultRoot) die("apply requires <vaultRoot>")
+    await applyImport(args, state, args.vaultRoot)
+    return
+  }
+
+  if (args.cmd === "resume") {
+    const vaultRoot = state.vault_root
+    if (!vaultRoot) die("No vault_root in state. Run: obsidian_import apply <vaultRoot> first.")
+    await applyImport(args, state, vaultRoot)
+    return
+  }
+
+  die(`Unknown command: ${args.cmd}`)
+}
+
+await main()
