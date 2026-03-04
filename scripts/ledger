@@ -1,0 +1,2219 @@
+#!/usr/bin/env python3
+import argparse
+import curses
+import datetime as dt
+import heapq
+import json
+import os
+import re
+import sys
+import textwrap
+import time
+from pathlib import Path
+
+# Add ledger package to path if needed
+SCRIPT_DIR = Path(__file__).resolve().parent
+ROOT_DIR = SCRIPT_DIR.parent
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
+# ---------------------------------------------------------------------------
+# Imports from ledger/ package — single source of truth
+# ---------------------------------------------------------------------------
+from ledger.config import get_config
+from ledger.validation import validate_query, validate_scope, validate_limit
+from ledger.errors import QueryValidationError, ScopeValidationError
+from ledger import retrieval as retrieval_lib
+from ledger import eval as eval_lib
+from ledger.io import safe_append_line
+from ledger.parsing import (
+    parse_frontmatter_text,
+    parse_frontmatter_lines,
+    parse_sections,
+    normalize_section_name,
+    extract_title,
+    first_content_line,
+    first_checkbox,
+    shorten,
+    tokenize,
+    extract_link_tokens,
+)
+from ledger.retrieval import (
+    now_utc,
+    parse_ts,
+    canonical_scope,
+    scope_matches,
+    resolve_retrieval_mode,
+    resolve_embed_backend,
+    confidence_value,
+    compute_recency_component,
+    load_aliases,
+    expand_query_tokens,
+    HISTORY_HINTS,
+    PREFERENCE_HINTS,
+    LOOP_HINTS,
+)
+
+# ---------------------------------------------------------------------------
+# Derive constants from config (single source of truth: ledger/config.py)
+# ---------------------------------------------------------------------------
+_config = get_config()
+
+NOTE_TYPES = {
+    name: {"dir": _config.root_dir / info["dir"], "label": info["label"]}
+    for name, info in _config.note_types.items()
+}
+CORE_NOTE_TYPES = _config.core_note_types
+LOOP_STATUSES = _config.loop_statuses
+QUERY_SCOPES = _config.query_scopes
+RETRIEVAL_MODES = _config.retrieval_modes
+EMBED_BACKENDS = _config.embed_backends
+ALIASES_PATH = _config.aliases_path
+
+# Retrieval tuning — all from config
+SHORTLIST_MIN_CANDIDATES = _config.shortlist_min_candidates
+SHORTLIST_MAX_CANDIDATES = _config.shortlist_max_candidates
+SHORTLIST_LIMIT_MULTIPLIER = _config.shortlist_limit_multiplier
+ATTENTION_SHORTLIST_MIN_CANDIDATES = _config.attention_shortlist_min
+ATTENTION_SHORTLIST_MAX_CANDIDATES = _config.attention_shortlist_max
+ATTENTION_SHORTLIST_LIMIT_MULTIPLIER = _config.attention_shortlist_limit_multiplier
+DETAILED_REASONS_LIMIT = _config.detailed_reasons_limit
+PROGRESSIVE_RATIONALE_TOP = _config.progressive_rationale_top
+
+_CANDIDATE_CACHE = None
+_CANDIDATE_INDEX_CACHE = None
+_EMBEDDINGS_MODULE_CACHE = None
+
+
+def maybe_reexec_in_repo_venv():
+    if os.environ.get("COG_LEDGER_VENV_REEXEC") == "1":
+        return
+    venv_dir = ROOT_DIR / ".venv"
+    venv_python = venv_dir / "bin" / "python"
+    if not venv_python.is_file():
+        return
+    try:
+        in_target_venv = Path(sys.prefix).resolve() == venv_dir.resolve()
+    except Exception:
+        return
+    if in_target_venv:
+        return
+    env = os.environ.copy()
+    env["COG_LEDGER_VENV_REEXEC"] = "1"
+    env["VIRTUAL_ENV"] = str(venv_dir.resolve())
+    env["PATH"] = f"{venv_dir / 'bin'}:{env.get('PATH', '')}"
+    os.execve(
+        str(venv_python),
+        [str(venv_python), str(Path(__file__).resolve()), *sys.argv[1:]],
+        env,
+    )
+
+
+def load_embeddings_module():
+    """Load the embeddings module using normal import."""
+    global _EMBEDDINGS_MODULE_CACHE
+    if _EMBEDDINGS_MODULE_CACHE is not None:
+        return _EMBEDDINGS_MODULE_CACHE
+
+    # Add scripts dir to path if needed for import
+    if str(SCRIPT_DIR) not in sys.path:
+        sys.path.insert(0, str(SCRIPT_DIR))
+
+    # Use normal import instead of exec_module
+    import ledger_embeddings as module
+    _EMBEDDINGS_MODULE_CACHE = module
+    return _EMBEDDINGS_MODULE_CACHE
+
+
+def resolve_embed_model(backend, embed_model):
+    if embed_model:
+        return str(embed_model).strip()
+    embeddings = load_embeddings_module()
+    return embeddings.default_model_for_backend(backend)
+
+
+def loop_item(path):
+    frontmatter, body = read_note(path)
+    sections = parse_sections(body)
+
+    question = "\n".join(sections.get("question or task", [])).strip()
+    title = extract_title(body)
+    if not question:
+        question = title or path.name.replace("loop__", "").replace("_", " ")
+
+    next_action_text = "\n".join(sections.get("next action", [])).strip()
+    if not next_action_text:
+        next_action_text = body
+    next_action = first_checkbox(next_action_text) or (next_action_text.splitlines()[0].strip() if next_action_text else "")
+
+    return {
+        "path": str(path),
+        "frontmatter": frontmatter,
+        "question": question,
+        "why": "\n".join(sections.get("why it matters", [])).strip(),
+        "next_action": next_action,
+        "links": "\n".join(sections.get("links", [])).strip(),
+        "title": title,
+        "body": body,
+        "type": "loops",
+    }
+
+
+def generic_item(path, note_type):
+    frontmatter, body = read_note(path)
+    sections = parse_sections(body)
+    title = extract_title(body) or path.name.replace("_", " ")
+
+    statement = "\n".join(sections.get("statement", [])).strip()
+    if not statement:
+        statement = first_content_line(body)
+
+    return {
+        "path": str(path),
+        "frontmatter": frontmatter,
+        "title": title,
+        "statement": statement,
+        "context": "\n".join(sections.get("context", [])).strip(),
+        "implications": "\n".join(sections.get("implications", [])).strip(),
+        "links": "\n".join(sections.get("links", [])).strip(),
+        "body": body,
+        "type": note_type,
+    }
+
+
+def read_note(path):
+    text = Path(path).read_text(encoding="utf-8")
+    frontmatter, body = parse_frontmatter_text(text)
+    return frontmatter, body.strip()
+
+
+def sorted_items(note_type, loop_status=None):
+    items = []
+    if note_type == "all":
+        for nt in NOTE_TYPES:
+            items.extend(sorted_items(nt))
+        items.sort(key=lambda x: x["frontmatter"].get("updated", ""), reverse=True)
+        return items
+
+    if note_type not in NOTE_TYPES:
+        return items
+    notes_dir = NOTE_TYPES[note_type]["dir"]
+    if not notes_dir.is_dir():
+        return items
+    for path in notes_dir.iterdir():
+        if path.suffix != ".md":
+            continue
+        if note_type == "loops":
+            item = loop_item(path)
+            status = str(item["frontmatter"].get("status", "open")).strip().lower()
+            if loop_status and loop_status != "all" and status != loop_status:
+                continue
+        else:
+            item = generic_item(path, note_type)
+        updated = item["frontmatter"].get("updated", "")
+        items.append((updated, item))
+    items.sort(key=lambda x: x[0], reverse=True)
+    return [item for _, item in items]
+
+
+def compact_line(item, width, show_path=False, prefix_type=False):
+    if item["type"] == "loops":
+        line = compact_loop_line(item, width, show_path=show_path)
+    else:
+        line = compact_generic_line(item, width, show_path=show_path)
+
+    if prefix_type:
+        label = NOTE_TYPES.get(item["type"], {}).get("label", item["type"])
+        line = f"{label} | {line}"
+    return line
+
+
+def compact_loop_line(item, width, show_path=False):
+    fm = item["frontmatter"]
+    status = fm.get("status", "?")
+    updated = fm.get("updated", "")
+    updated_short = updated.split("T")[0] if updated else "unknown"
+    question = item["question"] or "untitled"
+    next_action = item["next_action"] or "none"
+
+    conf = ""
+    if "confidence" in fm:
+        try:
+            conf_val = float(fm.get("confidence", "1"))
+            if conf_val < 0.7:
+                conf = f" conf {conf_val:.2g}"
+        except ValueError:
+            pass
+
+    base = f"{status} | {question} - next: {next_action} (updated {updated_short}{conf})"
+    if show_path:
+        base = f"{base} [{Path(item['path']).resolve().relative_to(ROOT_DIR)}]"
+    return shorten(base, width)
+
+
+def compact_generic_line(item, width, show_path=False):
+    fm = item["frontmatter"]
+    updated = fm.get("updated", "")
+    updated_short = updated.split("T")[0] if updated else "unknown"
+    title = item["title"] or "untitled"
+    statement = item.get("statement") or "no summary"
+
+    conf = ""
+    if "confidence" in fm:
+        try:
+            conf_val = float(fm.get("confidence", "1"))
+            if conf_val < 0.7:
+                conf = f" conf {conf_val:.2g}"
+        except ValueError:
+            pass
+
+    base = f"{title} - {statement} (updated {updated_short}{conf})"
+    if show_path:
+        base = f"{base} [{Path(item['path']).resolve().relative_to(ROOT_DIR)}]"
+    return shorten(base, width)
+
+
+def format_detail(item, width):
+    fm = item["frontmatter"]
+    lines = []
+    lines.append(f"Path: {Path(item['path']).resolve().relative_to(ROOT_DIR)}")
+    lines.append(f"Updated: {fm.get('updated', 'unknown')}")
+    conf = fm.get("confidence", "unknown")
+    lines.append(f"Confidence: {conf} (source: {fm.get('source', 'unknown')})")
+    scope = fm.get("scope", "unknown")
+    tags = fm.get("tags", [])
+    tags_text = ", ".join(tags) if isinstance(tags, list) else tags
+    lines.append(f"Scope: {scope} (tags: {tags_text or 'none'})")
+
+    def add_section(title, text):
+        if not text:
+            return
+        lines.append("")
+        lines.append(f"{title}:")
+        wrapped = textwrap.wrap(text, width=max(10, width - 2)) or [""]
+        lines.extend([f"  {w}" for w in wrapped])
+
+    if item["type"] == "loops":
+        lines.append(f"Status: {fm.get('status', '?')}")
+        add_section("Question or task", item["question"])
+        add_section("Why it matters", item["why"])
+        add_section("Next action", item["next_action"])
+        add_section("Links", item["links"])
+    else:
+        add_section("Statement", item.get("statement", ""))
+        add_section("Context", item.get("context", ""))
+        add_section("Implications", item.get("implications", ""))
+        add_section("Links", item.get("links", ""))
+    return lines
+
+
+def list_items(args, note_type, loop_status=None):
+    items = sorted_items(note_type, loop_status=loop_status)
+    if not items:
+        print("No notes found.")
+        return
+
+    label = note_type.replace("_", " ")
+    if note_type == "loops" and loop_status and loop_status != "all":
+        label = f"{label} [{loop_status}]"
+    print(f"{label} ({len(items)}):")
+    for item in items[: args.limit]:
+        line = compact_line(
+            item,
+            width=args.width,
+            show_path=args.paths,
+            prefix_type=(note_type == "all"),
+        )
+        print(f"- {line}")
+
+
+def verbose_items(args, note_type, loop_status=None):
+    items = sorted_items(note_type, loop_status=loop_status)
+    if not items:
+        print("No notes found.")
+        return
+
+    for item in items[: args.limit]:
+        print(
+            f"- {compact_line(item, width=args.width, show_path=args.paths, prefix_type=(note_type == 'all'))}"
+        )
+        detail_lines = format_detail(item, width=args.width)
+        for line in detail_lines:
+            print(f"  {line}")
+        print("")
+
+
+def interactive_items(_args, note_type, loop_status=None):
+    items = sorted_items(note_type, loop_status=loop_status)
+    if not items:
+        print("No notes found.")
+        return
+
+    def draw(stdscr):
+        curses.curs_set(0)
+        idx = 0
+        offset = 0
+        while True:
+            stdscr.erase()
+            h, w = stdscr.getmaxyx()
+
+            status_label = f", status={loop_status}" if note_type == "loops" and loop_status else ""
+            header = f"{note_type}{status_label} (up/down or j/k to navigate, q to quit)"
+            stdscr.addstr(0, 0, shorten(header, w - 1))
+
+            list_h = max(6, h // 2)
+            list_start = 1
+            list_lines = list_h - list_start
+
+            if idx < offset:
+                offset = idx
+            if idx >= offset + list_lines:
+                offset = idx - list_lines + 1
+
+            for i in range(list_lines):
+                item_index = offset + i
+                if item_index >= len(items):
+                    break
+                line = compact_line(
+                    items[item_index],
+                    width=w - 1,
+                    show_path=False,
+                    prefix_type=(note_type == "all"),
+                )
+                if item_index == idx:
+                    stdscr.addstr(list_start + i, 0, line.ljust(w - 1), curses.A_REVERSE)
+                else:
+                    stdscr.addstr(list_start + i, 0, line.ljust(w - 1))
+
+            sep_y = list_h
+            if sep_y < h - 1:
+                stdscr.hline(sep_y, 0, "-", w - 1)
+
+            detail_y = sep_y + 1
+            detail_lines = format_detail(items[idx], width=w - 1)
+            for i, line in enumerate(detail_lines):
+                if detail_y + i >= h:
+                    break
+                stdscr.addstr(detail_y + i, 0, shorten(line, w - 1))
+
+            stdscr.refresh()
+            ch = stdscr.getch()
+            if ch in (ord("q"), 27):
+                break
+            if ch in (curses.KEY_UP, ord("k")):
+                idx = max(0, idx - 1)
+            elif ch in (curses.KEY_DOWN, ord("j")):
+                idx = min(len(items) - 1, idx + 1)
+
+    try:
+        curses.wrapper(draw)
+    except curses.error:
+        print("Interactive view requires a larger terminal.")
+
+
+def build_attention_tokens(
+    title, statement, snippet_source, tags, scope, status, next_action, body, slug
+):
+    capsule_parts = [
+        title,
+        statement,
+        snippet_source,
+        " ".join(tags),
+        scope,
+        status,
+        next_action,
+        slug,
+    ]
+    attention_tokens = tokenize(" ".join(part for part in capsule_parts if part))
+    attention_tokens |= extract_link_tokens(body)
+    return attention_tokens
+
+
+def candidate_from_note(path, note_type):
+    frontmatter, body = read_note(path)
+    sections = parse_sections(body)
+    title = extract_title(body) or path.stem.replace("_", " ")
+
+    if note_type == "loops":
+        statement = "\n".join(sections.get("question or task", [])).strip()
+        if not statement:
+            statement = first_content_line(body)
+        next_action_text = "\n".join(sections.get("next action", [])).strip()
+        if not next_action_text:
+            next_action_text = body
+        next_action = first_checkbox(next_action_text)
+        status = str(frontmatter.get("status", "open")).strip().lower() or "open"
+    else:
+        statement = "\n".join(sections.get("statement", [])).strip() or first_content_line(body)
+        next_action = ""
+        status = ""
+
+    tags_raw = frontmatter.get("tags", [])
+    if isinstance(tags_raw, list):
+        tags = [str(t).strip() for t in tags_raw if str(t).strip()]
+    elif isinstance(tags_raw, str) and tags_raw.strip():
+        tags = [tags_raw.strip()]
+    else:
+        tags = []
+
+    scope = canonical_scope(frontmatter.get("scope", ""))
+    updated_str = str(frontmatter.get("updated", "")).strip()
+    updated_ts = parse_ts(updated_str)
+    confidence = confidence_value(frontmatter)
+    source = str(frontmatter.get("source", "")).strip().lower()
+
+    rel_path = path.resolve().relative_to(ROOT_DIR)
+    slug = path.stem
+
+    searchable_text = " ".join(
+        [
+            title,
+            statement,
+            body,
+            " ".join(tags),
+            slug,
+        ]
+    )
+    note_tokens = tokenize(searchable_text)
+
+    tag_tokens = set()
+    for tag in tags:
+        tag_tokens |= tokenize(tag.replace("-", " ").replace("_", " "))
+
+    snippet_source = statement or first_content_line(body)
+    if note_type == "loops" and next_action:
+        snippet_source = f"{statement} Next: {next_action}".strip()
+    attention_tokens = build_attention_tokens(
+        title=title,
+        statement=statement,
+        snippet_source=snippet_source,
+        tags=tags,
+        scope=scope,
+        status=status,
+        next_action=next_action,
+        body=body,
+        slug=slug,
+    )
+
+    return {
+        "path": str(path.resolve()),
+        "rel_path": str(rel_path),
+        "type": NOTE_TYPES[note_type]["label"],
+        "title": title,
+        "statement": statement,
+        "body": body,
+        "updated": updated_str,
+        "updated_ts": updated_ts,
+        "confidence": confidence,
+        "source": source,
+        "scope": scope,
+        "status": status,
+        "tags": tags,
+        "note_tokens": note_tokens,
+        "tag_tokens": tag_tokens,
+        "attention_tokens": attention_tokens,
+        "snippet": snippet_source,
+        "has_next_action_checkbox": bool(next_action),
+    }
+
+
+def build_candidates(use_cache=False):
+    global _CANDIDATE_CACHE
+    if use_cache and _CANDIDATE_CACHE is not None:
+        return _CANDIDATE_CACHE
+
+    candidates = []
+    for note_type in CORE_NOTE_TYPES:
+        note_dir = NOTE_TYPES[note_type]["dir"]
+        if not note_dir.is_dir():
+            continue
+        for path in sorted(note_dir.glob("*.md")):
+            candidates.append(candidate_from_note(path, note_type))
+
+    if use_cache:
+        _CANDIDATE_CACHE = candidates
+        return _CANDIDATE_CACHE
+    return candidates
+
+
+def clear_candidate_cache():
+    global _CANDIDATE_CACHE, _CANDIDATE_INDEX_CACHE
+    _CANDIDATE_CACHE = None
+    _CANDIDATE_INDEX_CACHE = None
+
+
+def candidate_index_tokens(candidate):
+    return (
+        set(candidate.get("note_tokens", set()))
+        | set(candidate.get("tag_tokens", set()))
+        | set(candidate.get("attention_tokens", set()))
+    )
+
+
+def build_candidate_index(use_cache=False):
+    global _CANDIDATE_INDEX_CACHE
+    if use_cache and _CANDIDATE_INDEX_CACHE is not None:
+        return _CANDIDATE_INDEX_CACHE
+
+    candidates = build_candidates(use_cache=use_cache)
+    token_index = {}
+    for idx, candidate in enumerate(candidates):
+        for token in candidate_index_tokens(candidate):
+            token_index.setdefault(token, []).append(idx)
+
+    index = {"candidates": candidates, "token_index": token_index}
+    if use_cache:
+        _CANDIDATE_INDEX_CACHE = index
+        return _CANDIDATE_INDEX_CACHE
+    return index
+
+
+def retrieve_candidates_from_index(index, query_tokens, query_scope, minimum_pool=SHORTLIST_MIN_CANDIDATES):
+    candidates = index.get("candidates", [])
+    if not candidates:
+        return []
+    if not query_tokens and query_scope == "all":
+        return candidates
+
+    matched_ids = set()
+    token_index = index.get("token_index", {})
+    for token in query_tokens:
+        matched_ids.update(token_index.get(token, []))
+
+    if query_scope != "all":
+        for idx, candidate in enumerate(candidates):
+            if scope_matches(candidate.get("scope", ""), query_scope):
+                matched_ids.add(idx)
+
+    if not matched_ids:
+        return candidates
+
+    ordered_ids = sorted(
+        matched_ids,
+        key=lambda idx: (
+            candidates[idx].get("updated") or "",
+            candidates[idx].get("path", ""),
+        ),
+        reverse=True,
+    )
+    selected = [candidates[idx] for idx in ordered_ids]
+    if len(selected) >= min(len(candidates), minimum_pool):
+        return selected
+
+    seen_ids = set(ordered_ids)
+    remainder = [idx for idx in range(len(candidates)) if idx not in seen_ids]
+    remainder.sort(
+        key=lambda idx: (
+            candidates[idx].get("updated") or "",
+            candidates[idx].get("path", ""),
+        ),
+        reverse=True,
+    )
+    for idx in remainder:
+        selected.append(candidates[idx])
+        if len(selected) >= min(len(candidates), minimum_pool):
+            break
+
+    return selected
+
+
+def coarse_candidate_score(candidate, query_tokens, query_scope, history_mode, loop_mode, preference_mode):
+    if query_tokens:
+        lexical_overlap_count = len(candidate["note_tokens"] & query_tokens)
+        lexical_match = lexical_overlap_count / len(query_tokens)
+        tag_overlap_count = len(candidate["tag_tokens"] & query_tokens)
+        tag_overlap = tag_overlap_count / len(query_tokens)
+    else:
+        lexical_overlap_count = 0
+        lexical_match = 0.0
+        tag_overlap_count = 0
+        tag_overlap = 0.0
+
+    scope_match = 1.0 if scope_matches(candidate["scope"], query_scope) else 0.0
+    score = (0.70 * lexical_match) + (0.20 * tag_overlap) + (0.10 * scope_match)
+
+    if query_scope != "all":
+        if scope_match >= 1.0:
+            score += 0.03
+        else:
+            score -= 0.03
+    if candidate["type"] == "loop" and candidate.get("status") == "closed" and not history_mode:
+        score -= 0.05
+    if history_mode and candidate["type"] == "loop" and candidate.get("status") == "closed":
+        score += 0.05
+    if loop_mode and candidate["type"] == "loop" and candidate.get("status") == "open":
+        score += 0.04
+    if preference_mode and candidate["type"] == "pref":
+        score += 0.04
+
+    return score, {
+        "lexical_overlap_count": lexical_overlap_count,
+        "tag_overlap_count": tag_overlap_count,
+        "scope_match": scope_match,
+    }
+
+
+def shortlist_candidates(candidates, query_tokens, query_scope, history_mode, loop_mode, preference_mode, limit):
+    if not candidates:
+        return []
+
+    shortlist_target = min(
+        len(candidates),
+        max(
+            SHORTLIST_MIN_CANDIDATES,
+            min(SHORTLIST_MAX_CANDIDATES, max(1, limit) * SHORTLIST_LIMIT_MULTIPLIER),
+        ),
+    )
+
+    scored = []
+    for candidate in candidates:
+        coarse_score, coarse_components = coarse_candidate_score(
+            candidate,
+            query_tokens,
+            query_scope,
+            history_mode,
+            loop_mode,
+            preference_mode,
+        )
+
+        if (
+            query_scope == "all"
+            and coarse_components["lexical_overlap_count"] == 0
+            and coarse_components["tag_overlap_count"] == 0
+        ):
+            continue
+        if query_scope == "all" and coarse_score <= 0:
+            continue
+
+        scored.append((coarse_score, candidate))
+
+    top_scored = heapq.nlargest(
+        shortlist_target,
+        scored,
+        key=lambda item: (
+            item[0],
+            item[1]["updated"] or "",
+            item[1]["path"],
+        ),
+    )
+    return [item[1] for item in top_scored]
+
+
+def compressed_attention_candidate_score(
+    candidate, query_tokens, query_scope, history_mode, loop_mode, preference_mode
+):
+    if query_tokens:
+        attention_overlap_count = len(candidate.get("attention_tokens", set()) & query_tokens)
+        attention_overlap = attention_overlap_count / len(query_tokens)
+        lexical_overlap_count = len(candidate["note_tokens"] & query_tokens)
+        lexical_match = lexical_overlap_count / len(query_tokens)
+        tag_overlap_count = len(candidate["tag_tokens"] & query_tokens)
+        tag_overlap = tag_overlap_count / len(query_tokens)
+    else:
+        attention_overlap_count = 0
+        attention_overlap = 0.0
+        lexical_overlap_count = 0
+        lexical_match = 0.0
+        tag_overlap_count = 0
+        tag_overlap = 0.0
+
+    scope_match = 1.0 if scope_matches(candidate["scope"], query_scope) else 0.0
+    score = (0.55 * attention_overlap) + (0.20 * lexical_match) + (0.15 * tag_overlap) + (0.10 * scope_match)
+
+    if query_scope != "all":
+        if scope_match >= 1.0:
+            score += 0.04
+        else:
+            score -= 0.04
+    if candidate["type"] == "loop" and candidate.get("status") == "closed" and not history_mode:
+        score -= 0.05
+    if history_mode and candidate["type"] == "loop" and candidate.get("status") == "closed":
+        score += 0.06
+    if loop_mode and candidate["type"] == "loop" and candidate.get("status") == "open":
+        score += 0.05
+    if preference_mode and candidate["type"] == "pref":
+        score += 0.05
+
+    return score, {
+        "attention_overlap_count": attention_overlap_count,
+        "lexical_overlap_count": lexical_overlap_count,
+        "tag_overlap_count": tag_overlap_count,
+        "scope_match": scope_match,
+    }
+
+
+def shortlist_attention_candidates(
+    candidates, query_tokens, query_scope, history_mode, loop_mode, preference_mode, limit
+):
+    if not candidates:
+        return []
+
+    shortlist_target = min(
+        len(candidates),
+        max(
+            ATTENTION_SHORTLIST_MIN_CANDIDATES,
+            min(
+                ATTENTION_SHORTLIST_MAX_CANDIDATES,
+                max(1, limit) * ATTENTION_SHORTLIST_LIMIT_MULTIPLIER,
+            ),
+        ),
+    )
+
+    scored = []
+    for candidate in candidates:
+        coarse_score, coarse_components = compressed_attention_candidate_score(
+            candidate,
+            query_tokens,
+            query_scope,
+            history_mode,
+            loop_mode,
+            preference_mode,
+        )
+
+        if (
+            query_scope == "all"
+            and coarse_components["attention_overlap_count"] == 0
+            and coarse_components["lexical_overlap_count"] == 0
+            and coarse_components["tag_overlap_count"] == 0
+        ):
+            continue
+        if query_scope == "all" and coarse_score <= 0:
+            continue
+
+        scored.append((coarse_score, candidate))
+
+    top_scored = heapq.nlargest(
+        shortlist_target,
+        scored,
+        key=lambda item: (
+            item[0],
+            item[1]["updated"] or "",
+            item[1]["path"],
+        ),
+    )
+    return [item[1] for item in top_scored]
+
+
+def has_token_overlap(candidate, query_tokens):
+    if not query_tokens:
+        return False
+    return bool((candidate["note_tokens"] & query_tokens) or (candidate["tag_tokens"] & query_tokens))
+
+
+def prefilter_candidates_by_scope_and_type(
+    candidates, query_tokens, query_scope, history_mode, loop_mode, preference_mode, limit
+):
+    if not candidates:
+        return []
+
+    filtered = []
+    for candidate in candidates:
+        token_overlap = has_token_overlap(candidate, query_tokens)
+
+        if query_scope != "all" and not scope_matches(candidate["scope"], query_scope) and not token_overlap:
+            continue
+        if preference_mode and candidate["type"] not in {"pref", "concept"} and not token_overlap:
+            continue
+        if loop_mode and candidate["type"] not in {"loop", "goal"} and not token_overlap:
+            continue
+        if history_mode and candidate["type"] not in {"loop", "fact", "concept"} and not token_overlap:
+            continue
+
+        filtered.append(candidate)
+
+    if not filtered:
+        return candidates
+
+    if query_scope == "all" and (history_mode or loop_mode or preference_mode):
+        return filtered
+
+    minimum_pool = min(len(candidates), max(SHORTLIST_MIN_CANDIDATES, max(1, limit) * 2))
+    if len(filtered) >= minimum_pool:
+        return filtered
+
+    seen_paths = {item["path"] for item in filtered}
+    remainder = [item for item in candidates if item["path"] not in seen_paths]
+    remainder.sort(key=lambda item: (item["updated"] or "", item["path"]), reverse=True)
+    for candidate in remainder:
+        filtered.append(candidate)
+        if len(filtered) >= minimum_pool:
+            break
+
+    return filtered
+
+
+def apply_progressive_disclosure(
+    ranked_results,
+    limit,
+    query_tokens,
+    query_scope,
+    history_mode,
+    loop_mode,
+    preference_mode,
+    now_dt,
+    expansion_events,
+):
+    output = ranked_results[:limit]
+    top_n = min(PROGRESSIVE_RATIONALE_TOP, len(output))
+    for idx, item in enumerate(output):
+        if idx < top_n:
+            _, reasons, _ = score_candidate(
+                item,
+                query_tokens,
+                query_scope,
+                history_mode,
+                loop_mode,
+                preference_mode,
+                now_dt,
+                expansion_events,
+                include_reasons=True,
+            )
+            item["reasons"] = reasons
+            item["disclosure_level"] = "rationale"
+        else:
+            item["reasons"] = []
+            item["disclosure_level"] = "compact"
+    return output
+
+
+def score_candidate(
+    candidate,
+    query_tokens,
+    query_scope,
+    history_mode,
+    loop_mode,
+    preference_mode,
+    now_dt,
+    expansion_events,
+    include_reasons=True,
+):
+    if query_tokens:
+        lexical_overlap_count = len(candidate["note_tokens"] & query_tokens)
+        lexical_match = lexical_overlap_count / len(query_tokens)
+        tag_overlap_count = len(candidate["tag_tokens"] & query_tokens)
+        tag_overlap = tag_overlap_count / len(query_tokens)
+    else:
+        lexical_overlap_count = 0
+        lexical_match = 0.0
+        tag_overlap_count = 0
+        tag_overlap = 0.0
+
+    scope_match = 1.0 if scope_matches(candidate["scope"], query_scope) else 0.0
+    recency = compute_recency_component(candidate["updated_ts"], now_dt)
+    confidence = candidate["confidence"]
+
+    score = (0.40 * lexical_match) + (0.20 * tag_overlap) + (0.15 * scope_match) + (0.15 * recency) + (0.10 * confidence)
+
+    reasons = []
+    if include_reasons and lexical_overlap_count > 0:
+        reasons.append(f"lexical_overlap={lexical_overlap_count}")
+    if include_reasons and tag_overlap_count > 0:
+        reasons.append(f"tag_overlap={tag_overlap_count}")
+    if query_scope != "all":
+        if scope_match >= 1.0:
+            score += 0.05
+            if include_reasons:
+                reasons.append("scope_boost")
+        else:
+            score -= 0.05
+            if include_reasons:
+                reasons.append("scope_demote")
+    if candidate["type"] == "loop" and candidate.get("status") == "closed" and not history_mode:
+        score -= 0.20
+        if include_reasons:
+            reasons.append("closed_loop_penalty")
+    if history_mode and candidate["type"] == "loop":
+        if candidate.get("status") == "closed":
+            score += 0.12
+            if include_reasons:
+                reasons.append("history_closed_loop_boost")
+        elif candidate.get("status") == "open":
+            score -= 0.05
+            if include_reasons:
+                reasons.append("history_open_loop_demote")
+    if loop_mode and candidate["type"] == "loop" and candidate.get("status") == "open":
+        score += 0.07
+        if include_reasons:
+            reasons.append("open_loop_intent_boost")
+    if preference_mode and candidate["type"] == "pref":
+        score += 0.07
+        if include_reasons:
+            reasons.append("preference_intent_boost")
+
+    if include_reasons and expansion_events:
+        alias_summary = ", ".join(sorted({f"{e['alias']}->{e['phrase']}" for e in expansion_events}))
+        reasons.append(f"alias_expansion={alias_summary}")
+
+    if include_reasons and recency > 0:
+        reasons.append(f"recency={recency:.2f}")
+    if include_reasons:
+        reasons.append(f"confidence={confidence:.2f}")
+
+    score = max(0.0, min(1.0, score))
+    return score, reasons, {
+        "lexical_match": lexical_match,
+        "tag_overlap": tag_overlap,
+        "scope_match": scope_match,
+        "recency": recency,
+        "confidence": confidence,
+    }
+
+
+def _rank_query_lexical(
+    query, scope="all", limit=8, aliases_path=ALIASES_PATH, now_dt=None, retrieval_mode="legacy"
+):
+    now_dt = now_dt or now_utc()
+    mode = resolve_retrieval_mode(retrieval_mode)
+    two_stage_active = mode in {"legacy", "two_stage"}
+    compressed_attention_active = mode in {"legacy", "compressed_attention"}
+    scope_prefilter_active = mode in {"legacy", "scope_type_prefilter"}
+    precomputed_index_active = mode in {"legacy", "precomputed_index"}
+    progressive_disclosure_active = mode in {"legacy", "progressive_disclosure"}
+    aliases = load_aliases(Path(aliases_path))
+    query_tokens = tokenize(query)
+    expanded_tokens, expansion_events = expand_query_tokens(query_tokens, aliases)
+
+    history_mode = any(token in HISTORY_HINTS for token in query_tokens)
+    loop_mode = any(token in LOOP_HINTS for token in query_tokens)
+    preference_mode = any(token in PREFERENCE_HINTS for token in query_tokens)
+    include_reasons = True if mode == "legacy" else (limit <= DETAILED_REASONS_LIMIT)
+    if progressive_disclosure_active:
+        include_reasons = False
+    index_pool_size = None
+    if precomputed_index_active:
+        index = build_candidate_index(use_cache=True)
+        candidates = index["candidates"]
+        prefiltered_candidates = retrieve_candidates_from_index(
+            index,
+            expanded_tokens,
+            scope,
+            minimum_pool=max(SHORTLIST_MIN_CANDIDATES, max(1, limit) * 2),
+        )
+        index_pool_size = len(prefiltered_candidates)
+    else:
+        candidates = build_candidates(
+            use_cache=(
+                mode
+                in {
+                    "two_stage",
+                    "compressed_attention",
+                    "progressive_disclosure",
+                }
+            )
+            or two_stage_active
+        )
+        prefiltered_candidates = candidates
+
+    if scope_prefilter_active:
+        prefiltered_candidates = prefilter_candidates_by_scope_and_type(
+            candidates,
+            expanded_tokens,
+            scope,
+            history_mode,
+            loop_mode,
+            preference_mode,
+            limit=limit,
+        )
+
+    if compressed_attention_active and limit <= ATTENTION_SHORTLIST_MAX_CANDIDATES:
+        shortlisted = shortlist_attention_candidates(
+            prefiltered_candidates,
+            expanded_tokens,
+            scope,
+            history_mode,
+            loop_mode,
+            preference_mode,
+            limit=limit,
+        )
+    elif two_stage_active and limit <= SHORTLIST_MAX_CANDIDATES:
+        shortlisted = shortlist_candidates(
+            prefiltered_candidates,
+            expanded_tokens,
+            scope,
+            history_mode,
+            loop_mode,
+            preference_mode,
+            limit=limit,
+        )
+    elif precomputed_index_active and limit <= SHORTLIST_MAX_CANDIDATES:
+        shortlisted = shortlist_candidates(
+            prefiltered_candidates,
+            expanded_tokens,
+            scope,
+            history_mode,
+            loop_mode,
+            preference_mode,
+            limit=limit,
+        )
+    elif precomputed_index_active:
+        shortlisted = prefiltered_candidates
+    elif scope_prefilter_active and limit <= SHORTLIST_MAX_CANDIDATES:
+        shortlisted = shortlist_candidates(
+            prefiltered_candidates,
+            expanded_tokens,
+            scope,
+            history_mode,
+            loop_mode,
+            preference_mode,
+            limit=limit,
+        )
+    elif scope_prefilter_active:
+        shortlisted = prefiltered_candidates
+    else:
+        shortlisted = candidates
+
+    ranked = []
+    for candidate in shortlisted:
+        score, reasons, components = score_candidate(
+            candidate,
+            expanded_tokens,
+            scope,
+            history_mode,
+            loop_mode,
+            preference_mode,
+            now_dt,
+            expansion_events if include_reasons else [],
+            include_reasons=include_reasons,
+        )
+
+        if score <= 0:
+            continue
+        if components["lexical_match"] == 0 and components["tag_overlap"] == 0 and scope == "all":
+            continue
+
+        enriched = dict(candidate)
+        enriched["score"] = score
+        enriched["reasons"] = reasons
+        enriched["components"] = components
+        ranked.append(enriched)
+
+    ranked.sort(
+        key=lambda item: (
+            item["score"],
+            item["updated"] or "",
+            item["path"],
+        ),
+        reverse=True,
+    )
+
+    if progressive_disclosure_active:
+        output_results = apply_progressive_disclosure(
+            ranked_results=ranked,
+            limit=limit,
+            query_tokens=expanded_tokens,
+            query_scope=scope,
+            history_mode=history_mode,
+            loop_mode=loop_mode,
+            preference_mode=preference_mode,
+            now_dt=now_dt,
+            expansion_events=expansion_events,
+        )
+    else:
+        output_results = ranked[:limit]
+
+    return {
+        "query": query,
+        "scope": scope,
+        "retrieval_mode": mode,
+        "progressive_top_n": PROGRESSIVE_RATIONALE_TOP if progressive_disclosure_active else 0,
+        "expanded_tokens": sorted(expanded_tokens),
+        "expansion_events": expansion_events,
+        "candidate_pool_size": len(candidates),
+        "indexed_pool_size": index_pool_size,
+        "prefilter_size": len(prefiltered_candidates),
+        "shortlist_size": len(shortlisted),
+        "results": output_results,
+    }
+
+
+def lexical_score_component(candidate, query_tokens):
+    if query_tokens:
+        lexical_overlap_count = len(candidate["note_tokens"] & query_tokens)
+        lexical_match = lexical_overlap_count / len(query_tokens)
+        tag_overlap_count = len(candidate["tag_tokens"] & query_tokens)
+        tag_overlap = tag_overlap_count / len(query_tokens)
+    else:
+        lexical_overlap_count = 0
+        lexical_match = 0.0
+        tag_overlap_count = 0
+        tag_overlap = 0.0
+
+    lexical_score = (0.70 * lexical_match) + (0.30 * tag_overlap)
+    lexical_score = max(0.0, min(1.0, lexical_score))
+    return lexical_score, lexical_overlap_count, tag_overlap_count
+
+
+def rank_query_semantic_hybrid(
+    query,
+    scope="all",
+    limit=8,
+    aliases_path=ALIASES_PATH,
+    now_dt=None,
+    embed_backend="local",
+    embed_model=None,
+):
+    now_dt = now_dt or now_utc()
+    aliases = load_aliases(Path(aliases_path))
+    query_tokens = tokenize(query)
+    expanded_tokens, expansion_events = expand_query_tokens(query_tokens, aliases)
+    include_reasons = limit <= DETAILED_REASONS_LIMIT
+
+    candidates = build_candidates(use_cache=True)
+    backend = resolve_embed_backend(embed_backend)
+    model = resolve_embed_model(backend, embed_model)
+    embeddings = load_embeddings_module()
+
+    if backend == "openai":
+        # Manual OpenAI mode should hard-fail if credentials are absent.
+        embeddings.ensure_openai_api_key()
+
+    semantic = embeddings.semantic_score_map(
+        query=query,
+        target="ledger",
+        backend=backend,
+        model=model,
+    )
+    if not semantic.get("available"):
+        if semantic.get("reason") == "missing_index":
+            fallback = _rank_query_lexical(
+                query=query,
+                scope=scope,
+                limit=limit,
+                aliases_path=aliases_path,
+                now_dt=now_dt,
+                retrieval_mode="legacy",
+            )
+            fallback["retrieval_mode"] = "semantic_hybrid"
+            fallback["effective_retrieval_mode"] = "legacy"
+            fallback["semantic"] = {
+                "available": False,
+                "reason": "missing_index",
+                "backend": backend,
+                "model": model,
+            }
+            return fallback
+        raise RuntimeError(f"semantic_hybrid retrieval failed: {semantic.get('reason', 'unknown_error')}")
+
+    score_by_rel_path = semantic.get("score_by_rel_path", {})
+    ranked = []
+    for candidate in candidates:
+        cosine = float(score_by_rel_path.get(candidate["rel_path"], 0.0))
+        semantic_component = max(0.0, min(1.0, cosine))
+        lexical_score, lexical_overlap_count, tag_overlap_count = lexical_score_component(
+            candidate, expanded_tokens
+        )
+        scope_component = 1.0 if scope == "all" else (1.0 if scope_matches(candidate["scope"], scope) else 0.0)
+        recency_component = compute_recency_component(candidate["updated_ts"], now_dt)
+
+        final_score = (
+            (0.55 * semantic_component)
+            + (0.30 * lexical_score)
+            + (0.10 * scope_component)
+            + (0.05 * recency_component)
+        )
+        final_score = max(0.0, min(1.0, final_score))
+
+        if semantic_component == 0.0 and lexical_score == 0.0:
+            continue
+
+        reasons = []
+        if include_reasons:
+            reasons.append(f"semantic={semantic_component:.3f}")
+            if lexical_overlap_count > 0:
+                reasons.append(f"lexical_overlap={lexical_overlap_count}")
+            if tag_overlap_count > 0:
+                reasons.append(f"tag_overlap={tag_overlap_count}")
+            if scope != "all":
+                reasons.append("scope_match" if scope_component >= 1.0 else "scope_miss")
+            reasons.append(f"recency={recency_component:.2f}")
+            if expansion_events:
+                alias_summary = ", ".join(
+                    sorted({f"{event['alias']}->{event['phrase']}" for event in expansion_events})
+                )
+                reasons.append(f"alias_expansion={alias_summary}")
+
+        enriched = dict(candidate)
+        enriched["score"] = final_score
+        enriched["reasons"] = reasons
+        enriched["components"] = {
+            "semantic_similarity": semantic_component,
+            "lexical_score": lexical_score,
+            "scope_component": scope_component,
+            "recency_component": recency_component,
+        }
+        ranked.append(enriched)
+
+    ranked.sort(
+        key=lambda item: (
+            item["score"],
+            item["updated"] or "",
+            item["path"],
+        ),
+        reverse=True,
+    )
+
+    return {
+        "query": query,
+        "scope": scope,
+        "retrieval_mode": "semantic_hybrid",
+        "effective_retrieval_mode": "semantic_hybrid",
+        "progressive_top_n": 0,
+        "expanded_tokens": sorted(expanded_tokens),
+        "expansion_events": expansion_events,
+        "candidate_pool_size": len(candidates),
+        "indexed_pool_size": semantic.get("index_item_count"),
+        "prefilter_size": len(candidates),
+        "shortlist_size": len(candidates),
+        "semantic": {
+            "available": True,
+            "backend": backend,
+            "model": model,
+            "index_item_count": semantic.get("index_item_count"),
+        },
+        "results": ranked[:limit],
+    }
+
+
+def rank_query(
+    query,
+    scope="all",
+    limit=8,
+    aliases_path=ALIASES_PATH,
+    now_dt=None,
+    retrieval_mode="legacy",
+    embed_backend="local",
+    embed_model=None,
+):
+    mode = resolve_retrieval_mode(retrieval_mode)
+    if mode == "semantic_hybrid":
+        return rank_query_semantic_hybrid(
+            query=query,
+            scope=scope,
+            limit=limit,
+            aliases_path=aliases_path,
+            now_dt=now_dt,
+            embed_backend=embed_backend,
+            embed_model=embed_model,
+        )
+
+    return _rank_query_lexical(
+        query=query,
+        scope=scope,
+        limit=limit,
+        aliases_path=aliases_path,
+        now_dt=now_dt,
+        retrieval_mode=mode,
+    )
+
+
+def bundle_results(results, word_budget=1200):
+    bundle = []
+    words_left = max(0, word_budget)
+
+    for item in results:
+        if words_left <= 0:
+            break
+        words = item["body"].split()
+        if not words:
+            continue
+        take = min(len(words), max(40, min(words_left, 200)))
+        excerpt = " ".join(words[:take])
+        consumed = len(excerpt.split())
+        words_left -= consumed
+        bundle.append(
+            {
+                "path": item["path"],
+                "title": item["title"],
+                "excerpt": excerpt,
+                "words": consumed,
+            }
+        )
+    return bundle
+
+
+def format_query_results_human(payload, include_bundle=False):
+    results = payload["results"]
+    lines = []
+    lines.append(f"query: {payload['query']}")
+    lines.append(f"scope: {payload['scope']}")
+    lines.append(f"retrieval_mode: {payload.get('retrieval_mode', 'legacy')}")
+    if payload.get("effective_retrieval_mode") and payload.get("effective_retrieval_mode") != payload.get(
+        "retrieval_mode"
+    ):
+        lines.append(f"effective_retrieval_mode: {payload.get('effective_retrieval_mode')}")
+    semantic_meta = payload.get("semantic")
+    if isinstance(semantic_meta, dict):
+        if semantic_meta.get("available"):
+            lines.append(
+                f"semantic: available ({semantic_meta.get('backend', 'unknown')}/{semantic_meta.get('model', 'unknown')})"
+            )
+        else:
+            lines.append(
+                f"semantic: unavailable ({semantic_meta.get('reason', 'unknown')})"
+            )
+    lines.append(f"results: {len(results)}")
+
+    for item in results:
+        rationale = ", ".join(item["reasons"][:3])
+        level = item.get("disclosure_level", "")
+        level_segment = f"{level} | " if level else ""
+        lines.append(
+            f"- score {item['score']:.3f} | {item['type']} | {item['rel_path']} | {level_segment}{rationale}"
+        )
+
+    if include_bundle:
+        lines.append("")
+        lines.append("Bundle:")
+        for chunk in bundle_results(results, word_budget=1200):
+            lines.append(f"- {chunk['title']} [{chunk['path']}]")
+            lines.append(f"  {shorten(chunk['excerpt'], 260)}")
+
+    return "\n".join(lines)
+
+
+def parse_yaml_scalar(value):
+    cleaned = value.strip()
+    if cleaned.startswith('"') and cleaned.endswith('"'):
+        return cleaned[1:-1]
+    if cleaned.startswith("'") and cleaned.endswith("'"):
+        return cleaned[1:-1]
+    return cleaned
+
+
+class EvalCaseValidationError(Exception):
+    def __init__(self, errors):
+        super().__init__("eval case validation failed")
+        self.errors = errors
+
+
+def parse_eval_cases(path):
+    cases = []
+    current = None
+    in_expected = False
+
+    for raw_line in Path(path).read_text(encoding="utf-8").splitlines():
+        line = raw_line.rstrip()
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+
+        if stripped.startswith("- query:") or stripped.startswith("- id:"):
+            if current:
+                cases.append(current)
+            current = {
+                "id": "",
+                "query": "",
+                "scope": "all",
+                "expected_any": [],
+            }
+            key, value = stripped[2:].split(":", 1)
+            key = key.strip()
+            if key in {"id", "query", "scope"}:
+                current[key] = parse_yaml_scalar(value)
+            in_expected = key == "expected_any"
+            continue
+
+        if current is None:
+            continue
+
+        field_match = re.match(r"^([A-Za-z0-9_]+):\s*(.*)$", stripped)
+        if field_match:
+            key = field_match.group(1)
+            value = field_match.group(2)
+            if key in {"id", "query", "scope"}:
+                current[key] = parse_yaml_scalar(value)
+                in_expected = False
+                continue
+
+        if re.match(r"^scope:\s*", stripped):
+            current["scope"] = parse_yaml_scalar(stripped.split(":", 1)[1]) or "all"
+            in_expected = False
+            continue
+
+        if re.match(r"^expected_any:\s*$", stripped):
+            in_expected = True
+            continue
+
+        if in_expected and re.match(r"^-\s+", stripped):
+            current["expected_any"].append(parse_yaml_scalar(stripped[1:].strip()))
+            continue
+
+    if current:
+        cases.append(current)
+    return cases
+
+
+def extract_notes_relative_path(raw_value):
+    normalized = str(raw_value).strip().replace("\\", "/")
+    if not normalized:
+        return ""
+    if normalized.startswith("notes/"):
+        return normalized
+
+    marker = "/notes/"
+    if marker in normalized:
+        suffix = normalized.split(marker, 1)[1].lstrip("/")
+        if suffix:
+            return f"notes/{suffix}"
+    return ""
+
+
+def path_candidates_from_expected(value):
+    raw = str(value).strip()
+    if not raw:
+        return set()
+
+    path = Path(raw)
+    candidates = {raw, raw.replace("\\", "/")}
+
+    if path.is_absolute():
+        candidates.add(path.as_posix())
+        try:
+            rel = path.resolve().relative_to(ROOT_DIR)
+            candidates.add(rel.as_posix())
+        except ValueError:
+            notes_rel = extract_notes_relative_path(raw)
+            if notes_rel:
+                candidates.add(notes_rel)
+    else:
+        candidates.add(path.as_posix())
+        candidates.add(str((ROOT_DIR / path).resolve()))
+        notes_rel = extract_notes_relative_path(raw)
+        if notes_rel:
+            candidates.add(notes_rel)
+
+    return {candidate for candidate in candidates if candidate}
+
+
+def normalize_expected_path(value):
+    return path_candidates_from_expected(value)
+
+
+def validate_eval_cases(cases, strict_cases=False):
+    errors = []
+    seen_ids = set()
+    root_resolved = ROOT_DIR.resolve()
+
+    for idx, case in enumerate(cases, start=1):
+        case_id = str(case.get("id", "")).strip()
+        case_label = case_id or f"case_{idx}"
+        query = str(case.get("query", "")).strip()
+        scope = str(case.get("scope", "all")).strip().lower() or "all"
+        expected = case.get("expected_any", [])
+
+        if case_id:
+            if case_id in seen_ids:
+                errors.append(f"{case_label}: duplicate id '{case_id}'")
+            seen_ids.add(case_id)
+        elif strict_cases:
+            errors.append(f"{case_label}: missing required id")
+
+        if not query:
+            errors.append(f"{case_label}: missing query")
+
+        if scope not in QUERY_SCOPES:
+            errors.append(f"{case_label}: invalid scope '{scope}'")
+
+        if not isinstance(expected, list) or not expected:
+            errors.append(f"{case_label}: expected_any must contain at least one path")
+            continue
+
+        if not strict_cases:
+            continue
+
+        for expected_path in expected:
+            raw = str(expected_path).strip()
+            if not raw:
+                errors.append(f"{case_label}: expected_any contains an empty path")
+                continue
+            candidate_path = Path(raw)
+            if candidate_path.is_absolute():
+                errors.append(
+                    f"{case_label}: expected_any path must be repo-relative notes/... (got absolute: {raw})"
+                )
+                continue
+
+            rel_path = candidate_path.as_posix()
+            if not rel_path.startswith("notes/"):
+                errors.append(
+                    f"{case_label}: expected_any path must start with 'notes/' (got: {raw})"
+                )
+                continue
+
+            resolved = (ROOT_DIR / rel_path).resolve()
+            try:
+                resolved.relative_to(root_resolved)
+            except ValueError:
+                errors.append(f"{case_label}: expected_any path escapes repo root (got: {raw})")
+                continue
+
+            if not resolved.is_file():
+                errors.append(f"{case_label}: expected_any path not found (got: {raw})")
+
+    return errors
+
+
+def run_eval(
+    cases_path,
+    k,
+    strict_cases=False,
+    retrieval_mode="legacy",
+    embed_backend="local",
+    embed_model=None,
+):
+    cases = parse_eval_cases(cases_path)
+    validation_errors = validate_eval_cases(cases, strict_cases=strict_cases)
+    if validation_errors:
+        raise EvalCaseValidationError(validation_errors)
+
+    if not cases:
+        return {
+            "cases": 0,
+            "hit1": 0.0,
+            "hitk": 0.0,
+            "mrr": 0.0,
+            "failed": [],
+            "k": k,
+        }
+
+    total = len(cases)
+    hit1_count = 0
+    hitk_count = 0
+    rr_total = 0.0
+    failed = []
+
+    for idx, case in enumerate(cases, start=1):
+        case_id = str(case.get("id", "")).strip() or f"case_{idx}"
+        payload = rank_query(
+            case["query"],
+            scope=case.get("scope", "all"),
+            limit=50,
+            retrieval_mode=retrieval_mode,
+            embed_backend=embed_backend,
+            embed_model=embed_model,
+        )
+        results = payload["results"]
+        expected_sets = [path_candidates_from_expected(path) for path in case.get("expected_any", [])]
+
+        best_rank = None
+        for idx, result in enumerate(results, start=1):
+            result_paths = {result["path"], result["rel_path"]}
+            matched = any(result_paths & expected for expected in expected_sets)
+            if matched:
+                best_rank = idx
+                break
+
+        if best_rank == 1:
+            hit1_count += 1
+        if best_rank is not None and best_rank <= k:
+            hitk_count += 1
+        rr_total += (1.0 / best_rank) if best_rank else 0.0
+
+        if best_rank is None or best_rank > k:
+            failed.append(
+                {
+                    "id": case_id,
+                    "query": case["query"],
+                    "scope": case.get("scope", "all"),
+                    "expected_any": case.get("expected_any", []),
+                    "top_results": [item["rel_path"] for item in results[: min(k, 5)]],
+                }
+            )
+
+    return {
+        "retrieval_mode": resolve_retrieval_mode(retrieval_mode),
+        "cases": total,
+        "hit1": hit1_count / total,
+        "hitk": hitk_count / total,
+        "mrr": rr_total / total,
+        "failed": failed,
+        "k": k,
+        "hit1_count": hit1_count,
+        "hitk_count": hitk_count,
+    }
+
+
+def print_eval_result(result):
+    cases = result["cases"]
+    k = result["k"]
+    print(f"cases: {cases}")
+    print(f"hit@1: {result['hit1']:.3f} ({result.get('hit1_count', 0)}/{cases})")
+    print(f"hit@{k}: {result['hitk']:.3f} ({result.get('hitk_count', 0)}/{cases})")
+    print(f"mrr: {result['mrr']:.3f}")
+
+    hitk_ok = result["hitk"] >= 0.80
+    mrr_ok = result["mrr"] >= 0.65
+    status = "PASS" if hitk_ok and mrr_ok else "FAIL"
+    print(f"thresholds: hit@{k}>=0.80, mrr>=0.65 -> {status}")
+
+    if result["failed"]:
+        print("failed_cases:")
+        for case in result["failed"]:
+            print(f"- id: {case.get('id', '')}")
+            print(f"  query: {case['query']}")
+            print(f"  scope: {case['scope']}")
+            print(f"  expected_any: {', '.join(case['expected_any'])}")
+            print(f"  top_results: {', '.join(case['top_results'])}")
+
+
+def baseline_metrics(result):
+    return {
+        "hit1": round(result.get("hit1", 0.0), 6),
+        "hitk": round(result.get("hitk", 0.0), 6),
+        "mrr": round(result.get("mrr", 0.0), 6),
+        "k": int(result.get("k", 3)),
+        "cases": int(result.get("cases", 0)),
+    }
+
+
+def compare_with_baseline(result, baseline_path):
+    try:
+        baseline = json.loads(Path(baseline_path).read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {"available": False, "reason": "baseline file not found"}
+    except json.JSONDecodeError:
+        return {"available": False, "reason": "baseline file is invalid JSON"}
+
+    current = baseline_metrics(result)
+    baseline_hitk = float(baseline.get("hitk", 0.0))
+    baseline_mrr = float(baseline.get("mrr", 0.0))
+    hitk_delta = current["hitk"] - baseline_hitk
+    mrr_delta = current["mrr"] - baseline_mrr
+    regressed = (hitk_delta < 0) or (mrr_delta < 0)
+    return {
+        "available": True,
+        "regressed": regressed,
+        "baseline": baseline,
+        "current": current,
+        "hitk_delta": hitk_delta,
+        "mrr_delta": mrr_delta,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Delegation layer: use library implementations for retrieval/eval internals.
+# Keep names stable for scripts/ledger_ab and tests that import this script.
+# ---------------------------------------------------------------------------
+build_attention_tokens = retrieval_lib.build_attention_tokens
+candidate_from_note = retrieval_lib.candidate_from_note
+build_candidates = retrieval_lib.build_candidates
+clear_candidate_cache = retrieval_lib.clear_candidate_cache
+build_candidate_index = retrieval_lib.build_candidate_index
+retrieve_candidates_from_index = retrieval_lib.retrieve_candidates_from_index
+coarse_candidate_score = retrieval_lib.coarse_candidate_score
+shortlist_candidates = retrieval_lib.shortlist_candidates
+shortlist_attention_candidates = retrieval_lib.shortlist_attention_candidates
+prefilter_candidates_by_scope_and_type = retrieval_lib.prefilter_candidates_by_scope_and_type
+score_candidate = retrieval_lib.score_candidate
+_rank_query_lexical = retrieval_lib.rank_lexical
+
+EvalCaseValidationError = eval_lib.EvalCaseValidationError
+parse_eval_cases = eval_lib.parse_eval_cases
+extract_notes_relative_path = eval_lib.extract_notes_relative_path
+path_candidates_from_expected = eval_lib.path_candidates_from_expected
+normalize_expected_path = eval_lib.normalize_expected_path
+validate_eval_cases = eval_lib.validate_eval_cases
+print_eval_result = eval_lib.print_eval_result
+baseline_metrics = eval_lib.baseline_metrics
+compare_with_baseline = eval_lib.compare_with_baseline
+
+
+def run_eval(
+    cases_path,
+    k,
+    strict_cases=False,
+    retrieval_mode="legacy",
+    embed_backend="local",
+    embed_model=None,
+):
+    return eval_lib.run_eval(
+        cases_path=cases_path,
+        k=k,
+        strict_cases=strict_cases,
+        retrieval_mode=retrieval_mode,
+        embed_backend=embed_backend,
+        embed_model=embed_model,
+        rank_query_fn=rank_query,
+    )
+
+
+def maybe_log_query_telemetry(
+    query,
+    scope,
+    retrieval_mode,
+    payload,
+    latency_ms,
+    log_path=None,
+):
+    enabled = os.getenv("LEDGER_QUERY_LOG", "").strip().lower() in {"1", "true", "yes", "on"}
+    if not enabled:
+        return
+
+    target_path = Path(log_path) if log_path else (ROOT_DIR / "notes" / "08_indices" / "query_log.jsonl")
+    top_results = []
+    for item in payload.get("results", [])[:3]:
+        top_results.append(item.get("rel_path") or item.get("path", ""))
+
+    record = {
+        "ts": now_utc().strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "query": query,
+        "scope": scope,
+        "mode": payload.get("retrieval_mode", retrieval_mode),
+        "top_3": top_results,
+        "latency_ms": int(round(max(0.0, latency_ms))),
+    }
+    safe_append_line(target_path, json.dumps(record, ensure_ascii=False))
+
+
+def handle_query_command(args):
+    # Validate inputs at entry point
+    try:
+        validated_query = validate_query(args.text)
+        validated_scope = validate_scope(args.scope)
+        validated_limit = validate_limit(args.limit, min_val=1, max_val=1000)
+    except QueryValidationError as e:
+        print(f"error: {e.message}", file=sys.stderr)
+        raise SystemExit(2)
+    except ScopeValidationError as e:
+        print(f"error: {e.message}", file=sys.stderr)
+        raise SystemExit(2)
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        raise SystemExit(2)
+
+    started = time.perf_counter()
+    payload = rank_query(
+        query=validated_query,
+        scope=validated_scope,
+        limit=validated_limit,
+        aliases_path=ALIASES_PATH,
+        retrieval_mode=args.retrieval_mode,
+        embed_backend=args.embed_backend,
+        embed_model=args.embed_model,
+    )
+    latency_ms = (time.perf_counter() - started) * 1000.0
+    maybe_log_query_telemetry(
+        query=validated_query,
+        scope=validated_scope,
+        retrieval_mode=args.retrieval_mode,
+        payload=payload,
+        latency_ms=latency_ms,
+    )
+
+    if args.json:
+        out = {
+            "query": payload["query"],
+            "scope": payload["scope"],
+            "retrieval_mode": payload.get("retrieval_mode", "legacy"),
+            "effective_retrieval_mode": payload.get(
+                "effective_retrieval_mode", payload.get("retrieval_mode", "legacy")
+            ),
+            "candidate_pool_size": payload.get("candidate_pool_size"),
+            "indexed_pool_size": payload.get("indexed_pool_size"),
+            "prefilter_size": payload.get("prefilter_size"),
+            "shortlist_size": payload.get("shortlist_size"),
+            "progressive_top_n": payload.get("progressive_top_n", 0),
+            "expanded_tokens": payload["expanded_tokens"],
+            "semantic": payload.get("semantic"),
+            "results": [],
+        }
+        for item in payload["results"]:
+            data = {
+                "path": item["path"],
+                "title": item["title"],
+                "type": item["type"],
+                "score": round(item["score"], 6),
+                "reasons": item["reasons"],
+                "updated": item["updated"],
+                "confidence": item["confidence"],
+                "source": item["source"],
+                "scope": item["scope"],
+            }
+            if item["type"] == "loop":
+                data["status"] = item.get("status", "")
+            if item.get("disclosure_level"):
+                data["disclosure_level"] = item.get("disclosure_level")
+            out["results"].append(data)
+        if args.bundle:
+            out["bundle"] = bundle_results(payload["results"], word_budget=1200)
+        print(json.dumps(out, indent=2, ensure_ascii=False))
+        return
+
+    print(format_query_results_human(payload, include_bundle=args.bundle))
+
+
+def _print_embed_build_human(payload):
+    print(f"target: {payload['target']}")
+    print(f"backend: {payload['backend']}")
+    print(f"model: {payload['model']}")
+    for result in payload.get("results", []):
+        print(
+            "- "
+            f"{result.get('target')} "
+            f"items={result.get('item_count', 0)} "
+            f"dims={result.get('dims', 0)} "
+            f"embedded={result.get('embedded_count', 0)} "
+            f"reused={result.get('reused_count', 0)} "
+            f"removed={result.get('removed_count', 0)}"
+        )
+
+
+def handle_embed_build_command(args):
+    embeddings = load_embeddings_module()
+    model = args.model or embeddings.default_model_for_backend(args.backend)
+    source_root = Path(args.source_root).expanduser().resolve()
+    payload = embeddings.build_indices(
+        target=args.target,
+        backend=args.backend,
+        model=model,
+        source_root=source_root,
+    )
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return
+    _print_embed_build_human(payload)
+
+
+def handle_embed_status_command(args):
+    embeddings = load_embeddings_module()
+    payload = embeddings.index_status(target=args.target)
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return
+
+    print(f"target: {payload.get('target')}")
+    for target_name, entries in payload.get("targets", {}).items():
+        print(f"{target_name}:")
+        if not entries:
+            print("- none")
+            continue
+        for entry in entries:
+            print(
+                "- "
+                f"{entry.get('backend','')}/{entry.get('model','')} "
+                f"items={entry.get('item_count', 0)} "
+                f"dims={entry.get('dims', 0)} "
+                f"built_at={entry.get('built_at', '')}"
+            )
+
+
+def handle_embed_clean_command(args):
+    embeddings = load_embeddings_module()
+    payload = embeddings.clean_indices(target=args.target)
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return
+    print(f"target: {payload.get('target')}")
+    removed = payload.get("removed", [])
+    if not removed:
+        print("removed: none")
+        return
+    for path in removed:
+        print(f"- removed {path}")
+
+
+def handle_discover_source_command(args):
+    # Validate inputs at entry point
+    try:
+        validated_query = validate_query(args.text)
+        validated_limit = validate_limit(args.limit, min_val=1, max_val=1000)
+    except QueryValidationError as e:
+        print(f"error: {e.message}", file=sys.stderr)
+        raise SystemExit(2)
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        raise SystemExit(2)
+
+    embeddings = load_embeddings_module()
+    backend = resolve_embed_backend(args.embed_backend)
+    model = resolve_embed_model(backend, args.embed_model)
+    source_root = Path(args.source_root).expanduser().resolve()
+    payload = embeddings.semantic_search(
+        query=validated_query,
+        target="source",
+        backend=backend,
+        model=model,
+        limit=validated_limit,
+        source_root=source_root,
+        allow_api_on_source=args.allow_api_on_source,
+    )
+
+    if args.json:
+        out = {
+            "mode": "source_only",
+            "target": payload.get("target", "source"),
+            "backend": payload.get("backend", backend),
+            "model": payload.get("model", model),
+            "available": payload.get("available", False),
+            "reason": payload.get("reason"),
+            "results": [],
+        }
+        for item in payload.get("results", []):
+            out["results"].append(
+                {
+                    "rel_path": item.get("rel_path", ""),
+                    "abs_path": item.get("abs_path", ""),
+                    "type": item.get("type", ""),
+                    "scope": item.get("scope", ""),
+                    "status": item.get("status", ""),
+                    "lang": item.get("lang", ""),
+                    "updated": item.get("updated", ""),
+                    "cosine_similarity": round(float(item.get("cosine_similarity", 0.0)), 6),
+                }
+            )
+        print(json.dumps(out, indent=2, ensure_ascii=False))
+        return
+
+    print("mode: source_only")
+    print(f"backend: {payload.get('backend', backend)}")
+    print(f"model: {payload.get('model', model)}")
+    if not payload.get("available", False):
+        print(f"available: no ({payload.get('reason', 'unknown')})")
+        return
+    print(f"results: {len(payload.get('results', []))}")
+    for item in payload.get("results", []):
+        print(
+            "- "
+            f"{item.get('cosine_similarity', 0.0):.3f} | "
+            f"{item.get('rel_path', '')} | "
+            f"{item.get('scope', '')}"
+        )
+
+
+def handle_eval_command(args):
+    # Validate write-baseline path if provided
+    if args.write_baseline:
+        baseline_path = Path(args.write_baseline).resolve()
+        # Check path is within repo or explicitly allowed
+        try:
+            baseline_path.relative_to(ROOT_DIR)
+        except ValueError:
+            print(
+                f"error: --write-baseline path must be within repo root ({ROOT_DIR})",
+                file=sys.stderr,
+            )
+            print("hint: use a path like 'notes/08_indices/baseline.json'", file=sys.stderr)
+            raise SystemExit(2)
+
+    try:
+        backend = resolve_embed_backend(args.embed_backend)
+        model = resolve_embed_model(backend, args.embed_model)
+        result = run_eval(
+            args.cases,
+            k=args.k,
+            strict_cases=args.strict_cases,
+            retrieval_mode=args.retrieval_mode,
+            embed_backend=backend,
+            embed_model=model,
+        )
+    except EvalCaseValidationError as exc:
+        print("eval_case_validation_errors:")
+        for error in exc.errors:
+            print(f"- {error}")
+        raise SystemExit(2)
+    print_eval_result(result)
+
+    if args.baseline:
+        cmp = compare_with_baseline(result, args.baseline)
+        if not cmp["available"]:
+            print(f"baseline: unavailable ({cmp['reason']})")
+        else:
+            print(
+                "baseline_comparison: "
+                f"hit@{result['k']} delta={cmp['hitk_delta']:+.3f}, "
+                f"mrr delta={cmp['mrr_delta']:+.3f}, "
+                f"regressed={'yes' if cmp['regressed'] else 'no'}"
+            )
+            if cmp["regressed"]:
+                raise SystemExit(2)
+
+    if args.write_baseline:
+        snapshot = baseline_metrics(result)
+        snapshot["generated_at"] = now_utc().strftime("%Y-%m-%dT%H:%M:%SZ")
+        snapshot["cases_path"] = str(Path(args.cases).resolve())
+        Path(args.write_baseline).write_text(json.dumps(snapshot, indent=2) + "\n", encoding="utf-8")
+        print(f"baseline_written: {args.write_baseline}")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Cognitive Ledger retrieval helpers")
+    subparsers = parser.add_subparsers(dest="command")
+
+    loops_parser = subparsers.add_parser("loops", help="List loops (default: open)")
+    loops_parser.add_argument("--limit", type=int, default=100)
+    loops_parser.add_argument("--width", type=int, default=120)
+    loops_parser.add_argument("--paths", action="store_true")
+    loops_parser.add_argument("--status", choices=list(LOOP_STATUSES) + ["all"], default="open")
+    loops_parser.add_argument("--verbose", action="store_true")
+    loops_parser.add_argument("--interactive", action="store_true")
+
+    notes_parser = subparsers.add_parser("notes", help="List notes by type")
+    notes_parser.add_argument(
+        "--type",
+        required=True,
+        choices=sorted(list(NOTE_TYPES.keys()) + ["all"]),
+        help="Note type to list",
+    )
+    notes_parser.add_argument("--limit", type=int, default=100)
+    notes_parser.add_argument("--width", type=int, default=120)
+    notes_parser.add_argument("--paths", action="store_true")
+    notes_parser.add_argument("--verbose", action="store_true")
+    notes_parser.add_argument("--interactive", action="store_true")
+
+    query_parser = subparsers.add_parser("query", help="Rank notes for a query")
+    query_parser.add_argument("text", help="query text")
+    query_parser.add_argument("--scope", choices=QUERY_SCOPES, default="all")
+    query_parser.add_argument("--limit", type=int, default=8)
+    query_parser.add_argument(
+        "--retrieval-mode",
+        choices=RETRIEVAL_MODES,
+        default=resolve_retrieval_mode(None),
+        help="Retrieval strategy (default: legacy; override with LEDGER_RETRIEVAL_MODE)",
+    )
+    query_parser.add_argument(
+        "--embed-backend",
+        choices=EMBED_BACKENDS,
+        default=resolve_embed_backend(None),
+        help="Embedding backend for semantic_hybrid mode (default: local)",
+    )
+    query_parser.add_argument(
+        "--embed-model",
+        default=None,
+        help="Optional embedding model override for semantic_hybrid mode",
+    )
+    query_parser.add_argument("--json", action="store_true", dest="json")
+    query_parser.add_argument("--bundle", action="store_true")
+
+    discover_parser = subparsers.add_parser(
+        "discover-source", help="Semantic discovery on source notes (source_only output)"
+    )
+    discover_parser.add_argument("text", help="query text")
+    discover_parser.add_argument(
+        "--source-root",
+        default=str(Path.home() / "notes"),
+        help="Source notes root for discovery (default: ~/notes)",
+    )
+    discover_parser.add_argument("--limit", type=int, default=20)
+    discover_parser.add_argument(
+        "--embed-backend",
+        choices=EMBED_BACKENDS,
+        default=resolve_embed_backend(None),
+        help="Embedding backend for source discovery (default: local)",
+    )
+    discover_parser.add_argument(
+        "--embed-model",
+        default=None,
+        help="Optional embedding model override",
+    )
+    discover_parser.add_argument(
+        "--allow-api-on-source",
+        action="store_true",
+        help="Required with --embed-backend openai to allow source-note API externalization",
+    )
+    discover_parser.add_argument("--json", action="store_true", dest="json")
+
+    embed_parser = subparsers.add_parser("embed", help="Build, inspect, or clean semantic indices")
+    embed_subparsers = embed_parser.add_subparsers(dest="embed_command")
+
+    embed_build_parser = embed_subparsers.add_parser("build", help="Build semantic indices")
+    embed_build_parser.add_argument("--target", choices=("ledger", "source", "both"), required=True)
+    embed_build_parser.add_argument("--backend", choices=EMBED_BACKENDS, required=True)
+    embed_build_parser.add_argument("--model", default=None)
+    embed_build_parser.add_argument(
+        "--source-root",
+        default=str(Path.home() / "notes"),
+        help="Source notes root (used for target=source|both)",
+    )
+    embed_build_parser.add_argument("--json", action="store_true", dest="json")
+
+    embed_status_parser = embed_subparsers.add_parser("status", help="Show semantic index status")
+    embed_status_parser.add_argument("--target", choices=("ledger", "source", "both"), required=True)
+    embed_status_parser.add_argument("--json", action="store_true", dest="json")
+
+    embed_clean_parser = embed_subparsers.add_parser("clean", help="Clean semantic index artifacts")
+    embed_clean_parser.add_argument("--target", choices=("ledger", "source", "both"), required=True)
+    embed_clean_parser.add_argument("--json", action="store_true", dest="json")
+
+    eval_parser = subparsers.add_parser("eval", help="Evaluate retrieval quality against benchmark cases")
+    eval_parser.add_argument("--cases", required=True, help="Path to retrieval_eval_cases.yaml")
+    eval_parser.add_argument("--k", type=int, default=3)
+    eval_parser.add_argument(
+        "--retrieval-mode",
+        choices=RETRIEVAL_MODES,
+        default=resolve_retrieval_mode(None),
+        help="Retrieval strategy used during eval (default: legacy; override with LEDGER_RETRIEVAL_MODE)",
+    )
+    eval_parser.add_argument(
+        "--embed-backend",
+        choices=EMBED_BACKENDS,
+        default=resolve_embed_backend(None),
+        help="Embedding backend for semantic_hybrid mode (default: local)",
+    )
+    eval_parser.add_argument(
+        "--embed-model",
+        default=None,
+        help="Optional embedding model override for semantic_hybrid mode",
+    )
+    eval_parser.add_argument("--strict-cases", action="store_true", help="Fail when eval cases violate strict schema/path rules")
+    eval_parser.add_argument("--baseline", help="Optional baseline metrics JSON path for regression check")
+    eval_parser.add_argument("--write-baseline", dest="write_baseline", help="Write current metrics snapshot to JSON")
+
+    args = parser.parse_args()
+
+    def handle_listing_command(command_args):
+        if command_args.command == "loops":
+            if command_args.interactive:
+                interactive_items(command_args, "loops", loop_status=command_args.status)
+            elif command_args.verbose:
+                verbose_items(command_args, "loops", loop_status=command_args.status)
+            else:
+                list_items(command_args, "loops", loop_status=command_args.status)
+            return
+
+        if command_args.command == "notes":
+            if command_args.interactive:
+                interactive_items(command_args, command_args.type)
+            elif command_args.verbose:
+                verbose_items(command_args, command_args.type)
+            else:
+                list_items(command_args, command_args.type)
+            return
+
+    command_handlers = {
+        "query": handle_query_command,
+        "discover-source": handle_discover_source_command,
+        "eval": handle_eval_command,
+    }
+    embed_handlers = {
+        "build": handle_embed_build_command,
+        "status": handle_embed_status_command,
+        "clean": handle_embed_clean_command,
+    }
+
+    try:
+        if args.command in {"loops", "notes"}:
+            handle_listing_command(args)
+            return
+
+        if args.command == "embed":
+            embed_handler = embed_handlers.get(args.embed_command)
+            if embed_handler is not None:
+                embed_handler(args)
+                return
+            embed_parser.print_help()
+            return
+
+        handler = command_handlers.get(args.command)
+        if handler is not None:
+            handler(args)
+            return
+    except RuntimeError as exc:
+        print(f"error: {exc}")
+        raise SystemExit(2)
+
+    parser.print_help()
+
+
+if __name__ == "__main__":
+    maybe_reexec_in_repo_venv()
+    main()

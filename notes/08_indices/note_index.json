@@ -1,0 +1,1180 @@
+{
+  "version": 2,
+  "built": "2026-03-04T08:10:46Z",
+  "entries": {
+    "notes/02_facts/fact__sample_public_profile.md": {
+      "mtime": 1772611597.7627401,
+      "content_hash": "sha256:ac8b5197815aa3d4558f26ac116198314e2927c953e1c2be46d54ad2a138c707",
+      "note_type": "facts",
+      "candidate": {
+        "path": "/Users/damsleth/Code/cog-led-public/notes/02_facts/fact__sample_public_profile.md",
+        "rel_path": "notes/02_facts/fact__sample_public_profile.md",
+        "type": "fact",
+        "title": "Sample Public Profile",
+        "statement": "This repository contains synthetic example notes for demonstrating Cognitive Ledger workflows.",
+        "body": "\n# Sample Public Profile\n\n## Statement\nThis repository contains synthetic example notes for demonstrating Cognitive Ledger workflows.\n\n## Context\nUsed as non-personal seed data for public distribution.\n\n## Implications\n- Retrieval and tooling should work without private user memory.\n\n## Links\n- ../06_concepts/concept__atomic_notes.md",
+        "updated": "2026-03-04T00:00:00Z",
+        "confidence": 0.95,
+        "source": "user",
+        "scope": "personal",
+        "status": "",
+        "tags": [
+          "sample",
+          "profile"
+        ],
+        "note_tokens": [
+          "06",
+          "atomic",
+          "cognitive",
+          "concept",
+          "concepts",
+          "contains",
+          "context",
+          "data",
+          "demonstrating",
+          "distribution",
+          "example",
+          "fact",
+          "implications",
+          "ledger",
+          "links",
+          "md",
+          "memory",
+          "non",
+          "notes",
+          "personal",
+          "private",
+          "profile",
+          "public",
+          "repository",
+          "retrieval",
+          "sample",
+          "seed",
+          "should",
+          "statement",
+          "synthetic",
+          "this",
+          "tooling",
+          "used",
+          "user",
+          "without",
+          "work",
+          "workflows"
+        ],
+        "tag_tokens": [
+          "profile",
+          "sample"
+        ],
+        "attention_tokens": [
+          "cognitive",
+          "contains",
+          "demonstrating",
+          "example",
+          "fact",
+          "ledger",
+          "notes",
+          "personal",
+          "profile",
+          "public",
+          "repository",
+          "sample",
+          "synthetic",
+          "this",
+          "workflows"
+        ],
+        "snippet": "This repository contains synthetic example notes for demonstrating Cognitive Ledger workflows.",
+        "has_next_action_checkbox": false
+      }
+    },
+    "notes/02_facts/fact__sample_work_context.md": {
+      "mtime": 1772611597.7653413,
+      "content_hash": "sha256:9b8c7a89cd950699c6119896ce6f0805426be679c52ad85589776c01360d2d15",
+      "note_type": "facts",
+      "candidate": {
+        "path": "/Users/damsleth/Code/cog-led-public/notes/02_facts/fact__sample_work_context.md",
+        "rel_path": "notes/02_facts/fact__sample_work_context.md",
+        "type": "fact",
+        "title": "Sample Work Context",
+        "statement": "The demo user works on software delivery and knowledge tooling.",
+        "body": "\n# Sample Work Context\n\n## Statement\nThe demo user works on software delivery and knowledge tooling.\n\n## Context\nSynthetic placeholder for work-scoped retrieval examples.\n\n## Implications\n- Work-scoped queries should prioritize this note.\n\n## Links\n- ../04_goals/goal__ship_public_template_repo.md",
+        "updated": "2026-03-04T00:00:00Z",
+        "confidence": 0.9,
+        "source": "user",
+        "scope": "work",
+        "status": "",
+        "tags": [
+          "sample",
+          "work"
+        ],
+        "note_tokens": [
+          "04",
+          "context",
+          "delivery",
+          "demo",
+          "examples",
+          "fact",
+          "goal",
+          "goals",
+          "implications",
+          "knowledge",
+          "links",
+          "md",
+          "note",
+          "placeholder",
+          "prioritize",
+          "public",
+          "queries",
+          "repo",
+          "retrieval",
+          "sample",
+          "scoped",
+          "ship",
+          "should",
+          "software",
+          "statement",
+          "synthetic",
+          "template",
+          "this",
+          "tooling",
+          "user",
+          "work",
+          "works"
+        ],
+        "tag_tokens": [
+          "sample",
+          "work"
+        ],
+        "attention_tokens": [
+          "context",
+          "delivery",
+          "demo",
+          "fact",
+          "knowledge",
+          "sample",
+          "software",
+          "tooling",
+          "user",
+          "work",
+          "works"
+        ],
+        "snippet": "The demo user works on software delivery and knowledge tooling.",
+        "has_next_action_checkbox": false
+      }
+    },
+    "notes/03_preferences/pref__agent_work_style.md": {
+      "mtime": 1772611597.7678337,
+      "content_hash": "sha256:2b88df51e8bbaf8bbb95f1cad0433d90a4288586dc1e34d0d787ba5cff77ad9d",
+      "note_type": "preferences",
+      "candidate": {
+        "path": "/Users/damsleth/Code/cog-led-public/notes/03_preferences/pref__agent_work_style.md",
+        "rel_path": "notes/03_preferences/pref__agent_work_style.md",
+        "type": "pref",
+        "title": "Agent Work Style",
+        "statement": "Prefer concise, explicit, and test-backed engineering communication.",
+        "body": "\n# Agent Work Style\n\n## Statement\nPrefer concise, explicit, and test-backed engineering communication.\n\n## Context\nSynthetic baseline preference used in documentation and tests.\n\n## Implications\n- Responses should prioritize clarity and verification.\n\n## Links\n- ../06_concepts/concept__atomic_notes.md",
+        "updated": "2026-03-04T00:00:00Z",
+        "confidence": 0.95,
+        "source": "user",
+        "scope": "meta",
+        "status": "",
+        "tags": [
+          "sample",
+          "agents",
+          "workflow"
+        ],
+        "note_tokens": [
+          "06",
+          "agent",
+          "agents",
+          "atomic",
+          "backed",
+          "baseline",
+          "clarity",
+          "communication",
+          "concept",
+          "concepts",
+          "concise",
+          "context",
+          "documentation",
+          "engineering",
+          "explicit",
+          "implications",
+          "links",
+          "md",
+          "notes",
+          "pref",
+          "prefer",
+          "preference",
+          "prioritize",
+          "responses",
+          "sample",
+          "should",
+          "statement",
+          "style",
+          "synthetic",
+          "test",
+          "tests",
+          "used",
+          "verification",
+          "work",
+          "workflow"
+        ],
+        "tag_tokens": [
+          "agents",
+          "sample",
+          "workflow"
+        ],
+        "attention_tokens": [
+          "agent",
+          "agents",
+          "backed",
+          "communication",
+          "concise",
+          "engineering",
+          "explicit",
+          "meta",
+          "pref",
+          "prefer",
+          "sample",
+          "style",
+          "test",
+          "work",
+          "workflow"
+        ],
+        "snippet": "Prefer concise, explicit, and test-backed engineering communication.",
+        "has_next_action_checkbox": false
+      }
+    },
+    "notes/03_preferences/pref__time_based_work.md": {
+      "mtime": 1772611597.7701008,
+      "content_hash": "sha256:d8d13a7bed63e71f9c96275854a2f08177498caa191d92dce8bab20e487cbad7",
+      "note_type": "preferences",
+      "candidate": {
+        "path": "/Users/damsleth/Code/cog-led-public/notes/03_preferences/pref__time_based_work.md",
+        "rel_path": "notes/03_preferences/pref__time_based_work.md",
+        "type": "pref",
+        "title": "Time Based Work",
+        "statement": "Use time-boxed sessions to reduce planning friction and maintain focus.",
+        "body": "\n# Time Based Work\n\n## Statement\nUse time-boxed sessions to reduce planning friction and maintain focus.\n\n## Context\nSynthetic preference for retrieval/evaluation coverage.\n\n## Implications\n- Planning suggestions should include duration-based blocks.\n\n## Links\n- ../04_goals/goal__ship_public_template_repo.md",
+        "updated": "2026-03-04T00:00:00Z",
+        "confidence": 0.9,
+        "source": "user",
+        "scope": "personal",
+        "status": "",
+        "tags": [
+          "sample",
+          "productivity"
+        ],
+        "note_tokens": [
+          "04",
+          "based",
+          "blocks",
+          "boxed",
+          "context",
+          "coverage",
+          "duration",
+          "evaluation",
+          "focus",
+          "friction",
+          "goal",
+          "goals",
+          "implications",
+          "include",
+          "links",
+          "maintain",
+          "md",
+          "planning",
+          "pref",
+          "preference",
+          "productivity",
+          "public",
+          "reduce",
+          "repo",
+          "retrieval",
+          "sample",
+          "sessions",
+          "ship",
+          "should",
+          "statement",
+          "suggestions",
+          "synthetic",
+          "template",
+          "time",
+          "use",
+          "work"
+        ],
+        "tag_tokens": [
+          "productivity",
+          "sample"
+        ],
+        "attention_tokens": [
+          "based",
+          "boxed",
+          "focus",
+          "friction",
+          "maintain",
+          "personal",
+          "planning",
+          "pref",
+          "productivity",
+          "reduce",
+          "sample",
+          "sessions",
+          "time",
+          "use",
+          "work"
+        ],
+        "snippet": "Use time-boxed sessions to reduce planning friction and maintain focus.",
+        "has_next_action_checkbox": false
+      }
+    },
+    "notes/04_goals/goal__ship_public_template_repo.md": {
+      "mtime": 1772611597.7723968,
+      "content_hash": "sha256:956aa170f301bfb70eb63ba47390dd9b1657bab8fc16b4ed3cde9f334e485f39",
+      "note_type": "goals",
+      "candidate": {
+        "path": "/Users/damsleth/Code/cog-led-public/notes/04_goals/goal__ship_public_template_repo.md",
+        "rel_path": "notes/04_goals/goal__ship_public_template_repo.md",
+        "type": "goal",
+        "title": "Ship Public Template Repo",
+        "statement": "Publish a reusable Cognitive Ledger template repository with no private data.",
+        "body": "\n# Ship Public Template Repo\n\n## Statement\nPublish a reusable Cognitive Ledger template repository with no private data.\n\n## Context\nPrimary synthetic goal for demo planning and retrieval.\n\n## Implications\n- Prioritize data hygiene, docs, and reproducible setup.\n\n## Links\n- ../05_open_loops/loop__sample_release_checklist.md",
+        "updated": "2026-03-04T00:00:00Z",
+        "confidence": 0.9,
+        "source": "user",
+        "scope": "dev",
+        "status": "",
+        "tags": [
+          "sample",
+          "publishing",
+          "template"
+        ],
+        "note_tokens": [
+          "05",
+          "checklist",
+          "cognitive",
+          "context",
+          "data",
+          "demo",
+          "docs",
+          "goal",
+          "hygiene",
+          "implications",
+          "ledger",
+          "links",
+          "loop",
+          "loops",
+          "md",
+          "no",
+          "open",
+          "planning",
+          "primary",
+          "prioritize",
+          "private",
+          "public",
+          "publish",
+          "publishing",
+          "release",
+          "repo",
+          "repository",
+          "reproducible",
+          "retrieval",
+          "reusable",
+          "sample",
+          "setup",
+          "ship",
+          "statement",
+          "synthetic",
+          "template"
+        ],
+        "tag_tokens": [
+          "publishing",
+          "sample",
+          "template"
+        ],
+        "attention_tokens": [
+          "cognitive",
+          "data",
+          "dev",
+          "goal",
+          "ledger",
+          "no",
+          "private",
+          "public",
+          "publish",
+          "publishing",
+          "repo",
+          "repository",
+          "reusable",
+          "sample",
+          "ship",
+          "template"
+        ],
+        "snippet": "Publish a reusable Cognitive Ledger template repository with no private data.",
+        "has_next_action_checkbox": false
+      }
+    },
+    "notes/05_open_loops/loop__sample_release_checklist.md": {
+      "mtime": 1772611597.7745614,
+      "content_hash": "sha256:002f94b3dc0c8faf9e1d7b8640319b3f93366755ee7b5259da4d3c2a6bd47a63",
+      "note_type": "loops",
+      "candidate": {
+        "path": "/Users/damsleth/Code/cog-led-public/notes/05_open_loops/loop__sample_release_checklist.md",
+        "rel_path": "notes/05_open_loops/loop__sample_release_checklist.md",
+        "type": "loop",
+        "title": "Sample Release Checklist",
+        "statement": "What should be completed before publishing the public template repository?",
+        "body": "\n# Loop: Sample Release Checklist\n\n## Question or Task\nWhat should be completed before publishing the public template repository?\n\n## Why It Matters\nA clean release process prevents accidental private data exposure.\n\n## Next Action\n- [ ] Run privacy scan and verify synthetic notes only\n\n## Exit Condition\n- [ ] Public repository is published with passing test suite\n\n## Links\n- ../04_goals/goal__ship_public_template_repo.md",
+        "updated": "2026-03-04T00:00:00Z",
+        "confidence": 0.9,
+        "source": "user",
+        "scope": "dev",
+        "status": "open",
+        "tags": [
+          "sample",
+          "release",
+          "checklist"
+        ],
+        "note_tokens": [
+          "04",
+          "accidental",
+          "action",
+          "before",
+          "checklist",
+          "clean",
+          "completed",
+          "condition",
+          "data",
+          "exit",
+          "exposure",
+          "goal",
+          "goals",
+          "links",
+          "loop",
+          "matters",
+          "md",
+          "next",
+          "notes",
+          "only",
+          "passing",
+          "prevents",
+          "privacy",
+          "private",
+          "process",
+          "public",
+          "published",
+          "publishing",
+          "question",
+          "release",
+          "repo",
+          "repository",
+          "run",
+          "sample",
+          "scan",
+          "ship",
+          "should",
+          "suite",
+          "synthetic",
+          "task",
+          "template",
+          "test",
+          "verify",
+          "why"
+        ],
+        "tag_tokens": [
+          "checklist",
+          "release",
+          "sample"
+        ],
+        "attention_tokens": [
+          "before",
+          "checklist",
+          "completed",
+          "dev",
+          "loop",
+          "next",
+          "notes",
+          "only",
+          "open",
+          "privacy",
+          "public",
+          "publishing",
+          "release",
+          "repository",
+          "run",
+          "sample",
+          "scan",
+          "should",
+          "synthetic",
+          "template",
+          "verify"
+        ],
+        "snippet": "What should be completed before publishing the public template repository? Next: Run privacy scan and verify synthetic notes only",
+        "has_next_action_checkbox": true
+      }
+    },
+    "notes/06_concepts/concept__atomic_notes.md": {
+      "mtime": 1772611597.7768927,
+      "content_hash": "sha256:06ee84d1e0d572b7da2ea2b3b104990fd1e2072ae63daa1df064086a85545641",
+      "note_type": "concepts",
+      "candidate": {
+        "path": "/Users/damsleth/Code/cog-led-public/notes/06_concepts/concept__atomic_notes.md",
+        "rel_path": "notes/06_concepts/concept__atomic_notes.md",
+        "type": "concept",
+        "title": "Atomic Notes",
+        "statement": "Each note should capture one durable idea to keep retrieval precise and maintainable.",
+        "body": "\n# Atomic Notes\n\n## Statement\nEach note should capture one durable idea to keep retrieval precise and maintainable.\n\n## Context\nCore concept used throughout Cognitive Ledger conventions.\n\n## Implications\n- Prefer multiple small linked notes over one large mixed note.\n\n## Links\n- ../03_preferences/pref__agent_work_style.md",
+        "updated": "2026-03-04T00:00:00Z",
+        "confidence": 0.95,
+        "source": "user",
+        "scope": "meta",
+        "status": "",
+        "tags": [
+          "sample",
+          "concepts",
+          "note-design"
+        ],
+        "note_tokens": [
+          "03",
+          "agent",
+          "atomic",
+          "capture",
+          "cognitive",
+          "concept",
+          "concepts",
+          "context",
+          "conventions",
+          "core",
+          "design",
+          "durable",
+          "each",
+          "idea",
+          "implications",
+          "keep",
+          "large",
+          "ledger",
+          "linked",
+          "links",
+          "maintainable",
+          "md",
+          "mixed",
+          "multiple",
+          "note",
+          "notes",
+          "one",
+          "over",
+          "precise",
+          "pref",
+          "prefer",
+          "preferences",
+          "retrieval",
+          "sample",
+          "should",
+          "small",
+          "statement",
+          "style",
+          "throughout",
+          "used",
+          "work"
+        ],
+        "tag_tokens": [
+          "concepts",
+          "design",
+          "note",
+          "sample"
+        ],
+        "attention_tokens": [
+          "atomic",
+          "capture",
+          "concept",
+          "concepts",
+          "design",
+          "durable",
+          "each",
+          "idea",
+          "keep",
+          "maintainable",
+          "meta",
+          "note",
+          "notes",
+          "one",
+          "precise",
+          "retrieval",
+          "sample",
+          "should"
+        ],
+        "snippet": "Each note should capture one durable idea to keep retrieval precise and maintainable.",
+        "has_next_action_checkbox": false
+      }
+    }
+  },
+  "inverted": {
+    "used": [
+      "notes/02_facts/fact__sample_public_profile.md",
+      "notes/03_preferences/pref__agent_work_style.md",
+      "notes/06_concepts/concept__atomic_notes.md"
+    ],
+    "cognitive": [
+      "notes/02_facts/fact__sample_public_profile.md",
+      "notes/04_goals/goal__ship_public_template_repo.md",
+      "notes/06_concepts/concept__atomic_notes.md"
+    ],
+    "should": [
+      "notes/02_facts/fact__sample_public_profile.md",
+      "notes/02_facts/fact__sample_work_context.md",
+      "notes/03_preferences/pref__agent_work_style.md",
+      "notes/03_preferences/pref__time_based_work.md",
+      "notes/05_open_loops/loop__sample_release_checklist.md",
+      "notes/06_concepts/concept__atomic_notes.md"
+    ],
+    "contains": [
+      "notes/02_facts/fact__sample_public_profile.md"
+    ],
+    "public": [
+      "notes/02_facts/fact__sample_public_profile.md",
+      "notes/02_facts/fact__sample_work_context.md",
+      "notes/03_preferences/pref__time_based_work.md",
+      "notes/04_goals/goal__ship_public_template_repo.md",
+      "notes/05_open_loops/loop__sample_release_checklist.md"
+    ],
+    "synthetic": [
+      "notes/02_facts/fact__sample_public_profile.md",
+      "notes/02_facts/fact__sample_work_context.md",
+      "notes/03_preferences/pref__agent_work_style.md",
+      "notes/03_preferences/pref__time_based_work.md",
+      "notes/04_goals/goal__ship_public_template_repo.md",
+      "notes/05_open_loops/loop__sample_release_checklist.md"
+    ],
+    "fact": [
+      "notes/02_facts/fact__sample_public_profile.md",
+      "notes/02_facts/fact__sample_work_context.md"
+    ],
+    "profile": [
+      "notes/02_facts/fact__sample_public_profile.md"
+    ],
+    "tooling": [
+      "notes/02_facts/fact__sample_public_profile.md",
+      "notes/02_facts/fact__sample_work_context.md"
+    ],
+    "data": [
+      "notes/02_facts/fact__sample_public_profile.md",
+      "notes/04_goals/goal__ship_public_template_repo.md",
+      "notes/05_open_loops/loop__sample_release_checklist.md"
+    ],
+    "memory": [
+      "notes/02_facts/fact__sample_public_profile.md"
+    ],
+    "demonstrating": [
+      "notes/02_facts/fact__sample_public_profile.md"
+    ],
+    "seed": [
+      "notes/02_facts/fact__sample_public_profile.md"
+    ],
+    "work": [
+      "notes/02_facts/fact__sample_public_profile.md",
+      "notes/02_facts/fact__sample_work_context.md",
+      "notes/03_preferences/pref__agent_work_style.md",
+      "notes/03_preferences/pref__time_based_work.md",
+      "notes/06_concepts/concept__atomic_notes.md"
+    ],
+    "user": [
+      "notes/02_facts/fact__sample_public_profile.md",
+      "notes/02_facts/fact__sample_work_context.md"
+    ],
+    "atomic": [
+      "notes/02_facts/fact__sample_public_profile.md",
+      "notes/03_preferences/pref__agent_work_style.md",
+      "notes/06_concepts/concept__atomic_notes.md"
+    ],
+    "concept": [
+      "notes/02_facts/fact__sample_public_profile.md",
+      "notes/03_preferences/pref__agent_work_style.md",
+      "notes/06_concepts/concept__atomic_notes.md"
+    ],
+    "distribution": [
+      "notes/02_facts/fact__sample_public_profile.md"
+    ],
+    "links": [
+      "notes/02_facts/fact__sample_public_profile.md",
+      "notes/02_facts/fact__sample_work_context.md",
+      "notes/03_preferences/pref__agent_work_style.md",
+      "notes/03_preferences/pref__time_based_work.md",
+      "notes/04_goals/goal__ship_public_template_repo.md",
+      "notes/05_open_loops/loop__sample_release_checklist.md",
+      "notes/06_concepts/concept__atomic_notes.md"
+    ],
+    "workflows": [
+      "notes/02_facts/fact__sample_public_profile.md"
+    ],
+    "ledger": [
+      "notes/02_facts/fact__sample_public_profile.md",
+      "notes/04_goals/goal__ship_public_template_repo.md",
+      "notes/06_concepts/concept__atomic_notes.md"
+    ],
+    "06": [
+      "notes/02_facts/fact__sample_public_profile.md",
+      "notes/03_preferences/pref__agent_work_style.md"
+    ],
+    "non": [
+      "notes/02_facts/fact__sample_public_profile.md"
+    ],
+    "private": [
+      "notes/02_facts/fact__sample_public_profile.md",
+      "notes/04_goals/goal__ship_public_template_repo.md",
+      "notes/05_open_loops/loop__sample_release_checklist.md"
+    ],
+    "sample": [
+      "notes/02_facts/fact__sample_public_profile.md",
+      "notes/02_facts/fact__sample_work_context.md",
+      "notes/03_preferences/pref__agent_work_style.md",
+      "notes/03_preferences/pref__time_based_work.md",
+      "notes/04_goals/goal__ship_public_template_repo.md",
+      "notes/05_open_loops/loop__sample_release_checklist.md",
+      "notes/06_concepts/concept__atomic_notes.md"
+    ],
+    "context": [
+      "notes/02_facts/fact__sample_public_profile.md",
+      "notes/02_facts/fact__sample_work_context.md",
+      "notes/03_preferences/pref__agent_work_style.md",
+      "notes/03_preferences/pref__time_based_work.md",
+      "notes/04_goals/goal__ship_public_template_repo.md",
+      "notes/06_concepts/concept__atomic_notes.md"
+    ],
+    "retrieval": [
+      "notes/02_facts/fact__sample_public_profile.md",
+      "notes/02_facts/fact__sample_work_context.md",
+      "notes/03_preferences/pref__time_based_work.md",
+      "notes/04_goals/goal__ship_public_template_repo.md",
+      "notes/06_concepts/concept__atomic_notes.md"
+    ],
+    "repository": [
+      "notes/02_facts/fact__sample_public_profile.md",
+      "notes/04_goals/goal__ship_public_template_repo.md",
+      "notes/05_open_loops/loop__sample_release_checklist.md"
+    ],
+    "concepts": [
+      "notes/02_facts/fact__sample_public_profile.md",
+      "notes/03_preferences/pref__agent_work_style.md",
+      "notes/06_concepts/concept__atomic_notes.md"
+    ],
+    "statement": [
+      "notes/02_facts/fact__sample_public_profile.md",
+      "notes/02_facts/fact__sample_work_context.md",
+      "notes/03_preferences/pref__agent_work_style.md",
+      "notes/03_preferences/pref__time_based_work.md",
+      "notes/04_goals/goal__ship_public_template_repo.md",
+      "notes/06_concepts/concept__atomic_notes.md"
+    ],
+    "this": [
+      "notes/02_facts/fact__sample_public_profile.md",
+      "notes/02_facts/fact__sample_work_context.md"
+    ],
+    "notes": [
+      "notes/02_facts/fact__sample_public_profile.md",
+      "notes/03_preferences/pref__agent_work_style.md",
+      "notes/05_open_loops/loop__sample_release_checklist.md",
+      "notes/06_concepts/concept__atomic_notes.md"
+    ],
+    "md": [
+      "notes/02_facts/fact__sample_public_profile.md",
+      "notes/02_facts/fact__sample_work_context.md",
+      "notes/03_preferences/pref__agent_work_style.md",
+      "notes/03_preferences/pref__time_based_work.md",
+      "notes/04_goals/goal__ship_public_template_repo.md",
+      "notes/05_open_loops/loop__sample_release_checklist.md",
+      "notes/06_concepts/concept__atomic_notes.md"
+    ],
+    "example": [
+      "notes/02_facts/fact__sample_public_profile.md"
+    ],
+    "without": [
+      "notes/02_facts/fact__sample_public_profile.md"
+    ],
+    "personal": [
+      "notes/02_facts/fact__sample_public_profile.md",
+      "notes/03_preferences/pref__time_based_work.md"
+    ],
+    "implications": [
+      "notes/02_facts/fact__sample_public_profile.md",
+      "notes/02_facts/fact__sample_work_context.md",
+      "notes/03_preferences/pref__agent_work_style.md",
+      "notes/03_preferences/pref__time_based_work.md",
+      "notes/04_goals/goal__ship_public_template_repo.md",
+      "notes/06_concepts/concept__atomic_notes.md"
+    ],
+    "goals": [
+      "notes/02_facts/fact__sample_work_context.md",
+      "notes/03_preferences/pref__time_based_work.md",
+      "notes/05_open_loops/loop__sample_release_checklist.md"
+    ],
+    "scoped": [
+      "notes/02_facts/fact__sample_work_context.md"
+    ],
+    "template": [
+      "notes/02_facts/fact__sample_work_context.md",
+      "notes/03_preferences/pref__time_based_work.md",
+      "notes/04_goals/goal__ship_public_template_repo.md",
+      "notes/05_open_loops/loop__sample_release_checklist.md"
+    ],
+    "delivery": [
+      "notes/02_facts/fact__sample_work_context.md"
+    ],
+    "repo": [
+      "notes/02_facts/fact__sample_work_context.md",
+      "notes/03_preferences/pref__time_based_work.md",
+      "notes/04_goals/goal__ship_public_template_repo.md",
+      "notes/05_open_loops/loop__sample_release_checklist.md"
+    ],
+    "examples": [
+      "notes/02_facts/fact__sample_work_context.md"
+    ],
+    "demo": [
+      "notes/02_facts/fact__sample_work_context.md",
+      "notes/04_goals/goal__ship_public_template_repo.md"
+    ],
+    "prioritize": [
+      "notes/02_facts/fact__sample_work_context.md",
+      "notes/03_preferences/pref__agent_work_style.md",
+      "notes/04_goals/goal__ship_public_template_repo.md"
+    ],
+    "knowledge": [
+      "notes/02_facts/fact__sample_work_context.md"
+    ],
+    "ship": [
+      "notes/02_facts/fact__sample_work_context.md",
+      "notes/03_preferences/pref__time_based_work.md",
+      "notes/04_goals/goal__ship_public_template_repo.md",
+      "notes/05_open_loops/loop__sample_release_checklist.md"
+    ],
+    "works": [
+      "notes/02_facts/fact__sample_work_context.md"
+    ],
+    "note": [
+      "notes/02_facts/fact__sample_work_context.md",
+      "notes/06_concepts/concept__atomic_notes.md"
+    ],
+    "placeholder": [
+      "notes/02_facts/fact__sample_work_context.md"
+    ],
+    "04": [
+      "notes/02_facts/fact__sample_work_context.md",
+      "notes/03_preferences/pref__time_based_work.md",
+      "notes/05_open_loops/loop__sample_release_checklist.md"
+    ],
+    "queries": [
+      "notes/02_facts/fact__sample_work_context.md"
+    ],
+    "goal": [
+      "notes/02_facts/fact__sample_work_context.md",
+      "notes/03_preferences/pref__time_based_work.md",
+      "notes/04_goals/goal__ship_public_template_repo.md",
+      "notes/05_open_loops/loop__sample_release_checklist.md"
+    ],
+    "software": [
+      "notes/02_facts/fact__sample_work_context.md"
+    ],
+    "workflow": [
+      "notes/03_preferences/pref__agent_work_style.md"
+    ],
+    "prefer": [
+      "notes/03_preferences/pref__agent_work_style.md",
+      "notes/06_concepts/concept__atomic_notes.md"
+    ],
+    "documentation": [
+      "notes/03_preferences/pref__agent_work_style.md"
+    ],
+    "communication": [
+      "notes/03_preferences/pref__agent_work_style.md"
+    ],
+    "engineering": [
+      "notes/03_preferences/pref__agent_work_style.md"
+    ],
+    "agent": [
+      "notes/03_preferences/pref__agent_work_style.md",
+      "notes/06_concepts/concept__atomic_notes.md"
+    ],
+    "baseline": [
+      "notes/03_preferences/pref__agent_work_style.md"
+    ],
+    "backed": [
+      "notes/03_preferences/pref__agent_work_style.md"
+    ],
+    "tests": [
+      "notes/03_preferences/pref__agent_work_style.md"
+    ],
+    "style": [
+      "notes/03_preferences/pref__agent_work_style.md",
+      "notes/06_concepts/concept__atomic_notes.md"
+    ],
+    "clarity": [
+      "notes/03_preferences/pref__agent_work_style.md"
+    ],
+    "preference": [
+      "notes/03_preferences/pref__agent_work_style.md",
+      "notes/03_preferences/pref__time_based_work.md"
+    ],
+    "meta": [
+      "notes/03_preferences/pref__agent_work_style.md",
+      "notes/06_concepts/concept__atomic_notes.md"
+    ],
+    "verification": [
+      "notes/03_preferences/pref__agent_work_style.md"
+    ],
+    "agents": [
+      "notes/03_preferences/pref__agent_work_style.md"
+    ],
+    "explicit": [
+      "notes/03_preferences/pref__agent_work_style.md"
+    ],
+    "responses": [
+      "notes/03_preferences/pref__agent_work_style.md"
+    ],
+    "test": [
+      "notes/03_preferences/pref__agent_work_style.md",
+      "notes/05_open_loops/loop__sample_release_checklist.md"
+    ],
+    "pref": [
+      "notes/03_preferences/pref__agent_work_style.md",
+      "notes/03_preferences/pref__time_based_work.md",
+      "notes/06_concepts/concept__atomic_notes.md"
+    ],
+    "concise": [
+      "notes/03_preferences/pref__agent_work_style.md"
+    ],
+    "boxed": [
+      "notes/03_preferences/pref__time_based_work.md"
+    ],
+    "productivity": [
+      "notes/03_preferences/pref__time_based_work.md"
+    ],
+    "reduce": [
+      "notes/03_preferences/pref__time_based_work.md"
+    ],
+    "coverage": [
+      "notes/03_preferences/pref__time_based_work.md"
+    ],
+    "focus": [
+      "notes/03_preferences/pref__time_based_work.md"
+    ],
+    "suggestions": [
+      "notes/03_preferences/pref__time_based_work.md"
+    ],
+    "blocks": [
+      "notes/03_preferences/pref__time_based_work.md"
+    ],
+    "sessions": [
+      "notes/03_preferences/pref__time_based_work.md"
+    ],
+    "include": [
+      "notes/03_preferences/pref__time_based_work.md"
+    ],
+    "maintain": [
+      "notes/03_preferences/pref__time_based_work.md"
+    ],
+    "planning": [
+      "notes/03_preferences/pref__time_based_work.md",
+      "notes/04_goals/goal__ship_public_template_repo.md"
+    ],
+    "friction": [
+      "notes/03_preferences/pref__time_based_work.md"
+    ],
+    "time": [
+      "notes/03_preferences/pref__time_based_work.md"
+    ],
+    "duration": [
+      "notes/03_preferences/pref__time_based_work.md"
+    ],
+    "based": [
+      "notes/03_preferences/pref__time_based_work.md"
+    ],
+    "evaluation": [
+      "notes/03_preferences/pref__time_based_work.md"
+    ],
+    "use": [
+      "notes/03_preferences/pref__time_based_work.md"
+    ],
+    "loops": [
+      "notes/04_goals/goal__ship_public_template_repo.md"
+    ],
+    "hygiene": [
+      "notes/04_goals/goal__ship_public_template_repo.md"
+    ],
+    "reproducible": [
+      "notes/04_goals/goal__ship_public_template_repo.md"
+    ],
+    "loop": [
+      "notes/04_goals/goal__ship_public_template_repo.md",
+      "notes/05_open_loops/loop__sample_release_checklist.md"
+    ],
+    "publishing": [
+      "notes/04_goals/goal__ship_public_template_repo.md",
+      "notes/05_open_loops/loop__sample_release_checklist.md"
+    ],
+    "docs": [
+      "notes/04_goals/goal__ship_public_template_repo.md"
+    ],
+    "primary": [
+      "notes/04_goals/goal__ship_public_template_repo.md"
+    ],
+    "dev": [
+      "notes/04_goals/goal__ship_public_template_repo.md",
+      "notes/05_open_loops/loop__sample_release_checklist.md"
+    ],
+    "setup": [
+      "notes/04_goals/goal__ship_public_template_repo.md"
+    ],
+    "no": [
+      "notes/04_goals/goal__ship_public_template_repo.md"
+    ],
+    "open": [
+      "notes/04_goals/goal__ship_public_template_repo.md",
+      "notes/05_open_loops/loop__sample_release_checklist.md"
+    ],
+    "checklist": [
+      "notes/04_goals/goal__ship_public_template_repo.md",
+      "notes/05_open_loops/loop__sample_release_checklist.md"
+    ],
+    "reusable": [
+      "notes/04_goals/goal__ship_public_template_repo.md"
+    ],
+    "release": [
+      "notes/04_goals/goal__ship_public_template_repo.md",
+      "notes/05_open_loops/loop__sample_release_checklist.md"
+    ],
+    "publish": [
+      "notes/04_goals/goal__ship_public_template_repo.md"
+    ],
+    "05": [
+      "notes/04_goals/goal__ship_public_template_repo.md"
+    ],
+    "run": [
+      "notes/05_open_loops/loop__sample_release_checklist.md"
+    ],
+    "suite": [
+      "notes/05_open_loops/loop__sample_release_checklist.md"
+    ],
+    "scan": [
+      "notes/05_open_loops/loop__sample_release_checklist.md"
+    ],
+    "only": [
+      "notes/05_open_loops/loop__sample_release_checklist.md"
+    ],
+    "clean": [
+      "notes/05_open_loops/loop__sample_release_checklist.md"
+    ],
+    "exit": [
+      "notes/05_open_loops/loop__sample_release_checklist.md"
+    ],
+    "passing": [
+      "notes/05_open_loops/loop__sample_release_checklist.md"
+    ],
+    "question": [
+      "notes/05_open_loops/loop__sample_release_checklist.md"
+    ],
+    "completed": [
+      "notes/05_open_loops/loop__sample_release_checklist.md"
+    ],
+    "before": [
+      "notes/05_open_loops/loop__sample_release_checklist.md"
+    ],
+    "next": [
+      "notes/05_open_loops/loop__sample_release_checklist.md"
+    ],
+    "exposure": [
+      "notes/05_open_loops/loop__sample_release_checklist.md"
+    ],
+    "prevents": [
+      "notes/05_open_loops/loop__sample_release_checklist.md"
+    ],
+    "published": [
+      "notes/05_open_loops/loop__sample_release_checklist.md"
+    ],
+    "matters": [
+      "notes/05_open_loops/loop__sample_release_checklist.md"
+    ],
+    "privacy": [
+      "notes/05_open_loops/loop__sample_release_checklist.md"
+    ],
+    "action": [
+      "notes/05_open_loops/loop__sample_release_checklist.md"
+    ],
+    "verify": [
+      "notes/05_open_loops/loop__sample_release_checklist.md"
+    ],
+    "task": [
+      "notes/05_open_loops/loop__sample_release_checklist.md"
+    ],
+    "condition": [
+      "notes/05_open_loops/loop__sample_release_checklist.md"
+    ],
+    "accidental": [
+      "notes/05_open_loops/loop__sample_release_checklist.md"
+    ],
+    "why": [
+      "notes/05_open_loops/loop__sample_release_checklist.md"
+    ],
+    "process": [
+      "notes/05_open_loops/loop__sample_release_checklist.md"
+    ],
+    "large": [
+      "notes/06_concepts/concept__atomic_notes.md"
+    ],
+    "conventions": [
+      "notes/06_concepts/concept__atomic_notes.md"
+    ],
+    "one": [
+      "notes/06_concepts/concept__atomic_notes.md"
+    ],
+    "preferences": [
+      "notes/06_concepts/concept__atomic_notes.md"
+    ],
+    "each": [
+      "notes/06_concepts/concept__atomic_notes.md"
+    ],
+    "throughout": [
+      "notes/06_concepts/concept__atomic_notes.md"
+    ],
+    "maintainable": [
+      "notes/06_concepts/concept__atomic_notes.md"
+    ],
+    "multiple": [
+      "notes/06_concepts/concept__atomic_notes.md"
+    ],
+    "small": [
+      "notes/06_concepts/concept__atomic_notes.md"
+    ],
+    "capture": [
+      "notes/06_concepts/concept__atomic_notes.md"
+    ],
+    "over": [
+      "notes/06_concepts/concept__atomic_notes.md"
+    ],
+    "keep": [
+      "notes/06_concepts/concept__atomic_notes.md"
+    ],
+    "design": [
+      "notes/06_concepts/concept__atomic_notes.md"
+    ],
+    "core": [
+      "notes/06_concepts/concept__atomic_notes.md"
+    ],
+    "mixed": [
+      "notes/06_concepts/concept__atomic_notes.md"
+    ],
+    "precise": [
+      "notes/06_concepts/concept__atomic_notes.md"
+    ],
+    "linked": [
+      "notes/06_concepts/concept__atomic_notes.md"
+    ],
+    "03": [
+      "notes/06_concepts/concept__atomic_notes.md"
+    ],
+    "idea": [
+      "notes/06_concepts/concept__atomic_notes.md"
+    ],
+    "durable": [
+      "notes/06_concepts/concept__atomic_notes.md"
+    ]
+  }
+}

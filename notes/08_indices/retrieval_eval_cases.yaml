@@ -1,0 +1,35 @@
+- query: "How should the agent collaborate in technical work?"
+  id: pref_agent_work_style
+  scope: "all"
+  expected_any:
+    - "notes/03_preferences/pref__agent_work_style.md"
+
+- query: "What is the time-based planning preference?"
+  id: pref_time_based_work
+  scope: "personal"
+  expected_any:
+    - "notes/03_preferences/pref__time_based_work.md"
+
+- query: "What goal tracks the public template release?"
+  id: goal_public_template
+  scope: "dev"
+  expected_any:
+    - "notes/04_goals/goal__ship_public_template_repo.md"
+
+- query: "What is the next action before publishing?"
+  id: loop_release_next_action
+  scope: "dev"
+  expected_any:
+    - "notes/05_open_loops/loop__sample_release_checklist.md"
+
+- query: "What does atomic note design mean?"
+  id: concept_atomic_notes
+  scope: "meta"
+  expected_any:
+    - "notes/06_concepts/concept__atomic_notes.md"
+
+- query: "What synthetic fact describes this sample profile?"
+  id: fact_public_profile
+  scope: "personal"
+  expected_any:
+    - "notes/02_facts/fact__sample_public_profile.md"

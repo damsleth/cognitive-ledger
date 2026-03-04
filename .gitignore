@@ -1,0 +1,19 @@
+.DS_Store
+node_modules/
+dist/
+.env
+.vscode/
+.obsidian/
+.misc/
+# Claude worktrees
+.claude/
+# Ignore Smart Environment folder
+.smart-env
+# Build artifacts
+build/
+dist/
+*.spec
+.venv/
+**__pycache__/
+*.pyc
+IMPROVEMENT_PLAN.md
