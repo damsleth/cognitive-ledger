@@ -27,6 +27,18 @@ def load_ledger_module():
     return module
 
 
+def payload_get(payload, key, default=None):
+    return getattr(payload, key, default) if hasattr(payload, key) else payload.get(key, default)
+
+
+def payload_results(payload):
+    return payload.results if hasattr(payload, "results") else payload["results"]
+
+
+def result_get(result, key, default=None):
+    return getattr(result, key, default) if hasattr(result, key) else result.get(key, default)
+
+
 class LedgerUnitTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -172,10 +184,10 @@ class LedgerUnitTests(unittest.TestCase):
         finally:
             ledger.load_embeddings_module = original_loader
 
-        self.assertEqual(payload["retrieval_mode"], "semantic_hybrid")
-        self.assertEqual(payload["effective_retrieval_mode"], "legacy")
-        self.assertEqual(payload["semantic"]["reason"], "missing_index")
-        self.assertTrue(payload["results"])
+        self.assertEqual(payload_get(payload, "retrieval_mode"), "semantic_hybrid")
+        self.assertEqual(payload_get(payload, "effective_retrieval_mode"), "legacy")
+        self.assertEqual(payload_get(payload, "semantic")["reason"], "missing_index")
+        self.assertTrue(payload_results(payload))
 
     def test_semantic_hybrid_openai_fails_without_api_key(self):
         ledger = self.ledger
@@ -240,7 +252,7 @@ class LedgerUnitTests(unittest.TestCase):
             ledger.load_embeddings_module = original_loader
 
         self.assertEqual(seen_targets, ["ledger"])
-        self.assertEqual(payload["retrieval_mode"], "semantic_hybrid")
+        self.assertEqual(payload_get(payload, "retrieval_mode"), "semantic_hybrid")
 
     def test_alias_expansion(self):
         expanded, events = self.ledger.expand_query_tokens(
@@ -326,7 +338,7 @@ class LedgerUnitTests(unittest.TestCase):
         selected = self.ledger.retrieve_candidates_from_index(
             index, query_tokens={"alpha"}, query_scope="all", minimum_pool=1
         )
-        self.assertEqual(selected[0]["path"], "/tmp/one.md")
+        self.assertEqual(result_get(selected[0], "path"), "/tmp/one.md")
 
     def test_shortlist_candidates_reduces_candidate_pool(self):
         candidates = []
@@ -393,7 +405,7 @@ class LedgerUnitTests(unittest.TestCase):
             preference_mode=False,
             limit=8,
         )
-        shortlisted_paths = {item["path"] for item in shortlist}
+        shortlisted_paths = {result_get(item, "path") for item in shortlist}
         self.assertIn("/tmp/match.md", shortlisted_paths)
         self.assertNotIn("/tmp/miss.md", shortlisted_paths)
 
@@ -463,7 +475,7 @@ class LedgerUnitTests(unittest.TestCase):
             preference_mode=False,
             limit=8,
         )
-        filtered_paths = {item["path"] for item in filtered}
+        filtered_paths = {result_get(item, "path") for item in filtered}
         self.assertIn("/tmp/loop.md", filtered_paths)
         self.assertNotIn("/tmp/fact.md", filtered_paths)
 
@@ -569,7 +581,7 @@ class LedgerIntegrationTests(unittest.TestCase):
 
     def test_query_release_returns_open_loop(self):
         payload = self.ledger.rank_query("What should I do next for release?", scope="dev", limit=8)
-        top_paths = [item["path"] for item in payload["results"][:5]]
+        top_paths = [result_get(item, "path") for item in payload_results(payload)[:5]]
         self.assertTrue(
             any("loop__sample_release_checklist.md" in path for path in top_paths),
             msg=f"Top paths: {top_paths}",
@@ -582,10 +594,10 @@ class LedgerIntegrationTests(unittest.TestCase):
             limit=8,
             retrieval_mode="two_stage",
         )
-        self.assertEqual(payload["retrieval_mode"], "two_stage")
-        self.assertIn("candidate_pool_size", payload)
-        self.assertIn("shortlist_size", payload)
-        self.assertLessEqual(payload["shortlist_size"], payload["candidate_pool_size"])
+        self.assertEqual(payload_get(payload, "retrieval_mode"), "two_stage")
+        self.assertIsNotNone(payload_get(payload, "candidate_pool_size"))
+        self.assertIsNotNone(payload_get(payload, "shortlist_size"))
+        self.assertLessEqual(payload_get(payload, "shortlist_size"), payload_get(payload, "candidate_pool_size"))
 
     def test_query_reports_compressed_attention_metadata(self):
         payload = self.ledger.rank_query(
@@ -594,10 +606,10 @@ class LedgerIntegrationTests(unittest.TestCase):
             limit=8,
             retrieval_mode="compressed_attention",
         )
-        self.assertEqual(payload["retrieval_mode"], "compressed_attention")
-        self.assertIn("candidate_pool_size", payload)
-        self.assertIn("shortlist_size", payload)
-        self.assertLessEqual(payload["shortlist_size"], payload["candidate_pool_size"])
+        self.assertEqual(payload_get(payload, "retrieval_mode"), "compressed_attention")
+        self.assertIsNotNone(payload_get(payload, "candidate_pool_size"))
+        self.assertIsNotNone(payload_get(payload, "shortlist_size"))
+        self.assertLessEqual(payload_get(payload, "shortlist_size"), payload_get(payload, "candidate_pool_size"))
 
     def test_query_compressed_attention_shortlists_eval_limit(self):
         payload = self.ledger.rank_query(
@@ -606,9 +618,9 @@ class LedgerIntegrationTests(unittest.TestCase):
             limit=50,
             retrieval_mode="compressed_attention",
         )
-        self.assertLessEqual(payload["shortlist_size"], payload["candidate_pool_size"])
-        if payload["candidate_pool_size"] > self.ledger.ATTENTION_SHORTLIST_MAX_CANDIDATES:
-            self.assertLess(payload["shortlist_size"], payload["candidate_pool_size"])
+        self.assertLessEqual(payload_get(payload, "shortlist_size"), payload_get(payload, "candidate_pool_size"))
+        if payload_get(payload, "candidate_pool_size") > self.ledger.ATTENTION_SHORTLIST_MAX_CANDIDATES:
+            self.assertLess(payload_get(payload, "shortlist_size"), payload_get(payload, "candidate_pool_size"))
 
     def test_query_scope_type_prefilter_reports_prefilter_size(self):
         payload = self.ledger.rank_query(
@@ -617,9 +629,9 @@ class LedgerIntegrationTests(unittest.TestCase):
             limit=8,
             retrieval_mode="scope_type_prefilter",
         )
-        self.assertEqual(payload["retrieval_mode"], "scope_type_prefilter")
-        self.assertIn("prefilter_size", payload)
-        self.assertLessEqual(payload["prefilter_size"], payload["candidate_pool_size"])
+        self.assertEqual(payload_get(payload, "retrieval_mode"), "scope_type_prefilter")
+        self.assertIsNotNone(payload_get(payload, "prefilter_size"))
+        self.assertLessEqual(payload_get(payload, "prefilter_size"), payload_get(payload, "candidate_pool_size"))
 
     def test_query_precomputed_index_reports_indexed_pool_size(self):
         payload = self.ledger.rank_query(
@@ -628,10 +640,9 @@ class LedgerIntegrationTests(unittest.TestCase):
             limit=8,
             retrieval_mode="precomputed_index",
         )
-        self.assertEqual(payload["retrieval_mode"], "precomputed_index")
-        self.assertIn("indexed_pool_size", payload)
-        self.assertIsNotNone(payload["indexed_pool_size"])
-        self.assertLessEqual(payload["indexed_pool_size"], payload["candidate_pool_size"])
+        self.assertEqual(payload_get(payload, "retrieval_mode"), "precomputed_index")
+        self.assertIsNotNone(payload_get(payload, "indexed_pool_size"))
+        self.assertLessEqual(payload_get(payload, "indexed_pool_size"), payload_get(payload, "candidate_pool_size"))
 
     def test_query_progressive_disclosure_assigns_levels(self):
         payload = self.ledger.rank_query(
@@ -640,17 +651,17 @@ class LedgerIntegrationTests(unittest.TestCase):
             limit=8,
             retrieval_mode="progressive_disclosure",
         )
-        self.assertEqual(payload["retrieval_mode"], "progressive_disclosure")
-        self.assertEqual(payload["progressive_top_n"], self.ledger.PROGRESSIVE_RATIONALE_TOP)
-        self.assertTrue(payload["results"])
+        self.assertEqual(payload_get(payload, "retrieval_mode"), "progressive_disclosure")
+        self.assertEqual(payload_get(payload, "progressive_top_n"), self.ledger.PROGRESSIVE_RATIONALE_TOP)
+        self.assertTrue(payload_results(payload))
 
-        top_n = min(self.ledger.PROGRESSIVE_RATIONALE_TOP, len(payload["results"]))
-        for item in payload["results"][:top_n]:
-            self.assertEqual(item.get("disclosure_level"), "rationale")
-            self.assertTrue(item["reasons"])
-        for item in payload["results"][top_n:]:
-            self.assertEqual(item.get("disclosure_level"), "compact")
-            self.assertEqual(item["reasons"], [])
+        top_n = min(self.ledger.PROGRESSIVE_RATIONALE_TOP, len(payload_results(payload)))
+        for item in payload_results(payload)[:top_n]:
+            self.assertEqual(result_get(item, "disclosure_level"), "rationale")
+            self.assertTrue(result_get(item, "reasons"))
+        for item in payload_results(payload)[top_n:]:
+            self.assertEqual(result_get(item, "disclosure_level"), "compact")
+            self.assertEqual(result_get(item, "reasons"), [])
 
     def test_query_large_limit_suppresses_rationale_strings(self):
         payload = self.ledger.rank_query(
@@ -659,25 +670,25 @@ class LedgerIntegrationTests(unittest.TestCase):
             limit=50,
             retrieval_mode="two_stage",
         )
-        self.assertTrue(payload["results"])
-        self.assertTrue(all(item["reasons"] == [] for item in payload["results"]))
-        self.assertEqual(payload["shortlist_size"], payload["candidate_pool_size"])
+        self.assertTrue(payload_results(payload))
+        self.assertTrue(all(result_get(item, "reasons") == [] for item in payload_results(payload)))
+        self.assertEqual(payload_get(payload, "shortlist_size"), payload_get(payload, "candidate_pool_size"))
 
     def test_query_default_legacy_mode_shortlists(self):
         payload = self.ledger.rank_query("What should I do next for release?", scope="dev", limit=8)
-        self.assertEqual(payload["retrieval_mode"], "legacy")
-        self.assertLessEqual(payload["shortlist_size"], payload["candidate_pool_size"])
-        if payload["candidate_pool_size"] > self.ledger.ATTENTION_SHORTLIST_MAX_CANDIDATES:
-            self.assertLess(payload["shortlist_size"], payload["candidate_pool_size"])
+        self.assertEqual(payload_get(payload, "retrieval_mode"), "legacy")
+        self.assertLessEqual(payload_get(payload, "shortlist_size"), payload_get(payload, "candidate_pool_size"))
+        if payload_get(payload, "candidate_pool_size") > self.ledger.ATTENTION_SHORTLIST_MAX_CANDIDATES:
+            self.assertLess(payload_get(payload, "shortlist_size"), payload_get(payload, "candidate_pool_size"))
 
     def test_query_legacy_keeps_reasons_for_large_limit(self):
         payload = self.ledger.rank_query("What should I do next for release?", scope="dev", limit=50)
-        self.assertTrue(payload["results"])
-        self.assertTrue(any(item["reasons"] for item in payload["results"]))
+        self.assertTrue(payload_results(payload))
+        self.assertTrue(any(result_get(item, "reasons") for item in payload_results(payload)))
 
     def test_eval_cases_parse(self):
         cases = self.ledger.parse_eval_cases(CASES_PATH)
-        self.assertGreaterEqual(len(cases), 6)
+        self.assertGreaterEqual(len(cases), 16)
         self.assertTrue(all("query" in case for case in cases))
 
     def test_eval_runs_and_returns_metrics(self):

@@ -35,6 +35,10 @@ class TestNoteTypeConfig(unittest.TestCase):
         self.assertEqual(cfg.prefix, "fact__")
         self.assertEqual(cfg.label, "fact")
 
+    def test_path_in_uses_explicit_notes_root(self):
+        cfg = NOTE_TYPE_CONFIGS["facts"]
+        self.assertEqual(cfg.path_in(Path("/tmp/custom-notes")), Path("/tmp/custom-notes/02_facts"))
+
     def test_core_note_types(self):
         self.assertEqual(len(CORE_NOTE_TYPES), 5)
         self.assertIn("facts", CORE_NOTE_TYPES)
@@ -259,6 +263,36 @@ tags: [test]
             self.assertIsInstance(note, GenericNote)
         finally:
             path.unlink()
+
+    def test_get_notes_respects_explicit_notes_dir(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            notes_root = Path(tmp) / "notes"
+            facts_dir = notes_root / "02_facts"
+            facts_dir.mkdir(parents=True)
+            (facts_dir / "fact__override.md").write_text(
+                """---
+created: 2026-02-13T10:00:00Z
+updated: 2026-02-13T10:00:00Z
+tags: [test]
+confidence: 0.9
+source: user
+scope: dev
+lang: en
+---
+
+# Override
+
+## Statement
+
+Uses the explicit notes directory.
+""",
+                encoding="utf-8",
+            )
+
+            notes = get_notes("facts", notes_dir=notes_root)
+            self.assertEqual(len(notes), 1)
+            self.assertEqual(notes[0].path.name, "fact__override.md")
 
 
 class TestComputeRecencyScore(unittest.TestCase):

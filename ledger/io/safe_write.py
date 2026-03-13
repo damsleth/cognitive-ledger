@@ -129,8 +129,20 @@ def atomic_write(
         suffix=".tmp",
     )
 
+    # Take ownership of fd immediately so cleanup is reliable even if
+    # os.fdopen itself raises (e.g. resource limit, invalid mode).
     try:
-        with os.fdopen(fd, mode, encoding=encoding if "b" not in mode else None) as f:
+        f_obj = os.fdopen(fd, mode, encoding=encoding if "b" not in mode else None)
+    except Exception:
+        os.close(fd)
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
+
+    try:
+        with f_obj as f:
             yield f
             # Flush to OS buffer
             f.flush()

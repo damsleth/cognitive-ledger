@@ -16,12 +16,22 @@ from .queue import sync_queue
 from .watch import run_watch
 
 
-def _parse_vault(path: str) -> Path:
+def _parse_root(path: str) -> Path:
     return Path(path).expanduser().resolve()
 
 
+def _add_root_argument(parser: argparse.ArgumentParser) -> None:
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("--vault", dest="root", help="Path to the Obsidian vault")
+    group.add_argument(
+        "--root",
+        dest="root",
+        help="Path to the note-base root (generic markdown tree or Obsidian vault)",
+    )
+
+
 def cmd_init(args: argparse.Namespace) -> int:
-    vault_root = _parse_vault(args.vault)
+    vault_root = _parse_root(args.root)
     config = default_config(vault_root)
 
     ensure_layout(config)
@@ -41,7 +51,7 @@ def cmd_init(args: argparse.Namespace) -> int:
             print(msg)
         except Exception as exc:
             print(f"warn: failed to auto-start daemon: {exc}")
-            return 1
+            return 0  # init succeeded; daemon auto-start is optional
     elif auto_start:
         print("warn: auto-start is macOS-only; run `ledger-obsidian watch --vault ...` manually")
 
@@ -49,7 +59,7 @@ def cmd_init(args: argparse.Namespace) -> int:
 
 
 def cmd_import(args: argparse.Namespace) -> int:
-    config = load_config(_parse_vault(args.vault))
+    config = load_config(_parse_root(args.root))
     validate_config(config)
 
     result = run_import(
@@ -75,17 +85,51 @@ def cmd_import(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_bootstrap(args: argparse.Namespace) -> int:
+    root = _parse_root(args.root)
+    config = default_config(root)
+
+    ensure_layout(config)
+    save_config(config)
+    write_bases(config)
+    validate_config(config)
+
+    result = run_import(
+        config,
+        dry_run=bool(args.dry_run),
+        max_files=args.max_files,
+        max_notes=args.max_notes,
+    )
+
+    print(f"initialized: {config.ledger_root}")
+    print(config_summary(config))
+    print(
+        json.dumps(
+            {
+                "selected_files": result.selected_files,
+                "notes_created": result.notes_created,
+                "queue_created": result.queue_created,
+                "skipped_low_confidence": result.skipped_low_confidence,
+                "skipped_deduped": result.skipped_deduped,
+                "dry_run": result.dry_run,
+            },
+            indent=2,
+        )
+    )
+    return 0
+
+
 def cmd_watch(args: argparse.Namespace) -> int:
-    config = load_config(_parse_vault(args.vault))
+    config = load_config(_parse_root(args.root))
     validate_config(config)
     return run_watch(config, debounce_seconds=args.debounce_seconds)
 
 
 def cmd_daemon(args: argparse.Namespace) -> int:
-    if not getattr(args, "vault", None):
-        print("error: --vault is required")
+    if not getattr(args, "root", None):
+        print("error: --vault or --root is required")
         return 2
-    config = load_config(_parse_vault(args.vault))
+    config = load_config(_parse_root(args.root))
     validate_config(config)
 
     if args.daemon_command == "start":
@@ -104,7 +148,7 @@ def cmd_daemon(args: argparse.Namespace) -> int:
 
 
 def cmd_doctor(args: argparse.Namespace) -> int:
-    config = load_config(_parse_vault(args.vault))
+    config = load_config(_parse_root(args.root))
     code, lines = run_doctor(config)
     for line in lines:
         print(line)
@@ -112,10 +156,10 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
 
 def cmd_queue_sync(args: argparse.Namespace) -> int:
-    if not getattr(args, "vault", None):
-        print("error: --vault is required")
+    if not getattr(args, "root", None):
+        print("error: --vault or --root is required")
         return 2
-    config = load_config(_parse_vault(args.vault))
+    config = load_config(_parse_root(args.root))
     validate_config(config)
     result = sync_queue(config)
     print(json.dumps(result, indent=2))
@@ -123,40 +167,52 @@ def cmd_queue_sync(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="ledger-obsidian", description="Drop-in Cognitive Ledger tooling for Obsidian vaults")
+    parser = argparse.ArgumentParser(
+        prog="ledger-obsidian",
+        description="Drop-in Cognitive Ledger tooling for Obsidian vaults and generic markdown note bases",
+    )
     subparsers = parser.add_subparsers(dest="command")
 
     init_parser = subparsers.add_parser("init", help="Initialize cognitive-ledger structure in a vault")
-    init_parser.add_argument("--vault", required=True, help="Path to the Obsidian vault")
+    _add_root_argument(init_parser)
     init_parser.add_argument("--auto-start", action="store_true", default=True, help="Start background daemon on macOS")
     init_parser.add_argument("--no-auto-start", action="store_true", help="Do not start daemon after init")
 
+    bootstrap_parser = subparsers.add_parser(
+        "bootstrap",
+        help="Initialize cognitive-ledger structure and run one import cycle",
+    )
+    _add_root_argument(bootstrap_parser)
+    bootstrap_parser.add_argument("--dry-run", action="store_true", help="Do not write notes or state")
+    bootstrap_parser.add_argument("--max-files", type=int, default=None)
+    bootstrap_parser.add_argument("--max-notes", type=int, default=None)
+
     import_parser = subparsers.add_parser("import", help="Run one import cycle")
-    import_parser.add_argument("--vault", required=True, help="Path to the Obsidian vault")
+    _add_root_argument(import_parser)
     import_parser.add_argument("--dry-run", action="store_true", help="Do not write notes or state")
     import_parser.add_argument("--max-files", type=int, default=None)
     import_parser.add_argument("--max-notes", type=int, default=None)
 
     watch_parser = subparsers.add_parser("watch", help="Run continuous watch/import loop")
-    watch_parser.add_argument("--vault", required=True, help="Path to the Obsidian vault")
+    _add_root_argument(watch_parser)
     watch_parser.add_argument("--debounce-seconds", type=float, default=None)
 
     daemon_parser = subparsers.add_parser("daemon", help="Manage launchd watcher daemon")
     daemon_subparsers = daemon_parser.add_subparsers(dest="daemon_command")
     daemon_start = daemon_subparsers.add_parser("start", help="Start daemon")
-    daemon_start.add_argument("--vault", required=True, help="Path to the Obsidian vault")
+    _add_root_argument(daemon_start)
     daemon_stop = daemon_subparsers.add_parser("stop", help="Stop daemon")
-    daemon_stop.add_argument("--vault", required=True, help="Path to the Obsidian vault")
+    _add_root_argument(daemon_stop)
     daemon_status = daemon_subparsers.add_parser("status", help="Show daemon status")
-    daemon_status.add_argument("--vault", required=True, help="Path to the Obsidian vault")
+    _add_root_argument(daemon_status)
 
     doctor_parser = subparsers.add_parser("doctor", help="Run environment checks")
-    doctor_parser.add_argument("--vault", required=True, help="Path to the Obsidian vault")
+    _add_root_argument(doctor_parser)
 
     queue_parser = subparsers.add_parser("queue", help="Queue operations")
     queue_subparsers = queue_parser.add_subparsers(dest="queue_command")
     queue_sync = queue_subparsers.add_parser("sync", help="Promote approved candidate notes")
-    queue_sync.add_argument("--vault", required=True, help="Path to the Obsidian vault")
+    _add_root_argument(queue_sync)
 
     return parser
 
@@ -167,6 +223,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "init":
         return cmd_init(args)
+    if args.command == "bootstrap":
+        return cmd_bootstrap(args)
     if args.command == "import":
         return cmd_import(args)
     if args.command == "watch":

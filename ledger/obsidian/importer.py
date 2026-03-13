@@ -206,8 +206,11 @@ def _write_canonical_note(
     target_dir.mkdir(parents=True, exist_ok=True)
     target = target_dir / file_name
 
-    if target.exists():
-        suffix = sha1_text(f"{candidate.kind}|{candidate.statement}|{imported_ts}")[:6]
+    # Use a hash suffix to avoid TOCTOU race when concurrent imports
+    # check exists() and then write — always include a unique suffix
+    # if the base name already exists.
+    while target.exists():
+        suffix = sha1_text(f"{candidate.kind}|{candidate.statement}|{imported_ts}|{file_name}")[:6]
         file_name = f"{prefix}__{slug}__{suffix}.md"
         target = target_dir / file_name
 
@@ -253,8 +256,8 @@ def _write_candidate_note(
     file_name = f"candidate__{slug}.md"
     target = folder / file_name
 
-    if target.exists():
-        suffix = sha1_text(f"{candidate.kind}|{candidate.statement}|{origin_rel}")[:6]
+    while target.exists():
+        suffix = sha1_text(f"{candidate.kind}|{candidate.statement}|{origin_rel}|{file_name}")[:6]
         file_name = f"candidate__{slug}__{suffix}.md"
         target = folder / file_name
 

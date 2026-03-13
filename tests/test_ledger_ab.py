@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 
+from ledger import ab as ab_lib
 
 ROOT = Path(__file__).resolve().parents[1]
 LEDGER_AB_PATH = ROOT / "scripts" / "ledger_ab"
@@ -89,6 +90,9 @@ class LedgerABDecisionTests(unittest.TestCase):
     def test_retrieval_modes_include_semantic_hybrid(self):
         self.assertIn("semantic_hybrid", self.ledger_ab.RETRIEVAL_MODES)
 
+    def test_script_delegates_decision_logic_to_library(self):
+        self.assertIs(self.ledger_ab.decide_outcome, ab_lib.decide_outcome)
+
 
 class LedgerABFingerprintTests(unittest.TestCase):
     @classmethod
@@ -153,11 +157,21 @@ class LedgerABFingerprintTests(unittest.TestCase):
 
             self.assertNotEqual(first["fingerprint"], second["fingerprint"])
 
+    def test_script_delegates_fingerprint_logic_to_library(self):
+        self.assertIs(self.ledger_ab.compute_corpus_fingerprint, ab_lib.compute_corpus_fingerprint)
+
 
 class LedgerABRetrievalModePassThroughTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.ledger_ab = load_ledger_ab_module()
+
+    def test_script_delegates_probe_helpers_to_library(self):
+        self.assertIs(self.ledger_ab.run_probe_for_side, ab_lib.run_probe_for_side)
+        self.assertIs(
+            self.ledger_ab.maybe_build_semantic_index,
+            ab_lib.maybe_build_semantic_index,
+        )
 
     def test_run_quality_eval_passes_retrieval_mode(self):
         class FakeModule:
@@ -438,6 +452,13 @@ class LedgerABSmokeIntegrationTests(unittest.TestCase):
             self.assertIn("candidate", payload)
             self.assertIn("decision", payload)
             self.assertIn("settings", payload)
+            self.assertIn("query_metrics", payload["baseline"])
+            self.assertIn("context_metrics", payload["baseline"])
+            self.assertIn("maintenance_metrics", payload["baseline"])
+            self.assertIn("boot_context_tokens", payload["baseline"]["context_metrics"])
+            self.assertIn("notes_total_tokens", payload["baseline"]["context_metrics"])
+            self.assertIn("index_rebuild_ms", payload["baseline"]["query_metrics"])
+            self.assertNotIn("composite_quality_score", payload)
 
     def test_head_vs_head_smoke_with_cold_query(self):
         with tempfile.TemporaryDirectory() as out_dir:

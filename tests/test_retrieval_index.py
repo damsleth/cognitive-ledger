@@ -45,13 +45,14 @@ def test_rebuild_note_index_writes_entries(tmp_path):
 
         retrieval_mod = importlib.reload(retrieval)
         payload = retrieval_mod.rebuild_note_index()
+        note_index_path = config.notes_dir / "08_indices" / "note_index.json"
 
         assert payload["version"] == 2
         assert payload["entries"]
         assert payload["inverted"]
-        assert retrieval_mod.NOTE_INDEX_PATH.is_file()
+        assert note_index_path.is_file()
 
-        disk = json.loads(retrieval_mod.NOTE_INDEX_PATH.read_text(encoding="utf-8"))
+        disk = json.loads(note_index_path.read_text(encoding="utf-8"))
         assert disk["entries"]
         assert disk["inverted"]
     finally:
@@ -95,6 +96,42 @@ def test_rebuild_note_index_is_stable_when_unchanged(tmp_path):
         second = retrieval_mod.rebuild_note_index()
 
         assert first["built"] == second["built"]
+    finally:
+        reset_config()
+        importlib.reload(retrieval)
+
+
+def test_rebuild_note_index_uses_latest_config_without_reload(tmp_path):
+    retrieval_mod = importlib.reload(retrieval)
+    config = LedgerConfig(root_dir=tmp_path)
+    set_config(config)
+    try:
+        note = config.notes_dir / "02_facts" / "fact__one.md"
+        _seed_note(note, "Config-sensitive statement")
+
+        payload = retrieval_mod.rebuild_note_index()
+
+        assert payload["entries"]
+        assert (config.notes_dir / "08_indices" / "note_index.json").is_file()
+    finally:
+        reset_config()
+        importlib.reload(retrieval)
+
+
+def test_rank_lexical_returns_typed_results_and_timing(tmp_path):
+    config = LedgerConfig(root_dir=tmp_path)
+    set_config(config)
+    try:
+        note = config.notes_dir / "02_facts" / "fact__one.md"
+        _seed_note(note, "First statement")
+
+        retrieval_mod = importlib.reload(retrieval)
+        result = retrieval_mod.rank_lexical("first statement", scope="dev", limit=5)
+
+        assert result.results
+        assert result.results[0].rel_path == "notes/02_facts/fact__one.md"
+        assert result.timing.total_ms >= 0.0
+        assert result.timing.expand_ms >= 0.0
     finally:
         reset_config()
         importlib.reload(retrieval)

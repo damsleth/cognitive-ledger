@@ -11,7 +11,7 @@ The high‑level structure is:
 
 ```text
 .
-├── AGENTS.md        – Instructions for agents interacting with this repo
+├── AGENTS.md        – Instructions and quick reference for agents
 ├── README.md        – This file
 ├── .gitignore       – Ignore patterns for version control
 ├── skills/          – Canonical, tool-agnostic agent skills
@@ -88,10 +88,21 @@ ledger-obsidian init --vault /path/to/your/obsidian-vault
 
 This creates a dedicated `cognitive-ledger/` directory inside the vault and never edits source notes outside that subtree.
 
+For a generic markdown note base such as `~/Code/notes`, the same drop-in flow works with the root alias or one-shot bootstrap command:
+
+```bash
+ledger-obsidian bootstrap --root ~/Code/notes
+ledger-obsidian import --root ~/Code/notes
+```
+
+The importer treats `.obsidian/` as optional and still writes only under `cognitive-ledger/` inside the source tree.
+
 ### Key commands
 
 ```bash
 ledger-obsidian import --vault /path/to/vault
+ledger-obsidian bootstrap --root /path/to/note-base
+ledger-obsidian import --root /path/to/note-base
 ledger-obsidian watch --vault /path/to/vault
 ledger-obsidian daemon start --vault /path/to/vault   # macOS
 ledger-obsidian daemon status --vault /path/to/vault  # macOS
@@ -133,6 +144,12 @@ Use `scripts/ledger` and `scripts/ledger_ab` to validate retrieval quality and c
 ./scripts/ledger eval --cases notes/08_indices/retrieval_eval_cases.yaml --k 3 --strict-cases
 ./scripts/ledger_ab --baseline-ref main --candidate-ref HEAD --eval-runs 7 --query-runs 5
 ```
+
+`ab_eval.json` and `ab_eval.md` now include the original quality/latency gate plus:
+- query-stage timings (`query_latency_ms`, `candidate_build_ms`, `prefilter_ms`, `shortlist_ms`, `scoring_ms`, `index_rebuild_ms`)
+- context-size metrics (`boot_context_tokens`, `boot_context_bytes`, per-scope profile tokens, bundle token distribution, note-size aggregates)
+- maintenance health metrics (`sync_drift_count`, `days_since_sleep`, `changes_since_sleep`, `lint_errors`, `lint_warnings`)
+- an informational composite quality score that combines retrieval quality, context size, and query latency
 
 For full A/B workflow, result interpretation, corpus-diff handling, and troubleshooting, see:
 - `.doc/ab_testing.md`

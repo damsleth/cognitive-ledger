@@ -55,13 +55,15 @@ def _plist_content(config: ObsidianLedgerConfig) -> str:
         str(config.debounce_seconds),
     ]
 
-    arg_xml = "\n".join(f"    <string>{arg}</string>" for arg in args)
+    from xml.sax.saxutils import escape
+
+    arg_xml = "\n".join(f"    <string>{escape(str(arg))}</string>" for arg in args)
     return f"""<?xml version=\"1.0\" encoding=\"UTF-8\"?>
 <!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">
 <plist version=\"1.0\">
 <dict>
   <key>Label</key>
-  <string>{daemon_label(config)}</string>
+  <string>{escape(daemon_label(config))}</string>
   <key>ProgramArguments</key>
   <array>
 {arg_xml}
@@ -71,11 +73,11 @@ def _plist_content(config: ObsidianLedgerConfig) -> str:
   <key>KeepAlive</key>
   <true/>
   <key>StandardOutPath</key>
-  <string>{stdout_path}</string>
+  <string>{escape(str(stdout_path))}</string>
   <key>StandardErrorPath</key>
-  <string>{stderr_path}</string>
+  <string>{escape(str(stderr_path))}</string>
   <key>WorkingDirectory</key>
-  <string>{config.vault_root}</string>
+  <string>{escape(str(config.vault_root))}</string>
 </dict>
 </plist>
 """

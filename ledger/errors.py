@@ -157,7 +157,7 @@ class ScopeValidationError(ValidationError):
     """Raised when a scope value is invalid."""
 
     def __init__(self, scope: str, valid_scopes: tuple[str, ...] | None = None) -> None:
-        valid = valid_scopes or ("home", "work", "dev", "personal", "meta", "all")
+        valid = valid_scopes or ("home", "work", "dev", "personal", "life", "meta", "all")
         super().__init__(
             f"Invalid scope: {scope!r}. Valid scopes: {', '.join(valid)}",
             scope=scope,

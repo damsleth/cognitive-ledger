@@ -397,12 +397,14 @@ class MainScreen(Screen):
 
     def _run_codex_query_command(self, query: str) -> tuple[int, str]:
         """Run codex query command and return (exit_code, merged_output)."""
+        import shlex
+
         command = [
             "codex",
             "-c",
             "mcp_servers.playwright.enabled=false",
             "e",
-            f"/cognitive-ledger query {query}",
+            f"/cognitive-ledger query {shlex.quote(query)}",
         ]
         result = subprocess.run(
             command,
@@ -548,19 +550,21 @@ class MainScreen(Screen):
             if refreshed:
                 self._show_note(refreshed)
 
-    def _poll_file_changes(self) -> None:
+    async def _poll_file_changes(self) -> None:
         """Poll note files and auto-refresh when disk state changes."""
+        import asyncio
+
         if self._query_running or self._lint_running:
             return
 
-        latest_snapshot = self.store.filesystem_snapshot()
+        latest_snapshot = await asyncio.to_thread(self.store.filesystem_snapshot)
         if latest_snapshot == self._watch_snapshot:
             return
 
         self._watch_snapshot = latest_snapshot
         selected_tag = self._current_tag_filter()
         current_path = self.current_note.path if self.current_note else None
-        self.store.refresh()
+        await asyncio.to_thread(self.store.refresh)
         self._populate_tag_filter(selected_tag)
         tree = self.query_one("#note-tree", NoteTree)
         tree.rebuild()

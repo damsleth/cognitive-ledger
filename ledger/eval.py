@@ -5,7 +5,6 @@ This module owns eval-case parsing/validation and benchmark metrics.
 
 from __future__ import annotations
 
-import inspect
 import json
 import re
 from pathlib import Path
@@ -13,15 +12,44 @@ from typing import Any, Callable
 
 from ledger.config import get_config
 from ledger.retrieval import rank_lexical, resolve_retrieval_mode
+from ledger.retrieval_types import RetrievalResult, ScoredResult
 
-ROOT_DIR = get_config().root_dir
+
+def _root_dir() -> Path:
+    return get_config().root_dir.resolve()
+
+
+def _payload_results(payload: RetrievalResult | dict[str, Any]) -> list[ScoredResult | dict[str, Any]]:
+    if isinstance(payload, RetrievalResult):
+        return payload.results
+    return payload["results"]
+
+
+def _result_path(result: ScoredResult | dict[str, Any]) -> tuple[str, str]:
+    if isinstance(result, ScoredResult):
+        return result.path, result.rel_path
+    return result["path"], result["rel_path"]
+
+
+def _result_rel_path(result: ScoredResult | dict[str, Any]) -> str:
+    if isinstance(result, ScoredResult):
+        return result.rel_path
+    return result["rel_path"]
 
 
 class EvalCaseValidationError(Exception):
-    """Raised when retrieval eval cases fail schema/path validation."""
+    """Raised when retrieval eval cases fail schema/path validation.
+
+    Note: This is the version used internally by eval.py for batch
+    validation (accepts list[str]).  ledger.errors defines a separate
+    EvalCaseValidationError with a different interface for single-case
+    errors.  Callers should catch this class when calling run_eval /
+    validate_eval_cases.
+    """
 
     def __init__(self, errors: list[str]):
-        super().__init__("eval case validation failed")
+        msg = "eval case validation failed:\n" + "\n".join(f"  - {e}" for e in errors)
+        super().__init__(msg)
         self.errors = errors
 
 
@@ -121,7 +149,7 @@ def path_candidates_from_expected(value: str | Path) -> set[str]:
     if path.is_absolute():
         candidates.add(path.as_posix())
         try:
-            rel = path.resolve().relative_to(ROOT_DIR)
+            rel = path.resolve().relative_to(_root_dir())
             candidates.add(rel.as_posix())
         except ValueError:
             notes_rel = extract_notes_relative_path(raw)
@@ -129,7 +157,7 @@ def path_candidates_from_expected(value: str | Path) -> set[str]:
                 candidates.add(notes_rel)
     else:
         candidates.add(path.as_posix())
-        candidates.add(str((ROOT_DIR / path).resolve()))
+        candidates.add(str((_root_dir() / path).resolve()))
         notes_rel = extract_notes_relative_path(raw)
         if notes_rel:
             candidates.add(notes_rel)
@@ -146,7 +174,7 @@ def validate_eval_cases(cases: list[dict[str, Any]], strict_cases: bool = False)
     """Validate retrieval eval cases and return errors."""
     errors: list[str] = []
     seen_ids = set()
-    root_resolved = ROOT_DIR.resolve()
+    root_resolved = _root_dir().resolve()
 
     for idx, case in enumerate(cases, start=1):
         case_id = str(case.get("id", "")).strip()
@@ -194,7 +222,7 @@ def validate_eval_cases(cases: list[dict[str, Any]], strict_cases: bool = False)
                 )
                 continue
 
-            resolved = (ROOT_DIR / rel_path).resolve()
+            resolved = (_root_dir() / rel_path).resolve()
             try:
                 resolved.relative_to(root_resolved)
             except ValueError:
@@ -208,14 +236,14 @@ def validate_eval_cases(cases: list[dict[str, Any]], strict_cases: bool = False)
 
 
 def _invoke_rank_query(
-    rank_query_fn: Callable[..., dict[str, Any]],
+    rank_query_fn: Callable[..., RetrievalResult | dict[str, Any]],
     query: str,
     scope: str,
     limit: int,
     retrieval_mode: str,
     embed_backend: str,
     embed_model: str | None,
-) -> dict[str, Any]:
+) -> RetrievalResult | dict[str, Any]:
     """Call rank_query function with best-effort compatibility across signatures."""
     try:
         return rank_query_fn(
@@ -251,7 +279,7 @@ def run_eval(
     retrieval_mode: str = "legacy",
     embed_backend: str = "local",
     embed_model: str | None = None,
-    rank_query_fn: Callable[..., dict[str, Any]] | None = None,
+    rank_query_fn: Callable[..., RetrievalResult | dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Run retrieval benchmark and compute hit@1/hit@k/MRR."""
     cases = parse_eval_cases(cases_path)
@@ -288,12 +316,12 @@ def run_eval(
             embed_model=embed_model,
         )
 
-        results = payload["results"]
+        results = _payload_results(payload)
         expected_sets = [path_candidates_from_expected(path) for path in case.get("expected_any", [])]
 
         best_rank = None
         for result_idx, result in enumerate(results, start=1):
-            result_paths = {result["path"], result["rel_path"]}
+            result_paths = set(_result_path(result))
             matched = any(result_paths & expected for expected in expected_sets)
             if matched:
                 best_rank = result_idx
@@ -312,7 +340,7 @@ def run_eval(
                     "query": case["query"],
                     "scope": case.get("scope", "all"),
                     "expected_any": case.get("expected_any", []),
-                    "top_results": [item["rel_path"] for item in results[: min(k, 5)]],
+                    "top_results": [_result_rel_path(item) for item in results[: min(k, 5)]],
                 }
             )
 
@@ -364,6 +392,36 @@ def baseline_metrics(result: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def build_baseline_snapshot(
+    result: dict[str, Any],
+    *,
+    cases_path: str | Path,
+    generated_at: str,
+) -> dict[str, Any]:
+    """Build a persisted baseline snapshot payload."""
+    snapshot = baseline_metrics(result)
+    snapshot["generated_at"] = generated_at
+    snapshot["cases_path"] = str(Path(cases_path).resolve())
+    return snapshot
+
+
+def write_baseline_snapshot(
+    result: dict[str, Any],
+    *,
+    cases_path: str | Path,
+    output_path: str | Path,
+    generated_at: str,
+) -> dict[str, Any]:
+    """Write a baseline snapshot to disk and return the written payload."""
+    snapshot = build_baseline_snapshot(
+        result,
+        cases_path=cases_path,
+        generated_at=generated_at,
+    )
+    Path(output_path).write_text(json.dumps(snapshot, indent=2) + "\n", encoding="utf-8")
+    return snapshot
+
+
 def compare_with_baseline(result: dict[str, Any], baseline_path: str | Path) -> dict[str, Any]:
     """Compare current metrics with a baseline snapshot."""
     try:
@@ -389,6 +447,49 @@ def compare_with_baseline(result: dict[str, Any], baseline_path: str | Path) -> 
     }
 
 
+def format_baseline_comparison(comparison: dict[str, Any], *, k: int) -> str:
+    """Format baseline comparison for CLI output."""
+    if not comparison.get("available"):
+        return f"baseline: unavailable ({comparison.get('reason', 'unknown')})"
+    return (
+        "baseline_comparison: "
+        f"hit@{k} delta={comparison.get('hitk_delta', 0.0):+.3f}, "
+        f"mrr delta={comparison.get('mrr_delta', 0.0):+.3f}, "
+        f"regressed={'yes' if comparison.get('regressed') else 'no'}"
+    )
+
+
+def eval_result_to_json(
+    result: dict[str, Any],
+    *,
+    default_k: int,
+    default_retrieval_mode: str,
+    embed_backend: str,
+    embed_model: str,
+    baseline_path: str | Path | None = None,
+    baseline_written: str | Path | None = None,
+) -> dict[str, Any]:
+    """Build the JSON-friendly eval command payload."""
+    payload = {
+        "cases": int(result.get("cases", 0)),
+        "k": int(result.get("k", default_k)),
+        "retrieval_mode": result.get("retrieval_mode", default_retrieval_mode),
+        "embed_backend": embed_backend,
+        "embed_model": embed_model,
+        "hit1": float(result.get("hit1", 0.0)),
+        "hitk": float(result.get("hitk", 0.0)),
+        "mrr": float(result.get("mrr", 0.0)),
+        "hit1_count": int(result.get("hit1_count", 0)),
+        "hitk_count": int(result.get("hitk_count", 0)),
+        "failed": result.get("failed", []),
+    }
+    if baseline_path:
+        payload["baseline_comparison"] = compare_with_baseline(result, baseline_path)
+    if baseline_written:
+        payload["baseline_written"] = str(baseline_written)
+    return payload
+
+
 __all__ = [
     "EvalCaseValidationError",
     "parse_yaml_scalar",
@@ -400,5 +501,9 @@ __all__ = [
     "run_eval",
     "print_eval_result",
     "baseline_metrics",
+    "build_baseline_snapshot",
+    "write_baseline_snapshot",
     "compare_with_baseline",
+    "format_baseline_comparison",
+    "eval_result_to_json",
 ]

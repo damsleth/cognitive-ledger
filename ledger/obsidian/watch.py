@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import signal
+import threading
 import time
 from pathlib import Path
 
@@ -19,6 +20,7 @@ def run_watch(config: ObsidianLedgerConfig, debounce_seconds: float | None = Non
         raise RuntimeError("watchdog is required for watch mode") from exc
 
     debounce = float(debounce_seconds if debounce_seconds is not None else config.debounce_seconds)
+    lock = threading.Lock()
     changed_paths: set[Path] = set()
     last_event_at = 0.0
     stop = False
@@ -33,8 +35,9 @@ def run_watch(config: ObsidianLedgerConfig, debounce_seconds: float | None = Non
                 return
             if should_skip_markdown(path, config.vault_root, config.exclude_dirs):
                 return
-            changed_paths.add(path.resolve())
-            last_event_at = time.monotonic()
+            with lock:
+                changed_paths.add(path.resolve())
+                last_event_at = time.monotonic()
 
     def _handle_signal(signum, frame):  # type: ignore[no-untyped-def]
         nonlocal stop
@@ -55,9 +58,12 @@ def run_watch(config: ObsidianLedgerConfig, debounce_seconds: float | None = Non
 
         while not stop:
             now = time.monotonic()
-            if changed_paths and last_event_at and now - last_event_at >= debounce:
-                batch = set(changed_paths)
-                changed_paths.clear()
+            with lock:
+                ready = bool(changed_paths) and last_event_at and now - last_event_at >= debounce
+                batch = set(changed_paths) if ready else set()
+                if ready:
+                    changed_paths.clear()
+            if batch:
                 run_import(config, dry_run=False, changed_paths=batch)
                 sync_queue(config)
             time.sleep(0.25)

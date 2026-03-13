@@ -45,6 +45,10 @@ class NoteTypeConfig:
         config = get_config()
         return config.notes_dir / self.folder
 
+    def path_in(self, notes_dir: Path) -> Path:
+        """Get the directory path for this note type under an explicit notes root."""
+        return Path(notes_dir) / self.folder
+
 
 # Standard note types with their configurations
 NOTE_TYPE_CONFIGS: dict[str, NoteTypeConfig] = {
@@ -293,12 +297,14 @@ def read_note(path: Path, note_type: str | None = None) -> BaseNote:
 def get_notes(
     note_type: str,
     loop_status: str | None = None,
+    notes_dir: Path | None = None,
 ) -> list[BaseNote]:
     """Get all notes of a given type, sorted by updated date.
 
     Args:
         note_type: Type of note ('facts', 'preferences', 'goals', 'loops', 'concepts', 'all').
         loop_status: For loops, filter by status ('open', 'closed', etc.).
+        notes_dir: Optional notes root override.
 
     Returns:
         List of note objects sorted by updated timestamp (newest first).
@@ -307,7 +313,7 @@ def get_notes(
 
     if note_type == "all":
         for nt in CORE_NOTE_TYPES:
-            notes.extend(get_notes(nt))
+            notes.extend(get_notes(nt, notes_dir=notes_dir))
         notes.sort(key=lambda x: x.updated, reverse=True)
         return notes
 
@@ -315,12 +321,12 @@ def get_notes(
         return notes
 
     config = NOTE_TYPE_CONFIGS[note_type]
-    notes_dir = config.dir
+    note_dir = config.path_in(notes_dir) if notes_dir is not None else config.dir
 
-    if not notes_dir.is_dir():
+    if not note_dir.is_dir():
         return notes
 
-    for path in notes_dir.iterdir():
+    for path in note_dir.iterdir():
         if path.suffix != ".md":
             continue
 

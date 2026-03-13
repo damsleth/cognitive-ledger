@@ -1,11 +1,19 @@
 # Agent Instructions (Cognitive Ledger)
 
-## 30-second boot
+## Quick Reference
+
+Machine-readable spec: `schema.yaml`. Note templates: `templates/`.
+
+The canonical `cognitive-ledger` skill lives in `skills/` and is intended
+for use outside this repository. Install it into your agent's user-level skills
+folder as needed rather than duplicating its contents here.
+
+### Boot
 
 ```bash
-tail -20 notes/08_indices/timeline.md   # recent changes
-rg "<keyword>" notes -l                  # search content
-fd "pref__" notes && fd "concept__" notes # search by type (portable)
+tail -20 notes/08_indices/timeline.md          # recent changes
+rg "<keyword>" notes -n                        # search content (show matches)
+fd "pref__" notes/03_preferences && fd "concept__" notes/06_concepts  # search by type (portable)
 ```
 
 **Non-negotiables:**
@@ -15,11 +23,88 @@ fd "pref__" notes && fd "concept__" notes # search by type (portable)
 - Always bump `updated` timestamp when editing
 - Always append to `notes/08_indices/timeline.md` after any note operation
 
-**Quick refs:** `QUICK_REF.md` (minimal), `schema.yaml` (machine-readable), `templates/` (structure).
+### Should I write?
 
-**Skills note:** The canonical `cognitive-ledger` skill lives in `skills/` and is intended
-for use outside this repository. Install it into your agent's user-level skills
-folder as needed rather than duplicating its contents here.
+Persist only if it's **durable** and **re-usable** (Decision / Preference / Correction / Goal / Concept / Open loop).
+If none apply: don't write. Noise kills retrieval.
+
+### Create or update a note
+
+1. **Search first**: `rg "<topic>" notes -l`
+2. **Create/update the right type** (atomic, one idea per file; use the right folder + prefix)
+3. **Frontmatter required**: `created`, `updated`, `tags`, `confidence`, `source`, `scope`, `lang` (+ `status` for loops)
+4. **No transcripts**: never store raw chat logs; summarize into atomic notes
+5. **Append timeline**: `echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) | <verb> | <path> | <why>" >> notes/08_indices/timeline.md`
+
+### Python env
+
+```bash
+./scripts/setup-venv.sh                                       # default: base + dev + embeddings
+./scripts/setup-venv.sh --python python3.12 --recreate        # if torch wheels are missing
+./scripts/setup-venv.sh --minimal                             # base-only fallback
+```
+
+### Obsidian Drop-In
+
+```bash
+pipx install cognitive-ledger
+ledger-obsidian init --vault /path/to/obsidian-vault
+ledger-obsidian import --vault /path/to/obsidian-vault
+ledger-obsidian bootstrap --root ~/Code/notes
+ledger-obsidian watch --vault /path/to/obsidian-vault
+ledger-obsidian queue sync --vault /path/to/obsidian-vault
+ledger-obsidian doctor --vault /path/to/obsidian-vault
+ledger-obsidian daemon start|status|stop --vault /path/to/vault   # macOS
+```
+
+### Retrieve & Eval
+
+```bash
+./scripts/ledger query "<topic>" --scope all --limit 8
+./scripts/ledger query "<topic>" --scope all --limit 8 --retrieval-mode <mode>
+./scripts/ledger query "<topic>" --scope dev --bundle
+./scripts/ledger discover-source "<topic>" --source-root <root> --limit 20
+./scripts/ledger embed build --target ledger --backend local --model TaylorAI/bge-micro-v2
+./scripts/ledger embed status --target both
+./scripts/ledger eval --cases notes/08_indices/retrieval_eval_cases.yaml --k 3 --strict-cases
+./scripts/ledger loops                 # compact list (default)
+./scripts/ledger loops --interactive   # progressive disclosure
+./scripts/ledger notes --type <all|facts|preferences|goals|loops|concepts> --interactive
+```
+
+`<mode>`: `legacy`, `two_stage`, `compressed_attention`, `scope_type_prefilter`, `precomputed_index`, `progressive_disclosure`, `semantic_hybrid`.
+
+### A/B Testing
+
+```bash
+./scripts/ledger_ab --baseline-ref main --candidate-ref HEAD
+./scripts/ledger_ab --baseline-ref main --candidate-ref HEAD --eval-runs 7 --query-runs 5
+./scripts/ledger_ab --baseline-ref main --candidate-ref HEAD --query-runs 5 --cold-query
+```
+
+Exit codes: `0` beneficial, `2` regression, `3` neutral, `4` invalid setup.
+
+### Electric Sheep (sleep / consolidation)
+
+```bash
+./scripts/sheep status
+./scripts/sheep sync --check && ./scripts/sheep sync --apply
+./scripts/sheep sleep
+./scripts/sheep lint    # if present
+./scripts/sheep index   # if present
+```
+
+### Folder map
+
+```
+notes/02_facts/        stable truths / decisions
+notes/03_preferences/  user preferences / policies
+notes/04_goals/        long-lived objectives
+notes/05_open_loops/   durable unresolved items (status lifecycle)
+notes/06_concepts/     definitions / frameworks / mental models
+notes/08_indices/      timeline, logs, import state, generated indexes
+notes/09_archive/      superseded notes (do not delete)
+```
 
 ---
 
@@ -214,7 +299,7 @@ future agents to understand and extend the system.
 
 ## Electric Sheep (sleep / consolidation)
 
-The ledger must maintain cohesion as it grows. Consolidation (“sleep”) is the primary tool for preventing drift and fragmentation.
+The ledger must maintain cohesion as it grows. Consolidation ("sleep") is the primary tool for preventing drift and fragmentation. Commands are listed in the Quick Reference above.
 
 Run sleep when:
 
@@ -224,20 +309,13 @@ Run sleep when:
 - open loops proliferate without clear next actions,
 - or on a periodic schedule (see `schema.yaml` limits: sleep interval and change threshold).
 
-Expected sleep behaviors:
+Expected behaviors:
 
 - merge duplicates (preserve provenance; prefer oldest canonical note),
 - promote repeated patterns into stable concepts/preferences,
 - update indices (timeline, tags, loop summaries),
 - clarify open loops (tighten statements; add next actions; adjust status),
-- surface conflicts as explicit open loops (“needs decision”).
-
-If the repo provides `./scripts/sheep`, treat it as canonical:
-
-- `./scripts/sheep status`
-- `./scripts/sheep sync --check` / `./scripts/sheep sync --apply`
-- `./scripts/sheep sleep`
-- `./scripts/sheep lint` / `./scripts/sheep index` (if present)
+- surface conflicts as explicit open loops ("needs decision").
 
 ## Safety & control
 

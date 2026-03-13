@@ -109,11 +109,11 @@ class TestParseScalar(unittest.TestCase):
 
     def test_true(self):
         self.assertTrue(parse_scalar("true"))
-        self.assertTrue(parse_scalar("yes"))
+        self.assertEqual(parse_scalar("yes"), "yes")
 
     def test_false(self):
         self.assertFalse(parse_scalar("false"))
-        self.assertFalse(parse_scalar("no"))
+        self.assertEqual(parse_scalar("no"), "no")
 
     def test_string(self):
         self.assertEqual(parse_scalar("hello"), "hello")

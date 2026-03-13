@@ -86,6 +86,12 @@ def sync_queue(config: ObsidianLedgerConfig) -> dict[str, int]:
 
         if promoted_path:
             canonical_abs = config.vault_root / promoted_path
+            # Ensure the resolved path stays within the vault root
+            try:
+                canonical_abs.resolve().relative_to(config.vault_root.resolve())
+            except ValueError:
+                pending += 1
+                continue
             if not canonical_abs.exists():
                 promoted_path = _write_canonical_note(config, candidate, scope, lang, origin_rel, imported_ts)
         else:

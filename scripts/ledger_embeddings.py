@@ -15,11 +15,13 @@ import re
 import shutil
 import urllib.error
 import urllib.request
+from collections import OrderedDict
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 from ledger.io import append_timeline_entry as append_timeline_entry_safe
+from ledger.parsing import extract_title, parse_frontmatter_text
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 ROOT_DIR = SCRIPT_DIR.parent
@@ -29,7 +31,7 @@ LEDGER_NOTES_ROOT = ROOT_DIR / "notes"
 LEDGER_TIMELINE_PATH = LEDGER_NOTES_ROOT / "08_indices" / "timeline.md"
 SEMANTIC_MANIFEST_PATH = LEDGER_NOTES_ROOT / "08_indices" / "semantic_manifest.json"
 
-DEFAULT_SOURCE_ROOT = Path.home() / "Code" / "notes"
+DEFAULT_SOURCE_ROOT = Path.home() / "notes"
 
 SUPPORTED_BACKENDS = ("local", "openai")
 SUPPORTED_TARGETS = ("ledger", "source", "both")
@@ -45,10 +47,6 @@ LEDGER_EMBED_NOTE_TYPES = {
     "notes/06_concepts": "concept",
 }
 
-FRONTMATTER_BOUNDARY = re.compile(r"^---\s*$")
-INLINE_COMMENT_RE = re.compile(r"\s+#.*$")
-TITLE_RE = re.compile(r"^#\s+(.+?)\s*$", re.MULTILINE)
-
 INDEX_ITEM_FIELDS = (
     "id",
     "rel_path",
@@ -61,6 +59,10 @@ INDEX_ITEM_FIELDS = (
     "content_hash",
     "row",
 )
+
+_LOCAL_ENCODER_CACHE: dict[str, Any] = {}
+_QUERY_VECTOR_CACHE: OrderedDict[tuple[str, str, str], np.ndarray] = OrderedDict()
+_QUERY_VECTOR_CACHE_MAX = 256
 
 
 def now_iso() -> str:
@@ -108,94 +110,11 @@ def semantic_vectors_path(target: str, backend: str, model: str) -> Path:
     return semantic_dir(target, backend, model) / "vectors.npy"
 
 
-def strip_quotes(value: str) -> str:
-    if len(value) >= 2 and (
-        (value[0] == '"' and value[-1] == '"')
-        or (value[0] == "'" and value[-1] == "'")
-    ):
-        return value[1:-1]
-    return value
-
-
-def parse_inline_list(value: str) -> list[str]:
-    raw = value.strip()
-    if not raw.startswith("[") or not raw.endswith("]"):
-        return []
-    inner = raw[1:-1].strip()
-    if not inner:
-        return []
-    out = []
-    for chunk in inner.split(","):
-        item = strip_quotes(chunk.strip())
-        if item:
-            out.append(item)
-    return out
-
-
-def parse_frontmatter_block(text: str) -> tuple[dict[str, Any], str]:
-    lines = text.splitlines()
-    if not lines or not FRONTMATTER_BOUNDARY.match(lines[0]):
-        return {}, text
-
-    boundary_idx = None
-    for idx in range(1, len(lines)):
-        if FRONTMATTER_BOUNDARY.match(lines[idx]):
-            boundary_idx = idx
-            break
-    if boundary_idx is None:
-        return {}, text
-
-    frontmatter: dict[str, Any] = {}
-    current_list_key: str | None = None
-
-    for raw in lines[1:boundary_idx]:
-        line = raw.rstrip("\n")
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#"):
-            continue
-
-        list_item_match = re.match(r"^\s*-\s+(.*)$", line)
-        if list_item_match and current_list_key is not None:
-            item_value = INLINE_COMMENT_RE.sub("", list_item_match.group(1)).strip()
-            item = strip_quotes(item_value)
-            if item:
-                frontmatter[current_list_key].append(item)
-            continue
-
-        if ":" not in stripped:
-            current_list_key = None
-            continue
-
-        key, value = stripped.split(":", 1)
-        key = key.strip()
-        value = INLINE_COMMENT_RE.sub("", value).strip()
-        if value == "":
-            frontmatter[key] = []
-            current_list_key = key
-            continue
-        current_list_key = None
-
-        if value.startswith("[") and value.endswith("]"):
-            frontmatter[key] = parse_inline_list(value)
-        else:
-            frontmatter[key] = strip_quotes(value)
-
-    body = "\n".join(lines[boundary_idx + 1 :])
-    return frontmatter, body
-
-
 def infer_ledger_note_type(rel_path: str) -> str:
     for prefix, note_type in LEDGER_EMBED_NOTE_TYPES.items():
         if rel_path.startswith(prefix + "/"):
             return note_type
     return "unknown"
-
-
-def extract_markdown_title(body: str, fallback: str) -> str:
-    match = TITLE_RE.search(body)
-    if match:
-        return match.group(1).strip()
-    return fallback
 
 
 def normalize_for_hash(frontmatter: dict[str, Any], body: str, title: str) -> str:
@@ -262,7 +181,7 @@ def collect_source_notes(source_root: Path) -> list[Path]:
 def build_item_record(path: Path, target: str, source_root: Path | None = None) -> dict[str, Any]:
     abs_path = path.resolve()
     text = abs_path.read_text(encoding="utf-8")
-    frontmatter, body = parse_frontmatter_block(text)
+    frontmatter, body = parse_frontmatter_text(text)
 
     if target == "ledger":
         rel_path = abs_path.relative_to(ROOT_DIR).as_posix()
@@ -273,7 +192,7 @@ def build_item_record(path: Path, target: str, source_root: Path | None = None) 
         note_type = "source"
 
     fallback_title = abs_path.stem.replace("_", " ")
-    title = extract_markdown_title(body, fallback=fallback_title)
+    title = extract_title(body) or fallback_title
     embedding_text = "\n".join([title.strip(), body.strip()]).strip()
 
     content_hash = sha1_text(normalize_for_hash(frontmatter, body, title))
@@ -307,7 +226,16 @@ def collect_target_items(target: str, source_root: Path | None = None) -> list[d
     return items
 
 
-def _local_embed_texts(texts: list[str], model: str) -> np.ndarray:
+def clear_runtime_caches() -> None:
+    _LOCAL_ENCODER_CACHE.clear()
+    _QUERY_VECTOR_CACHE.clear()
+
+
+def _get_local_encoder(model: str) -> Any:
+    encoder = _LOCAL_ENCODER_CACHE.get(model)
+    if encoder is not None:
+        return encoder
+
     try:
         from sentence_transformers import SentenceTransformer  # type: ignore
     except ImportError as exc:
@@ -317,6 +245,12 @@ def _local_embed_texts(texts: list[str], model: str) -> np.ndarray:
         ) from exc
 
     encoder = SentenceTransformer(model)
+    _LOCAL_ENCODER_CACHE[model] = encoder
+    return encoder
+
+
+def _local_embed_texts(texts: list[str], model: str) -> np.ndarray:
+    encoder = _get_local_encoder(model)
     vectors = encoder.encode(
         texts,
         convert_to_numpy=True,
@@ -374,6 +308,21 @@ def embed_texts(texts: list[str], backend: str, model: str) -> np.ndarray:
     if backend == "openai":
         return _openai_embed_texts(texts, model)
     raise ValueError(f"Unsupported embedding backend: {backend}")
+
+
+def embed_query_text(query: str, backend: str, model: str) -> np.ndarray:
+    cache_key = (str(backend or "").strip().lower(), str(model or "").strip(), str(query))
+    cached = _QUERY_VECTOR_CACHE.get(cache_key)
+    if cached is not None:
+        _QUERY_VECTOR_CACHE.move_to_end(cache_key)
+        return cached
+
+    vectors = embed_texts([query], backend=backend, model=model)
+    _QUERY_VECTOR_CACHE[cache_key] = vectors
+    _QUERY_VECTOR_CACHE.move_to_end(cache_key)
+    while len(_QUERY_VECTOR_CACHE) > _QUERY_VECTOR_CACHE_MAX:
+        _QUERY_VECTOR_CACHE.popitem(last=False)
+    return vectors
 
 
 def load_semantic_index(
@@ -791,7 +740,7 @@ def semantic_score_map(
             "score_by_rel_path": {},
         }
 
-    query_vector = embed_texts([query], backend=backend, model=resolved_model)
+    query_vector = embed_query_text(query, backend=backend, model=resolved_model)
     if query_vector.ndim != 2 or query_vector.shape[0] == 0:
         return {
             "available": False,
