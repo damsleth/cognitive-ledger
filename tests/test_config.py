@@ -42,7 +42,8 @@ class TestLedgerConfig(unittest.TestCase):
         config = LedgerConfig()
 
         lexical_sum = (
-            config.score_weight_lexical
+            config.score_weight_bm25
+            + config.score_weight_lexical
             + config.score_weight_tag
             + config.score_weight_scope
             + config.score_weight_recency
@@ -93,6 +94,15 @@ class TestLedgerConfig(unittest.TestCase):
         self.assertAlmostEqual(config.score_weight_lexical, 0.55)
 
         del os.environ["LEDGER_WEIGHT_LEXICAL"]
+
+    def test_env_override_bm25_weight(self):
+        """Test environment variable override for BM25 weight."""
+        os.environ["LEDGER_WEIGHT_BM25"] = "0.45"
+
+        config = LedgerConfig.from_env()
+        self.assertAlmostEqual(config.score_weight_bm25, 0.45)
+
+        del os.environ["LEDGER_WEIGHT_BM25"]
 
     def test_env_override_invalid_ignored(self):
         """Test that invalid env values are ignored."""

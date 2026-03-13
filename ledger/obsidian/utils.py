@@ -85,32 +85,14 @@ def infer_scope_from_relpath(path_rel: str) -> str:
     return "personal"
 
 
-def _serialize_scalar(value: Any) -> str:
-    if isinstance(value, bool):
-        return "true" if value else "false"
-    if isinstance(value, (int, float)):
-        return str(value)
-    text = str(value)
-    if not text:
-        return '""'
-    lower = text.lower()
-    if lower in RESERVED_YAML_SCALARS:
-        return json.dumps(text)
-    if re.fullmatch(r"[A-Za-z0-9_./:-]+", text):
-        return text
-    return json.dumps(text)
-
-
 def frontmatter_to_text(fields: dict[str, Any]) -> str:
-    lines = ["---"]
-    for key, value in fields.items():
-        if isinstance(value, list):
-            serialized = ", ".join(_serialize_scalar(v) for v in value)
-            lines.append(f"{key}: [{serialized}]")
-            continue
-        lines.append(f"{key}: {_serialize_scalar(value)}")
-    lines.append("---")
-    return "\n".join(lines)
+    """Serialize a frontmatter dict to YAML text.
+
+    Delegates to the canonical serializer in ledger.parsing.frontmatter.
+    """
+    from ledger.parsing.frontmatter import serialize_frontmatter
+
+    return serialize_frontmatter(fields)
 
 
 def write_markdown(path: Path, frontmatter: dict[str, Any], body: str) -> None:
@@ -132,9 +114,8 @@ def append_timeline(path: Path, action: str, rel_path: str, description: str, ts
 
 def append_log(path: Path, lines: list[str], ts: str | None = None) -> None:
     ts_value = ts or now_iso()
-    existing = safe_read_text(path) if path.is_file() else ""
-    block = ["", "---", "", f"## {ts_value}", "", *lines, ""]
-    safe_write_text(path, existing.rstrip("\n") + "\n" + "\n".join(block))
+    block = "\n".join(["", "---", "", f"## {ts_value}", "", *lines, ""])
+    safe_append_line(path, block)
 
 
 def is_markdown(path: Path) -> bool:

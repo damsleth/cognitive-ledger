@@ -1,12 +1,13 @@
-"""Canonical YAML frontmatter parser for Cognitive Ledger.
+"""Canonical YAML frontmatter parser and serializer for Cognitive Ledger.
 
-This is THE source of truth for frontmatter parsing.
+This is THE source of truth for frontmatter parsing and serialization.
 Do not duplicate this logic elsewhere.
 """
 
 from __future__ import annotations
 
 import csv
+import json as _json
 import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -142,10 +143,14 @@ def parse_scalar(value: str) -> str | int | float | bool | list[str]:
 
     cleaned = strip_quotes(cleaned)
 
+    # YAML null
+    if cleaned.lower() in {"null", "~"}:
+        return ""
+
     # Boolean
-    if cleaned.lower() in ("true", "yes"):
+    if cleaned.lower() == "true":
         return True
-    if cleaned.lower() in ("false", "no"):
+    if cleaned.lower() == "false":
         return False
 
     # Number
@@ -317,3 +322,41 @@ def to_parsed_frontmatter(raw: dict[str, Any]) -> ParsedFrontmatter:
         status=str(raw.get("status", "")).strip().lower() or None,
         raw=raw,
     )
+
+
+# ---- Serialization ----
+
+_RESERVED_YAML_SCALARS = {"yes", "no", "true", "false", "null", "~"}
+
+
+def _serialize_scalar(value: Any) -> str:
+    """Serialize a single value to a safe YAML scalar string."""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)):
+        return str(value)
+    text = str(value)
+    if not text:
+        return '""'
+    if text.lower() in _RESERVED_YAML_SCALARS:
+        return _json.dumps(text)
+    if re.fullmatch(r"[A-Za-z0-9_./:-]+", text):
+        return text
+    return _json.dumps(text)
+
+
+def serialize_frontmatter(fields: dict[str, Any]) -> str:
+    """Serialize a frontmatter dict to ``---`` delimited YAML text.
+
+    This is the canonical serializer. All code paths should use this
+    instead of building YAML strings manually.
+    """
+    lines = ["---"]
+    for key, value in fields.items():
+        if isinstance(value, list):
+            serialized = ", ".join(_serialize_scalar(v) for v in value)
+            lines.append(f"{key}: [{serialized}]")
+            continue
+        lines.append(f"{key}: {_serialize_scalar(value)}")
+    lines.append("---")
+    return "\n".join(lines)

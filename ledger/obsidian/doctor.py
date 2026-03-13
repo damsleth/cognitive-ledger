@@ -35,7 +35,7 @@ def run_doctor(config: ObsidianLedgerConfig) -> tuple[int, list[str]]:
     if obsidian_dir.exists():
         lines.append("ok: .obsidian folder found")
     else:
-        lines.append("warn: .obsidian not found; this may not be an Obsidian vault")
+        lines.append("warn: .obsidian not found; treating root as a generic markdown note base")
 
     try:
         config.ledger_root.mkdir(parents=True, exist_ok=True)

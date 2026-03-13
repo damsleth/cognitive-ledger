@@ -20,6 +20,7 @@ from .frontmatter import (
     parse_timestamp,
     normalize_tags,
     to_parsed_frontmatter,
+    serialize_frontmatter,
 )
 from .sections import (
     parse_sections,
@@ -50,6 +51,7 @@ __all__ = [
     "parse_timestamp",
     "normalize_tags",
     "to_parsed_frontmatter",
+    "serialize_frontmatter",
     # Sections
     "parse_sections",
     "normalize_section_name",

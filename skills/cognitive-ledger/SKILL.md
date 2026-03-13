@@ -62,8 +62,7 @@ Always give a minimal acknowledgement after writing, e.g. “Logged.” If asked
 ## Source of Truth
 
 Read these before writing (when you need guidance; keep reads minimal):
-- `AGENTS.md` for operating rules and triggers
-- `QUICK_REF.md` for minimal workflow
+- `AGENTS.md` for operating rules, triggers, and quick reference
 - `schema.yaml` for frontmatter and enums
 - `templates/` for note structure
 - `notes/08_indices/README.md` and `notes/08_indices/sleep_playbook.md` for indices/sleep

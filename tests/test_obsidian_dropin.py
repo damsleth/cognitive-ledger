@@ -19,6 +19,12 @@ def _make_vault(tmp_path: Path) -> Path:
     return vault
 
 
+def _make_note_root(tmp_path: Path) -> Path:
+    root = tmp_path / "note-root"
+    root.mkdir(parents=True)
+    return root
+
+
 def test_init_creates_expected_layout(tmp_path):
     vault = _make_vault(tmp_path)
 
@@ -137,3 +143,31 @@ def test_queue_sync_promotes_approved_candidates_idempotently(tmp_path):
     timeline = (vault / "cognitive-ledger" / "notes" / "08_indices" / "timeline.md").read_text(encoding="utf-8")
     assert "promoted from candidate queue" in timeline
     assert "candidate promoted" in timeline
+
+
+def test_bootstrap_supports_generic_markdown_root_via_root_alias(tmp_path):
+    root = _make_note_root(tmp_path)
+    source_pref = root / "projects" / "workflow.md"
+    source_pref.parent.mkdir(parents=True, exist_ok=True)
+    source_pref.write_text("I prefer concise responses with explicit tradeoffs.\n", encoding="utf-8")
+
+    source_loop = root / "projects" / "tasks.md"
+    source_loop.write_text(
+        (
+            "# CI Stabilization\n\n"
+            "Open question: we need to decide how to stabilize CI before release.\n"
+            "- [ ] Investigate flaky CI integration tests across environments.\n"
+        ),
+        encoding="utf-8",
+    )
+
+    rc = obsidian_main(["bootstrap", "--root", str(root), "--max-files", "10", "--max-notes", "10"])
+    assert rc == 0
+
+    preferences = list((root / "cognitive-ledger" / "notes" / "03_preferences").glob("pref__*.md"))
+    queue_notes = list((root / "cognitive-ledger" / "notes" / "00_inbox").glob("candidate__*.md"))
+    assert preferences
+    assert queue_notes
+
+    config = load_config(root)
+    assert config.vault_root == root.resolve()

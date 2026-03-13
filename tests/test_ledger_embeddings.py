@@ -2,6 +2,7 @@ import os
 import sys
 from pathlib import Path
 import tempfile
+import types
 import unittest
 
 try:
@@ -89,6 +90,7 @@ class LedgerEmbeddingsTests(unittest.TestCase):
             setattr(self.embeddings, key, value)
 
     def tearDown(self):
+        self.embeddings.clear_runtime_caches()
         for key, value in self._originals.items():
             setattr(self.embeddings, key, value)
         self.temp_dir.cleanup()
@@ -223,6 +225,68 @@ class LedgerEmbeddingsTests(unittest.TestCase):
                 model=self.embeddings.DEFAULT_OPENAI_MODEL,
                 allow_api_on_source=False,
             )
+
+    def test_semantic_score_map_reuses_query_vector_for_repeated_query(self):
+        self.embeddings.build_indices(
+            target="ledger",
+            backend="local",
+            model="fake-local-model",
+            source_root=self.source_root,
+            write_manifest=False,
+            append_timeline=False,
+        )
+        self.call_log.clear()
+        self.embeddings.clear_runtime_caches()
+
+        first = self.embeddings.semantic_score_map(
+            query="alpha",
+            target="ledger",
+            backend="local",
+            model="fake-local-model",
+        )
+        second = self.embeddings.semantic_score_map(
+            query="alpha",
+            target="ledger",
+            backend="local",
+            model="fake-local-model",
+        )
+
+        self.assertTrue(first["available"])
+        self.assertTrue(second["available"])
+        self.assertEqual(self.call_log, [("local", "fake-local-model", 1)])
+
+    def test_local_encoder_cache_reuses_model_instance(self):
+        created_models = []
+        test_case = self
+
+        class FakeSentenceTransformer:
+            def __init__(self, model):
+                created_models.append(model)
+
+            def encode(self, texts, convert_to_numpy=True, normalize_embeddings=True, show_progress_bar=False):
+                test_case.assertTrue(convert_to_numpy)
+                test_case.assertTrue(normalize_embeddings)
+                test_case.assertFalse(show_progress_bar)
+                return np.ones((len(texts), 2), dtype=np.float32)
+
+        fake_module = types.ModuleType("sentence_transformers")
+        fake_module.SentenceTransformer = FakeSentenceTransformer
+        original_module = sys.modules.get("sentence_transformers")
+        self.embeddings.clear_runtime_caches()
+        sys.modules["sentence_transformers"] = fake_module
+
+        try:
+            first = self.embeddings._local_embed_texts(["alpha"], "fake-model")
+            second = self.embeddings._local_embed_texts(["beta"], "fake-model")
+        finally:
+            if original_module is None:
+                del sys.modules["sentence_transformers"]
+            else:
+                sys.modules["sentence_transformers"] = original_module
+
+        self.assertEqual(created_models, ["fake-model"])
+        self.assertEqual(first.shape, (1, 2))
+        self.assertEqual(second.shape, (1, 2))
 
 
 if __name__ == "__main__":

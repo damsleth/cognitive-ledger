@@ -5,6 +5,8 @@ dist/
 .vscode/
 .obsidian/
 .misc/
+.tmp/
+.doc/
 # Claude worktrees
 .claude/
 # Ignore Smart Environment folder

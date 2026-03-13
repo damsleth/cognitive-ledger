@@ -37,7 +37,7 @@ def is_journal_file(path_abs: Path) -> bool:
 def is_meeting_like(path_abs: Path, content: str) -> bool:
     p = str(path_abs).replace("\\", "/").lower()
     if re.search(
-        r"\\b(meeting|meetings|mom|minutes-of-meeting|minutes|møte|mote|samtale|call|check-?in|1-1|1:1|one-on-one|standup|sync|retro|retrospective|status)\\b",
+        r"\b(meeting|meetings|mom|minutes-of-meeting|minutes|møte|mote|samtale|call|check-?in|1-1|1:1|one-on-one|standup|sync|retro|retrospective|status)\b",
         p,
         re.I,
     ):

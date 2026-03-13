@@ -24,57 +24,60 @@ class NoteWriter:
             note: The note to update
             changes: Dict of field -> new_value
         """
-        content = note.path.read_text(encoding="utf-8")
+        # Hold the lock for both read and write to prevent TOCTOU races
+        # (e.g. concurrent $EDITOR saves overwritten by stale snapshot).
+        with FileLock(note.path):
+            content = note.path.read_text(encoding="utf-8")
 
-        # Split into frontmatter and body using explicit boundary lines.
-        # Avoid content.split('---') because markdown bodies often contain '---' horizontal rules.
-        lines = content.splitlines(keepends=True)
-        if not lines or lines[0].strip() != "---":
-            raise ValueError("Note has no frontmatter")
+            # Split into frontmatter and body using explicit boundary lines.
+            # Avoid content.split('---') because markdown bodies often contain '---' horizontal rules.
+            lines = content.splitlines(keepends=True)
+            if not lines or lines[0].strip() != "---":
+                raise ValueError("Note has no frontmatter")
 
-        end_idx = None
-        for i in range(1, len(lines)):
-            if lines[i].strip() == "---":
-                end_idx = i
-                break
-        if end_idx is None:
-            raise ValueError("Malformed frontmatter")
+            end_idx = None
+            for i in range(1, len(lines)):
+                if lines[i].strip() == "---":
+                    end_idx = i
+                    break
+            if end_idx is None:
+                raise ValueError("Malformed frontmatter")
 
-        frontmatter_text = "".join(lines[1:end_idx])
-        body = "".join(lines[end_idx + 1 :])
+            frontmatter_text = "".join(lines[1:end_idx])
+            body = "".join(lines[end_idx + 1 :])
 
-        # Parse existing frontmatter
-        frontmatter = yaml.safe_load(frontmatter_text) or {}
+            # Parse existing frontmatter
+            frontmatter = yaml.safe_load(frontmatter_text) or {}
 
-        # Apply changes
-        for key, value in changes.items():
-            if hasattr(value, "value"):  # Enum
-                frontmatter[key] = value.value
+            # Apply changes
+            for key, value in changes.items():
+                if hasattr(value, "value"):  # Enum
+                    frontmatter[key] = value.value
+                else:
+                    frontmatter[key] = value
+
+            # Always update timestamp
+            now = datetime.now(timezone.utc)
+            frontmatter["updated"] = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+            # Rebuild frontmatter
+            new_frontmatter = yaml.safe_dump(
+                frontmatter,
+                default_flow_style=False,
+                allow_unicode=True,
+                sort_keys=False,
+            )
+
+            if not new_frontmatter.endswith("\n"):
+                new_frontmatter += "\n"
+
+            # Write back (lock already held, skip double-locking)
+            if body.startswith("\n") or body == "":
+                new_content = f"---\n{new_frontmatter}---{body}"
             else:
-                frontmatter[key] = value
+                new_content = f"---\n{new_frontmatter}---\n{body}"
 
-        # Always update timestamp
-        now = datetime.now(timezone.utc)
-        frontmatter["updated"] = now.strftime("%Y-%m-%dT%H:%M:%SZ")
-
-        # Rebuild frontmatter
-        new_frontmatter = yaml.safe_dump(
-            frontmatter,
-            default_flow_style=False,
-            allow_unicode=True,
-            sort_keys=False,
-        )
-
-        if not new_frontmatter.endswith("\n"):
-            new_frontmatter += "\n"
-
-        # Write back
-        if body.startswith("\n") or body == "":
-            new_content = f"---\n{new_frontmatter}---{body}"
-        else:
-            new_content = f"---\n{new_frontmatter}---\n{body}"
-
-        safe_write_text(note.path, new_content, use_lock=True)
+            safe_write_text(note.path, new_content, use_lock=False)
 
         # Log to timeline
         changed_fields = ", ".join(changes.keys())

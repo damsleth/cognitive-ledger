@@ -15,19 +15,27 @@ import datetime as dt
 import hashlib
 import heapq
 import json
+import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Union
 
 from ledger.config import get_config
 from ledger.io import safe_write_text
 from ledger.parsing import (
+    extract_link_tokens,
+    extract_title,
+    first_checkbox,
+    first_content_line,
     parse_frontmatter_text,
     parse_sections,
-    extract_title,
-    first_content_line,
-    first_checkbox,
     tokenize,
-    extract_link_tokens,
+)
+from ledger.retrieval_types import (
+    RetrievalCandidate,
+    RetrievalResult,
+    ScoreComponents,
+    ScoredResult,
+    TimingInfo,
 )
 
 try:
@@ -36,31 +44,7 @@ except ImportError:  # pragma: no cover - optional dependency fallback
     BM25Okapi = None
 
 
-# ---------------------------------------------------------------------------
-# Config-derived constants
-# ---------------------------------------------------------------------------
-
-_config = get_config()
-ROOT_DIR = _config.root_dir
-ALIASES_PATH = _config.aliases_path
-NOTE_INDEX_PATH = _config.notes_dir / "08_indices" / "note_index.json"
 NOTE_INDEX_VERSION = 2
-
-NOTE_TYPES = {
-    name: {"dir": ROOT_DIR / info["dir"], "label": info["label"]}
-    for name, info in _config.note_types.items()
-}
-CORE_NOTE_TYPES = _config.core_note_types
-
-SHORTLIST_MIN_CANDIDATES = _config.shortlist_min_candidates
-SHORTLIST_MAX_CANDIDATES = _config.shortlist_max_candidates
-SHORTLIST_LIMIT_MULTIPLIER = _config.shortlist_limit_multiplier
-ATTENTION_SHORTLIST_MIN_CANDIDATES = _config.attention_shortlist_min
-ATTENTION_SHORTLIST_MAX_CANDIDATES = _config.attention_shortlist_max
-ATTENTION_SHORTLIST_LIMIT_MULTIPLIER = _config.attention_shortlist_limit_multiplier
-DETAILED_REASONS_LIMIT = _config.detailed_reasons_limit
-PROGRESSIVE_RATIONALE_TOP = _config.progressive_rationale_top
-
 
 # Intent detection hints
 HISTORY_HINTS = frozenset({"history", "closed", "past"})
@@ -68,8 +52,98 @@ PREFERENCE_HINTS = frozenset({"preference", "preferences", "style", "workflow", 
 LOOP_HINTS = frozenset({"loop", "loops", "unresolved", "next", "pending", "todo", "task", "tasks", "do"})
 
 
-_CANDIDATE_CACHE: list[dict[str, Any]] | None = None
+CandidateLike = Union[RetrievalCandidate, ScoredResult, dict[str, Any]]
+
+_CANDIDATE_CACHE: list[RetrievalCandidate] | None = None
 _CANDIDATE_INDEX_CACHE: dict[str, Any] | None = None
+
+
+def _cfg():
+    return get_config()
+
+
+def _note_index_path() -> Path:
+    return _cfg().notes_dir / "08_indices" / "note_index.json"
+
+
+def _note_types() -> dict[str, dict[str, Any]]:
+    config = _cfg()
+    return {
+        name: {"dir": config.root_dir / info["dir"], "label": info["label"]}
+        for name, info in config.note_types.items()
+    }
+
+
+def _candidate_value(candidate: CandidateLike, field: str, default: Any = None) -> Any:
+    if isinstance(candidate, dict):
+        return candidate.get(field, default)
+    return getattr(candidate, field, default)
+
+
+def _candidate_sort_key(candidate: CandidateLike) -> tuple[str, str]:
+    return (
+        str(_candidate_value(candidate, "updated", "") or ""),
+        str(_candidate_value(candidate, "path", "") or ""),
+    )
+
+
+def _candidate_label(note_type: str) -> str:
+    return str(_note_types()[note_type]["label"])
+
+
+def _copy_candidate(candidate: CandidateLike) -> RetrievalCandidate:
+    return RetrievalCandidate(
+        path=str(_candidate_value(candidate, "path", "") or ""),
+        rel_path=str(_candidate_value(candidate, "rel_path", "") or ""),
+        type=str(_candidate_value(candidate, "type", "") or ""),
+        title=str(_candidate_value(candidate, "title", "") or ""),
+        statement=str(_candidate_value(candidate, "statement", "") or ""),
+        body=str(_candidate_value(candidate, "body", "") or ""),
+        updated=str(_candidate_value(candidate, "updated", "") or ""),
+        updated_ts=_candidate_value(candidate, "updated_ts"),
+        confidence=float(_candidate_value(candidate, "confidence", 0.0) or 0.0),
+        source=str(_candidate_value(candidate, "source", "") or ""),
+        scope=str(_candidate_value(candidate, "scope", "") or ""),
+        status=str(_candidate_value(candidate, "status", "") or ""),
+        tags=list(_candidate_value(candidate, "tags", []) or []),
+        note_tokens=set(_candidate_value(candidate, "note_tokens", set()) or set()),
+        tag_tokens=set(_candidate_value(candidate, "tag_tokens", set()) or set()),
+        attention_tokens=set(_candidate_value(candidate, "attention_tokens", set()) or set()),
+        snippet=str(_candidate_value(candidate, "snippet", "") or ""),
+        has_next_action_checkbox=bool(_candidate_value(candidate, "has_next_action_checkbox", False)),
+    )
+
+
+def _scored_result(
+    candidate: CandidateLike,
+    score: float,
+    reasons: list[str],
+    components: ScoreComponents,
+) -> ScoredResult:
+    base = _copy_candidate(candidate)
+    return ScoredResult(
+        path=base.path,
+        rel_path=base.rel_path,
+        type=base.type,
+        title=base.title,
+        statement=base.statement,
+        body=base.body,
+        updated=base.updated,
+        updated_ts=base.updated_ts,
+        confidence=base.confidence,
+        source=base.source,
+        scope=base.scope,
+        status=base.status,
+        tags=list(base.tags),
+        note_tokens=set(base.note_tokens),
+        tag_tokens=set(base.tag_tokens),
+        attention_tokens=set(base.attention_tokens),
+        snippet=base.snippet,
+        has_next_action_checkbox=base.has_next_action_checkbox,
+        score=score,
+        reasons=list(reasons),
+        components=components,
+    )
 
 
 def now_utc() -> dt.datetime:
@@ -138,10 +212,7 @@ def confidence_value(frontmatter: dict[str, Any]) -> float:
 
 
 def compute_recency_component(updated_ts: dt.datetime | None, now_dt: dt.datetime) -> float:
-    """Compute recency score (0.0-1.0) based on age.
-
-    Decays linearly over 90 days.
-    """
+    """Compute recency score (0.0-1.0) based on age."""
     if not updated_ts:
         return 0.0
     age_days = max(0.0, (now_dt - updated_ts).total_seconds() / 86400.0)
@@ -173,11 +244,7 @@ def expand_query_tokens(
     query_tokens: set[str],
     aliases: dict[str, list[str]],
 ) -> tuple[set[str], list[dict[str, Any]]]:
-    """Expand query tokens using aliases.
-
-    Returns:
-        Tuple of (expanded_tokens, expansion_events)
-    """
+    """Expand query tokens using aliases."""
     expanded = set(query_tokens)
     expansion_events = []
 
@@ -199,11 +266,7 @@ def expand_query_tokens(
 
 
 def read_note_for_retrieval(path: Path) -> tuple[dict[str, Any], str]:
-    """Read a note file for retrieval.
-
-    Returns:
-        Tuple of (frontmatter_dict, body).
-    """
+    """Read a note file for retrieval."""
     text = path.read_text(encoding="utf-8")
     return parse_frontmatter_text(text)
 
@@ -239,8 +302,13 @@ def build_attention_tokens(
     return attention_tokens
 
 
-def _candidate_from_parts(path: Path, note_type: str, frontmatter: dict[str, Any], body: str) -> dict[str, Any]:
-    """Build retrieval candidate dictionary from parsed note content."""
+def _candidate_from_parts(
+    path: Path,
+    note_type: str,
+    frontmatter: dict[str, Any],
+    body: str,
+) -> RetrievalCandidate:
+    """Build retrieval candidate from parsed note content."""
     sections = parse_sections(body)
     title = extract_title(body) or path.stem.replace("_", " ")
 
@@ -272,21 +340,13 @@ def _candidate_from_parts(path: Path, note_type: str, frontmatter: dict[str, Any
     confidence = confidence_value(frontmatter)
     source = str(frontmatter.get("source", "")).strip().lower()
 
-    rel_path = path.resolve().relative_to(ROOT_DIR)
+    rel_path = path.resolve().relative_to(_cfg().root_dir.resolve())
     slug = path.stem
 
-    searchable_text = " ".join(
-        [
-            title,
-            statement,
-            body,
-            " ".join(tags),
-            slug,
-        ]
-    )
+    searchable_text = " ".join([title, statement, body, " ".join(tags), slug])
     note_tokens = tokenize(searchable_text)
 
-    tag_tokens = set()
+    tag_tokens: set[str] = set()
     for tag in tags:
         tag_tokens |= tokenize(tag.replace("-", " ").replace("_", " "))
 
@@ -305,59 +365,91 @@ def _candidate_from_parts(path: Path, note_type: str, frontmatter: dict[str, Any
         slug=slug,
     )
 
-    return {
-        "path": str(path.resolve()),
-        "rel_path": str(rel_path),
-        "type": NOTE_TYPES[note_type]["label"],
-        "title": title,
-        "statement": statement,
-        "body": body,
-        "updated": updated_str,
-        "updated_ts": updated_ts,
-        "confidence": confidence,
-        "source": source,
-        "scope": scope,
-        "status": status,
-        "tags": tags,
-        "note_tokens": note_tokens,
-        "tag_tokens": tag_tokens,
-        "attention_tokens": attention_tokens,
-        "snippet": snippet_source,
-        "has_next_action_checkbox": bool(next_action),
-    }
+    return RetrievalCandidate(
+        path=str(path.resolve()),
+        rel_path=str(rel_path),
+        type=_candidate_label(note_type),
+        title=title,
+        statement=statement,
+        body=body,
+        updated=updated_str,
+        updated_ts=updated_ts,
+        confidence=confidence,
+        source=source,
+        scope=scope,
+        status=status,
+        tags=tags,
+        note_tokens=note_tokens,
+        tag_tokens=tag_tokens,
+        attention_tokens=attention_tokens,
+        snippet=snippet_source,
+        has_next_action_checkbox=bool(next_action),
+    )
 
 
-def candidate_from_note(path: Path, note_type: str) -> dict[str, Any]:
-    """Build retrieval candidate dictionary from a note path."""
+def candidate_from_note(path: Path, note_type: str) -> RetrievalCandidate:
+    """Build retrieval candidate from a note path."""
     frontmatter, body = read_note_for_retrieval(path)
     return _candidate_from_parts(path, note_type, frontmatter, body)
 
 
-def _candidate_to_json(candidate: dict[str, Any]) -> dict[str, Any]:
+def _candidate_to_json(candidate: RetrievalCandidate) -> dict[str, Any]:
     """Serialize candidate to JSON-friendly payload."""
-    data = dict(candidate)
-    data.pop("updated_ts", None)
-    data["note_tokens"] = sorted(candidate.get("note_tokens", set()))
-    data["tag_tokens"] = sorted(candidate.get("tag_tokens", set()))
-    data["attention_tokens"] = sorted(candidate.get("attention_tokens", set()))
-    return data
+    return {
+        "path": candidate.path,
+        "rel_path": candidate.rel_path,
+        "type": candidate.type,
+        "title": candidate.title,
+        "statement": candidate.statement,
+        "body": candidate.body,
+        "updated": candidate.updated,
+        "confidence": candidate.confidence,
+        "source": candidate.source,
+        "scope": candidate.scope,
+        "status": candidate.status,
+        "tags": list(candidate.tags),
+        "note_tokens": sorted(candidate.note_tokens),
+        "tag_tokens": sorted(candidate.tag_tokens),
+        "attention_tokens": sorted(candidate.attention_tokens),
+        "snippet": candidate.snippet,
+        "has_next_action_checkbox": candidate.has_next_action_checkbox,
+    }
 
 
-def _candidate_from_json(candidate_json: dict[str, Any]) -> dict[str, Any]:
+def _candidate_from_json(candidate_json: dict[str, Any]) -> RetrievalCandidate:
     """Deserialize candidate from JSON-friendly payload."""
-    data = dict(candidate_json)
-    data["note_tokens"] = set(candidate_json.get("note_tokens", []))
-    data["tag_tokens"] = set(candidate_json.get("tag_tokens", []))
-    data["attention_tokens"] = set(candidate_json.get("attention_tokens", []))
-    data["updated_ts"] = parse_ts(str(candidate_json.get("updated", "")))
-    return data
+    updated = str(candidate_json.get("updated", ""))
+    try:
+        confidence = float(candidate_json.get("confidence", 0.0) or 0.0)
+    except (TypeError, ValueError):
+        confidence = 0.0
+    return RetrievalCandidate(
+        path=str(candidate_json.get("path", "")),
+        rel_path=str(candidate_json.get("rel_path", "")),
+        type=str(candidate_json.get("type", "")),
+        title=str(candidate_json.get("title", "")),
+        statement=str(candidate_json.get("statement", "")),
+        body=str(candidate_json.get("body", "")),
+        updated=updated,
+        updated_ts=parse_ts(updated),
+        confidence=confidence,
+        source=str(candidate_json.get("source", "")),
+        scope=str(candidate_json.get("scope", "")),
+        status=str(candidate_json.get("status", "")),
+        tags=list(candidate_json.get("tags", []) or []),
+        note_tokens=set(candidate_json.get("note_tokens", [])),
+        tag_tokens=set(candidate_json.get("tag_tokens", [])),
+        attention_tokens=set(candidate_json.get("attention_tokens", [])),
+        snippet=str(candidate_json.get("snippet", "")),
+        has_next_action_checkbox=bool(candidate_json.get("has_next_action_checkbox", False)),
+    )
 
 
 def _list_note_paths() -> list[tuple[str, Path]]:
     """List all retrieval note paths as (note_type, path)."""
     paths: list[tuple[str, Path]] = []
-    for note_type in CORE_NOTE_TYPES:
-        note_dir = NOTE_TYPES[note_type]["dir"]
+    for note_type in _cfg().core_note_types:
+        note_dir = _note_types()[note_type]["dir"]
         if not note_dir.is_dir():
             continue
         for path in sorted(note_dir.glob("*.md")):
@@ -365,20 +457,21 @@ def _list_note_paths() -> list[tuple[str, Path]]:
     return paths
 
 
-def load_note_index(index_path: Path | str = NOTE_INDEX_PATH) -> dict[str, Any]:
+def load_note_index(index_path: Path | str | None = None) -> dict[str, Any]:
     """Load persistent note index from disk."""
-    path = Path(index_path)
+    path = Path(index_path) if index_path is not None else _note_index_path()
+    empty = {"version": NOTE_INDEX_VERSION, "built": "", "entries": {}, "inverted": {}}
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:
-        return {"version": NOTE_INDEX_VERSION, "built": "", "entries": {}, "inverted": {}}
+        return empty
     except json.JSONDecodeError:
-        return {"version": NOTE_INDEX_VERSION, "built": "", "entries": {}, "inverted": {}}
+        return empty
 
     if not isinstance(raw, dict):
-        return {"version": NOTE_INDEX_VERSION, "built": "", "entries": {}, "inverted": {}}
+        return empty
     if int(raw.get("version", 0)) != NOTE_INDEX_VERSION:
-        return {"version": NOTE_INDEX_VERSION, "built": "", "entries": {}, "inverted": {}}
+        return empty
     entries = raw.get("entries", {})
     if not isinstance(entries, dict):
         entries = {}
@@ -393,15 +486,16 @@ def load_note_index(index_path: Path | str = NOTE_INDEX_PATH) -> dict[str, Any]:
     }
 
 
-def rebuild_note_index(index_path: Path | str = NOTE_INDEX_PATH) -> dict[str, Any]:
+def rebuild_note_index(index_path: Path | str | None = None) -> dict[str, Any]:
     """Incrementally rebuild persistent note metadata index."""
-    path = Path(index_path)
+    started = time.perf_counter_ns()
+    path = Path(index_path) if index_path is not None else _note_index_path()
     existing = load_note_index(path)
     existing_entries: dict[str, dict[str, Any]] = existing.get("entries", {})
     updated_entries: dict[str, dict[str, Any]] = {}
 
     for note_type, note_path in _list_note_paths():
-        rel = note_path.resolve().relative_to(ROOT_DIR).as_posix()
+        rel = note_path.resolve().relative_to(_cfg().root_dir.resolve()).as_posix()
         mtime = note_path.stat().st_mtime
         cached = existing_entries.get(rel, {})
         cached_mtime = float(cached.get("mtime", -1.0)) if cached else -1.0
@@ -453,27 +547,30 @@ def rebuild_note_index(index_path: Path | str = NOTE_INDEX_PATH) -> dict[str, An
         and path.is_file()
     )
     if unchanged:
-        return existing
+        payload = dict(existing)
+        payload["build_ms"] = (time.perf_counter_ns() - started) / 1_000_000.0
+        return payload
 
     payload = {
         "version": NOTE_INDEX_VERSION,
         "built": now_utc().strftime("%Y-%m-%dT%H:%M:%SZ"),
         "entries": updated_entries,
         "inverted": inverted,
+        "build_ms": (time.perf_counter_ns() - started) / 1_000_000.0,
     }
     safe_write_text(path, json.dumps(payload, indent=2, ensure_ascii=False) + "\n")
     return payload
 
 
-def build_candidates(use_cache: bool = False) -> list[dict[str, Any]]:
+def build_candidates(use_cache: bool = False) -> list[RetrievalCandidate]:
     """Build retrieval candidates from all core note types."""
     global _CANDIDATE_CACHE
     if use_cache and _CANDIDATE_CACHE is not None:
         return _CANDIDATE_CACHE
 
-    index = rebuild_note_index(NOTE_INDEX_PATH)
+    index = rebuild_note_index()
     entries = index.get("entries", {})
-    candidates = []
+    candidates: list[RetrievalCandidate] = []
     for rel_path in sorted(entries.keys()):
         entry = entries.get(rel_path, {})
         candidate_json = entry.get("candidate", {})
@@ -493,12 +590,12 @@ def clear_candidate_cache() -> None:
     _CANDIDATE_INDEX_CACHE = None
 
 
-def candidate_index_tokens(candidate: dict[str, Any]) -> set[str]:
+def candidate_index_tokens(candidate: CandidateLike) -> set[str]:
     """Return all tokens that should index a candidate."""
     return (
-        set(candidate.get("note_tokens", set()))
-        | set(candidate.get("tag_tokens", set()))
-        | set(candidate.get("attention_tokens", set()))
+        set(_candidate_value(candidate, "note_tokens", set()) or set())
+        | set(_candidate_value(candidate, "tag_tokens", set()) or set())
+        | set(_candidate_value(candidate, "attention_tokens", set()) or set())
     )
 
 
@@ -508,10 +605,10 @@ def build_candidate_index(use_cache: bool = False) -> dict[str, Any]:
     if use_cache and _CANDIDATE_INDEX_CACHE is not None:
         return _CANDIDATE_INDEX_CACHE
 
-    note_index = rebuild_note_index(NOTE_INDEX_PATH)
+    note_index = rebuild_note_index()
     entries = note_index.get("entries", {})
     rel_paths = sorted(entries.keys())
-    candidates = []
+    candidates: list[RetrievalCandidate] = []
     rel_to_idx: dict[str, int] = {}
     for rel in rel_paths:
         entry = entries.get(rel, {})
@@ -546,9 +643,10 @@ def retrieve_candidates_from_index(
     index: dict[str, Any],
     query_tokens: set[str],
     query_scope: str,
-    minimum_pool: int = SHORTLIST_MIN_CANDIDATES,
-) -> list[dict[str, Any]]:
+    minimum_pool: int | None = None,
+) -> list[CandidateLike]:
     """Retrieve candidate subset from token index while preserving fallback pool size."""
+    minimum_pool = minimum_pool if minimum_pool is not None else _cfg().shortlist_min_candidates
     candidates = index.get("candidates", [])
     if not candidates:
         return []
@@ -562,33 +660,20 @@ def retrieve_candidates_from_index(
 
     if query_scope != "all":
         for idx, candidate in enumerate(candidates):
-            if scope_matches(candidate.get("scope", ""), query_scope):
+            if scope_matches(_candidate_value(candidate, "scope", ""), query_scope):
                 matched_ids.add(idx)
 
     if not matched_ids:
         return candidates
 
-    ordered_ids = sorted(
-        matched_ids,
-        key=lambda idx: (
-            candidates[idx].get("updated") or "",
-            candidates[idx].get("path", ""),
-        ),
-        reverse=True,
-    )
+    ordered_ids = sorted(matched_ids, key=lambda idx: _candidate_sort_key(candidates[idx]), reverse=True)
     selected = [candidates[idx] for idx in ordered_ids]
     if len(selected) >= min(len(candidates), minimum_pool):
         return selected
 
     seen_ids = set(ordered_ids)
     remainder = [idx for idx in range(len(candidates)) if idx not in seen_ids]
-    remainder.sort(
-        key=lambda idx: (
-            candidates[idx].get("updated") or "",
-            candidates[idx].get("path", ""),
-        ),
-        reverse=True,
-    )
+    remainder.sort(key=lambda idx: _candidate_sort_key(candidates[idx]), reverse=True)
     for idx in remainder:
         selected.append(candidates[idx])
         if len(selected) >= min(len(candidates), minimum_pool):
@@ -598,7 +683,7 @@ def retrieve_candidates_from_index(
 
 
 def coarse_candidate_score(
-    candidate: dict[str, Any],
+    candidate: CandidateLike,
     query_tokens: set[str],
     query_scope: str,
     history_mode: bool,
@@ -606,10 +691,15 @@ def coarse_candidate_score(
     preference_mode: bool,
 ) -> tuple[float, dict[str, float | int]]:
     """Cheap first-pass score used to shortlist candidates."""
+    note_tokens = set(_candidate_value(candidate, "note_tokens", set()) or set())
+    tag_tokens = set(_candidate_value(candidate, "tag_tokens", set()) or set())
+    candidate_type = str(_candidate_value(candidate, "type", "") or "")
+    status = str(_candidate_value(candidate, "status", "") or "")
+
     if query_tokens:
-        lexical_overlap_count = len(candidate["note_tokens"] & query_tokens)
+        lexical_overlap_count = len(note_tokens & query_tokens)
         lexical_match = lexical_overlap_count / len(query_tokens)
-        tag_overlap_count = len(candidate["tag_tokens"] & query_tokens)
+        tag_overlap_count = len(tag_tokens & query_tokens)
         tag_overlap = tag_overlap_count / len(query_tokens)
     else:
         lexical_overlap_count = 0
@@ -617,21 +707,18 @@ def coarse_candidate_score(
         tag_overlap_count = 0
         tag_overlap = 0.0
 
-    scope_match = 1.0 if scope_matches(candidate["scope"], query_scope) else 0.0
+    scope_match = 1.0 if scope_matches(str(_candidate_value(candidate, "scope", "") or ""), query_scope) else 0.0
     score = (0.70 * lexical_match) + (0.20 * tag_overlap) + (0.10 * scope_match)
 
     if query_scope != "all":
-        if scope_match >= 1.0:
-            score += 0.03
-        else:
-            score -= 0.03
-    if candidate["type"] == "loop" and candidate.get("status") == "closed" and not history_mode:
+        score += 0.03 if scope_match >= 1.0 else -0.03
+    if candidate_type == "loop" and status == "closed" and not history_mode:
         score -= 0.05
-    if history_mode and candidate["type"] == "loop" and candidate.get("status") == "closed":
+    if history_mode and candidate_type == "loop" and status == "closed":
         score += 0.05
-    if loop_mode and candidate["type"] == "loop" and candidate.get("status") == "open":
+    if loop_mode and candidate_type == "loop" and status == "open":
         score += 0.04
-    if preference_mode and candidate["type"] == "pref":
+    if preference_mode and candidate_type == "pref":
         score += 0.04
 
     return score, {
@@ -642,14 +729,14 @@ def coarse_candidate_score(
 
 
 def shortlist_candidates(
-    candidates: list[dict[str, Any]],
+    candidates: list[CandidateLike],
     query_tokens: set[str],
     query_scope: str,
     history_mode: bool,
     loop_mode: bool,
     preference_mode: bool,
     limit: int,
-) -> list[dict[str, Any]]:
+) -> list[CandidateLike]:
     """Shortlist candidate set using coarse score."""
     if not candidates:
         return []
@@ -657,8 +744,8 @@ def shortlist_candidates(
     shortlist_target = min(
         len(candidates),
         max(
-            SHORTLIST_MIN_CANDIDATES,
-            min(SHORTLIST_MAX_CANDIDATES, max(1, limit) * SHORTLIST_LIMIT_MULTIPLIER),
+            _cfg().shortlist_min_candidates,
+            min(_cfg().shortlist_max_candidates, max(1, limit) * _cfg().shortlist_limit_multiplier),
         ),
     )
 
@@ -687,17 +774,13 @@ def shortlist_candidates(
     top_scored = heapq.nlargest(
         shortlist_target,
         scored,
-        key=lambda item: (
-            item[0],
-            item[1]["updated"] or "",
-            item[1]["path"],
-        ),
+        key=lambda item: (item[0], *_candidate_sort_key(item[1])),
     )
     return [item[1] for item in top_scored]
 
 
 def compressed_attention_candidate_score(
-    candidate: dict[str, Any],
+    candidate: CandidateLike,
     query_tokens: set[str],
     query_scope: str,
     history_mode: bool,
@@ -705,12 +788,18 @@ def compressed_attention_candidate_score(
     preference_mode: bool,
 ) -> tuple[float, dict[str, float | int]]:
     """Cheap score variant that includes attention-token overlap."""
+    attention_tokens = set(_candidate_value(candidate, "attention_tokens", set()) or set())
+    note_tokens = set(_candidate_value(candidate, "note_tokens", set()) or set())
+    tag_tokens = set(_candidate_value(candidate, "tag_tokens", set()) or set())
+    candidate_type = str(_candidate_value(candidate, "type", "") or "")
+    status = str(_candidate_value(candidate, "status", "") or "")
+
     if query_tokens:
-        attention_overlap_count = len(candidate.get("attention_tokens", set()) & query_tokens)
+        attention_overlap_count = len(attention_tokens & query_tokens)
         attention_overlap = attention_overlap_count / len(query_tokens)
-        lexical_overlap_count = len(candidate["note_tokens"] & query_tokens)
+        lexical_overlap_count = len(note_tokens & query_tokens)
         lexical_match = lexical_overlap_count / len(query_tokens)
-        tag_overlap_count = len(candidate["tag_tokens"] & query_tokens)
+        tag_overlap_count = len(tag_tokens & query_tokens)
         tag_overlap = tag_overlap_count / len(query_tokens)
     else:
         attention_overlap_count = 0
@@ -720,21 +809,18 @@ def compressed_attention_candidate_score(
         tag_overlap_count = 0
         tag_overlap = 0.0
 
-    scope_match = 1.0 if scope_matches(candidate["scope"], query_scope) else 0.0
+    scope_match = 1.0 if scope_matches(str(_candidate_value(candidate, "scope", "") or ""), query_scope) else 0.0
     score = (0.55 * attention_overlap) + (0.20 * lexical_match) + (0.15 * tag_overlap) + (0.10 * scope_match)
 
     if query_scope != "all":
-        if scope_match >= 1.0:
-            score += 0.04
-        else:
-            score -= 0.04
-    if candidate["type"] == "loop" and candidate.get("status") == "closed" and not history_mode:
+        score += 0.04 if scope_match >= 1.0 else -0.04
+    if candidate_type == "loop" and status == "closed" and not history_mode:
         score -= 0.05
-    if history_mode and candidate["type"] == "loop" and candidate.get("status") == "closed":
+    if history_mode and candidate_type == "loop" and status == "closed":
         score += 0.06
-    if loop_mode and candidate["type"] == "loop" and candidate.get("status") == "open":
+    if loop_mode and candidate_type == "loop" and status == "open":
         score += 0.05
-    if preference_mode and candidate["type"] == "pref":
+    if preference_mode and candidate_type == "pref":
         score += 0.05
 
     return score, {
@@ -746,14 +832,14 @@ def compressed_attention_candidate_score(
 
 
 def shortlist_attention_candidates(
-    candidates: list[dict[str, Any]],
+    candidates: list[CandidateLike],
     query_tokens: set[str],
     query_scope: str,
     history_mode: bool,
     loop_mode: bool,
     preference_mode: bool,
     limit: int,
-) -> list[dict[str, Any]]:
+) -> list[CandidateLike]:
     """Shortlist candidate set using compressed-attention coarse score."""
     if not candidates:
         return []
@@ -761,10 +847,10 @@ def shortlist_attention_candidates(
     shortlist_target = min(
         len(candidates),
         max(
-            ATTENTION_SHORTLIST_MIN_CANDIDATES,
+            _cfg().attention_shortlist_min,
             min(
-                ATTENTION_SHORTLIST_MAX_CANDIDATES,
-                max(1, limit) * ATTENTION_SHORTLIST_LIMIT_MULTIPLIER,
+                _cfg().attention_shortlist_max,
+                max(1, limit) * _cfg().attention_shortlist_limit_multiplier,
             ),
         ),
     )
@@ -795,31 +881,29 @@ def shortlist_attention_candidates(
     top_scored = heapq.nlargest(
         shortlist_target,
         scored,
-        key=lambda item: (
-            item[0],
-            item[1]["updated"] or "",
-            item[1]["path"],
-        ),
+        key=lambda item: (item[0], *_candidate_sort_key(item[1])),
     )
     return [item[1] for item in top_scored]
 
 
-def has_token_overlap(candidate: dict[str, Any], query_tokens: set[str]) -> bool:
+def has_token_overlap(candidate: CandidateLike, query_tokens: set[str]) -> bool:
     """Whether candidate has overlap with note/tag tokens."""
     if not query_tokens:
         return False
-    return bool((candidate["note_tokens"] & query_tokens) or (candidate["tag_tokens"] & query_tokens))
+    note_tokens = set(_candidate_value(candidate, "note_tokens", set()) or set())
+    tag_tokens = set(_candidate_value(candidate, "tag_tokens", set()) or set())
+    return bool((note_tokens & query_tokens) or (tag_tokens & query_tokens))
 
 
 def compute_bm25_scores(
-    candidates: list[dict[str, Any]],
+    candidates: list[CandidateLike],
     query_tokens: set[str],
 ) -> dict[str, float]:
     """Compute normalized BM25 scores (0.0-1.0) keyed by candidate path."""
     if BM25Okapi is None or not candidates or not query_tokens:
         return {}
 
-    corpus = [list(candidate.get("note_tokens", set())) for candidate in candidates]
+    corpus = [list(set(_candidate_value(candidate, "note_tokens", set()) or set())) for candidate in candidates]
     if not any(corpus):
         return {}
 
@@ -833,20 +917,20 @@ def compute_bm25_scores(
         return {}
 
     return {
-        candidate["path"]: max(0.0, float(score) / max_score)
+        str(_candidate_value(candidate, "path", "") or ""): max(0.0, float(score) / max_score)
         for candidate, score in zip(candidates, raw_scores, strict=False)
     }
 
 
 def prefilter_candidates_by_scope_and_type(
-    candidates: list[dict[str, Any]],
+    candidates: list[CandidateLike],
     query_tokens: set[str],
     query_scope: str,
     history_mode: bool,
     loop_mode: bool,
     preference_mode: bool,
     limit: int,
-) -> list[dict[str, Any]]:
+) -> list[CandidateLike]:
     """Filter obvious noise before shortlist/final scoring."""
     if not candidates:
         return []
@@ -854,14 +938,15 @@ def prefilter_candidates_by_scope_and_type(
     filtered = []
     for candidate in candidates:
         token_overlap = has_token_overlap(candidate, query_tokens)
+        candidate_type = str(_candidate_value(candidate, "type", "") or "")
 
-        if query_scope != "all" and not scope_matches(candidate["scope"], query_scope) and not token_overlap:
+        if query_scope != "all" and not scope_matches(str(_candidate_value(candidate, "scope", "") or ""), query_scope) and not token_overlap:
             continue
-        if preference_mode and candidate["type"] not in {"pref", "concept"} and not token_overlap:
+        if preference_mode and candidate_type not in {"pref", "concept"} and not token_overlap:
             continue
-        if loop_mode and candidate["type"] not in {"loop", "goal"} and not token_overlap:
+        if loop_mode and candidate_type not in {"loop", "goal"} and not token_overlap:
             continue
-        if history_mode and candidate["type"] not in {"loop", "fact", "concept"} and not token_overlap:
+        if history_mode and candidate_type not in {"loop", "fact", "concept"} and not token_overlap:
             continue
 
         filtered.append(candidate)
@@ -872,13 +957,13 @@ def prefilter_candidates_by_scope_and_type(
     if query_scope == "all" and (history_mode or loop_mode or preference_mode):
         return filtered
 
-    minimum_pool = min(len(candidates), max(SHORTLIST_MIN_CANDIDATES, max(1, limit) * 2))
+    minimum_pool = min(len(candidates), max(_cfg().shortlist_min_candidates, max(1, limit) * 2))
     if len(filtered) >= minimum_pool:
         return filtered
 
-    seen_paths = {item["path"] for item in filtered}
-    remainder = [item for item in candidates if item["path"] not in seen_paths]
-    remainder.sort(key=lambda item: (item["updated"] or "", item["path"]), reverse=True)
+    seen_paths = {str(_candidate_value(item, "path", "") or "") for item in filtered}
+    remainder = [item for item in candidates if str(_candidate_value(item, "path", "") or "") not in seen_paths]
+    remainder.sort(key=_candidate_sort_key, reverse=True)
     for candidate in remainder:
         filtered.append(candidate)
         if len(filtered) >= minimum_pool:
@@ -888,7 +973,7 @@ def prefilter_candidates_by_scope_and_type(
 
 
 def score_candidate(
-    candidate: dict[str, Any],
+    candidate: CandidateLike,
     query_tokens: set[str],
     query_scope: str,
     history_mode: bool,
@@ -898,12 +983,17 @@ def score_candidate(
     expansion_events: list[dict[str, Any]],
     include_reasons: bool = True,
     bm25_score: float = 0.0,
-) -> tuple[float, list[str], dict[str, float]]:
+) -> tuple[float, list[str], ScoreComponents]:
     """Final score for candidate in lexical retrieval modes."""
+    note_tokens = set(_candidate_value(candidate, "note_tokens", set()) or set())
+    tag_tokens = set(_candidate_value(candidate, "tag_tokens", set()) or set())
+    candidate_type = str(_candidate_value(candidate, "type", "") or "")
+    status = str(_candidate_value(candidate, "status", "") or "")
+
     if query_tokens:
-        lexical_overlap_count = len(candidate["note_tokens"] & query_tokens)
+        lexical_overlap_count = len(note_tokens & query_tokens)
         lexical_match = lexical_overlap_count / len(query_tokens)
-        tag_overlap_count = len(candidate["tag_tokens"] & query_tokens)
+        tag_overlap_count = len(tag_tokens & query_tokens)
         tag_overlap = tag_overlap_count / len(query_tokens)
     else:
         lexical_overlap_count = 0
@@ -911,17 +1001,18 @@ def score_candidate(
         tag_overlap_count = 0
         tag_overlap = 0.0
 
-    scope_match = 1.0 if scope_matches(candidate["scope"], query_scope) else 0.0
-    recency = compute_recency_component(candidate["updated_ts"], now_dt)
-    confidence = candidate["confidence"]
+    scope_match = 1.0 if scope_matches(str(_candidate_value(candidate, "scope", "") or ""), query_scope) else 0.0
+    recency = compute_recency_component(_candidate_value(candidate, "updated_ts"), now_dt)
+    confidence = float(_candidate_value(candidate, "confidence", 0.0) or 0.0)
 
+    config = _cfg()
     score = (
-        (0.30 * bm25_score)
-        + (0.15 * lexical_match)
-        + (0.15 * tag_overlap)
-        + (0.15 * scope_match)
-        + (0.15 * recency)
-        + (0.10 * confidence)
+        (config.score_weight_bm25 * bm25_score)
+        + (config.score_weight_lexical * lexical_match)
+        + (config.score_weight_tag * tag_overlap)
+        + (config.score_weight_scope * scope_match)
+        + (config.score_weight_recency * recency)
+        + (config.score_weight_confidence * confidence)
     )
 
     reasons = []
@@ -940,24 +1031,24 @@ def score_candidate(
             score -= 0.05
             if include_reasons:
                 reasons.append("scope_demote")
-    if candidate["type"] == "loop" and candidate.get("status") == "closed" and not history_mode:
+    if candidate_type == "loop" and status == "closed" and not history_mode:
         score -= 0.20
         if include_reasons:
             reasons.append("closed_loop_penalty")
-    if history_mode and candidate["type"] == "loop":
-        if candidate.get("status") == "closed":
+    if history_mode and candidate_type == "loop":
+        if status == "closed":
             score += 0.12
             if include_reasons:
                 reasons.append("history_closed_loop_boost")
-        elif candidate.get("status") == "open":
+        elif status == "open":
             score -= 0.05
             if include_reasons:
                 reasons.append("history_open_loop_demote")
-    if loop_mode and candidate["type"] == "loop" and candidate.get("status") == "open":
+    if loop_mode and candidate_type == "loop" and status == "open":
         score += 0.07
         if include_reasons:
             reasons.append("open_loop_intent_boost")
-    if preference_mode and candidate["type"] == "pref":
+    if preference_mode and candidate_type == "pref":
         score += 0.07
         if include_reasons:
             reasons.append("preference_intent_boost")
@@ -972,18 +1063,18 @@ def score_candidate(
         reasons.append(f"confidence={confidence:.2f}")
 
     score = max(0.0, min(1.0, score))
-    return score, reasons, {
-        "bm25_score": bm25_score,
-        "lexical_match": lexical_match,
-        "tag_overlap": tag_overlap,
-        "scope_match": scope_match,
-        "recency": recency,
-        "confidence": confidence,
-    }
+    return score, reasons, ScoreComponents(
+        bm25_score=bm25_score,
+        lexical_match=lexical_match,
+        tag_overlap=tag_overlap,
+        scope_match=scope_match,
+        recency=recency,
+        confidence=confidence,
+    )
 
 
 def apply_progressive_disclosure(
-    ranked_results: list[dict[str, Any]],
+    ranked_results: list[ScoredResult],
     limit: int,
     query_tokens: set[str],
     query_scope: str,
@@ -992,11 +1083,16 @@ def apply_progressive_disclosure(
     preference_mode: bool,
     now_dt: dt.datetime,
     expansion_events: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    """Attach full rationales to top-N items and compact output for remainder."""
-    output = ranked_results[:limit]
-    top_n = min(PROGRESSIVE_RATIONALE_TOP, len(output))
-    for idx, item in enumerate(output):
+) -> list[ScoredResult]:
+    """Attach full rationales to top-N items and compact output for remainder.
+
+    Returns new ScoredResult instances to avoid mutating cached objects.
+    """
+    from dataclasses import replace
+
+    output: list[ScoredResult] = []
+    top_n = min(_cfg().progressive_rationale_top, limit)
+    for idx, item in enumerate(ranked_results[:limit]):
         if idx < top_n:
             _, reasons, _ = score_candidate(
                 item,
@@ -1008,12 +1104,11 @@ def apply_progressive_disclosure(
                 now_dt,
                 expansion_events,
                 include_reasons=True,
+                bm25_score=item.components.bm25_score,
             )
-            item["reasons"] = reasons
-            item["disclosure_level"] = "rationale"
+            output.append(replace(item, reasons=reasons, disclosure_level="rationale"))
         else:
-            item["reasons"] = []
-            item["disclosure_level"] = "compact"
+            output.append(replace(item, reasons=[], disclosure_level="compact"))
     return output
 
 
@@ -1021,11 +1116,12 @@ def rank_lexical(
     query: str,
     scope: str = "all",
     limit: int = 8,
-    aliases_path: Path | str = ALIASES_PATH,
+    aliases_path: Path | str | None = None,
     now_dt: dt.datetime | None = None,
     retrieval_mode: str = "legacy",
-) -> dict[str, Any]:
+) -> RetrievalResult:
     """Rank notes using lexical retrieval modes."""
+    t0 = time.perf_counter()
     now_dt = now_dt or now_utc()
     mode = resolve_retrieval_mode(retrieval_mode)
     two_stage_active = mode in {"legacy", "two_stage"}
@@ -1033,14 +1129,15 @@ def rank_lexical(
     scope_prefilter_active = mode in {"legacy", "scope_type_prefilter"}
     precomputed_index_active = mode in {"legacy", "precomputed_index"}
     progressive_disclosure_active = mode in {"legacy", "progressive_disclosure"}
-    aliases = load_aliases(Path(aliases_path))
+    aliases = load_aliases(Path(aliases_path) if aliases_path is not None else _cfg().aliases_path)
     query_tokens = tokenize(query)
     expanded_tokens, expansion_events = expand_query_tokens(query_tokens, aliases)
+    t_expand = time.perf_counter()
 
     history_mode = any(token in HISTORY_HINTS for token in query_tokens)
     loop_mode = any(token in LOOP_HINTS for token in query_tokens)
     preference_mode = any(token in PREFERENCE_HINTS for token in query_tokens)
-    include_reasons = True if mode == "legacy" else (limit <= DETAILED_REASONS_LIMIT)
+    include_reasons = True if mode == "legacy" else (limit <= _cfg().detailed_reasons_limit)
     if progressive_disclosure_active:
         include_reasons = False
 
@@ -1052,22 +1149,18 @@ def rank_lexical(
             index,
             expanded_tokens,
             scope,
-            minimum_pool=max(SHORTLIST_MIN_CANDIDATES, max(1, limit) * 2),
+            minimum_pool=max(_cfg().shortlist_min_candidates, max(1, limit) * 2),
         )
         index_pool_size = len(prefiltered_candidates)
     else:
         candidates = build_candidates(
             use_cache=(
-                mode
-                in {
-                    "two_stage",
-                    "compressed_attention",
-                    "progressive_disclosure",
-                }
+                mode in {"two_stage", "compressed_attention", "progressive_disclosure"}
             )
             or two_stage_active
         )
         prefiltered_candidates = candidates
+    t_candidates = time.perf_counter()
 
     if scope_prefilter_active:
         prefiltered_candidates = prefilter_candidates_by_scope_and_type(
@@ -1079,8 +1172,9 @@ def rank_lexical(
             preference_mode,
             limit=limit,
         )
+    t_prefilter = time.perf_counter()
 
-    if compressed_attention_active and limit <= ATTENTION_SHORTLIST_MAX_CANDIDATES:
+    if compressed_attention_active and limit <= _cfg().attention_shortlist_max:
         shortlisted = shortlist_attention_candidates(
             prefiltered_candidates,
             expanded_tokens,
@@ -1090,7 +1184,7 @@ def rank_lexical(
             preference_mode,
             limit=limit,
         )
-    elif two_stage_active and limit <= SHORTLIST_MAX_CANDIDATES:
+    elif two_stage_active and limit <= _cfg().shortlist_max_candidates:
         shortlisted = shortlist_candidates(
             prefiltered_candidates,
             expanded_tokens,
@@ -1100,7 +1194,7 @@ def rank_lexical(
             preference_mode,
             limit=limit,
         )
-    elif precomputed_index_active and limit <= SHORTLIST_MAX_CANDIDATES:
+    elif precomputed_index_active and limit <= _cfg().shortlist_max_candidates:
         shortlisted = shortlist_candidates(
             prefiltered_candidates,
             expanded_tokens,
@@ -1112,7 +1206,7 @@ def rank_lexical(
         )
     elif precomputed_index_active:
         shortlisted = prefiltered_candidates
-    elif scope_prefilter_active and limit <= SHORTLIST_MAX_CANDIDATES:
+    elif scope_prefilter_active and limit <= _cfg().shortlist_max_candidates:
         shortlisted = shortlist_candidates(
             prefiltered_candidates,
             expanded_tokens,
@@ -1126,8 +1220,9 @@ def rank_lexical(
         shortlisted = prefiltered_candidates
     else:
         shortlisted = candidates
+    t_shortlist = time.perf_counter()
 
-    ranked = []
+    ranked: list[ScoredResult] = []
     bm25_scores = compute_bm25_scores(shortlisted, expanded_tokens)
     for candidate in shortlisted:
         score, reasons, components = score_candidate(
@@ -1140,28 +1235,17 @@ def rank_lexical(
             now_dt,
             expansion_events if include_reasons else [],
             include_reasons=include_reasons,
-            bm25_score=bm25_scores.get(candidate["path"], 0.0),
+            bm25_score=bm25_scores.get(str(_candidate_value(candidate, "path", "") or ""), 0.0),
         )
 
         if score <= 0:
             continue
-        if components["lexical_match"] == 0 and components["tag_overlap"] == 0 and scope == "all":
+        if components.lexical_match == 0 and components.tag_overlap == 0 and scope == "all":
             continue
 
-        enriched = dict(candidate)
-        enriched["score"] = score
-        enriched["reasons"] = reasons
-        enriched["components"] = components
-        ranked.append(enriched)
+        ranked.append(_scored_result(candidate, score, reasons, components))
 
-    ranked.sort(
-        key=lambda item: (
-            item["score"],
-            item["updated"] or "",
-            item["path"],
-        ),
-        reverse=True,
-    )
+    ranked.sort(key=lambda item: (item.score, item.updated or "", item.path), reverse=True)
 
     if progressive_disclosure_active:
         output_results = apply_progressive_disclosure(
@@ -1177,20 +1261,29 @@ def rank_lexical(
         )
     else:
         output_results = ranked[:limit]
+    t_score = time.perf_counter()
 
-    return {
-        "query": query,
-        "scope": scope,
-        "retrieval_mode": mode,
-        "progressive_top_n": PROGRESSIVE_RATIONALE_TOP if progressive_disclosure_active else 0,
-        "expanded_tokens": sorted(expanded_tokens),
-        "expansion_events": expansion_events,
-        "candidate_pool_size": len(candidates),
-        "indexed_pool_size": index_pool_size,
-        "prefilter_size": len(prefiltered_candidates),
-        "shortlist_size": len(shortlisted),
-        "results": output_results,
-    }
+    return RetrievalResult(
+        query=query,
+        scope=scope,
+        retrieval_mode=mode,
+        progressive_top_n=_cfg().progressive_rationale_top if progressive_disclosure_active else 0,
+        expanded_tokens=sorted(expanded_tokens),
+        expansion_events=expansion_events,
+        candidate_pool_size=len(candidates),
+        indexed_pool_size=index_pool_size,
+        prefilter_size=len(prefiltered_candidates),
+        shortlist_size=len(shortlisted),
+        results=output_results,
+        timing=TimingInfo(
+            expand_ms=(t_expand - t0) * 1000.0,
+            candidates_ms=(t_candidates - t_expand) * 1000.0,
+            prefilter_ms=(t_prefilter - t_candidates) * 1000.0,
+            shortlist_ms=(t_shortlist - t_prefilter) * 1000.0,
+            score_ms=(t_score - t_shortlist) * 1000.0,
+            total_ms=(t_score - t0) * 1000.0,
+        ),
+    )
 
 
 # Backward-compat alias used by scripts/ledger and tests.
@@ -1198,19 +1291,7 @@ _rank_query_lexical = rank_lexical
 
 
 __all__ = [
-    "ROOT_DIR",
-    "NOTE_INDEX_PATH",
-    "NOTE_TYPES",
-    "CORE_NOTE_TYPES",
-    "ALIASES_PATH",
-    "SHORTLIST_MIN_CANDIDATES",
-    "SHORTLIST_MAX_CANDIDATES",
-    "SHORTLIST_LIMIT_MULTIPLIER",
-    "ATTENTION_SHORTLIST_MIN_CANDIDATES",
-    "ATTENTION_SHORTLIST_MAX_CANDIDATES",
-    "ATTENTION_SHORTLIST_LIMIT_MULTIPLIER",
-    "DETAILED_REASONS_LIMIT",
-    "PROGRESSIVE_RATIONALE_TOP",
+    "NOTE_INDEX_VERSION",
     "HISTORY_HINTS",
     "PREFERENCE_HINTS",
     "LOOP_HINTS",

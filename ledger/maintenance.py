@@ -8,9 +8,12 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import re
+import statistics
 import subprocess
 import sys
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from itertools import combinations
@@ -18,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from ledger.config import get_config
+from ledger import context as context_lib
 from ledger.parsing import (
     parse_frontmatter_text,
     parse_sections,
@@ -572,6 +576,14 @@ def _word_count(text: str) -> int:
     return len(text.split())
 
 
+def _note_word_counts() -> list[int]:
+    counts: list[int] = []
+    for path in _iter_note_files(include_indices=False):
+        counts.append(_word_count(path.read_text(encoding="utf-8")))
+    counts.sort()
+    return counts
+
+
 def _generate_sizes(indices_dir: Path) -> None:
     rows: list[tuple[int, str]] = []
     for path in _iter_note_files(include_indices=False):
@@ -590,10 +602,12 @@ def _generate_sizes(indices_dir: Path) -> None:
     ]
     for words, rel in rows:
         lines.append(f"| {words} | `{rel}` |")
-    (indices_dir / "sizes.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    from ledger.io import safe_write_text
+
+    safe_write_text(indices_dir / "sizes.md", "\n".join(lines) + "\n", use_lock=False)
 
     payload = [{"words": words, "path": rel} for words, rel in rows]
-    (indices_dir / "sizes.json").write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    safe_write_text(indices_dir / "sizes.json", json.dumps(payload, indent=2) + "\n", use_lock=False)
 
 
 def _generate_tags(indices_dir: Path) -> None:
@@ -623,10 +637,12 @@ def _generate_tags(indices_dir: Path) -> None:
             title = title_by_path.get(rel, Path(rel).stem)
             md_lines.append(f"- [`{rel}`]({rel}) – {title}")
         md_lines.append("")
-    (indices_dir / "tags.md").write_text("\n".join(md_lines) + "\n", encoding="utf-8")
+    from ledger.io import safe_write_text
+
+    safe_write_text(indices_dir / "tags.md", "\n".join(md_lines) + "\n", use_lock=False)
 
     json_payload = {tag: sorted(paths) for tag, paths in sorted(by_tag.items())}
-    (indices_dir / "tags.json").write_text(json.dumps(json_payload, indent=2) + "\n", encoding="utf-8")
+    safe_write_text(indices_dir / "tags.json", json.dumps(json_payload, indent=2) + "\n", use_lock=False)
 
 
 def _tokenize_phrase(text: str, stopwords: set[str]) -> list[str]:
@@ -739,10 +755,12 @@ def _generate_recent(indices_dir: Path) -> None:
     ]
     for _mtime, rel, updated in rows:
         md_lines.append(f"| {updated} | `{rel}` |")
-    (indices_dir / "recent.md").write_text("\n".join(md_lines) + "\n", encoding="utf-8")
+    from ledger.io import safe_write_text
+
+    safe_write_text(indices_dir / "recent.md", "\n".join(md_lines) + "\n", use_lock=False)
 
     payload = [{"updated": updated, "path": rel} for _mtime, rel, updated in rows]
-    (indices_dir / "recent.json").write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    safe_write_text(indices_dir / "recent.json", json.dumps(payload, indent=2) + "\n", use_lock=False)
 
 
 def _run_subprocess(command: list[str], required: bool = True) -> tuple[int, str]:
@@ -754,33 +772,42 @@ def _run_subprocess(command: list[str], required: bool = True) -> tuple[int, str
 
 
 def _generate_context(indices_dir: Path) -> None:
-    root = get_config().root_dir
-    notes_dir = get_config().notes_dir
-    _run_subprocess(
-        [
-            sys.executable,
-            str(root / "scripts" / "build_context.py"),
-            "--notes-dir",
-            _relative(notes_dir),
-            "--output",
-            _relative(indices_dir / "context.md"),
-        ]
-    )
+    context_lib.write_context(indices_dir / "context.md", get_config().notes_dir)
 
 
 def _generate_context_profiles(indices_dir: Path) -> None:
-    root = get_config().root_dir
-    notes_dir = get_config().notes_dir
-    _run_subprocess(
-        [
-            sys.executable,
-            str(root / "scripts" / "build_context_profiles.py"),
-            "--notes-dir",
-            _relative(notes_dir),
-            "--output-dir",
-            _relative(indices_dir),
-        ]
+    context_lib.write_context_profiles(indices_dir, get_config().notes_dir)
+
+
+def _write_context_metrics(indices_dir: Path) -> dict[str, Any]:
+    context_path = indices_dir / "context.md"
+    context_text = context_path.read_text(encoding="utf-8") if context_path.is_file() else ""
+
+    profile_tokens: dict[str, int] = {}
+    for profile_path in sorted(indices_dir.glob("context_profile_*.md")):
+        scope = profile_path.stem.removeprefix("context_profile_")
+        profile_tokens[scope] = _word_count(profile_path.read_text(encoding="utf-8"))
+
+    note_word_counts = _note_word_counts()
+    note_p95 = 0.0
+    if note_word_counts:
+        note_p95 = float(note_word_counts[max(0, math.ceil(0.95 * len(note_word_counts)) - 1)])
+
+    payload = {
+        "boot_context_tokens": _word_count(context_text),
+        "boot_context_bytes": len(context_text.encode("utf-8")),
+        "profile_tokens": profile_tokens,
+        "notes_total_tokens": int(sum(note_word_counts)),
+        "avg_note_words": float(statistics.mean(note_word_counts)) if note_word_counts else 0.0,
+        "p95_note_words": note_p95,
+        "note_count": len(note_word_counts),
+        "generated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }
+    (indices_dir / "context_metrics.json").write_text(
+        json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
     )
+    return payload
 
 
 def _generate_semantic_index() -> None:
@@ -831,8 +858,11 @@ def cmd_index() -> int:
     print("  -> recent.md, recent.json")
 
     print("Generating persistent note index...")
-    retrieval_lib.rebuild_note_index()
-    print("  -> note_index.json")
+    started = time.perf_counter_ns()
+    note_index_payload = retrieval_lib.rebuild_note_index()
+    measured_ms = (time.perf_counter_ns() - started) / 1_000_000.0
+    build_ms = float(note_index_payload.get("build_ms", measured_ms) or measured_ms)
+    print(f"  -> note_index.json ({build_ms:.2f} ms)")
 
     print("Regenerating structured timeline...")
     timeline_jsonl = timeline_md.with_name("timeline.jsonl")
@@ -842,13 +872,27 @@ def cmd_index() -> int:
 
     print("Generating context...")
     _generate_context(indices_dir)
-    print("  -> context.md")
+    context_path = indices_dir / "context.md"
+    context_text = context_path.read_text(encoding="utf-8") if context_path.exists() else ""
+    print(
+        "  -> context.md "
+        f"({_word_count(context_text)} tokens, {len(context_text.encode('utf-8'))} bytes)"
+    )
 
     print("Generating context profiles...")
     _generate_context_profiles(indices_dir)
     print("  -> context_profile_personal.{md,json}")
     print("  -> context_profile_work.{md,json}")
     print("  -> context_profile_dev.{md,json}")
+    for profile_path in sorted(indices_dir.glob("context_profile_*.md")):
+        word_count = len(profile_path.read_text(encoding="utf-8").split())
+        print(f"  -> {profile_path.name} ({word_count} words)")
+    context_metrics = _write_context_metrics(indices_dir)
+    print("  -> context_metrics.json")
+    print(
+        "  -> corpus "
+        f"({int(context_metrics['notes_total_tokens'])} tokens across {int(context_metrics['note_count'])} notes)"
+    )
 
     print("Generating semantic index (ledger/local)...")
     _generate_semantic_index()

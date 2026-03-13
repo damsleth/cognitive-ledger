@@ -50,6 +50,7 @@ def _apply_env_overrides(config: "LedgerConfig") -> "LedgerConfig":
 
     # Float overrides
     float_mappings = {
+        "LEDGER_WEIGHT_BM25": "score_weight_bm25",
         "LEDGER_WEIGHT_LEXICAL": "score_weight_lexical",
         "LEDGER_WEIGHT_TAG": "score_weight_tag",
         "LEDGER_WEIGHT_SCOPE": "score_weight_scope",
@@ -168,14 +169,20 @@ class LedgerConfig:
     # These weights were tuned via the eval framework to maximize MRR
     # on the retrieval_eval_cases.yaml benchmark.
 
-    score_weight_lexical: float = 0.40
-    """Weight for lexical (token overlap) match.
+    score_weight_bm25: float = 0.30
+    """Weight for BM25 keyword ranking.
 
-    Rationale: Primary signal for relevance. High because
-    direct keyword matches are strong indicators.
+    Rationale: BM25 captures term frequency and document length
+    better than plain overlap, so it gets the largest single share.
     """
 
-    score_weight_tag: float = 0.20
+    score_weight_lexical: float = 0.15
+    """Weight for lexical (token overlap) match.
+
+    Rationale: Secondary lexical signal once BM25 is active.
+    """
+
+    score_weight_tag: float = 0.15
     """Weight for tag overlap.
 
     Rationale: Tags are curated metadata, so matches are
@@ -238,8 +245,8 @@ class LedgerConfig:
     loop_statuses: tuple[str, ...] = ("open", "closed", "blocked", "snoozed")
     """Valid loop status values."""
 
-    query_scopes: tuple[str, ...] = ("home", "work", "dev", "personal", "meta", "all")
-    """Valid query scope values."""
+    query_scopes: tuple[str, ...] = ("home", "work", "dev", "personal", "life", "meta", "all")
+    """Valid query scope values (life is an alias for personal)."""
 
     retrieval_modes: tuple[str, ...] = (
         "legacy",
@@ -350,18 +357,23 @@ class LedgerConfig:
 # Module-level singleton
 # =============================================================================
 
+import threading
+
 _config: LedgerConfig | None = None
+_config_lock = threading.Lock()
 
 
 def get_config() -> LedgerConfig:
-    """Get the global configuration singleton.
+    """Get the global configuration singleton (thread-safe).
 
     Returns:
         The LedgerConfig instance, creating it if needed.
     """
     global _config
     if _config is None:
-        _config = LedgerConfig.from_env()
+        with _config_lock:
+            if _config is None:
+                _config = LedgerConfig.from_env()
     return _config
 
 
