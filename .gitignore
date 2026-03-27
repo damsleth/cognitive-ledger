@@ -21,6 +21,5 @@ dist/
 IMPROVEMENT_PLAN.md
 # Lock artifacts from safe_write
 *.lock
-
 # Generated retrieval index (contains machine-local metadata like absolute paths/mtimes)
 notes/08_indices/note_index.json
