@@ -1,16 +1,16 @@
 
-#!/usr/bin/env bashw
+#!/usr/bin/env bash
 set -euo pipefail
 
-# Install symlinks for the cognitive-ledger skill into the expected skill folders
+# Install symlinks for the notes skill into the expected skill folders
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SKILL_SRC="$SCRIPT_DIR/cognitive-ledger"
+SKILL_SRC="$SCRIPT_DIR/notes"
 
 TARGETS=(
-    "$HOME/.codex/skills/cognitive-ledger"
-    "$HOME/.claude/skills/cognitive-ledger"
-    "$HOME/.copilot/skills/cognitive-ledger"
+    "$HOME/.codex/skills/notes"
+    "$HOME/.claude/skills/notes"
+    "$HOME/.copilot/skills/notes"
 )
 
 if [ ! -e "$SKILL_SRC" ]; then

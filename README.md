@@ -1,247 +1,162 @@
 # Cognitive Ledger
+Deepening your agent's cognitive lightcone with a persistent, hybrid markdown+embeddings based memory system. Includes dreams-based consolidation (`electric sheep`), a drop-in `/notes` skill for agents, and tools for bootstrapping from existing notes trees.  
 
-This repository is an **opinionated scaffold for a Cognitive Ledger**, a structured
-note‑taking system designed to extend the temporal reach of language models and
-their users.  It provides a simple, file‑based layout where each entry is
-small, atomic and easy to search with standard command‑line tools.  The aim
-is to build a durable, inspectable record of decisions, preferences, goals and
-concepts without storing raw chat logs.
+![Cognitive Lightcone](skills/notes/cognitive_lightcone.png)
 
-The high‑level structure is:
+## What
+A structured, file-based memory system for AI agents. Small atomic notes (facts, preferences, goals, open loops, concepts) stored as markdown with YAML frontmatter — searchable, versionable, and designed to fit inside context windows.
 
-```text
-.
-├── AGENTS.md        – Instructions and quick reference for agents
-├── README.md        – This file
-├── .gitignore       – Ignore patterns for version control
-├── skills/          – Canonical, tool-agnostic agent skills
-├── notes/           – Primary storage for atomic notes
-│   ├── 00_inbox/    – Temporary capture; cleared on consolidation
-│   ├── 02_facts/    – Stable truths sourced from the user or tools
-│   ├── 03_preferences/ – Recorded preferences and stylistic choices
-│   ├── 04_goals/    – Longer‑term objectives
-│   ├── 05_open_loops/ – Unresolved questions and pending actions
-│   ├── 06_concepts/ – Definitions, frameworks and models
-│   ├── 07_projects/ – Project‑specific subfolders (created on demand)
-│   ├── 08_indices/  – Derived indices (timelines, tag maps)
-│   └── 09_archive/  – Obsolete or superseded notes
-├── templates/       – Reusable note templates
-│   ├── generic_note_template.md
-│   └── open_loop_template.md
-└── scripts/         – Retrieval, eval, and maintenance helpers (`ledger`, `ledger_ab`, `sheep`)
-├── ledger/          – Core Python library (see "Library Architecture" below)
-```
+## Why
+Language models forget everything between sessions. The Cognitive Ledger gives them a persistent, inspectable memory — not by stuffing raw chat logs into the context window, but by distilling conversations into atomic, retrievable notes. Each note captures one durable idea (a decision, a preference, a goal, an open question) so that any agent can resume any thread by searching the ledger instead of re-reading the entire conversation history. The result is continuity across sessions, agents, and tools without blowing up context budgets.
 
-This layout keeps individual files small and context‑portable.  Agents are
-expected to consult **AGENTS.md** for guidance on when and how to write notes.
+## Getting Started
 
-## Library Architecture
-
-The `ledger/` package provides a modular Python library for working with notes:
-
-```text
-ledger/
-├── __init__.py        – Package entry point (re-exports main APIs)
-├── config.py          – Centralized configuration (LedgerConfig dataclass)
-├── errors.py          – Exception hierarchy (LedgerError, ParseError, etc.)
-├── validation.py      – Input validators (query, scope, paths)
-├── parsing/           – Canonical parsing utilities
-│   ├── frontmatter.py – YAML frontmatter extraction
-│   ├── sections.py    – Markdown section splitting
-│   ├── links.py       – Wiki/markdown link extraction
-│   └── tokenizer.py   – Text tokenization for search
-├── notes/             – Note models and type definitions
-│   └── __init__.py    – BaseNote, LoopNote, GenericNote
-└── io/                – File safety utilities
-    └── safe_write.py  – Atomic writes, file locking
-```
-
-### Usage
-
-```python
-from ledger.config import get_config
-from ledger.parsing import parse_frontmatter_text, parse_sections, extract_links
-from ledger.notes import read_note, get_notes
-from ledger.validation import validate_query
-from ledger.io import atomic_write
-```
-
-## Skills
-
-Skills live in `skills/` as the canonical, tool-agnostic location, and can be symlinked to your user skills folder (e.g. `~/.claude/skills/`) by running `./skills/install-skill.sh`.
-
-## Obsidian Drop-In (MVP)
-
-The repository now ships a Python-first Obsidian integration via `ledger-obsidian`.
-
-### Install
+### 1. Clone and set up
 
 ```bash
-pipx install cognitive-ledger
+git clone https://github.com/<you>/cognitive-ledger.git
+cd cognitive-ledger
+./scripts/setup-venv.sh
 ```
 
-### Initialize in an existing vault
+### 2. Install the `/notes` skill
+
+The `/notes` skill lets your agent capture notes and sync durable memory to the ledger. Install it into your agent's skill folder:
 
 ```bash
-ledger-obsidian init --vault /path/to/your/obsidian-vault
+./skills/install-skill.sh
 ```
 
-This creates a dedicated `cognitive-ledger/` directory inside the vault and never edits source notes outside that subtree.
+This symlinks `skills/notes/` into `~/.claude/skills/`, `~/.codex/skills/`, and `~/.copilot/skills/`.
 
-For a generic markdown note base such as `~/Code/notes`, the same drop-in flow works with the root alias or one-shot bootstrap command:
+Before first use, set `NOTES_DIR` and `LEDGER_DIR` in the skill's frontmatter (`skills/notes/SKILL.md`) or as environment variables:
 
 ```bash
+export NOTES_DIR=~/Code/notes        # your existing notes tree
+export LEDGER_DIR=~/Code/cognitive-ledger
+```
+
+### 3. Try it
+
+Once the skill is installed, invoke `/notes` in your agent session. The skill will:
+
+1. Read `notes/08_indices/context.md` for existing context
+2. Ask targeted questions about what you want to capture
+3. Write atomic notes to the ledger (and optionally to your notes tree)
+
+## Plugging Into an Existing Notes Repository
+
+You don't need to move your notes. Bootstrap the ledger inside your existing notes tree:
+
+```bash
+# Generic markdown notes
 ledger-obsidian bootstrap --root ~/Code/notes
 ledger-obsidian import --root ~/Code/notes
-```
 
-The importer treats `.obsidian/` as optional and still writes only under `cognitive-ledger/` inside the source tree.
-
-### Key commands
-
-```bash
+# Obsidian vault
+ledger-obsidian init --vault /path/to/your/obsidian-vault
 ledger-obsidian import --vault /path/to/vault
-ledger-obsidian bootstrap --root /path/to/note-base
-ledger-obsidian import --root /path/to/note-base
-ledger-obsidian watch --vault /path/to/vault
-ledger-obsidian daemon start --vault /path/to/vault   # macOS
-ledger-obsidian daemon status --vault /path/to/vault  # macOS
-ledger-obsidian daemon stop --vault /path/to/vault    # macOS
-ledger-obsidian doctor --vault /path/to/vault
-ledger-obsidian queue sync --vault /path/to/vault
 ```
 
-### Quality gates (default)
+This creates a `cognitive-ledger/` subdirectory inside your notes tree. Source notes are never edited.
 
-- `auto_write_confidence_min = 0.90`
-- `queue_confidence_min = 0.70`
-- `file_signal_min = 1.5`
-- `max_files_per_cycle = 50`
-- `max_notes_per_cycle = 100`
-
-Candidates below auto-write confidence are queued into `cognitive-ledger/notes/00_inbox/` with `review_status: pending` for Bases triage.
-
-## Python Environment (Single venv)
-
-Use one repository-wide virtual environment for all Python tooling (ledger scripts, TUI, tests, and local embeddings by default):
+### Keeping it in sync
 
 ```bash
-./scripts/setup-venv.sh  # default: base + dev + embeddings
-./scripts/setup-venv.sh --python python3.12 --recreate  # if torch wheels are missing
-./scripts/setup-venv.sh --minimal  # base-only fallback
+ledger-obsidian watch --vault /path/to/vault          # live sync
+ledger-obsidian daemon start --vault /path/to/vault    # macOS background service
+ledger-obsidian queue sync --vault /path/to/vault      # manual sync
+ledger-obsidian doctor --vault /path/to/vault          # health check
 ```
 
-Once `.venv` exists:
-- `./scripts/ledger`, `./scripts/ledger_ab`, and context builders auto-reexec into `.venv`
-- `./scripts/sheep index` prefers `.venv/bin/python` when available
-- TUI and binary build also use the same `.venv`
+## Indexing and Retrieval
 
-## Retrieval Evaluation and A/B Testing
-
-Use `scripts/ledger` and `scripts/ledger_ab` to validate retrieval quality and compare branches:
+### Build indices
 
 ```bash
-./scripts/ledger eval --cases notes/08_indices/retrieval_eval_cases.yaml --k 3 --strict-cases
-./scripts/ledger_ab --baseline-ref main --candidate-ref HEAD --eval-runs 7 --query-runs 5
+./scripts/sheep index                    # rebuild metadata index
+./scripts/sheep lint                     # validate frontmatter
+./scripts/sheep status                   # time since last consolidation
 ```
 
-`ab_eval.json` and `ab_eval.md` now include the original quality/latency gate plus:
-- query-stage timings (`query_latency_ms`, `candidate_build_ms`, `prefilter_ms`, `shortlist_ms`, `scoring_ms`, `index_rebuild_ms`)
-- context-size metrics (`boot_context_tokens`, `boot_context_bytes`, per-scope profile tokens, bundle token distribution, note-size aggregates)
-- maintenance health metrics (`sync_drift_count`, `days_since_sleep`, `changes_since_sleep`, `lint_errors`, `lint_warnings`)
-- an informational composite quality score that combines retrieval quality, context size, and query latency
-
-For full A/B workflow, result interpretation, corpus-diff handling, and troubleshooting, see:
-- `.doc/ab_testing.md`
-
-## Native Embeddings (Local-First)
-
-Embeddings are now first-class in ledger tooling (independent of Obsidian plugins).
-
-- Default local backend/model: `local` + `TaylorAI/bge-micro-v2`
-- OpenAI backend is explicit opt-in only (`--backend openai` / `--embed-backend openai`)
-- OpenAI usage requires `OPENAI_API_KEY` and never silently falls back
-- Retrieval corpus stays ledger-only (`notes/`)
-- Optional source-note corpus (`<source-notes-root>`) is discovery-only via `discover-source`
-
-Install/update dependencies:
+### Query your notes
 
 ```bash
-./scripts/setup-venv.sh
-# if needed, force a compatible interpreter:
-./scripts/setup-venv.sh --python python3.12 --recreate
-# base-only fallback if local embedding deps are not wanted:
-./scripts/setup-venv.sh --minimal
+./scripts/ledger query "calendar constraints" --scope all --limit 8
+./scripts/ledger query "calendar constraints" --bundle    # context-window-friendly output
+./scripts/ledger loops                                    # list open loops
+./scripts/ledger loops --interactive                      # progressive disclosure
 ```
 
-Local embedding deps are pinned in `<ledger-root>/scripts/setup-venv.sh` (`sentence-transformers==2.7.0`, `transformers<5`, `numpy<2`) to avoid current `torch`/`numpy` breakage on some platforms.
-
-Build semantic indices:
+### Semantic search (optional)
 
 ```bash
 ./scripts/ledger embed build --target ledger --backend local --model TaylorAI/bge-micro-v2
-./scripts/ledger embed build --target source --backend local --model TaylorAI/bge-micro-v2 --source-root <source-notes-root>
-./scripts/ledger embed status --target both
-./scripts/ledger embed clean --target source
-```
-
-Query with hybrid semantic retrieval:
-
-```bash
 ./scripts/ledger query "calendar constraints" --retrieval-mode semantic_hybrid --embed-backend local
 ```
 
-Source discovery (never mixed into normal query ranking):
+### Eval and A/B testing
 
 ```bash
-./scripts/ledger discover-source "calendar constraints" --source-root <source-notes-root> --limit 20
-./scripts/ledger discover-source "calendar constraints" --embed-backend openai --allow-api-on-source
+./scripts/ledger eval --cases notes/08_indices/retrieval_eval_cases.yaml --k 3
+./scripts/ledger_ab --baseline-ref main --candidate-ref HEAD --runs 5
 ```
 
-Artifacts:
-- Local ignored state: `.smart-env/semantic/{ledger,source}/<backend>__<model_key>/{index.json,vectors.npy}`
-- Tracked manifest: `notes/08_indices/semantic_manifest.json`
+## Folder Layout
+
+```
+notes/
+  00_inbox/         temporary capture (cleared on consolidation)
+  02_facts/         stable truths (fact__*.md)
+  03_preferences/   user preferences (pref__*.md)
+  04_goals/         long-term objectives (goal__*.md)
+  05_open_loops/    unresolved items (loop__*.md)
+  06_concepts/      definitions and frameworks (concept__*.md)
+  07_projects/      project-specific subfolders
+  08_indices/       derived indices (timeline, tags, eval cases)
+  09_archive/       superseded notes
+```
+
+Each note has YAML frontmatter with `created`, `updated`, `tags`, `confidence`, `source`, `scope`, and `lang`. See `schema.yaml` for the full spec and `templates/` for starter templates.
+
+## Consolidation ("Electric Sheep")
+
+Periodic maintenance keeps the ledger coherent as it grows:
+
+```bash
+./scripts/sheep sync --check && ./scripts/sheep sync --apply
+./scripts/sheep sleep
+```
+
+Sleep merges duplicates, promotes patterns into stable notes, updates indices, and tightens open loops.
 
 ## TUI
 
-A terminal interface for browsing and editing notes, built with Python + Textual.
+A terminal interface for browsing and editing notes:
 
-### Quick Start
-
-**Run with the shared venv (from repo root):**
 ```bash
-./scripts/setup-venv.sh
-./.venv/bin/python -m tui
+./.venv/bin/python -m tui              # run from venv
+# or
+./tui/build-tui.sh && ./tui/dist/ledger-tui   # standalone binary
 ```
 
-**Or build standalone binary:**
+Key bindings: `j/k` navigate, `Enter` select, `1-5` filter by type, `/` search, `e` edit, `g` graph, `q` quit.
+
+## Agent Integration
+
+Agents should read `AGENTS.md` for the full protocol — golden rules, note conventions, write triggers, and the operating loop. The short version:
+
+- Search before you write (`rg`, `fd`)
+- One idea per file
+- Never store raw chat logs
+- Append to `notes/08_indices/timeline.md` after every note operation
+
+## Python Environment
+
 ```bash
-./tui/build-tui.sh
-./tui/dist/ledger-tui
+./scripts/setup-venv.sh                                  # base + dev + embeddings
+./scripts/setup-venv.sh --python python3.12 --recreate   # force interpreter
+./scripts/setup-venv.sh --minimal                        # base only
 ```
 
-The binary can run from anywhere — it defaults to `<ledger-root>` or uses the current directory if it contains `notes/`.
-
-### Key Bindings
-
-| Key | Action |
-|-----|--------|
-| `↑/↓` or `j/k` | Navigate tree |
-| `Enter` | Select note / follow link |
-| `1-5` | Filter by type (facts/prefs/goals/loops/concepts) |
-| `0` | Show all types |
-| `/` | Focus filter input |
-| `e` | Edit in $EDITOR |
-| `f` | Quick fix (confidence, source, scope, status) |
-| `t` | Edit tags |
-| `g` | Toggle graph panel |
-| `Ctrl+L` | Run lint |
-| `Ctrl+S` | Show status |
-| `q` | Quit |
-
-### Development
-
-TUI source and build artifacts live in `tui/`:
-- `.venv/` — Shared Python virtual environment for the whole repo
-- `tui/build-tui.sh` — Build script for standalone binary
-- `tui/dist/ledger-tui` — Compiled binary (14MB)
+All scripts auto-activate `.venv` when present.
