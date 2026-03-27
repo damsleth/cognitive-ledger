@@ -8,12 +8,12 @@ version = "0.2.0"
 description = "File-based memory system for AI agents"
 requires-python = ">=3.11"
 dependencies = [
-    "textual>=0.89.0",
+    "textual>=8.0.0",
     "pyyaml>=6.0",
     "numpy",
     "scikit-learn",
     "rank-bm25",
-    "watchdog>=4.0.0",
+    "watchdog>=6.0.0",
 ]
 
 [project.scripts]
@@ -22,9 +22,7 @@ ledger-obsidian = "ledger.obsidian.cli:main"
 [project.optional-dependencies]
 dev = ["pyinstaller", "pytest>=8.0"]
 embeddings = [
-    "numpy<2",
-    "transformers<5",
-    "sentence-transformers==2.7.0",
+    "sentence-transformers>=5.0",
 ]
 
 [tool.hatch.build.targets.wheel]
