@@ -48,7 +48,7 @@ NOTE_INDEX_VERSION = 2
 
 # Intent detection hints
 HISTORY_HINTS = frozenset({"history", "closed", "past"})
-PREFERENCE_HINTS = frozenset({"preference", "preferences", "style", "workflow", "habit", "habits"})
+PREFERENCE_HINTS = frozenset({"preference", "preferences", "style", "workflow", "habit", "habits", "tools", "editors", "editor"})
 LOOP_HINTS = frozenset({"loop", "loops", "unresolved", "next", "pending", "todo", "task", "tasks", "do"})
 
 
@@ -1052,6 +1052,10 @@ def score_candidate(
         score += 0.07
         if include_reasons:
             reasons.append("preference_intent_boost")
+    if preference_mode and candidate_type not in {"pref", "fact"}:
+        score -= 0.05
+        if include_reasons:
+            reasons.append("preference_non_pref_demote")
 
     if include_reasons and expansion_events:
         alias_summary = ", ".join(sorted({f"{e['alias']}->{e['phrase']}" for e in expansion_events}))

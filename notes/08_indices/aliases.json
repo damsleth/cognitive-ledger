@@ -1,5 +1,13 @@
 {
   "release": ["publish", "ship"],
   "template": ["starter", "scaffold"],
-  "ledger": ["memory", "notes"]
+  "ledger": ["memory", "notes"],
+  "collaborate": ["agents workflow collaboration working style"],
+  "agent": ["agents workflow assistant"],
+  "saas": ["local first tooling hosting cloud"],
+  "tools": ["editor editors dev environment tooling"],
+  "editors": ["editor vscode vim tooling dev environment"],
+  "vim": ["editor terminal nano"],
+  "preference": ["prefer pref style habit workflow"],
+  "time": ["timebox timeboxed schedule deep work admin"]
 }
