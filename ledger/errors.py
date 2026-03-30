@@ -217,23 +217,28 @@ class EvalError(LedgerError):
 
 
 class EvalCaseValidationError(EvalError):
-    """Raised when an eval case is invalid.
+    """Raised when eval cases fail validation.
 
-    This replaces the existing EvalCaseValidationError class
-    in scripts/ledger with improved context.
+    Supports two calling conventions:
+    - Batch:  EvalCaseValidationError(["error1", "error2"])
+    - Single: EvalCaseValidationError("msg", case_index=3, field="expected")
     """
 
     def __init__(
         self,
-        message: str,
+        message_or_errors: str | list[str],
         *,
         case_index: int | None = None,
         field: str | None = None,
     ) -> None:
-        super().__init__(
-            message,
-            case_index=case_index,
-            field=field,
-        )
+        if isinstance(message_or_errors, list):
+            self.errors = message_or_errors
+            msg = "eval case validation failed:\n" + "\n".join(
+                f"  - {e}" for e in message_or_errors
+            )
+        else:
+            self.errors = [message_or_errors]
+            msg = message_or_errors
+        super().__init__(msg)
         self.case_index = case_index
         self.field = field
