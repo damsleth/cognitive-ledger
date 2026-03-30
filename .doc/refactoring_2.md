@@ -25,21 +25,26 @@
 | Phase | Status |
 |-------|--------|
 | 1.1 Extract retrieval | DONE |
-| 1.2 Rewrite sheep in Python | TODO |
+| 1.2 Rewrite sheep in Python | DONE |
 | 2.1 Persistent metadata cache | DONE |
-| 2.2 Persistent inverted index | TODO |
+| 2.2 Persistent inverted index | DONE |
 | 3.1 BM25 scoring | DONE |
-| 3.2 Automatic alias discovery | TODO |
-| 4.1 Unify TUI/library note models | TODO |
-| 5.1 Structured timeline (JSONL) | TODO |
-| 5.2 Query telemetry log | TODO |
-| 6.1 CLI refactor | PARTIAL |
-| 6.2 TUI watch mode | TODO |
+| 3.2 Automatic alias discovery | DONE |
+| 4.1 Unify TUI/library note models | TODO — needs design session |
+| 5.1 Structured timeline (JSONL) | DONE |
+| 5.2 Query telemetry log | DONE |
+| 6.1 CLI refactor | DONE — 595 lines |
+| 6.2 TUI watch mode | DONE |
 | Obsidian boundary (phases 1-2) | DONE |
 | Obsidian boundary (phases 3-4) | TODO |
 | Context extraction to ledger/ | DONE |
-| Structured return types | PARTIAL |
-| Pluggability (semantic, CLI, TUI) | TODO |
+| Structured return types | DONE |
+| Pluggability (semantic, CLI, TUI) | DONE |
+| Bug: duplicate EvalCaseValidationError (C6) | FIXED |
+| Test cleanup (T3, T4, T5, T6) | FIXED |
+| Test coverage gaps | TODO |
+
+All bugs from QA reviews verified fixed as of 2026-03-30.
 
 ---
 
