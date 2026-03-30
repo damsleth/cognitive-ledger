@@ -263,25 +263,43 @@ class LedgerUnitTests(unittest.TestCase):
         self.assertTrue(events)
 
     def test_query_telemetry_writes_jsonl_when_enabled(self):
-        ledger = self.ledger
+        from ledger.config import LedgerConfig, set_config, reset_config
+        from ledger.retrieval import _maybe_log_query, clear_candidate_cache
+        from ledger.retrieval_types import RetrievalResult, TimingInfo
+
         original = os.environ.get("LEDGER_QUERY_LOG")
         os.environ["LEDGER_QUERY_LOG"] = "1"
         try:
             with tempfile.TemporaryDirectory() as temp_dir:
-                log_path = Path(temp_dir) / "query_log.jsonl"
-                ledger.maybe_log_query_telemetry(
+                tmp = Path(temp_dir)
+                (tmp / "notes" / "08_indices").mkdir(parents=True)
+                config = LedgerConfig(root_dir=tmp)
+                set_config(config)
+                result = RetrievalResult(
                     query="calendar constraints",
                     scope="work",
                     retrieval_mode="legacy",
-                    payload={"retrieval_mode": "legacy", "results": [{"rel_path": "notes/02_facts/fact__one.md"}]},
-                    latency_ms=42.6,
-                    log_path=log_path,
+                    progressive_top_n=0,
+                    expanded_tokens=[],
+                    expansion_events=[],
+                    candidate_pool_size=0,
+                    indexed_pool_size=None,
+                    prefilter_size=0,
+                    shortlist_size=0,
+                    results=[],
+                    timing=TimingInfo(
+                        expand_ms=0, candidates_ms=0, prefilter_ms=0,
+                        shortlist_ms=0, score_ms=0, total_ms=42.6,
+                    ),
                 )
+                _maybe_log_query(result)
+                log_path = tmp / "notes" / "08_indices" / "query_log.jsonl"
                 content = log_path.read_text(encoding="utf-8")
                 self.assertIn('"query": "calendar constraints"', content)
                 self.assertIn('"scope": "work"', content)
-                self.assertIn('"latency_ms": 43', content)
+                self.assertIn('"latency_ms": 42.6', content)
         finally:
+            reset_config()
             if original is None:
                 del os.environ["LEDGER_QUERY_LOG"]
             else:

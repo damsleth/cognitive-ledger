@@ -1,12 +1,8 @@
 #!/usr/bin/env python3
 import argparse
 import curses
-import datetime as dt
 import json
-import os
-import re
 import sys
-import time
 from pathlib import Path
 
 # Add ledger package to path if needed
@@ -22,16 +18,10 @@ from ledger.config import get_config
 from ledger.validation import validate_query, validate_scope, validate_limit
 from ledger.errors import QueryValidationError, ScopeValidationError
 from ledger import browse as browse_lib
-from ledger import retrieval as retrieval_lib
 from ledger import eval as eval_lib
 from ledger import query as query_lib
 from ledger import semantic as semantic_lib
-from ledger.io import safe_append_line
-from ledger.parsing import (
-    normalize_section_name,
-    extract_link_tokens,
-    shorten,
-)
+from ledger.parsing import extract_link_tokens, normalize_section_name, shorten
 from ledger.retrieval import (
     now_utc,
     resolve_retrieval_mode,
@@ -39,33 +29,17 @@ from ledger.retrieval import (
 )
 from ledger.venv import maybe_reexec_in_repo_venv
 
-# ---------------------------------------------------------------------------
-# Derive constants from config (single source of truth: ledger/config.py)
-# ---------------------------------------------------------------------------
 _config = get_config()
 
-NOTE_TYPES = {
-    name: {"dir": _config.root_dir / info["dir"], "label": info["label"]}
-    for name, info in _config.note_types.items()
-}
-CORE_NOTE_TYPES = _config.core_note_types
-LOOP_STATUSES = _config.loop_statuses
-QUERY_SCOPES = _config.query_scopes
-RETRIEVAL_MODES = _config.retrieval_modes
-EMBED_BACKENDS = _config.embed_backends
-ALIASES_PATH = _config.aliases_path
+# Re-export config constants for test compatibility
 SHORTLIST_MIN_CANDIDATES = _config.shortlist_min_candidates
 SHORTLIST_MAX_CANDIDATES = _config.shortlist_max_candidates
 SHORTLIST_LIMIT_MULTIPLIER = _config.shortlist_limit_multiplier
 ATTENTION_SHORTLIST_MIN_CANDIDATES = _config.attention_shortlist_min
 ATTENTION_SHORTLIST_MAX_CANDIDATES = _config.attention_shortlist_max
 ATTENTION_SHORTLIST_LIMIT_MULTIPLIER = _config.attention_shortlist_limit_multiplier
-DETAILED_REASONS_LIMIT = _config.detailed_reasons_limit
 PROGRESSIVE_RATIONALE_TOP = _config.progressive_rationale_top
-
-_payload_get = query_lib.payload_get
-_payload_results = query_lib.payload_results
-_result_get = query_lib.result_get
+RETRIEVAL_MODES = _config.retrieval_modes
 
 
 def load_embeddings_module():
@@ -194,41 +168,32 @@ def interactive_items(_args, note_type, loop_status=None):
         print("Interactive view requires a larger terminal.")
 
 
-# ---------------------------------------------------------------------------
-# Delegation layer: keep names stable for script consumers while moving core
-# behavior into library modules.
-# ---------------------------------------------------------------------------
-build_attention_tokens = retrieval_lib.build_attention_tokens
-candidate_from_note = retrieval_lib.candidate_from_note
-build_candidates = retrieval_lib.build_candidates
-clear_candidate_cache = retrieval_lib.clear_candidate_cache
-build_candidate_index = retrieval_lib.build_candidate_index
-retrieve_candidates_from_index = retrieval_lib.retrieve_candidates_from_index
-coarse_candidate_score = retrieval_lib.coarse_candidate_score
-shortlist_candidates = retrieval_lib.shortlist_candidates
-shortlist_attention_candidates = retrieval_lib.shortlist_attention_candidates
-prefilter_candidates_by_scope_and_type = retrieval_lib.prefilter_candidates_by_scope_and_type
-score_candidate = retrieval_lib.score_candidate
-compute_recency_component = retrieval_lib.compute_recency_component
-expand_query_tokens = retrieval_lib.expand_query_tokens
 
-EvalCaseValidationError = eval_lib.EvalCaseValidationError
-parse_eval_cases = eval_lib.parse_eval_cases
-extract_notes_relative_path = eval_lib.extract_notes_relative_path
-path_candidates_from_expected = eval_lib.path_candidates_from_expected
-normalize_expected_path = eval_lib.normalize_expected_path
-validate_eval_cases = eval_lib.validate_eval_cases
-print_eval_result = eval_lib.print_eval_result
-baseline_metrics = eval_lib.baseline_metrics
-build_baseline_snapshot = eval_lib.build_baseline_snapshot
-write_baseline_snapshot = eval_lib.write_baseline_snapshot
-compare_with_baseline = eval_lib.compare_with_baseline
-format_baseline_comparison = eval_lib.format_baseline_comparison
-eval_result_to_json = eval_lib.eval_result_to_json
 
-bundle_results = query_lib.bundle_results
-format_query_results_human = query_lib.format_query_results_human
-query_result_to_json = query_lib.query_result_to_json
+# Re-exports for test compatibility (tests import scripts/ledger as a module)
+from ledger.retrieval import (  # noqa: E402,F811
+    build_attention_tokens, candidate_from_note, build_candidates,
+    clear_candidate_cache, build_candidate_index,
+    retrieve_candidates_from_index, coarse_candidate_score,
+    shortlist_candidates, shortlist_attention_candidates,
+    prefilter_candidates_by_scope_and_type, score_candidate,
+    compute_recency_component, expand_query_tokens,
+)
+from ledger.eval import (  # noqa: E402,F811
+    EvalCaseValidationError, parse_eval_cases, extract_notes_relative_path,
+    path_candidates_from_expected, normalize_expected_path,
+    validate_eval_cases, print_eval_result, baseline_metrics,
+    build_baseline_snapshot, write_baseline_snapshot,
+    compare_with_baseline, format_baseline_comparison, eval_result_to_json,
+)
+from ledger.query import (  # noqa: E402,F811
+    bundle_results, format_query_results_human, query_result_to_json,
+)
+
+
+def maybe_log_query_telemetry(**_kwargs):
+    """No-op: telemetry now handled by ledger.retrieval._maybe_log_query."""
+    pass
 
 
 def rank_query(*args, **kwargs):
@@ -259,33 +224,6 @@ def run_eval(
     )
 
 
-def maybe_log_query_telemetry(
-    query,
-    scope,
-    retrieval_mode,
-    payload,
-    latency_ms,
-    log_path=None,
-):
-    enabled = os.getenv("LEDGER_QUERY_LOG", "").strip().lower() in {"1", "true", "yes", "on"}
-    if not enabled:
-        return
-
-    target_path = Path(log_path) if log_path else (ROOT_DIR / "notes" / "08_indices" / "query_log.jsonl")
-    top_results = []
-    for item in _payload_results(payload)[:3]:
-        top_results.append(_result_get(item, "rel_path") or _result_get(item, "path", ""))
-
-    record = {
-        "ts": now_utc().strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "query": query,
-        "scope": scope,
-        "mode": _payload_get(payload, "retrieval_mode", retrieval_mode),
-        "top_3": top_results,
-        "latency_ms": int(round(max(0.0, latency_ms))),
-    }
-    safe_append_line(target_path, json.dumps(record, ensure_ascii=False))
-
 
 def handle_query_command(args):
     # Validate inputs at entry point
@@ -303,36 +241,27 @@ def handle_query_command(args):
         print(f"error: {e}", file=sys.stderr)
         raise SystemExit(2)
 
-    started = time.perf_counter()
     payload = rank_query(
         query=validated_query,
         scope=validated_scope,
         limit=validated_limit,
-        aliases_path=ALIASES_PATH,
+        aliases_path=_config.aliases_path,
         retrieval_mode=args.retrieval_mode,
         embed_backend=args.embed_backend,
         embed_model=args.embed_model,
-    )
-    latency_ms = (time.perf_counter() - started) * 1000.0
-    maybe_log_query_telemetry(
-        query=validated_query,
-        scope=validated_scope,
-        retrieval_mode=args.retrieval_mode,
-        payload=payload,
-        latency_ms=latency_ms,
     )
 
     if args.json:
         print(
             json.dumps(
-                query_result_to_json(payload, include_bundle=args.bundle),
+                query_lib.query_result_to_json(payload, include_bundle=args.bundle),
                 indent=2,
                 ensure_ascii=False,
             )
         )
         return
 
-    print(format_query_results_human(payload, include_bundle=args.bundle))
+    print(query_lib.format_query_results_human(payload, include_bundle=args.bundle))
 
 
 def handle_embed_build_command(args):
@@ -435,7 +364,7 @@ def handle_eval_command(args):
             embed_backend=backend,
             embed_model=model,
         )
-    except EvalCaseValidationError as exc:
+    except eval_lib.EvalCaseValidationError as exc:
         print("eval_case_validation_errors:")
         for error in exc.errors:
             print(f"- {error}")
@@ -444,14 +373,14 @@ def handle_eval_command(args):
     if args.json:
         baseline_written = None
         if args.write_baseline:
-            write_baseline_snapshot(
+            eval_lib.write_baseline_snapshot(
                 result,
                 cases_path=args.cases,
                 output_path=args.write_baseline,
                 generated_at=now_utc().strftime("%Y-%m-%dT%H:%M:%SZ"),
             )
             baseline_written = args.write_baseline
-        out = eval_result_to_json(
+        out = eval_lib.eval_result_to_json(
             result,
             default_k=args.k,
             default_retrieval_mode=args.retrieval_mode,
@@ -463,16 +392,16 @@ def handle_eval_command(args):
         print(json.dumps(out, indent=2, ensure_ascii=False))
         return
 
-    print_eval_result(result)
+    eval_lib.print_eval_result(result)
 
     if args.baseline:
-        cmp = compare_with_baseline(result, args.baseline)
-        print(format_baseline_comparison(cmp, k=result["k"]))
+        cmp = eval_lib.compare_with_baseline(result, args.baseline)
+        print(eval_lib.format_baseline_comparison(cmp, k=result["k"]))
         if cmp.get("available") and cmp.get("regressed"):
             raise SystemExit(2)
 
     if args.write_baseline:
-        write_baseline_snapshot(
+        eval_lib.write_baseline_snapshot(
             result,
             cases_path=args.cases,
             output_path=args.write_baseline,
@@ -489,7 +418,7 @@ def main():
     loops_parser.add_argument("--limit", type=int, default=100)
     loops_parser.add_argument("--width", type=int, default=120)
     loops_parser.add_argument("--paths", action="store_true")
-    loops_parser.add_argument("--status", choices=list(LOOP_STATUSES) + ["all"], default="open")
+    loops_parser.add_argument("--status", choices=list(_config.loop_statuses) + ["all"], default="open")
     loops_parser.add_argument("--verbose", action="store_true")
     loops_parser.add_argument("--interactive", action="store_true")
 
@@ -497,7 +426,7 @@ def main():
     notes_parser.add_argument(
         "--type",
         required=True,
-        choices=sorted(list(NOTE_TYPES.keys()) + ["all"]),
+        choices=sorted(list(_config.note_types.keys()) + ["all"]),
         help="Note type to list",
     )
     notes_parser.add_argument("--limit", type=int, default=100)
@@ -508,17 +437,17 @@ def main():
 
     query_parser = subparsers.add_parser("query", help="Rank notes for a query")
     query_parser.add_argument("text", help="query text")
-    query_parser.add_argument("--scope", choices=QUERY_SCOPES, default="all")
+    query_parser.add_argument("--scope", choices=_config.query_scopes, default="all")
     query_parser.add_argument("--limit", type=int, default=8)
     query_parser.add_argument(
         "--retrieval-mode",
-        choices=RETRIEVAL_MODES,
+        choices=_config.retrieval_modes,
         default=resolve_retrieval_mode(None),
         help="Retrieval strategy (default: legacy; override with LEDGER_RETRIEVAL_MODE)",
     )
     query_parser.add_argument(
         "--embed-backend",
-        choices=EMBED_BACKENDS,
+        choices=_config.embed_backends,
         default=resolve_embed_backend(None),
         help="Embedding backend for semantic_hybrid mode (default: local)",
     )
@@ -542,7 +471,7 @@ def main():
     discover_parser.add_argument("--limit", type=int, default=20)
     discover_parser.add_argument(
         "--embed-backend",
-        choices=EMBED_BACKENDS,
+        choices=_config.embed_backends,
         default=resolve_embed_backend(None),
         help="Embedding backend for source discovery (default: local)",
     )
@@ -563,7 +492,7 @@ def main():
 
     embed_build_parser = embed_subparsers.add_parser("build", help="Build semantic indices")
     embed_build_parser.add_argument("--target", choices=("ledger", "source", "both"), required=True)
-    embed_build_parser.add_argument("--backend", choices=EMBED_BACKENDS, required=True)
+    embed_build_parser.add_argument("--backend", choices=_config.embed_backends, required=True)
     embed_build_parser.add_argument("--model", default=None)
     embed_build_parser.add_argument(
         "--source-root",
@@ -585,13 +514,13 @@ def main():
     eval_parser.add_argument("--k", type=int, default=3)
     eval_parser.add_argument(
         "--retrieval-mode",
-        choices=RETRIEVAL_MODES,
+        choices=_config.retrieval_modes,
         default=resolve_retrieval_mode(None),
         help="Retrieval strategy used during eval (default: legacy; override with LEDGER_RETRIEVAL_MODE)",
     )
     eval_parser.add_argument(
         "--embed-backend",
-        choices=EMBED_BACKENDS,
+        choices=_config.embed_backends,
         default=resolve_embed_backend(None),
         help="Embedding backend for semantic_hybrid mode (default: local)",
     )
