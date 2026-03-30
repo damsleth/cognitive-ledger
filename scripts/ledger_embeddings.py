@@ -20,18 +20,19 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from ledger.config import get_config
 from ledger.io import append_timeline_entry as append_timeline_entry_safe
 from ledger.parsing import extract_title, parse_frontmatter_text
 
-SCRIPT_DIR = Path(__file__).resolve().parent
-ROOT_DIR = SCRIPT_DIR.parent
+_cfg = get_config()
 
-SEMANTIC_ROOT = ROOT_DIR / ".smart-env" / "semantic"
-LEDGER_NOTES_ROOT = ROOT_DIR / "notes"
-LEDGER_TIMELINE_PATH = LEDGER_NOTES_ROOT / "08_indices" / "timeline.md"
-SEMANTIC_MANIFEST_PATH = LEDGER_NOTES_ROOT / "08_indices" / "semantic_manifest.json"
+ROOT_DIR = _cfg.root_dir
+SEMANTIC_ROOT = _cfg.semantic_root
+LEDGER_NOTES_ROOT = _cfg.notes_dir
+LEDGER_TIMELINE_PATH = _cfg.timeline_path
+SEMANTIC_MANIFEST_PATH = _cfg.semantic_manifest_path
 
-DEFAULT_SOURCE_ROOT = Path.home() / "notes"
+DEFAULT_SOURCE_ROOT = _cfg.source_root
 
 SUPPORTED_BACKENDS = ("local", "openai")
 SUPPORTED_TARGETS = ("ledger", "source", "both")
