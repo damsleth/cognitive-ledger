@@ -23,12 +23,19 @@ def find_root() -> Path:
         print(f"Error: No notes/ directory at: {path}", file=sys.stderr)
         sys.exit(1)
 
-    # 2. Current working directory
+    # 2. LEDGER_ROOT_DIR environment variable
+    import os
+    if env_root := os.getenv("LEDGER_ROOT_DIR"):
+        env_path = Path(env_root).expanduser().resolve()
+        if (env_path / "notes").is_dir():
+            return env_path
+
+    # 3. Current working directory
     cwd = Path.cwd()
     if (cwd / "notes").is_dir():
         return cwd
 
-    # 3. Default location
+    # 4. Default location
     if (DEFAULT_ROOT / "notes").is_dir():
         return DEFAULT_ROOT
 
