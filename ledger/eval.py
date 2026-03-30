@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from ledger.config import get_config
+from ledger.errors import EvalCaseValidationError
 from ledger.retrieval import rank_lexical, resolve_retrieval_mode
 from ledger.retrieval_types import RetrievalResult, ScoredResult
 
@@ -36,21 +37,6 @@ def _result_rel_path(result: ScoredResult | dict[str, Any]) -> str:
         return result.rel_path
     return result["rel_path"]
 
-
-class EvalCaseValidationError(Exception):
-    """Raised when retrieval eval cases fail schema/path validation.
-
-    Note: This is the version used internally by eval.py for batch
-    validation (accepts list[str]).  ledger.errors defines a separate
-    EvalCaseValidationError with a different interface for single-case
-    errors.  Callers should catch this class when calling run_eval /
-    validate_eval_cases.
-    """
-
-    def __init__(self, errors: list[str]):
-        msg = "eval case validation failed:\n" + "\n".join(f"  - {e}" for e in errors)
-        super().__init__(msg)
-        self.errors = errors
 
 
 def parse_yaml_scalar(value: str) -> str:
