@@ -15,6 +15,7 @@ import datetime as dt
 import hashlib
 import heapq
 import json
+import os
 import time
 from pathlib import Path
 from typing import Any, Union
@@ -1116,6 +1117,30 @@ def apply_progressive_disclosure(
     return output
 
 
+def _maybe_log_query(result: "RetrievalResult") -> None:
+    """Append a JSONL telemetry line if LEDGER_QUERY_LOG=1."""
+    if os.environ.get("LEDGER_QUERY_LOG") != "1":
+        return
+    try:
+        log_path = _cfg().notes_dir / "08_indices" / "query_log.jsonl"
+        entry = json.dumps(
+            {
+                "ts": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "query": result.query,
+                "scope": result.scope,
+                "mode": result.retrieval_mode,
+                "top_3": [r.rel_path for r in result.results[:3]],
+                "latency_ms": round(result.timing.total_ms, 1),
+                "candidates": result.candidate_pool_size,
+            },
+            ensure_ascii=False,
+        )
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(entry + "\n")
+    except OSError:
+        pass
+
+
 def rank_lexical(
     query: str,
     scope: str = "all",
@@ -1267,7 +1292,7 @@ def rank_lexical(
         output_results = ranked[:limit]
     t_score = time.perf_counter()
 
-    return RetrievalResult(
+    result = RetrievalResult(
         query=query,
         scope=scope,
         retrieval_mode=mode,
@@ -1288,6 +1313,8 @@ def rank_lexical(
             total_ms=(t_score - t0) * 1000.0,
         ),
     )
+    _maybe_log_query(result)
+    return result
 
 
 # Backward-compat alias used by scripts/ledger and tests.
