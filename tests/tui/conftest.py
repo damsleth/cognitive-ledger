@@ -4,23 +4,10 @@ from __future__ import annotations
 # Path setup MUST happen FIRST before any project imports
 import sys as _sys
 from pathlib import Path as _Path
+from pathlib import Path
 
 _ROOT = _Path(__file__).resolve().parents[2]
 _sys.path.insert(0, str(_ROOT))
-
-# Debug print BEFORE the failing import
-print(f"DEBUG: sys.path[0] = {_sys.path[0]}")
-print(f"DEBUG: _ROOT = {_ROOT}")
-print(f"DEBUG: tui exists? {(_ROOT / 'tui').exists()}")
-print(f"DEBUG: tui/models exists? {(_ROOT / 'tui' / 'models').exists()}")
-print(f"DEBUG: tui/models/__init__.py exists? {(_ROOT / 'tui' / 'models' / '__init__.py').exists()}")
-
-# Try importing step by step
-try:
-    import tui
-    print(f"DEBUG: tui imported from {tui.__file__}")
-except ImportError as e:
-    print(f"DEBUG: tui import failed: {e}")
 
 # Now we can safely import
 import tempfile

@@ -4,6 +4,7 @@ import importlib
 
 from ledger import query
 from ledger.config import LedgerConfig, reset_config, set_config
+from ledger.retrieval import clear_candidate_cache
 from ledger.retrieval_types import RetrievalResult
 
 
@@ -37,6 +38,7 @@ lang: en
 def test_rank_query_semantic_hybrid_returns_typed_payload(tmp_path):
     config = LedgerConfig(root_dir=tmp_path)
     set_config(config)
+    clear_candidate_cache()
     try:
         note = config.notes_dir / "02_facts" / "fact__semantic.md"
         _seed_note(note, "Ship the release when tests are green")
@@ -74,6 +76,7 @@ def test_rank_query_semantic_hybrid_returns_typed_payload(tmp_path):
         payload = query.retrieval_result_to_dict(result)
         assert payload["results"][0]["components"]["semantic_similarity"] == 0.93
     finally:
+        clear_candidate_cache()
         reset_config()
         importlib.reload(query)
 

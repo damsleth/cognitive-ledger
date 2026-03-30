@@ -158,6 +158,7 @@ Seed.
         _write(config.timeline_path, "# Timeline\n\n---\n")
 
         apply_rc = maintenance.cmd_sync(apply=True)
+        capsys.readouterr()  # clear apply output
         check_rc = maintenance.cmd_sync(apply=False)
     finally:
         reset_config()
