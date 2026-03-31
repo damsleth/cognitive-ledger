@@ -4,10 +4,10 @@ Deepening your agent's cognitive lightcone with a persistent, hybrid markdown+em
 ![Cognitive Lightcone](skills/notes/cognitive_lightcone.png)
 
 ## What
-A structured, file-based memory system for AI agents. Small atomic notes (facts, preferences, goals, open loops, concepts) stored as markdown with YAML frontmatter — searchable, versionable, and designed to fit inside context windows.
+A structured, file-based memory system for AI agents. Small atomic notes (facts, preferences, goals, open loops, concepts) stored as markdown with YAML frontmatter. Searchable, versionable, and designed to fit inside context windows.
 
 ## Why
-Language models forget everything between sessions. The Cognitive Ledger gives them a persistent, inspectable memory — not by stuffing raw chat logs into the context window, but by distilling conversations into atomic, retrievable notes. Each note captures one durable idea (a decision, a preference, a goal, an open question) so that any agent can resume any thread by searching the ledger instead of re-reading the entire conversation history. The result is continuity across sessions, agents, and tools without blowing up context budgets.
+Language models forget everything between sessions. The Cognitive Ledger gives them a persistent, inspectable memory - not by stuffing raw chat logs into the context window, but by distilling conversations into atomic, retrievable notes. Each note captures one durable idea (a decision, a preference, a goal, an open question) so that any agent can resume any thread by searching the ledger instead of re-reading the entire conversation history. The result is continuity across sessions, agents, and tools without blowing up context budgets.
 
 ## Getting Started
 
