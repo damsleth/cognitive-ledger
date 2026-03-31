@@ -23,3 +23,4 @@ IMPROVEMENT_PLAN.md
 *.lock
 # Generated retrieval index (contains machine-local metadata like absolute paths/mtimes)
 notes/08_indices/note_index.json
+config.yaml
