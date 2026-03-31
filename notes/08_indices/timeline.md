@@ -5,6 +5,7 @@ Append-only log of meaningful note changes.
 Format: `<ISO timestamp> | <action> | <path> | <description>`
 
 ---
+
 2026-03-04T00:00:00Z | created | notes/02_facts/fact__sample_public_profile.md | seed synthetic public fact
 2026-03-04T00:00:00Z | created | notes/03_preferences/pref__agent_work_style.md | seed synthetic public preference
 2026-03-04T00:00:00Z | created | notes/04_goals/goal__ship_public_template_repo.md | seed synthetic public goal
