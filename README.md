@@ -19,7 +19,20 @@ cd cognitive-ledger
 ./scripts/setup-venv.sh
 ```
 
-### 2. Install the `/notes` skill
+### 2. Configure
+
+Edit `config.yaml` in the repo root to point at your paths:
+
+```yaml
+# config.yaml
+root_dir: ~/Code/cognitive-ledger
+notes_dir: ~/Code/cognitive-ledger/notes
+source_root: ~/Code/notes
+```
+
+All values are optional - defaults work out of the box. Environment variables (`LEDGER_ROOT_DIR`, `LEDGER_NOTES_DIR`, etc.) override the config file.
+
+### 3. Install the `/notes` skill
 
 The `/notes` skill lets your agent capture notes and sync durable memory to the ledger. Install it into your agent's skill folder:
 
@@ -36,7 +49,7 @@ export NOTES_DIR=~/Code/notes        # your existing notes tree
 export LEDGER_DIR=~/Code/cognitive-ledger
 ```
 
-### 3. Try it
+### 4. Try it
 
 Once the skill is installed, invoke `/notes` in your agent session. The skill will:
 

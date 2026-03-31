@@ -30,6 +30,33 @@ def _get_source_root() -> Path:
     return Path.home() / "notes"
 
 
+def _apply_dict(config: "LedgerConfig", data: dict) -> None:
+    """Apply a dict of key-value pairs to a LedgerConfig, coercing types."""
+    for key, value in data.items():
+        if not hasattr(config, key):
+            continue
+        current = getattr(config, key)
+        if isinstance(current, Path):
+            value = Path(str(value)).expanduser()
+        elif isinstance(current, (tuple, frozenset)):
+            continue  # skip complex types
+        setattr(config, key, value)
+
+
+def _apply_yaml_config(config: "LedgerConfig", path: Path) -> "LedgerConfig":
+    """Apply config.yaml overrides if the file exists."""
+    if not path.is_file():
+        return config
+    try:
+        import yaml
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+        if isinstance(data, dict):
+            _apply_dict(config, data)
+    except (ImportError, OSError, TypeError, ValueError):
+        pass
+    return config
+
+
 def _apply_env_overrides(config: "LedgerConfig") -> "LedgerConfig":
     """Apply environment variable overrides to an existing config instance."""
     # Integer overrides
@@ -332,30 +359,25 @@ class LedgerConfig:
 
     @classmethod
     def from_env(cls) -> "LedgerConfig":
-        """Load config with environment variable overrides."""
-        return _apply_env_overrides(cls())
+        """Load config from config.yaml (if present) with env var overrides."""
+        config = cls()
+        config_path = config.root_dir / "config.yaml"
+        config = _apply_yaml_config(config, config_path)
+        return _apply_env_overrides(config)
 
     @classmethod
     def from_file(cls, path: Path) -> "LedgerConfig":
-        """Load config from JSON file with env var overrides on top."""
+        """Load config from a YAML or JSON file with env var overrides on top."""
         config = cls()
-
-        if path.exists():
+        if path.suffix in (".yaml", ".yml"):
+            config = _apply_yaml_config(config, path)
+        elif path.exists():
             try:
                 data = json.loads(path.read_text(encoding="utf-8"))
                 if isinstance(data, dict):
-                    for key, value in data.items():
-                        if not hasattr(config, key):
-                            continue
-                        current = getattr(config, key)
-                        if isinstance(current, Path):
-                            value = Path(value)
-                        setattr(config, key, value)
-            except (json.JSONDecodeError, OSError, IOError, TypeError, ValueError):
-                # Best-effort: ignore invalid config files.
+                    _apply_dict(config, data)
+            except (json.JSONDecodeError, OSError, TypeError, ValueError):
                 pass
-
-        # Environment variables take precedence over file values
         return _apply_env_overrides(config)
 
 
