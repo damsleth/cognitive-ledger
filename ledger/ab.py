@@ -486,6 +486,7 @@ def run_probe_for_side(
     embed_backend: str,
     embed_model: str | None,
     side_label: str,
+    corpus_dir: "Path | None" = None,
 ) -> dict[str, Any]:
     probe_payload = {
         "worktree": str(worktree_root),
@@ -498,6 +499,8 @@ def run_probe_for_side(
         "embed_backend": embed_backend,
         "embed_model": embed_model,
     }
+    if corpus_dir is not None:
+        probe_payload["corpus_dir"] = str(corpus_dir)
     process = subprocess.run(
         [repo_python(repo_root), "-m", "ledger.ab_probe", json.dumps(probe_payload)],
         cwd=str(worktree_root),
