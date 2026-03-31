@@ -3,8 +3,8 @@
 
 # Paths (use ~ for home directory)
 # root_dir: ~/Code/cognitive-ledger
-# notes_dir: ~/Code/cognitive-ledger/notes
-# source_root: ~/notes
+notes_dir: ~/Code/cog-led/notes 
+source_root: ~/Code/notes
 
 # A/B eval corpus (used with: scripts/ledger_ab --corpus <path>)
 # eval_corpus: ~/Code/my-ledger-instance
