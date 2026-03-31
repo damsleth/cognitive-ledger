@@ -1,113 +1,14 @@
-- query: "How should the agent collaborate in technical work?"
-  id: pref_agent_work_style
-  scope: "all"
-  expected_any:
-    - "notes/03_preferences/pref__agent_work_style.md"
-
-- query: "What response style should engineering answers use?"
-  id: pref_agent_work_style_engineering
-  scope: "meta"
-  expected_any:
-    - "notes/03_preferences/pref__agent_work_style.md"
-
-- query: "Which preference says answers should be concise and test-backed?"
-  id: pref_agent_work_style_concise_test_backed
-  scope: "all"
-  expected_any:
-    - "notes/03_preferences/pref__agent_work_style.md"
-
-- query: "What is the time-based planning preference?"
-  id: pref_time_based_work
-  scope: "personal"
-  expected_any:
-    - "notes/03_preferences/pref__time_based_work.md"
-
-- query: "How should planning suggestions handle focus blocks?"
-  id: pref_time_based_work_focus_blocks
-  scope: "personal"
-  expected_any:
-    - "notes/03_preferences/pref__time_based_work.md"
-
-- query: "Which preference recommends time-boxed sessions?"
-  id: pref_time_based_work_time_boxed
-  scope: "all"
-  expected_any:
-    - "notes/03_preferences/pref__time_based_work.md"
-
-- query: "What goal tracks the public template release?"
-  id: goal_public_template
-  scope: "dev"
-  expected_any:
-    - "notes/04_goals/goal__ship_public_template_repo.md"
-
-- query: "What is the dev goal about publishing a reusable ledger template?"
-  id: goal_public_template_reusable
-  scope: "dev"
-  expected_any:
-    - "notes/04_goals/goal__ship_public_template_repo.md"
-
-- query: "Which goal prioritizes data hygiene and reproducible setup?"
-  id: goal_public_template_hygiene
-  scope: "all"
-  expected_any:
-    - "notes/04_goals/goal__ship_public_template_repo.md"
-
-- query: "What is the next action before publishing?"
-  id: loop_release_next_action
-  scope: "dev"
-  expected_any:
-    - "notes/05_open_loops/loop__sample_release_checklist.md"
-
-- query: "What should be completed before publishing the public template repository?"
-  id: loop_release_question
-  scope: "dev"
-  expected_any:
-    - "notes/05_open_loops/loop__sample_release_checklist.md"
-
-- query: "What release step mentions a privacy scan?"
-  id: loop_release_privacy_scan
-  scope: "dev"
-  expected_any:
-    - "notes/05_open_loops/loop__sample_release_checklist.md"
-
-- query: "What does atomic note design mean?"
-  id: concept_atomic_notes
-  scope: "meta"
-  expected_any:
-    - "notes/06_concepts/concept__atomic_notes.md"
-
-- query: "Why should notes capture one durable idea each?"
-  id: concept_atomic_notes_durable_idea
-  scope: "meta"
-  expected_any:
-    - "notes/06_concepts/concept__atomic_notes.md"
-
-- query: "Which concept prefers multiple small linked notes?"
-  id: concept_atomic_notes_small_linked
-  scope: "all"
-  expected_any:
-    - "notes/06_concepts/concept__atomic_notes.md"
-
-- query: "What synthetic fact describes this sample profile?"
-  id: fact_public_profile
-  scope: "personal"
-  expected_any:
-    - "notes/02_facts/fact__sample_public_profile.md"
-
-- query: "Which note explains that the repository uses synthetic example notes?"
-  id: fact_public_profile_synthetic_examples
-  scope: "personal"
-  expected_any:
-    - "notes/02_facts/fact__sample_public_profile.md"
-
-- query: "What work-scoped fact mentions software delivery and knowledge tooling?"
-  id: fact_work_context_software_delivery
-  scope: "work"
-  expected_any:
-    - "notes/02_facts/fact__sample_work_context.md"
-
-- query: "Which work fact should rank for knowledge tooling?"
-  id: fact_work_context_knowledge_tooling
-  scope: "work"
-  expected_any:
-    - "notes/02_facts/fact__sample_work_context.md"
+# Retrieval eval cases for A/B testing
+#
+# Add cases that reference notes in your ledger (or external corpus).
+# Each case needs a query, an id, and expected_any paths:
+#
+# - query: "What is the team's deployment process?"
+#   id: fact_deployment_process
+#   scope: "work"
+#   expected_any:
+#     - "notes/02_facts/fact__deployment_process.md"
+#
+# Run eval:   ./scripts/ledger eval --cases notes/08_indices/retrieval_eval_cases.yaml --k 3
+# Run A/B:    ./scripts/ledger_ab --baseline-ref main --candidate-ref HEAD
+# External:   ./scripts/ledger_ab --corpus ~/my-ledger --baseline-ref main --candidate-ref HEAD

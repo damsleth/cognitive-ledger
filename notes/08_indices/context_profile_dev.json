@@ -2,17 +2,5 @@
   "scope": "dev",
   "facts": [],
   "preferences": [],
-  "active_loops": [
-    {
-      "path": "~/Code/cognitive-ledger/notes/05_open_loops/loop__sample_release_checklist.md",
-      "title": "Sample Release Checklist",
-      "summary": "What should be completed before publishing the public template repository?",
-      "score": 0.808551,
-      "updated": "2026-03-04T00:00:00Z",
-      "confidence": 0.9,
-      "source": "user",
-      "status": "open",
-      "next_action": "Run privacy scan and verify synthetic notes only"
-    }
-  ]
+  "active_loops": []
 }

@@ -156,6 +156,9 @@ class LedgerUnitTests(unittest.TestCase):
         self.assertGreater(score_with_bm25, score_no_bm25)
 
     def test_semantic_hybrid_falls_back_to_lexical_when_index_missing(self):
+        from ledger.config import LedgerConfig, set_config, reset_config
+        from ledger.retrieval import clear_candidate_cache
+
         ledger = self.ledger
         original_loader = ledger.load_embeddings_module
 
@@ -173,16 +176,32 @@ class LedgerUnitTests(unittest.TestCase):
                     "score_by_rel_path": {},
                 }
 
-        ledger.load_embeddings_module = lambda: FakeEmbeddings
-        try:
-            payload = ledger.rank_query(
-                "What should I do next for release?",
-                scope="dev",
-                limit=8,
-                retrieval_mode="semantic_hybrid",
+        with tempfile.TemporaryDirectory() as temp_dir:
+            tmp = Path(temp_dir)
+            note_dir = tmp / "notes" / "05_open_loops"
+            note_dir.mkdir(parents=True)
+            (note_dir / "loop__release.md").write_text(
+                "---\ncreated: 2026-01-01T00:00:00Z\nupdated: 2026-01-01T00:00:00Z\n"
+                "tags: [release]\nconfidence: 0.9\nsource: user\nscope: dev\nlang: en\n"
+                "status: open\n---\n\n# Release\n\n## Question or Task\n\n"
+                "What should I do next for release?\n",
+                encoding="utf-8",
             )
-        finally:
-            ledger.load_embeddings_module = original_loader
+            config = LedgerConfig(root_dir=tmp)
+            set_config(config)
+            clear_candidate_cache()
+            ledger.load_embeddings_module = lambda: FakeEmbeddings
+            try:
+                payload = ledger.rank_query(
+                    "What should I do next for release?",
+                    scope="dev",
+                    limit=8,
+                    retrieval_mode="semantic_hybrid",
+                )
+            finally:
+                ledger.load_embeddings_module = original_loader
+                clear_candidate_cache()
+                reset_config()
 
         self.assertEqual(payload_get(payload, "retrieval_mode"), "semantic_hybrid")
         self.assertEqual(payload_get(payload, "effective_retrieval_mode"), "legacy")
@@ -504,17 +523,36 @@ class LedgerUnitTests(unittest.TestCase):
         self.assertIn("notes/03_preferences/pref__agent_work_style.md", candidates)
 
     def test_eval_matches_when_case_uses_external_absolute_path(self):
-        content = (
-            '- query: "What are my stable work-style preferences?"\n'
-            "  id: stable_work_style\n"
-            '  scope: "all"\n'
-            "  expected_any:\n"
-            '    - "/tmp/alt-root/notes/03_preferences/pref__agent_work_style.md"\n'
-        )
+        from ledger.config import LedgerConfig, set_config, reset_config
+        from ledger.retrieval import clear_candidate_cache
         with tempfile.TemporaryDirectory() as temp_dir:
-            case_path = Path(temp_dir) / "cases.yaml"
-            case_path.write_text(content, encoding="utf-8")
-            result = self.ledger.run_eval(case_path, k=3)
+            tmp = Path(temp_dir)
+            note_dir = tmp / "notes" / "03_preferences"
+            note_dir.mkdir(parents=True)
+            note = note_dir / "pref__test_style.md"
+            note.write_text(
+                "---\ncreated: 2026-01-01T00:00:00Z\nupdated: 2026-01-01T00:00:00Z\n"
+                "tags: [test]\nconfidence: 0.9\nsource: user\nscope: dev\nlang: en\n---\n\n"
+                "# Test Pref\n\n## Statement\n\nStable work-style preferences for testing.\n",
+                encoding="utf-8",
+            )
+            config = LedgerConfig(root_dir=tmp)
+            set_config(config)
+            clear_candidate_cache()
+            try:
+                content = (
+                    '- query: "What are my stable work-style preferences?"\n'
+                    "  id: stable_work_style\n"
+                    '  scope: "all"\n'
+                    "  expected_any:\n"
+                    f'    - "/other/root/notes/03_preferences/pref__test_style.md"\n'
+                )
+                case_path = tmp / "cases.yaml"
+                case_path.write_text(content, encoding="utf-8")
+                result = self.ledger.run_eval(case_path, k=3)
+            finally:
+                clear_candidate_cache()
+                reset_config()
         self.assertGreater(result["hitk"], 0.0)
 
     def test_parse_eval_cases_reads_id(self):
@@ -592,6 +630,17 @@ class LedgerUnitTests(unittest.TestCase):
                 self.ledger.run_eval(case_path, k=3, strict_cases=True)
 
 
+def _has_corpus_notes() -> bool:
+    """Check if the repo has actual notes (not just .gitkeep)."""
+    notes_root = Path(__file__).resolve().parents[1] / "notes"
+    for folder in ("02_facts", "03_preferences", "04_goals", "05_open_loops", "06_concepts"):
+        d = notes_root / folder
+        if d.is_dir() and any(f.suffix == ".md" for f in d.iterdir()):
+            return True
+    return False
+
+
+@unittest.skipUnless(_has_corpus_notes(), "no corpus notes present - skipping integration tests")
 class LedgerIntegrationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
