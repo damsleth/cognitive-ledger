@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-03-31
+
+### Added
+- `config.yaml` - user-facing configuration file at repo root. Supports paths, retrieval tuning, scoring weights, and shortlisting params. Env vars override file values.
+- `--corpus <path>` flag on `scripts/ledger_ab` for A/B testing against an external ledger instance instead of bundled sample notes
+- `LEDGER_NOTES_DIR` env var to decouple note corpus from code root
+
 ## 2026-03-30
 
 ### Fixed
