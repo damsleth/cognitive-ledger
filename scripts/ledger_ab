@@ -187,6 +187,13 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--latency-tol-pct", type=float, default=0.05)
     parser.add_argument("--latency-tol-ms", type=float, default=2.0)
     parser.add_argument("--out-dir", help="Output directory for ab_eval.json and ab_eval.md")
+    parser.add_argument(
+        "--corpus",
+        default=None,
+        help="Path to external ledger corpus. When set, both sides use this "
+             "corpus for notes and eval cases instead of the worktree's "
+             "bundled samples. The corpus must contain a notes/ subdirectory.",
+    )
     return parser
 
 
@@ -221,6 +228,14 @@ def run_harness(args: argparse.Namespace) -> int:
     candidate_embed_model = (
         str(args.candidate_embed_model).strip() if args.candidate_embed_model else None
     )
+
+    corpus_dir: Path | None = None
+    if args.corpus:
+        corpus_dir = Path(args.corpus).expanduser().resolve()
+        if not (corpus_dir / "notes").is_dir():
+            raise InvalidSetupError(
+                f"--corpus path does not contain a notes/ directory: {corpus_dir}"
+            )
 
     out_dir = Path(args.out_dir).resolve() if args.out_dir else Path(
         tempfile.mkdtemp(prefix="ledger-ab-")
@@ -263,6 +278,8 @@ def run_harness(args: argparse.Namespace) -> int:
             "latency_tol_ms": args.latency_tol_ms,
         },
     }
+    if corpus_dir:
+        report["settings"]["corpus"] = str(corpus_dir)
 
     worktree_paths: list[Path] = []
     temp_worktree_root: Path | None = None
@@ -275,7 +292,7 @@ def run_harness(args: argparse.Namespace) -> int:
             if args.baseline_ref != args.candidate_ref:
                 raise
 
-            cases_rel = normalize_cases_path(repo_root, args.cases)
+            cases_rel = normalize_cases_path(corpus_dir or repo_root, args.cases)
             direct_probe_baseline = run_probe_for_side(
                 repo_root,
                 repo_root,
@@ -288,6 +305,7 @@ def run_harness(args: argparse.Namespace) -> int:
                 embed_backend=baseline_embed_backend,
                 embed_model=baseline_embed_model,
                 side_label="baseline",
+                corpus_dir=corpus_dir,
             )
             direct_probe_candidate = run_probe_for_side(
                 repo_root,
@@ -301,6 +319,7 @@ def run_harness(args: argparse.Namespace) -> int:
                 embed_backend=candidate_embed_backend,
                 embed_model=candidate_embed_model,
                 side_label="candidate",
+                corpus_dir=corpus_dir,
             )
             return finalize_direct_probe_report(
                 report=report,
@@ -316,7 +335,7 @@ def run_harness(args: argparse.Namespace) -> int:
         report["baseline"]["commit"] = baseline_commit
         report["candidate"]["commit"] = candidate_commit
 
-        cases_rel = normalize_cases_path(repo_root, args.cases)
+        cases_rel = normalize_cases_path(corpus_dir or repo_root, args.cases)
 
         if baseline_commit == candidate_commit:
             direct_probe_baseline = run_probe_for_side(
@@ -331,6 +350,7 @@ def run_harness(args: argparse.Namespace) -> int:
                 embed_backend=baseline_embed_backend,
                 embed_model=baseline_embed_model,
                 side_label="baseline",
+                corpus_dir=corpus_dir,
             )
             direct_probe_candidate = run_probe_for_side(
                 repo_root,
@@ -344,6 +364,7 @@ def run_harness(args: argparse.Namespace) -> int:
                 embed_backend=candidate_embed_backend,
                 embed_model=candidate_embed_model,
                 side_label="candidate",
+                corpus_dir=corpus_dir,
             )
             return finalize_direct_probe_report(
                 report=report,
@@ -366,8 +387,13 @@ def run_harness(args: argparse.Namespace) -> int:
         create_worktree(repo_root, args.candidate_ref, candidate_wt)
         worktree_paths.append(candidate_wt)
 
-        baseline_corpus = compute_corpus_fingerprint(baseline_wt, cases_rel)
-        candidate_corpus = compute_corpus_fingerprint(candidate_wt, cases_rel)
+        corpus_scan_root = corpus_dir if corpus_dir else None
+        baseline_corpus = compute_corpus_fingerprint(
+            corpus_scan_root or baseline_wt, cases_rel
+        )
+        candidate_corpus = compute_corpus_fingerprint(
+            corpus_scan_root or candidate_wt, cases_rel
+        )
 
         report["baseline"]["corpus"] = {
             "fingerprint": baseline_corpus["fingerprint"],
@@ -408,6 +434,7 @@ def run_harness(args: argparse.Namespace) -> int:
             embed_backend=baseline_embed_backend,
             embed_model=baseline_embed_model,
             side_label="baseline",
+            corpus_dir=corpus_dir,
         )
         candidate_probe = run_probe_for_side(
             repo_root,
@@ -421,6 +448,7 @@ def run_harness(args: argparse.Namespace) -> int:
             embed_backend=candidate_embed_backend,
             embed_model=candidate_embed_model,
             side_label="candidate",
+            corpus_dir=corpus_dir,
         )
 
         baseline_quality = baseline_probe["quality"]

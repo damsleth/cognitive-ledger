@@ -27,12 +27,18 @@ def main() -> int:
     if str(worktree) not in sys.path:
         sys.path.insert(0, str(worktree))
 
+    corpus_dir = payload.get("corpus_dir")
+    if corpus_dir:
+        corpus_path = Path(corpus_dir).resolve()
+        os.environ["LEDGER_NOTES_DIR"] = str(corpus_path / "notes")
+        cases_path = str((corpus_path / payload["cases_rel"]).resolve())
+    else:
+        cases_path = str((worktree / payload["cases_rel"]).resolve())
+
     ledger_script = ab_lib.load_module_from_script(
         worktree / "scripts" / "ledger",
         "ledger_side_module",
     )
-
-    cases_path = str((worktree / payload["cases_rel"]).resolve())
     retrieval_mode = payload["retrieval_mode"]
     embed_backend = payload["embed_backend"]
     embed_model = payload.get("embed_model") or None
@@ -132,7 +138,7 @@ def main() -> int:
             bundle = ledger_script.bundle_results(results, word_budget=1200)
             bundle_token_samples.append(sum(len(str(item.get("excerpt", "")).split()) for item in bundle))
 
-    notes_dir = worktree / "notes"
+    notes_dir = Path(os.environ["LEDGER_NOTES_DIR"]) if "LEDGER_NOTES_DIR" in os.environ else worktree / "notes"
     context_text = context_mod.build_context(notes_dir)
     profile_items = context_mod.collect_profile_items(notes_dir)
     profile_tokens = {}

@@ -290,7 +290,13 @@ class LedgerConfig:
 
     @property
     def notes_dir(self) -> Path:
-        """Path to the notes directory."""
+        """Path to the notes directory.
+
+        Overridable via LEDGER_NOTES_DIR env var to decouple note corpus
+        from code root (e.g. for A/B testing against an external ledger).
+        """
+        if env_notes := os.getenv("LEDGER_NOTES_DIR"):
+            return Path(env_notes).expanduser().resolve()
         return self.root_dir / "notes"
 
     @property
