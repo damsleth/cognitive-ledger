@@ -1,14 +1,14 @@
 {
-  "boot_context_tokens": 185,
-  "boot_context_bytes": 1396,
+  "boot_context_tokens": 124,
+  "boot_context_bytes": 839,
   "profile_tokens": {
-    "dev": 114,
-    "personal": 117,
-    "work": 108
+    "dev": 100,
+    "personal": 100,
+    "work": 100
   },
-  "notes_total_tokens": 427,
-  "avg_note_words": 61.0,
-  "p95_note_words": 84.0,
-  "note_count": 7,
-  "generated": "2026-03-30T06:26:09Z"
+  "notes_total_tokens": 0,
+  "avg_note_words": 0.0,
+  "p95_note_words": 0.0,
+  "note_count": 0,
+  "generated": "2026-03-31T06:33:17Z"
 }
