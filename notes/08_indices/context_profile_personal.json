@@ -1,0 +1,26 @@
+{
+  "scope": "personal",
+  "facts": [
+    {
+      "path": "~/Code/cognitive-ledger/notes/02_facts/fact__sample_public_profile.md",
+      "title": "Sample Public Profile",
+      "summary": "This repository contains synthetic example notes for demonstrating Cognitive Ledger workflows.",
+      "score": 0.821051,
+      "updated": "2026-03-04T00:00:00Z",
+      "confidence": 0.95,
+      "source": "user"
+    }
+  ],
+  "preferences": [
+    {
+      "path": "~/Code/cognitive-ledger/notes/03_preferences/pref__time_based_work.md",
+      "title": "Time Based Work",
+      "summary": "Use time-boxed sessions to reduce planning friction and maintain focus.",
+      "score": 0.808551,
+      "updated": "2026-03-04T00:00:00Z",
+      "confidence": 0.9,
+      "source": "user"
+    }
+  ],
+  "active_loops": []
+}

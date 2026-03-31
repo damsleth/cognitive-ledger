@@ -263,8 +263,12 @@ def render_profile(scope: str, items: list[ContextProfileItem]) -> tuple[str, di
     )
 
     def _payload_row(item: ContextProfileItem) -> dict[str, Any]:
+        path_str = str(item.path)
+        home = str(Path.home())
+        if path_str.startswith(home + "/"):
+            path_str = "~" + path_str[len(home):]
         return {
-            "path": str(item.path),
+            "path": path_str,
             "title": item.title,
             "summary": item.summary,
             "score": round(item.score, 6),
