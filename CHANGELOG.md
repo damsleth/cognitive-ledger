@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-04-08
+
+### Added
+- **Voice DNA integration** - new `ledger/voice.py` module for importing, exporting, and retrieving voice-dna-creator profiles as identity notes. New `voice-dna` CLI subcommand (`import`, `show`). Added `voice` to `identity_type` enum, bumped `max_identity_notes` to 6.
+- **Content index** - `sheep index` now generates `notes/08_indices/index.md` (human-readable) and `index.json` (machine-consumable) as a browseable catalog grouped by note type.
+- **Obsidian retrieval API** - new `related_to_text()` function in `ledger/retrieval.py` for querying the ledger with arbitrary text. Exposed via `ledger-obsidian related --path <note> | --query <text>`.
+- **Passive second-brain capture** - session hooks for automatic baseline tracking and end-of-session capture. New `ledger/inbox.py` for inbox triage. SKILL.md updated with passive capture policy.
+- **Proactive assistant** - new `ledger/briefing.py` with daily/weekly briefings, loop nudging with staleness tracking. New `ledger briefing` CLI subcommand. New `scripts/sheep-auto.sh` for safe automated maintenance.
+- **Ingest pipeline** - new `ledger/ingest.py` for source scanning, manifest diffing, and provenance tracking. New `ledger ingest` CLI subcommand. Cross-reference maintenance with `links.json` generation and orphan/broken link detection.
+- **Batteries-included setup** - new `ledger/init.py` for one-command initialization. New `ledger init` CLI subcommand. Safer `install-skill.sh` that respects existing customizations.
+- Voice DNA template (`templates/voice_dna_template.md`), inbox template (`templates/inbox_template.md`), ingest prompt template (`templates/ingest_prompt_template.md`)
+
+### Changed
+- `schema.yaml` - added `voice` identity type, `synthesized` recommended tag, bumped `max_identity_notes` to 6
+- `AGENTS.md` - two-tier lookup strategy (context.md for boot, index.md for lookup), voice DNA, hook config docs, recommended setup section
+- `SKILL.md` - boot sequence updated with voice DNA and content index, passive capture policy, ingest section, answer filing policy, session wrap-up section
+- `install-skill.sh` - now checks for existing symlinks/directories before overwriting
+
 ## 2026-04-07
 
 ### Added
