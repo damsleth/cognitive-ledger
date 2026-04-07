@@ -9,7 +9,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from tui.services.note_parser import NoteParser
-from tui.models.enums import NoteType, Source, Scope, LoopStatus
+from ledger.notes import NoteType, Source, Scope, LoopStatus
 
 # Import canonical parsing functions from ledger.parsing
 from ledger.parsing import (

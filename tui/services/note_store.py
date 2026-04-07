@@ -3,7 +3,7 @@
 from collections import defaultdict
 from pathlib import Path
 
-from ..models.enums import NoteType, Scope, LoopStatus
+from ledger.notes import NoteType, Scope, LoopStatus
 from ..models.note import Note
 from .note_parser import NoteParser
 
