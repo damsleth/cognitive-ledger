@@ -525,6 +525,78 @@ def handle_signal_command(args):
         raise SystemExit(1)
 
 
+def handle_ingest_command(args):
+    """Handle ingest subcommands."""
+    from ledger.ingest import scan_sources, diff_manifest, load_manifest, record_ingest
+
+    sub = getattr(args, "ingest_command", None)
+
+    if sub == "scan":
+        sources = scan_sources(args.source_root)
+        if not sources:
+            print("No source files found.")
+            return
+        print(f"Sources ({len(sources)}):")
+        for s in sources:
+            print(f"  {s['path']} ({s['size']} bytes, {s['modified'][:10]})")
+
+    elif sub == "diff":
+        manifest = load_manifest()
+        scan = scan_sources(args.source_root)
+        d = diff_manifest(manifest, scan)
+        print(f"New: {len(d['new'])}, Modified: {len(d['modified'])}, Deleted: {len(d['deleted'])}")
+        for s in d["new"][:10]:
+            print(f"  + {s['path']}")
+        for s in d["modified"][:10]:
+            print(f"  ~ {s['path']}")
+        for s in d["deleted"][:10]:
+            print(f"  - {s['path']}")
+
+    elif sub == "record":
+        record_ingest(args.source, args.notes, source_root=args.source_root)
+        print(f"Recorded ingest: {args.source} -> {len(args.notes)} note(s)")
+
+    else:
+        print("Usage: ledger ingest {scan|diff|record}")
+        raise SystemExit(1)
+
+
+def handle_links_command(args):
+    """Handle links subcommand."""
+    from ledger.maintenance import _generate_links_index, _config_paths
+
+    _notes_dir, indices_dir, _timeline = _config_paths()
+    links_data, orphans, broken = _generate_links_index(indices_dir)
+
+    if args.note_path:
+        # Show links for specific note
+        entry = links_data.get(args.note_path)
+        if entry is None:
+            print(f"Note not found in links index: {args.note_path}")
+            raise SystemExit(1)
+        print(f"Links for {args.note_path}:")
+        print(f"  Outgoing ({len(entry['outgoing'])}):")
+        for link in entry["outgoing"]:
+            print(f"    -> {link}")
+        print(f"  Incoming ({len(entry['incoming'])}):")
+        for link in entry["incoming"]:
+            print(f"    <- {link}")
+    else:
+        # Summary
+        total_links = sum(len(d["outgoing"]) for d in links_data.values())
+        print(f"Link graph: {len(links_data)} notes, {total_links} outgoing links")
+        print(f"Orphans: {len(orphans)}")
+        print(f"Broken links: {len(broken)}")
+        if orphans:
+            print("\nOrphan notes:")
+            for w in orphans[:10]:
+                print(f"  {w}")
+        if broken:
+            print("\nBroken links:")
+            for e in broken[:10]:
+                print(f"  {e}")
+
+
 def handle_briefing_command(args):
     """Handle briefing subcommand."""
     from ledger.briefing import daily_briefing, weekly_review
@@ -721,6 +793,22 @@ def main():
         help="Output format: boot (full payload), identity (identity notes only), json (scored items)",
     )
 
+    # Ingest subcommand
+    ingest_parser = subparsers.add_parser("ingest", help="Source ingest pipeline")
+    ingest_subparsers = ingest_parser.add_subparsers(dest="ingest_command")
+    ingest_scan_parser = ingest_subparsers.add_parser("scan", help="Show new/changed sources")
+    ingest_scan_parser.add_argument("--source-root", default=None, help="Source notes root")
+    ingest_diff_parser = ingest_subparsers.add_parser("diff", help="Detailed diff against manifest")
+    ingest_diff_parser.add_argument("--source-root", default=None, help="Source notes root")
+    ingest_record_parser = ingest_subparsers.add_parser("record", help="Record ingest provenance")
+    ingest_record_parser.add_argument("source", help="Source file relative path")
+    ingest_record_parser.add_argument("notes", nargs="+", help="Derived note paths")
+    ingest_record_parser.add_argument("--source-root", default=None, help="Source notes root")
+
+    # Links subcommand
+    links_parser = subparsers.add_parser("links", help="Show link graph")
+    links_parser.add_argument("note_path", nargs="?", help="Show links for a specific note")
+
     # Briefing subcommand
     briefing_parser = subparsers.add_parser("briefing", help="Daily or weekly briefing")
     briefing_parser.add_argument("--weekly", action="store_true", help="Weekly review instead of daily")
@@ -806,6 +894,14 @@ def main():
 
         if args.command == "signal":
             handle_signal_command(args)
+            return
+
+        if args.command == "ingest":
+            handle_ingest_command(args)
+            return
+
+        if args.command == "links":
+            handle_links_command(args)
             return
 
         if args.command == "briefing":

@@ -169,6 +169,30 @@ Only capture when there is clear evidence. Do not log signals speculatively.
 
 ---
 
+## Ingest (Source Distillation)
+
+If the user says "ingest this", "process this article/meeting/doc", or
+"distill this source":
+
+1. Run `./scripts/ledger ingest scan` to check source state
+2. Read the source content
+3. Create 3-8 atomic notes (one idea per file, proper frontmatter)
+4. Tag all notes with `ingested`
+5. Run `./scripts/ledger ingest record <source> <note1> [note2...]`
+
+## Answer Filing (Knowledge Compounding)
+
+After synthesizing a query answer that drew from 2+ notes AND produced
+new insight not in any single source:
+
+- **Ask the user**: "This synthesis connects ideas that weren't linked before.
+  Want me to file it as a concept note?"
+- If the user confirms (or `auto_file_synthesis: true` in config.yaml):
+  create a `concept__` or `fact__` note, tag it `synthesized`, link to all
+  source notes, set `source: assistant`, `confidence: 0.8`
+- **Do not silently write during pure queries** - the read-only query contract
+  is preserved unless the user explicitly opts in.
+
 ## Briefing (Proactive Awareness)
 
 If the user says "what's on my plate", "brief me", "what needs doing",
