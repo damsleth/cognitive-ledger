@@ -215,6 +215,27 @@ The ledger lives at `$LEDGER_DIR`. Notes live at `$NOTES_DIR`.
 - If the user is working in another repository, temporarily `cd` to the target repo for operations, then return to the original working directory.
 - Never modify unrelated repositories as part of note/ledger operations.
 
+## Session Wrap-Up (Passive Capture)
+
+At the end of any session that created/modified/deleted files, even when
+`/notes` was never explicitly invoked:
+
+1. Scan your actions for durable artifacts:
+   - Decisions made (e.g. chose library X over Y)
+   - Preferences expressed (e.g. "always use TypeScript")
+   - New patterns established (e.g. new architectural convention)
+   - Configuration choices (e.g. enabled feature flag)
+   - Problems diagnosed and solutions applied
+2. For each: search ledger first (`rg`), then create/update the appropriate note type
+3. If a multi-step task was completed: file a fact note summarizing what + why
+4. If work was left incomplete: create/update an open loop with a concrete next action
+
+**When to capture (heuristics):**
+- Commit messages containing decisions or rationale
+- New architectural patterns established
+- Configuration choices made
+- Problems diagnosed and solutions applied
+
 ## Safety
 
 - Use only repo data and user input; do not invent or import external facts.
