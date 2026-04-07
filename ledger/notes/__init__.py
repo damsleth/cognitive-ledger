@@ -225,7 +225,7 @@ NOTE_TYPE_CONFIGS: dict[str, NoteTypeConfig] = {
 
 CORE_NOTE_TYPES = tuple(NOTE_TYPE_CONFIGS.keys())
 LOOP_STATUSES = ("open", "closed", "blocked", "snoozed")
-IDENTITY_TYPES = ("mission", "beliefs", "models", "strategies", "narratives")
+IDENTITY_TYPES = ("mission", "beliefs", "models", "strategies", "narratives", "voice")
 
 
 @dataclass

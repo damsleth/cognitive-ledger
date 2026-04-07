@@ -83,6 +83,7 @@ frontmatter:
       - models     # personal mental models and frameworks
       - strategies # recurring decision heuristics
       - narratives # self-stories, framing, voice
+      - voice      # writing voice DNA profile
 
   # Validation rules
   rules:
@@ -139,7 +140,7 @@ limits:
   max_words: 400          # warn if exceeded
   max_tags: 10            # per note
   max_links: 20           # per note
-  max_identity_notes: 5   # one per identity_type
+  max_identity_notes: 6   # one per identity_type
   sleep_interval_days: 7  # recommended
   sleep_change_threshold: 25
 
