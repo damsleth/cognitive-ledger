@@ -23,4 +23,6 @@ IMPROVEMENT_PLAN.md
 *.lock
 # Generated retrieval index (contains machine-local metadata like absolute paths/mtimes)
 notes/08_indices/note_index.json
+# Session baseline (ephemeral, created by session_start hook)
+notes/08_indices/.session_baseline
 config.yaml
