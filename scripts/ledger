@@ -525,6 +525,29 @@ def handle_signal_command(args):
         raise SystemExit(1)
 
 
+def handle_voice_dna_command(args):
+    """Handle voice-dna subcommands."""
+    from ledger.voice import import_voice_dna, export_voice_dna
+
+    sub = getattr(args, "voice_command", None)
+
+    if sub == "import":
+        path = import_voice_dna(args.json_path)
+        print(f"Voice DNA imported to {path}")
+
+    elif sub == "show":
+        profile = export_voice_dna()
+        if profile is None:
+            print("No voice DNA profile found.")
+            print("Import one with: ledger voice-dna import <json-path>")
+            raise SystemExit(1)
+        print(json.dumps(profile, indent=2, ensure_ascii=False))
+
+    else:
+        print("Usage: ledger voice-dna {import|show}")
+        raise SystemExit(1)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Cognitive Ledger retrieval helpers")
     subparsers = parser.add_subparsers(dest="command")
@@ -658,6 +681,13 @@ def main():
         help="Output format: boot (full payload), identity (identity notes only), json (scored items)",
     )
 
+    # Voice DNA subcommand
+    voice_parser = subparsers.add_parser("voice-dna", help="Import or show voice DNA profile")
+    voice_subparsers = voice_parser.add_subparsers(dest="voice_command")
+    voice_import_parser = voice_subparsers.add_parser("import", help="Import voice DNA from JSON")
+    voice_import_parser.add_argument("json_path", help="Path to voice-dna JSON file")
+    voice_subparsers.add_parser("show", help="Show current voice DNA profile")
+
     # Signal subcommand (feedback loop)
     signal_parser = subparsers.add_parser("signal", help="Capture and analyze feedback signals")
     signal_subparsers = signal_parser.add_subparsers(dest="signal_command")
@@ -726,6 +756,10 @@ def main():
 
         if args.command == "signal":
             handle_signal_command(args)
+            return
+
+        if args.command == "voice-dna":
+            handle_voice_dna_command(args)
             return
 
         handler = command_handlers.get(args.command)
