@@ -134,6 +134,37 @@ notes/09_archive/      superseded notes (do not delete)
 
 ---
 
+### Recommended Setup
+
+**Claude Code hooks** (`.claude/settings.json`):
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      {"type": "command", "command": "bash scripts/hooks/session_start.sh"}
+    ],
+    "Notification": [
+      {"type": "command", "command": "bash scripts/hooks/session_end_capture.sh"}
+    ]
+  }
+}
+```
+
+**Codex** (`AGENTS.md` in repo root already covers this).
+
+**Automated maintenance** (cron or Claude Code `/schedule`):
+```
+0 6 * * * cd ~/Code/cognitive-ledger && ./scripts/sheep-auto.sh
+```
+
+**Troubleshooting:**
+- If hooks don't fire: check that scripts are executable (`chmod +x scripts/hooks/*.sh`)
+- If venv is missing: run `./scripts/setup-venv.sh`
+- If session_start is slow: ensure `.venv` exists (avoids pip install on each run)
+- If capture creates too many inbox items: review and triage with `ledger inbox triage`
+
+---
+
 ## Purpose
 
 This repository implements a **Cognitive Ledger**: a persistent, file-based
