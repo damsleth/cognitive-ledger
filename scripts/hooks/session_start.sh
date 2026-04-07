@@ -15,12 +15,13 @@ if [ -f "$ROOT_DIR/.venv/bin/activate" ]; then
     source "$ROOT_DIR/.venv/bin/activate" 2>/dev/null || true
 fi
 
-# Use the ledger context subcommand if available
+# Primary path: ledger context --format boot emits the full payload
+# (identity, facts, prefs, loops, maintenance status, signal stats)
 if [ -x "$ROOT_DIR/scripts/ledger" ]; then
     python3 "$ROOT_DIR/scripts/ledger" context --format boot 2>/dev/null && exit 0
 fi
 
-# Fallback: manual boot payload
+# Fallback: manual boot payload (when ledger CLI is unavailable)
 echo "# Session Boot Context"
 echo ""
 
@@ -32,7 +33,6 @@ if [ -d "$IDENTITY_DIR" ] && [ -n "$(ls -A "$IDENTITY_DIR"/*.md 2>/dev/null)" ];
     for f in "$IDENTITY_DIR"/id__*.md; do
         [ -f "$f" ] || continue
         name=$(basename "$f")
-        # Extract first non-frontmatter, non-heading content line
         summary=$(sed -n '/^---$/,/^---$/d; /^#/d; /^$/d; p' "$f" | head -1)
         echo "- \`$name\` - $summary"
     done
@@ -51,7 +51,7 @@ echo ""
 bash "$ROOT_DIR/scripts/sheep" status 2>/dev/null || echo "- (could not check status)"
 echo ""
 
-# Signal stats (if available)
+# Signal stats
 SIGNALS_FILE="$ROOT_DIR/notes/08_indices/signals.jsonl"
 if [ -f "$SIGNALS_FILE" ]; then
     count=$(wc -l < "$SIGNALS_FILE" | tr -d ' ')
