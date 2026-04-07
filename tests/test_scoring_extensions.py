@@ -198,3 +198,84 @@ class TestSignalScoring:
         )
 
         assert score_demoted < score_neutral
+
+
+class TestContextProfileIdentity:
+    """Test that identity notes appear in generated scope profiles."""
+
+    def test_render_profile_includes_identity(self, tmp_path):
+        """Identity notes should appear in render_profile output."""
+        from ledger.context import ContextProfileItem, render_profile
+        from ledger.parsing import parse_timestamp
+
+        items = [
+            ContextProfileItem(
+                path=tmp_path / "notes" / "01_identity" / "id__mission.md",
+                name="id__mission.md",
+                type="identity",
+                title="Mission",
+                summary="Build useful tools",
+                updated="2026-04-07T10:00:00Z",
+                updated_ts=parse_timestamp("2026-04-07T10:00:00Z"),
+                confidence=0.95,
+                source="user",
+                scope="personal",
+                status="",
+                next_action="",
+                score=0.9,
+            ),
+            ContextProfileItem(
+                path=tmp_path / "notes" / "02_facts" / "fact__x.md",
+                name="fact__x.md",
+                type="fact",
+                title="A fact",
+                summary="Some fact",
+                updated="2026-04-07T10:00:00Z",
+                updated_ts=parse_timestamp("2026-04-07T10:00:00Z"),
+                confidence=0.9,
+                source="user",
+                scope="personal",
+                status="",
+                next_action="",
+                score=0.8,
+            ),
+        ]
+
+        markdown, payload = render_profile("personal", items)
+
+        # Identity section should be in the markdown
+        assert "## Identity" in markdown
+        assert "id__mission.md" in markdown
+        assert "Build useful tools" in markdown
+
+        # Identity should be in the JSON payload
+        assert "identity" in payload
+        assert len(payload["identity"]) == 1
+        assert payload["identity"][0]["title"] == "Mission"
+
+    def test_identity_appears_in_all_scope_profiles(self, tmp_path):
+        """Identity notes are scope-independent and should appear in every profile."""
+        from ledger.context import ContextProfileItem, render_profile
+        from ledger.parsing import parse_timestamp
+
+        identity_item = ContextProfileItem(
+            path=tmp_path / "notes" / "01_identity" / "id__beliefs.md",
+            name="id__beliefs.md",
+            type="identity",
+            title="Beliefs",
+            summary="Core axioms",
+            updated="2026-04-07T10:00:00Z",
+            updated_ts=parse_timestamp("2026-04-07T10:00:00Z"),
+            confidence=0.95,
+            source="user",
+            scope="personal",  # scope on the note itself
+            status="",
+            next_action="",
+            score=0.9,
+        )
+
+        # Identity should show up in "work" profile even though its scope is "personal"
+        markdown, payload = render_profile("work", [identity_item])
+        assert "## Identity" in markdown
+        assert "id__beliefs.md" in markdown
+        assert len(payload["identity"]) == 1
