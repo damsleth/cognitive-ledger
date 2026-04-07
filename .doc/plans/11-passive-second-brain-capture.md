@@ -38,7 +38,11 @@ so the end hook knows what changed. Concretely:
    - Write `notes/08_indices/.session_baseline` containing:
      - `HEAD` commit SHA at session start
      - Timestamp
-     - Working-tree file list snapshot (`git ls-files --modified`)
+     - Full working-tree snapshot via
+       `git status --porcelain=v1 --untracked-files=all`
+       (covers modified, untracked, staged-new, and deleted files -
+       `git ls-files --modified` alone misses untracked and deletions,
+       causing the end hook to misattribute pre-existing dirt as session work)
    - This file is gitignored and ephemeral
 2. Create `scripts/hooks/session_end_capture.py` (~120 lines):
    - Read the baseline from `.session_baseline`
