@@ -103,16 +103,29 @@ Read these before writing (when guidance is needed; keep reads minimal):
 - Always bump `updated` on edits.
 - Always append to `notes/08_indices/timeline.md` after any note operation.
 
-### Intent → Artifact Mapping
+### Intent → Artifact Mapping (Routing Table)
 
-Infer ledger actions from natural language:
+Infer ledger actions from natural language. Check this table first:
 
+- **Identity / mission / beliefs** ("My mission is…", "I believe…", "My strategy for…", "I see myself as…") → `notes/01_identity/id__*.md`
 - **Stable preference** ("I prefer…", "I want you to…", "Going forward…") → `notes/03_preferences/pref__*.md`
 - **Decision / commitment** ("We'll do X", "I decided…") → `notes/02_facts/fact__*.md` or `notes/04_goals/goal__*.md`
 - **New concept / definition** ("Let's define…", "The idea is…") → `notes/06_concepts/concept__*.md`
 - **Unresolved / revisit later** ("We should revisit…", "Not sure yet…") → `notes/05_open_loops/loop__*.md`
 
 If multiple triggers occur, write multiple small notes rather than one large note.
+
+### Signal Capture
+
+After using a ledger note in a response, or when the user gives feedback:
+
+```bash
+./scripts/ledger signal add --type retrieval_hit --query "<query>" --note <path>
+./scripts/ledger signal add --type correction --note <path> --detail "<what's wrong>"
+./scripts/ledger signal add --type affirmation --note <path>
+```
+
+Only capture when there is clear evidence. Do not log signals speculatively.
 
 ### Create or Update an Atomic Note
 
