@@ -126,13 +126,21 @@ def read_signals(
     return signals
 
 
-def summarize_signals(signals_path: Path | None = None) -> dict[str, Any]:
+def summarize_signals(
+    signals_path: Path | None = None,
+    signals: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     """Build a per-note signal summary from the full signal log.
+
+    Args:
+        signals_path: Override path (for testing).
+        signals: Pre-loaded signal list (avoids re-reading JSONL).
 
     Returns:
         Dict mapping note paths to summary stats, plus a metadata key.
     """
-    signals = read_signals(signals_path=signals_path)
+    if signals is None:
+        signals = read_signals(signals_path=signals_path)
     notes: dict[str, dict[str, Any]] = {}
 
     for entry in signals:
@@ -146,7 +154,10 @@ def summarize_signals(signals_path: Path | None = None) -> dict[str, Any]:
                 "last_hit": "",
                 "corrections": 0,
                 "affirmations": 0,
-                "ratings": [],
+                "rating_count": 0,
+                "rating_sum": 0,
+                "rating_min": None,
+                "rating_max": None,
                 "stale_flags": 0,
                 "preference_applied": 0,
             }
@@ -169,7 +180,13 @@ def summarize_signals(signals_path: Path | None = None) -> dict[str, Any]:
             stats["preference_applied"] += 1
         elif sig_type == "rating":
             if "rating" in entry:
-                stats["ratings"].append(entry["rating"])
+                r = entry["rating"]
+                stats["rating_count"] += 1
+                stats["rating_sum"] += r
+                if stats["rating_min"] is None or r < stats["rating_min"]:
+                    stats["rating_min"] = r
+                if stats["rating_max"] is None or r > stats["rating_max"]:
+                    stats["rating_max"] = r
 
     # Compute signal_score for each note
     for note_path, stats in notes.items():
@@ -273,7 +290,7 @@ def signal_stats(signals_path: Path | None = None) -> dict[str, Any]:
         sig_type = entry.get("type", "unknown")
         by_type[sig_type] = by_type.get(sig_type, 0) + 1
 
-    summary = summarize_signals(signals_path=signals_path)
+    summary = summarize_signals(signals=signals)
     notes_data = summary.get("notes", {})
     top_notes = sorted(
         notes_data.items(),
