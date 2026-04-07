@@ -1,46 +1,27 @@
-"""Note data models."""
+"""Note data models for the TUI.
+
+The canonical ``Frontmatter``, ``NoteType``, and other enums now live in
+``ledger.notes``.  This module re-exports them and defines ``Note`` - a
+thin TUI-specific wrapper that adds ``incoming_links`` and ``lint_warnings``.
+"""
 
 from dataclasses import dataclass, field
-from datetime import datetime
 from pathlib import Path
 
-from .enums import NoteType, Source, Scope, LoopStatus
-from ledger.parsing import NoteLink  # noqa: F401 — re-exported as part of TUI model surface
-from ledger.notes import LintWarning  # noqa: F401 — re-exported as part of TUI model surface
+from ledger.notes import (
+    Frontmatter,
+    NoteType,
+    LintWarning,
+)
+from ledger.parsing import NoteLink  # noqa: F401 - re-exported as part of TUI model surface
 
-
-@dataclass
-class Frontmatter:
-    """YAML frontmatter fields."""
-
-    created: datetime
-    updated: datetime
-    tags: list[str]
-    confidence: float
-    source: Source
-    scope: Scope
-    lang: str
-    status: LoopStatus | None = None  # Only for loops
-
-    def to_yaml_dict(self) -> dict:
-        """Convert to dict for YAML serialization."""
-        d = {
-            "created": self.created.strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "updated": self.updated.strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "tags": self.tags,
-            "confidence": self.confidence,
-            "source": self.source.value,
-            "scope": self.scope.value,
-            "lang": self.lang,
-        }
-        if self.status is not None:
-            d["status"] = self.status.value
-        return d
+# Re-export for backward compatibility
+__all__ = ["Frontmatter", "NoteLink", "LintWarning", "Note"]
 
 
 @dataclass
 class Note:
-    """A single ledger note."""
+    """A single ledger note for TUI display."""
 
     path: Path
     note_type: NoteType
@@ -58,7 +39,7 @@ class Note:
         name = self.path.stem
         prefix = self.note_type.prefix
         if name.startswith(prefix):
-            return name[len(prefix) :]
+            return name[len(prefix):]
         return name
 
     @property

@@ -35,6 +35,9 @@ def _apply_dict(config: "LedgerConfig", data: dict) -> None:
     for key, value in data.items():
         if not hasattr(config, key):
             continue
+        # Skip read-only properties (e.g. notes_dir)
+        if isinstance(getattr(type(config), key, None), property):
+            continue
         current = getattr(config, key)
         if isinstance(current, Path):
             value = Path(str(value)).expanduser()
