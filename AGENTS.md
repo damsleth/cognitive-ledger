@@ -439,3 +439,21 @@ but still remain correct and reversible via git history.
 
 These conventions maintain transparency without flooding the user or
 future agents with unnecessary text.
+
+## Keeping docs in sync
+
+When you make changes to the ledger's **infrastructure** (new note types,
+config parameters, retrieval modes, CLI subcommands, schema changes, hooks,
+or other user-facing features):
+
+1. **`CHANGELOG.md`** – Append an entry under the current date. Use
+   `### Added`, `### Changed`, `### Fixed`, or `### Removed` headings
+   (keep-a-changelog style). One bullet per distinct change.
+2. **`README.md`** – Update if the change affects getting-started steps,
+   folder layout, CLI examples, or introduces a new top-level feature
+   section. Keep the README concise; link to `AGENTS.md` or `schema.yaml`
+   for details.
+
+Do **not** update these files for routine note operations (creating,
+updating, or archiving individual notes). Only infrastructure and tooling
+changes warrant doc updates.
