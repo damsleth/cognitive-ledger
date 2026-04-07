@@ -31,18 +31,34 @@ their own actions at session end:
 
 For Claude Code, use hooks to trigger capture at session boundaries.
 
-1. Create `scripts/hooks/session_end_capture.py` (~120 lines):
-   - Read recent git log (commits since session start)
+**Session-start baseline**: The session_start hook must persist a baseline
+so the end hook knows what changed. Concretely:
+
+1. Extend `scripts/hooks/session_start.sh` to record a session baseline:
+   - Write `notes/08_indices/.session_baseline` containing:
+     - `HEAD` commit SHA at session start
+     - Timestamp
+     - Working-tree file list snapshot (`git ls-files --modified`)
+   - This file is gitignored and ephemeral
+2. Create `scripts/hooks/session_end_capture.py` (~120 lines):
+   - Read the baseline from `.session_baseline`
+   - Diff against current state: `git log <baseline-sha>..HEAD`,
+     `git diff --name-only <baseline-sha>`, and working-tree changes
+   - If no baseline exists (session_start didn't run): fall back to
+     inspecting only uncommitted working-tree diffs (current behavior)
    - Extract durable artifacts from commit messages and file changes
    - Write inbox notes to `notes/00_inbox/` with `source: assistant`,
      `confidence: 0.6`
    - Append timeline entries
-2. Create `scripts/hooks/session_end_capture.sh` - bash wrapper activating
+   - Clean up `.session_baseline`
+3. Create `scripts/hooks/session_end_capture.sh` - bash wrapper activating
    venv and calling the Python script
-3. Document recommended hook config in AGENTS.md:
+4. Document recommended hook config in AGENTS.md:
    ```json
+   { "event": "session_start", "command": "./scripts/hooks/session_start.sh" },
    { "event": "session_end", "command": "./scripts/hooks/session_end_capture.sh" }
    ```
+5. Add `notes/08_indices/.session_baseline` to `.gitignore`
 
 ### 2c. Inbox Triage System
 

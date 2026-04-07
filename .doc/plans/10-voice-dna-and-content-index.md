@@ -23,7 +23,10 @@ so every agent can read and apply it when writing.
 3. Add `voice-dna` subcommand to `scripts/ledger`:
    - `ledger voice-dna import <json-path>`
    - `ledger voice-dna show`
-4. Update `schema.yaml` - add `voice` to `identity_type` enum
+4. Update `schema.yaml`:
+   - Add `voice` to `identity_type` enum (6th value)
+   - Bump `max_identity_notes` from 5 to 6
+   - Update `ledger/notes/__init__.py` if it hardcodes the cap
 5. Update `skills/notes/SKILL.md` - add instruction:
    "Before writing any note longer than 2 sentences, read
    `notes/01_identity/id__voice_dna.md` if it exists. Apply the voice
@@ -42,9 +45,16 @@ Generate a browseable, content-oriented catalog as part of `sheep index`.
    - Output `notes/08_indices/index.md` (human-readable) +
      `notes/08_indices/index.json` (machine-consumable)
 2. Call from existing `cmd_index()` in the sheep pipeline
-3. Update SKILL.md Boot Sequence: read `index.md` first (full catalog),
-   then `context.md` (scoped summary)
-4. Update AGENTS.md Boot section
+3. Update SKILL.md Boot Sequence: read `context.md` first (compact
+   summary, stays small), then use `index.md` as a lookup table for
+   deeper searches. **Do not** load the full index into context at boot -
+   on a mature ledger it would become the context bottleneck. Instead:
+   - Boot reads `context.md` (existing behavior, unchanged)
+   - When the agent needs to find notes by topic, it reads `index.md`
+     or `index.json` as a lightweight lookup before `rg`
+   - The index replaces blind `rg` searches, not the boot summary
+4. Update AGENTS.md Boot section to document the two-tier strategy:
+   `context.md` for boot, `index.md` for lookup
 
 ## Key Files
 

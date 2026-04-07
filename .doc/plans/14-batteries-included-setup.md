@@ -16,7 +16,7 @@ configuration.
      1. Create notes directory structure (all folders from schema)
      2. Copy templates to `templates/` if not present
      3. Generate initial `config.yaml` with sensible defaults
-     4. Run `install-skill.sh` (symlinks for Claude Code / Codex / Copilot)
+     4. Install skill symlinks (see safety note below)
      5. If `voice_dna_path` provided: import voice DNA (Phase 1a)
      6. If `source_root` provided: set in config, run initial scan
      7. Run `sheep index` to generate initial indices
@@ -27,6 +27,24 @@ configuration.
    ```
 3. Handle idempotency: skip steps that are already done, report what was
    skipped vs created
+4. **Fix `install-skill.sh` safety** (prerequisite): The current installer
+   unconditionally `rm -rf`s existing skill directories before recreating
+   symlinks (line 24-25). This destroys user customizations. Fix:
+   - If target is already a symlink pointing to the correct source: skip
+   - If target is a symlink pointing elsewhere: warn and ask
+   - If target is a real directory (user customizations): warn and skip,
+     suggest `--force` flag
+   - Only `rm -rf` when `--force` is passed or target doesn't exist
+5. **Add `ledger` console script to `pyproject.toml`**: Currently only
+   `ledger-obsidian` is exposed. Add:
+   ```toml
+   [project.scripts]
+   ledger = "ledger.cli:main"
+   ledger-obsidian = "ledger.obsidian.cli:main"
+   ```
+   This requires extracting the CLI logic from `scripts/ledger` into a
+   proper `ledger/cli.py` module. Until then, `ledger init` only works
+   from the repo root via `./scripts/ledger init`.
 
 ### 5b. Hook Configuration Documentation
 
@@ -41,7 +59,9 @@ configuration.
 ### 5c. README Quick Start
 
 1. Update project README (if exists) or create minimal one:
-   - One-liner install: `pip install cognitive-ledger && ledger init`
+   - Install: `pip install cognitive-ledger`
+   - Init from repo root: `./scripts/ledger init`
+     (or `ledger init` once the console script is wired up)
    - 3-step quick start: init, create voice DNA, write first note
    - Link to detailed docs in AGENTS.md and .doc/plans/
 

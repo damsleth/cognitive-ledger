@@ -40,10 +40,16 @@ Extend briefing with staleness-aware nudges.
    - Loops open > 7 days, no updates: gentle nudge
    - Loops open > 21 days: "close, delegate, or snooze?"
    - Loops blocked > 14 days: "still blocked? what's needed?"
-   - Track nudge timestamps in note frontmatter (`last_nudge` field)
-     to avoid re-nudging same day
-2. Update `schema.yaml` - add optional `last_nudge` field to loop type
-3. Motivational framing: emphasize progress, not guilt.
+   - **Staleness tracking**: Use `created` date (immutable) as the age
+     anchor, not `updated` (which gets bumped on every edit per AGENTS.md
+     rules). Track nudge history in a separate sidecar file
+     `notes/08_indices/nudge_log.json` keyed by note path:
+     ```json
+     {"notes/05_open_loops/loop__foo.md": {"last_nudge": "2026-04-07T10:00:00Z", "count": 2}}
+     ```
+     This avoids the problem where editing a loop's frontmatter to record
+     a nudge would bump `updated` and make the loop look fresh.
+2. Motivational framing: emphasize progress, not guilt.
    "You've closed 2 loops this week. 3 more are ready to wrap up."
 
 ### 3c. Session-Start Briefing Integration
@@ -59,15 +65,34 @@ Make the agent proactively aware at session start.
 
 ### 3d. Automated Maintenance
 
+**Problem**: `cmd_sleep()` is currently a manual checklist that prints
+instructions - it doesn't actually perform maintenance or append a sleep
+timeline entry. Running `sheep index && sheep lint` when status says "due"
+would leave the ledger permanently "due" because no sleep event gets logged.
+
+**Fix**: The auto script must either:
+- (a) Run the actual maintenance steps AND append the sleep timeline entry, or
+- (b) Only run `index` + `lint` (which are safe) and NOT claim sleep was done
+
+Option (b) is safer and honest. Full sleep requires agent judgment (merge
+duplicates, triage inbox, review loops), so it shouldn't be automated.
+
 1. Create `scripts/sheep-auto.sh` (~40 lines):
-   - Check `sheep status`
-   - If sleep is due: run `sheep index && sheep lint`
-   - Write summary to `notes/08_indices/last_auto_maintenance.md`
+   - Run `sheep index` (regenerate indices - always safe)
+   - Run `sheep lint` (validate frontmatter - always safe)
+   - Write lint/index results to `notes/08_indices/last_auto_maintenance.md`
+   - **Do not** append a sleep timeline entry - this is not a full sleep
+   - If lint finds errors or status shows sleep is overdue, write a flag
+     that session_start can surface: "Maintenance needed: lint found 3
+     errors, sleep overdue by 5 days"
 2. Document cron setup in AGENTS.md:
    ```
    0 6 * * * cd ~/Code/cognitive-ledger && ./scripts/sheep-auto.sh
    ```
    Or use Claude Code `/schedule` skill for managed scheduling.
+3. Full sleep remains agent-driven (via `sheep sleep` checklist) or
+   user-initiated. The auto script keeps indices fresh and surfaces
+   problems, but doesn't pretend to consolidate.
 
 ## Key Files
 
@@ -75,7 +100,7 @@ Make the agent proactively aware at session start.
 - `scripts/ledger` (add `briefing` subcommand)
 - `scripts/sheep-auto.sh` (new)
 - `skills/notes/SKILL.md` (extend boot + triggers)
-- `schema.yaml` (add `last_nudge` field)
+- `notes/08_indices/nudge_log.json` (new, sidecar for nudge tracking)
 - `AGENTS.md` (cron/schedule documentation)
 
 ## Reuse
