@@ -194,7 +194,7 @@ def collect_profile_items(notes_dir: Path) -> list[ContextProfileItem]:
                 updated=note.updated,
                 updated_ts=parse_timestamp(note.updated),
                 confidence=note.confidence,
-                source=str(note.frontmatter.get("source", "")).strip().lower(),
+                source=note.frontmatter.source.value if hasattr(note.frontmatter, "source") else "",
                 scope=canonical_scope(note.scope),
                 status=status,
                 next_action=next_action,
