@@ -224,6 +224,11 @@ def collect_profile_items(notes_dir: Path) -> list[ContextProfileItem]:
 def render_profile(scope: str, items: list[ContextProfileItem]) -> tuple[str, dict[str, Any]]:
     scope_items = [item for item in items if item.scope == scope]
 
+    # Identity notes appear in every profile (they're scope-independent)
+    identity = sorted(
+        (item for item in items if item.type == "identity"),
+        key=lambda item: item.score, reverse=True,
+    )
     facts = sorted((item for item in scope_items if item.type == "fact"), key=lambda item: item.score, reverse=True)[:6]
     preferences = sorted(
         (item for item in scope_items if item.type == "preference"),
@@ -248,13 +253,19 @@ def render_profile(scope: str, items: list[ContextProfileItem]) -> tuple[str, di
         "## Snapshot",
         "",
         f"- Scope: {scope}",
+        f"- Identity: {len(identity)}",
         f"- Facts: {len(facts)}",
         f"- Preferences: {len(preferences)}",
         f"- Active loops with next action: {len(loops)}",
         "",
-        "## Top Facts",
-        "",
     ]
+
+    if identity:
+        lines.extend(["## Identity", ""])
+        lines.extend(f"- `{item.name}` - {shorten(item.summary, 160)}" for item in identity)
+        lines.append("")
+
+    lines.extend(["## Top Facts", ""])
     if facts:
         lines.extend(f"- `{item.name}` - {shorten(item.summary, 160)}" for item in facts)
     else:
@@ -308,6 +319,7 @@ def render_profile(scope: str, items: list[ContextProfileItem]) -> tuple[str, di
 
     payload = {
         "scope": scope,
+        "identity": [_payload_row(item) for item in identity],
         "facts": [_payload_row(item) for item in facts],
         "preferences": [_payload_row(item) for item in preferences],
         "active_loops": [
