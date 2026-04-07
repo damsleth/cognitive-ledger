@@ -118,6 +118,7 @@ class LedgerConfig:
     # =========================================================================
 
     note_types: dict[str, dict[str, Any]] = field(default_factory=lambda: {
+        "identity": {"dir": "notes/01_identity", "label": "id"},
         "facts": {"dir": "notes/02_facts", "label": "fact"},
         "preferences": {"dir": "notes/03_preferences", "label": "pref"},
         "goals": {"dir": "notes/04_goals", "label": "goal"},
@@ -126,8 +127,28 @@ class LedgerConfig:
     })
     """Mapping of note type names to their directories and labels."""
 
-    core_note_types: tuple[str, ...] = ("facts", "preferences", "goals", "loops", "concepts")
+    core_note_types: tuple[str, ...] = ("identity", "facts", "preferences", "goals", "loops", "concepts")
     """Core note types included in retrieval."""
+
+    # =========================================================================
+    # Identity Scoring
+    # =========================================================================
+
+    identity_score_boost: float = 0.15
+    """Additive boost for identity notes in retrieval scoring.
+
+    Rationale: Identity notes (mission, beliefs, models, strategies,
+    narratives) are high-signal, almost-always-relevant context that
+    should surface above generic notes of similar lexical relevance.
+    """
+
+    boot_min_confidence: float = 0.8
+    """Minimum confidence for notes included in boot context.
+
+    Rationale: Prevents low-confidence hypotheses from polluting
+    the session-start context. Notes below this threshold are still
+    findable via search but excluded from automatic loading.
+    """
 
     # =========================================================================
     # Retrieval Tuning
@@ -237,6 +258,21 @@ class LedgerConfig:
     but low-confidence notes shouldn't be excluded.
     """
 
+    score_weight_signal: float = 0.0
+    """Weight for signal feedback score (0.0 until sufficient data).
+
+    Rationale: Disabled by default until signals.jsonl has enough
+    entries to be meaningful. Enable via config.yaml once the
+    feedback loop has accumulated data.
+    """
+
+    signal_min_entries: int = 20
+    """Minimum signal entries before signal scoring activates.
+
+    Rationale: With too few signals, the signal score is noisy
+    and can distort retrieval. This gate prevents premature activation.
+    """
+
     # =========================================================================
     # Semantic Scoring Weights (Hybrid Mode)
     # =========================================================================
@@ -325,6 +361,16 @@ class LedgerConfig:
         if env_notes := os.getenv("LEDGER_NOTES_DIR"):
             return Path(env_notes).expanduser().resolve()
         return self.root_dir / "notes"
+
+    @property
+    def signals_path(self) -> Path:
+        """Path to signals JSONL."""
+        return self.notes_dir / "08_indices" / "signals.jsonl"
+
+    @property
+    def signal_summary_path(self) -> Path:
+        """Path to precomputed signal summary JSON."""
+        return self.notes_dir / "08_indices" / "signal_summary.json"
 
     @property
     def aliases_path(self) -> Path:
