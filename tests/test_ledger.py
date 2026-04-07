@@ -630,21 +630,176 @@ class LedgerUnitTests(unittest.TestCase):
                 self.ledger.run_eval(case_path, k=3, strict_cases=True)
 
 
-def _has_corpus_notes() -> bool:
-    """Check if the repo has actual notes (not just .gitkeep)."""
-    notes_root = Path(__file__).resolve().parents[1] / "notes"
-    for folder in ("02_facts", "03_preferences", "04_goals", "05_open_loops", "06_concepts"):
-        d = notes_root / folder
-        if d.is_dir() and any(f.suffix == ".md" for f in d.iterdir()):
-            return True
-    return False
+def _build_fixture_tree(root: Path) -> Path:
+    """Create a temp notes tree with fixture notes for integration tests.
+
+    Returns the notes directory path inside root.
+    """
+    notes = root / "notes"
+    for folder in (
+        "01_identity", "02_facts", "03_preferences",
+        "04_goals", "05_open_loops", "06_concepts", "08_indices",
+    ):
+        (notes / folder).mkdir(parents=True, exist_ok=True)
+
+    # Open loop - release checklist (primary fixture for release queries)
+    (notes / "05_open_loops" / "loop__sample_release_checklist.md").write_text(
+        "---\n"
+        "created: 2026-03-01T00:00:00Z\n"
+        "updated: 2026-03-20T00:00:00Z\n"
+        "tags: [release, checklist, deploy]\n"
+        "confidence: 0.9\n"
+        "source: user\n"
+        "scope: dev\n"
+        "lang: en\n"
+        "status: open\n"
+        "---\n\n"
+        "# Loop: Release checklist\n\n"
+        "## Question or Task\n\n"
+        "What should I do next for release?\n\n"
+        "## Why it matters\n\n"
+        "Tracks pending release tasks.\n\n"
+        "## Next Action\n\n"
+        "- [ ] Run final integration tests\n",
+        encoding="utf-8",
+    )
+
+    # A second loop to exercise loop-mode filtering
+    (notes / "05_open_loops" / "loop__pending_review.md").write_text(
+        "---\n"
+        "created: 2026-02-15T00:00:00Z\n"
+        "updated: 2026-03-10T00:00:00Z\n"
+        "tags: [review, pending, task]\n"
+        "confidence: 0.85\n"
+        "source: user\n"
+        "scope: dev\n"
+        "lang: en\n"
+        "status: open\n"
+        "---\n\n"
+        "# Loop: Pending code review\n\n"
+        "## Question or Task\n\n"
+        "Complete pending code review for the API module.\n\n"
+        "## Why it matters\n\n"
+        "Blocks the release pipeline.\n\n"
+        "## Next Action\n\n"
+        "- [ ] Review pull request #42\n",
+        encoding="utf-8",
+    )
+
+    # Fact note
+    (notes / "02_facts" / "fact__deploy_target.md").write_text(
+        "---\n"
+        "created: 2026-01-10T00:00:00Z\n"
+        "updated: 2026-03-15T00:00:00Z\n"
+        "tags: [deploy, infrastructure]\n"
+        "confidence: 0.95\n"
+        "source: user\n"
+        "scope: dev\n"
+        "lang: en\n"
+        "---\n\n"
+        "# Deploy Target\n\n"
+        "## Statement\n\n"
+        "Production deployments target the k8s cluster via CI.\n",
+        encoding="utf-8",
+    )
+
+    # Preference note
+    (notes / "03_preferences" / "pref__concise_answers.md").write_text(
+        "---\n"
+        "created: 2026-01-05T00:00:00Z\n"
+        "updated: 2026-02-20T00:00:00Z\n"
+        "tags: [communication, style]\n"
+        "confidence: 0.9\n"
+        "source: user\n"
+        "scope: dev\n"
+        "lang: en\n"
+        "---\n\n"
+        "# Concise Answers\n\n"
+        "## Statement\n\n"
+        "Prefer concise, direct answers without unnecessary preamble.\n",
+        encoding="utf-8",
+    )
+
+    # Goal note
+    (notes / "04_goals" / "goal__ship_v1.md").write_text(
+        "---\n"
+        "created: 2026-02-01T00:00:00Z\n"
+        "updated: 2026-03-18T00:00:00Z\n"
+        "tags: [release, milestone]\n"
+        "confidence: 0.9\n"
+        "source: user\n"
+        "scope: dev\n"
+        "lang: en\n"
+        "---\n\n"
+        "# Ship v1\n\n"
+        "## Statement\n\n"
+        "Ship the first stable release by end of Q1.\n",
+        encoding="utf-8",
+    )
+
+    # Concept note
+    (notes / "06_concepts" / "concept__progressive_disclosure.md").write_text(
+        "---\n"
+        "created: 2026-01-20T00:00:00Z\n"
+        "updated: 2026-03-05T00:00:00Z\n"
+        "tags: [retrieval, ux]\n"
+        "confidence: 0.85\n"
+        "source: assistant\n"
+        "scope: dev\n"
+        "lang: en\n"
+        "---\n\n"
+        "# Progressive Disclosure\n\n"
+        "## Statement\n\n"
+        "Show top results with rationale, rest in compact form.\n",
+        encoding="utf-8",
+    )
+
+    # Eval cases file referencing the fixture notes
+    (notes / "08_indices" / "retrieval_eval_cases.yaml").write_text(
+        '- query: "What should I do next for release?"\n'
+        "  id: release_checklist\n"
+        '  scope: "dev"\n'
+        "  expected_any:\n"
+        '    - "notes/05_open_loops/loop__sample_release_checklist.md"\n'
+        "\n"
+        '- query: "What is the deploy target?"\n'
+        "  id: deploy_target\n"
+        '  scope: "dev"\n'
+        "  expected_any:\n"
+        '    - "notes/02_facts/fact__deploy_target.md"\n',
+        encoding="utf-8",
+    )
+
+    return notes
 
 
-@unittest.skipUnless(_has_corpus_notes(), "no corpus notes present - skipping integration tests")
 class LedgerIntegrationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        from ledger.config import LedgerConfig, set_config
+        from ledger.retrieval import clear_candidate_cache
+
         cls.ledger = load_ledger_module()
+        cls._tmpdir = tempfile.TemporaryDirectory()
+        cls._tmp = Path(cls._tmpdir.name)
+        cls._notes_dir = _build_fixture_tree(cls._tmp)
+        cls._cases_path = cls._notes_dir / "08_indices" / "retrieval_eval_cases.yaml"
+        cls._config = LedgerConfig(root_dir=cls._tmp)
+        set_config(cls._config)
+        clear_candidate_cache()
+
+    @classmethod
+    def tearDownClass(cls):
+        from ledger.config import reset_config
+        from ledger.retrieval import clear_candidate_cache
+
+        clear_candidate_cache()
+        reset_config()
+        cls._tmpdir.cleanup()
+
+    def setUp(self):
+        from ledger.retrieval import clear_candidate_cache
+        clear_candidate_cache()
 
     def test_query_release_returns_open_loop(self):
         payload = self.ledger.rank_query("What should I do next for release?", scope="dev", limit=8)
@@ -754,12 +909,12 @@ class LedgerIntegrationTests(unittest.TestCase):
         self.assertTrue(any(result_get(item, "reasons") for item in payload_results(payload)))
 
     def test_eval_cases_parse(self):
-        cases = self.ledger.parse_eval_cases(CASES_PATH)
-        self.assertGreaterEqual(len(cases), 16)
+        cases = self.ledger.parse_eval_cases(self._cases_path)
+        self.assertGreaterEqual(len(cases), 2)
         self.assertTrue(all("query" in case for case in cases))
 
     def test_eval_runs_and_returns_metrics(self):
-        result = self.ledger.run_eval(CASES_PATH, k=3)
+        result = self.ledger.run_eval(self._cases_path, k=3)
         self.assertIn("hit1", result)
         self.assertIn("hitk", result)
         self.assertIn("mrr", result)

@@ -3,12 +3,16 @@
 This module provides dataclasses representing different note types
 (facts, preferences, goals, loops, concepts) and functions for
 reading and parsing notes.
+
+Canonical enums and the structured ``Frontmatter`` dataclass live here
+so that both the core library and the TUI share a single source of truth.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
+from enum import Enum
 from pathlib import Path
 from typing import Any
 
@@ -20,12 +24,171 @@ from ledger.parsing import (
     first_content_line,
     first_checkbox,
     extract_links,
+    normalize_tags,
+    parse_timestamp,
     NoteLink,
 )
 
 
+# ---------------------------------------------------------------------------
+# Canonical enums (shared by library and TUI)
+# ---------------------------------------------------------------------------
+
+class NoteType(Enum):
+    """Note type categories."""
+
+    IDENTITY = "id"
+    FACT = "fact"
+    PREF = "pref"
+    GOAL = "goal"
+    LOOP = "loop"
+    CONCEPT = "concept"
+
+    @property
+    def prefix(self) -> str:
+        return f"{self.value}__"
+
+    @property
+    def folder(self) -> str:
+        folders = {
+            "id": "notes/01_identity",
+            "fact": "notes/02_facts",
+            "pref": "notes/03_preferences",
+            "goal": "notes/04_goals",
+            "loop": "notes/05_open_loops",
+            "concept": "notes/06_concepts",
+        }
+        return folders[self.value]
+
+    @classmethod
+    def from_path(cls, path: str) -> NoteType | None:
+        """Infer note type from file path."""
+        name = path.split("/")[-1] if "/" in path else path
+        for t in cls:
+            if name.startswith(t.prefix):
+                return t
+        return None
+
+
+class Source(Enum):
+    """Note provenance."""
+
+    USER = "user"
+    TOOL = "tool"
+    ASSISTANT = "assistant"
+    INFERRED = "inferred"
+
+
+class Scope(Enum):
+    """Life domain categorization."""
+
+    HOME = "home"
+    WORK = "work"
+    DEV = "dev"
+    PERSONAL = "personal"
+    LIFE = "life"  # alias for personal
+    META = "meta"
+
+
+class LoopStatus(Enum):
+    """Open loop status values."""
+
+    OPEN = "open"
+    CLOSED = "closed"
+    BLOCKED = "blocked"
+    SNOOZED = "snoozed"
+
+
+# ---------------------------------------------------------------------------
+# Structured Frontmatter
+# ---------------------------------------------------------------------------
+
+def _parse_enum(enum_class: type, value: str, default: Any) -> Any:
+    """Parse an enum value with fallback."""
+    if not value:
+        return default
+    try:
+        return enum_class(str(value).lower())
+    except ValueError:
+        return default
+
+
+@dataclass
+class Frontmatter:
+    """Structured YAML frontmatter fields.
+
+    Canonical representation shared by library and TUI.
+    """
+
+    created: datetime
+    updated: datetime
+    tags: list[str]
+    confidence: float
+    source: Source
+    scope: Scope
+    lang: str
+    status: LoopStatus | None = None  # Only for loops
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Frontmatter:
+        """Construct from a raw frontmatter dict (as returned by YAML parsing)."""
+        created_raw = parse_timestamp(str(data.get("created", "")))
+        updated_raw = parse_timestamp(str(data.get("updated", "")))
+
+        created = created_raw if created_raw else datetime.now(timezone.utc)
+        updated = updated_raw if updated_raw else datetime.now(timezone.utc)
+
+        source = _parse_enum(Source, data.get("source", ""), Source.ASSISTANT)
+        scope = _parse_enum(Scope, data.get("scope", ""), Scope.PERSONAL)
+        status = None
+        if "status" in data:
+            status = _parse_enum(LoopStatus, data["status"], LoopStatus.OPEN)
+
+        tags = normalize_tags(data.get("tags"))
+
+        confidence = data.get("confidence", 0.0)
+        if isinstance(confidence, str):
+            try:
+                confidence = float(confidence)
+            except ValueError:
+                confidence = 0.0
+
+        return cls(
+            created=created,
+            updated=updated,
+            tags=tags,
+            confidence=max(0.0, min(1.0, float(confidence))),
+            source=source,
+            scope=scope,
+            lang=data.get("lang", "en"),
+            status=status,
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dict for YAML serialization or backward compatibility."""
+        d: dict[str, Any] = {
+            "created": self.created.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "updated": self.updated.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "tags": self.tags,
+            "confidence": self.confidence,
+            "source": self.source.value,
+            "scope": self.scope.value,
+            "lang": self.lang,
+        }
+        if self.status is not None:
+            d["status"] = self.status.value
+        return d
+
+    # dict-like access for backward compatibility
+    def get(self, key: str, default: Any = None) -> Any:
+        """Dict-like get() for backward compatibility."""
+        return self.to_dict().get(key, default)
+
+
+# ---------------------------------------------------------------------------
 # Note type configuration
-# TODO: Move to config when we refactor further
+# ---------------------------------------------------------------------------
+
 @dataclass(frozen=True)
 class NoteTypeConfig:
     """Configuration for a note type."""
@@ -89,8 +252,8 @@ class BaseNote:
     path: Path
     """Path to the note file."""
 
-    frontmatter: dict[str, Any]
-    """Parsed YAML frontmatter."""
+    frontmatter: Any  # Frontmatter; accepts raw dict via __post_init__ conversion
+    """Structured frontmatter. Accepts a raw dict for backward compatibility."""
 
     body: str
     """Markdown body (without frontmatter)."""
@@ -110,37 +273,37 @@ class BaseNote:
     outgoing_links: list[NoteLink] = field(default_factory=list)
     """Outgoing links extracted from markdown body."""
 
+    def __post_init__(self) -> None:
+        """Auto-convert raw dicts to Frontmatter for backward compatibility."""
+        if isinstance(self.frontmatter, dict):
+            self.frontmatter = Frontmatter.from_dict(self.frontmatter)
+
     @property
     def confidence(self) -> float:
         """Get confidence value from frontmatter (0.0-1.0)."""
-        try:
-            value = float(self.frontmatter.get("confidence", 0))
-        except (TypeError, ValueError):
-            return 0.0
-        return max(0.0, min(1.0, value))
+        return self.frontmatter.confidence
 
     @property
     def updated(self) -> str:
         """Get updated timestamp string."""
-        return str(self.frontmatter.get("updated", ""))
+        return self.frontmatter.updated.strftime("%Y-%m-%dT%H:%M:%SZ")
 
     @property
     def scope(self) -> str:
         """Get scope from frontmatter."""
-        return str(self.frontmatter.get("scope", "")).lower()
+        return self.frontmatter.scope.value
 
     @property
     def status(self) -> str:
         """Get status from frontmatter (primarily for loops)."""
-        return str(self.frontmatter.get("status", "")).lower()
+        if self.frontmatter.status is None:
+            return ""
+        return self.frontmatter.status.value
 
     @property
     def tags(self) -> list[str]:
         """Get tags from frontmatter."""
-        raw = self.frontmatter.get("tags", [])
-        if isinstance(raw, list):
-            return [str(t).lower() for t in raw]
-        return [str(raw).lower()]
+        return self.frontmatter.tags
 
 
 @dataclass
@@ -194,7 +357,7 @@ class LoopNote(BaseNote):
         """Convert to dictionary (for backward compatibility)."""
         return {
             "path": str(self.path),
-            "frontmatter": self.frontmatter,
+            "frontmatter": self.frontmatter.to_dict(),
             "question": self.question,
             "why": self.why,
             "next_action": self.next_action,
@@ -248,7 +411,7 @@ class GenericNote(BaseNote):
         """Convert to dictionary (for backward compatibility)."""
         return {
             "path": str(self.path),
-            "frontmatter": self.frontmatter,
+            "frontmatter": self.frontmatter.to_dict(),
             "title": self.title,
             "statement": self.statement,
             "context": self.context,
