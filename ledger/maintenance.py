@@ -504,6 +504,14 @@ def _lint_note(path: Path, counters: LintCounters) -> None:
         counters.warnings += 1
         counters.warn_placeholder_links += 1
 
+    # Synthesized notes must have at least 1 outgoing link
+    if "synthesized" in tags:
+        from ledger.parsing.links import extract_links
+        note_links = extract_links(body)
+        if not note_links:
+            _lint_warn(path, "synthesized note has no outgoing links (should reference sources)")
+            counters.warnings += 1
+
 
 def _lint_timeline(timeline: Path, counters: LintCounters) -> None:
     print("\nValidating timeline...")
@@ -734,6 +742,73 @@ def _generate_alias_suggestions(indices_dir: Path) -> None:
     out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
+def _generate_links_index(indices_dir: Path) -> tuple[dict[str, Any], list[str], list[str]]:
+    """Build a link graph index for cross-reference maintenance.
+
+    Returns:
+        Tuple of (links_data, orphan_warnings, broken_link_errors).
+    """
+    from ledger.parsing.links import extract_links
+
+    links_data: dict[str, dict[str, Any]] = {}
+    all_paths: set[str] = set()
+
+    for path in _iter_note_files(include_indices=False):
+        rel = _relative(path)
+        all_paths.add(rel)
+        text = path.read_text(encoding="utf-8")
+        _, body = parse_frontmatter_text(text)
+        note_links = extract_links(body)
+
+        outgoing = []
+        for link in note_links:
+            target = link.target
+            # Normalize relative paths
+            if target.startswith("../") or target.startswith("./"):
+                resolved = (path.parent / target).resolve()
+                config = get_config()
+                try:
+                    target = str(resolved.relative_to(config.root_dir))
+                except ValueError:
+                    pass
+            outgoing.append(target)
+
+        links_data[rel] = {
+            "outgoing": outgoing,
+            "incoming": [],
+        }
+
+    # Build incoming links
+    for source, data in links_data.items():
+        for target in data["outgoing"]:
+            if target in links_data:
+                links_data[target]["incoming"].append(source)
+
+    # Detect orphans and broken links
+    orphan_warnings: list[str] = []
+    broken_errors: list[str] = []
+
+    for rel, data in links_data.items():
+        total_links = len(data["outgoing"]) + len(data["incoming"])
+        if total_links == 0:
+            orphan_warnings.append(f"WARN: {rel} - orphan note (0 links)")
+        for target in data["outgoing"]:
+            # Check if target exists (as relative path or as filename match)
+            target_exists = target in all_paths
+            if not target_exists:
+                # Try matching just the filename
+                target_name = target.split("/")[-1] if "/" in target else target
+                target_exists = any(p.endswith(f"/{target_name}") or p == target_name for p in all_paths)
+            if not target_exists and target.endswith(".md"):
+                broken_errors.append(f"ERROR: {rel} - broken link to {target}")
+
+    # Write links.json
+    from ledger.io import safe_write_text as _sw
+    _sw(indices_dir / "links.json", json.dumps(links_data, indent=2, ensure_ascii=False) + "\n", use_lock=False)
+
+    return links_data, orphan_warnings, broken_errors
+
+
 def _generate_content_index(indices_dir: Path) -> None:
     """Generate a browseable content-oriented catalog.
 
@@ -950,6 +1025,16 @@ def cmd_index() -> int:
     print("Generating content index...")
     _generate_content_index(indices_dir)
     print("  -> index.md, index.json")
+
+    print("Generating links index...")
+    _links_data, orphans, broken = _generate_links_index(indices_dir)
+    print(f"  -> links.json ({len(_links_data)} notes)")
+    if orphans:
+        for w in orphans[:5]:
+            print(f"  {w}")
+    if broken:
+        for e in broken[:5]:
+            print(f"  {e}")
 
     print("Generating recent...")
     _generate_recent(indices_dir)

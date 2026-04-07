@@ -269,6 +269,14 @@ class LedgerConfig:
     feedback loop has accumulated data.
     """
 
+    auto_file_synthesis: bool = False
+    """Whether to automatically file synthesized answers as notes.
+
+    When True, query answers that synthesize from 2+ notes and produce
+    new insight will be automatically filed as concept/fact notes.
+    When False (default), the agent asks the user before filing.
+    """
+
     signal_min_entries: int = 20
     """Minimum signal entries before signal scoring activates.
 
