@@ -525,6 +525,16 @@ def handle_signal_command(args):
         raise SystemExit(1)
 
 
+def handle_briefing_command(args):
+    """Handle briefing subcommand."""
+    from ledger.briefing import daily_briefing, weekly_review
+
+    if args.weekly:
+        print(weekly_review())
+    else:
+        print(daily_briefing())
+
+
 def handle_inbox_command(args):
     """Handle inbox subcommands."""
     from ledger.inbox import list_inbox, triage_suggestions
@@ -711,6 +721,10 @@ def main():
         help="Output format: boot (full payload), identity (identity notes only), json (scored items)",
     )
 
+    # Briefing subcommand
+    briefing_parser = subparsers.add_parser("briefing", help="Daily or weekly briefing")
+    briefing_parser.add_argument("--weekly", action="store_true", help="Weekly review instead of daily")
+
     # Inbox subcommand
     inbox_parser = subparsers.add_parser("inbox", help="Manage inbox captures")
     inbox_subparsers = inbox_parser.add_subparsers(dest="inbox_command")
@@ -792,6 +806,10 @@ def main():
 
         if args.command == "signal":
             handle_signal_command(args)
+            return
+
+        if args.command == "briefing":
+            handle_briefing_command(args)
             return
 
         if args.command == "inbox":

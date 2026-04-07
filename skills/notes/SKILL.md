@@ -169,6 +169,23 @@ Only capture when there is clear evidence. Do not log signals speculatively.
 
 ---
 
+## Briefing (Proactive Awareness)
+
+If the user says "what's on my plate", "brief me", "what needs doing",
+"morning", "status", or "what should I work on":
+
+```bash
+./scripts/ledger briefing           # daily (default)
+./scripts/ledger briefing --weekly  # extended weekly review
+```
+
+The briefing surfaces:
+- Open loops sorted by staleness with nudges
+- Recent changes from the last 24h
+- Inbox items needing triage
+- Maintenance status
+- Motivational progress tracking
+
 ## Things3 Task Intake (When Planning)
 
 If the user asks for help planning their week/day, or to triage what's due:
