@@ -45,17 +45,26 @@ creates notes through the normal skill workflow.
 
 ### 4b. Answer Filing (Knowledge Compounding)
 
-Good query answers should persist as notes.
+Good query answers should persist as notes - but only when the user opts in.
+The current SKILL.md policy (line 154) says pure queries must not create or
+update files unless the user explicitly asks. Answer filing must respect this.
 
-1. Add to SKILL.md "Answer Filing" policy:
+1. Add to SKILL.md "Answer Filing" policy (opt-in, not automatic):
    - After synthesizing a query that drew from 2+ notes AND produced
      new insight not in any single source:
-   - Create a `concept__` or `fact__` note capturing the synthesis
+   - **Ask the user**: "This synthesis connects ideas that weren't linked
+     before. Want me to file it as a concept note?"
+   - If the user confirms (or has set `auto_file_synthesis: true` in
+     config.yaml): create a `concept__` or `fact__` note
    - Tag it `synthesized`, link to all source notes
    - Set `source: assistant`, `confidence: 0.8`
-2. Add lint check in `ledger/maintenance.py`:
+   - **Do not silently write during pure queries.** The read-only query
+     contract is preserved unless the user explicitly opts in.
+2. Add `auto_file_synthesis` boolean to `config.yaml` (default: `false`)
+   for users who want automatic filing without being asked each time
+3. Add lint check in `ledger/maintenance.py`:
    - Notes tagged `synthesized` must have at least 1 outgoing link
-3. Update `schema.yaml` - add `synthesized` to recommended tags list
+4. Update `schema.yaml` - add `synthesized` to recommended tags list
 
 ### 4c. Cross-Reference Maintenance
 
@@ -66,8 +75,14 @@ Detect orphans, broken links, and contradictions.
      mapping each note to its outgoing/incoming links
    - Lint: orphan notes (0 total links) - warning, not error
    - Lint: broken links (reference non-existent notes) - error
-   - Lint: potential contradictions (notes with overlapping tags but
-     conflicting confidence values) - flag as new open loop
+   - Lint: potential contradictions - **not tag+confidence based** (confidence
+     measures certainty, not claim polarity, so overlapping tags with different
+     confidence is normal). Instead, flag pairs where:
+     - Same `fact__` prefix + similar slug (edit distance < 3)
+     - Or notes explicitly linked that have opposing statements
+     - This is inherently noisy, so output as advisory warnings only,
+       not auto-created open loops. The agent or user decides whether
+       a flagged pair is actually contradictory.
 2. Add `links` subcommand to `scripts/ledger`:
    - `ledger links` - show full link graph summary
    - `ledger links <note-path>` - show links for specific note
