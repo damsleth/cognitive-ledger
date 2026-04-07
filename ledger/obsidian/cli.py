@@ -214,7 +214,46 @@ def build_parser() -> argparse.ArgumentParser:
     queue_sync = queue_subparsers.add_parser("sync", help="Promote approved candidate notes")
     _add_root_argument(queue_sync)
 
+    related_parser = subparsers.add_parser(
+        "related",
+        help="Find ledger notes related to an Obsidian note or free text",
+    )
+    related_group = related_parser.add_mutually_exclusive_group(required=True)
+    related_group.add_argument("--path", dest="note_path", help="Path to an Obsidian/markdown note")
+    related_group.add_argument("--query", dest="query_text", help="Free-text query")
+    related_parser.add_argument("--limit", type=int, default=5, help="Max results (default: 5)")
+    related_parser.add_argument("--json", action="store_true", dest="json_output")
+
     return parser
+
+
+def cmd_related(args: argparse.Namespace) -> int:
+    from ledger.retrieval import related_to_text
+
+    if args.note_path:
+        note_path = Path(args.note_path).expanduser().resolve()
+        if not note_path.is_file():
+            print(f"error: file not found: {note_path}", file=sys.stderr)
+            return 2
+        text = note_path.read_text(encoding="utf-8")
+    else:
+        text = args.query_text
+
+    results = related_to_text(text, top_k=args.limit)
+
+    if args.json_output:
+        print(json.dumps(results, indent=2, ensure_ascii=False))
+        return 0
+
+    if not results:
+        print("No related notes found.")
+        return 0
+
+    print(f"Related notes ({len(results)}):")
+    for r in results:
+        print(f"  {r['score']:.3f}  {r['title']}")
+        print(f"         {r['path']}")
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -235,6 +274,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_doctor(args)
     if args.command == "queue" and args.queue_command == "sync":
         return cmd_queue_sync(args)
+    if args.command == "related":
+        return cmd_related(args)
 
     parser.print_help()
     return 0

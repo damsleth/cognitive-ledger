@@ -18,6 +18,14 @@ fd "id__" notes/01_identity                    # identity notes
 fd "pref__" notes/03_preferences && fd "concept__" notes/06_concepts  # search by type (portable)
 ```
 
+**Two-tier lookup strategy:**
+- `context.md` for boot (compact summary, always loaded at session start)
+- `notes/08_indices/index.md` / `index.json` as a lookup table for deeper searches
+  (do NOT load into context at boot - on a mature ledger it would become the bottleneck)
+
+**Voice DNA:** If `notes/01_identity/id__voice_dna.md` exists, read it at boot.
+Apply the voice profile to tone, sentence structure, and vocabulary when writing notes.
+
 **Non-negotiables:**
 
 - No chat transcripts — ever

@@ -1389,4 +1389,69 @@ __all__ = [
     "apply_progressive_disclosure",
     "rank_lexical",
     "_rank_query_lexical",
+    "related_to_text",
 ]
+
+
+def related_to_text(
+    text: str,
+    top_k: int = 5,
+    scope: str = "all",
+) -> list[dict[str, Any]]:
+    """Find ledger notes related to arbitrary text.
+
+    Tokenizes the input text and runs it through the candidate index
+    pipeline, returning ranked results. Designed for use by external
+    tools (Obsidian plugin, CLI) that need to query with free text
+    rather than ledger note paths.
+
+    Args:
+        text: Arbitrary text to find related notes for.
+        top_k: Maximum results to return.
+        scope: Scope filter (default: all).
+
+    Returns:
+        List of dicts with path, title, score, snippet.
+    """
+    from ledger.parsing import tokenize
+
+    config = get_config()
+    query_tokens = tokenize(text)
+    if not query_tokens:
+        return []
+
+    candidates = build_candidates()
+    if not candidates:
+        return []
+
+    index = build_candidate_index(candidates)
+    shortlisted = retrieve_candidates_from_index(index, query_tokens)
+
+    if scope != "all":
+        shortlisted = [c for c in shortlisted if scope_matches(c.scope, scope)]
+
+    now = now_utc()
+    scored: list[ScoredResult] = []
+    for candidate in shortlisted:
+        result = score_candidate(
+            candidate,
+            query_tokens,
+            aliases={},
+            scope=scope,
+            now_dt=now,
+        )
+        scored.append(result)
+
+    scored.sort(key=lambda r: r.score, reverse=True)
+
+    return [
+        {
+            "path": r.rel_path or r.path,
+            "title": r.title,
+            "score": round(r.score, 4),
+            "snippet": r.snippet[:200],
+            "tags": r.tags,
+            "updated": r.updated,
+        }
+        for r in scored[:top_k]
+    ]
