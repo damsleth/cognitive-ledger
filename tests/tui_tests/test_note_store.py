@@ -8,7 +8,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from tui.services.note_store import NoteStore
-from tui.models.enums import NoteType, Scope
+from ledger.notes import NoteType, Scope
 
 
 class TestNoteStore:
