@@ -16,8 +16,9 @@ from typing import Generator
 
 import pytest
 
-from tui.models.enums import NoteType, Source, Scope, LoopStatus
-from tui.models.note import Frontmatter, Note, NoteLink
+from ledger.notes import NoteType, Source, Scope, LoopStatus, Frontmatter
+from ledger.parsing import NoteLink
+from tui.models.note import Note
 
 
 @pytest.fixture
