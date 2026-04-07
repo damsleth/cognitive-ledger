@@ -9,53 +9,63 @@ A structured, file-based memory system for AI agents. Small atomic notes (facts,
 ## Why
 Language models forget everything between sessions. The Cognitive Ledger gives them a persistent, inspectable memory - not by stuffing raw chat logs into the context window, but by distilling conversations into atomic, retrievable notes. Each note captures one durable idea (a decision, a preference, a goal, an open question) so that any agent can resume any thread by searching the ledger instead of re-reading the entire conversation history. The result is continuity across sessions, agents, and tools without blowing up context budgets.
 
-## Getting Started
-
-### 1. Clone and set up
+## Quick Start
 
 ```bash
 git clone https://github.com/<you>/cognitive-ledger.git
 cd cognitive-ledger
 ./scripts/setup-venv.sh
+./scripts/ledger init                # one-command setup
+./skills/install-skill.sh            # install /notes skill for your agents
 ```
 
-### 2. Configure
+That's it. The `init` command creates the full directory structure, templates,
+config, and initial indices. Optional flags:
 
-Edit `config.yaml` in the repo root to point at your paths:
+```bash
+./scripts/ledger init --voice-dna ~/voice-profile.json   # import your writing voice
+./scripts/ledger init --source-root ~/notes               # set source for ingest
+```
+
+### Configure (optional)
+
+Edit `config.yaml` in the repo root:
 
 ```yaml
 # config.yaml
-root_dir: ~/Code/cognitive-ledger
-notes_dir: ~/Code/cognitive-ledger/notes
 source_root: ~/Code/notes
+# auto_file_synthesis: false  # set true to auto-file query syntheses
 ```
 
-All values are optional - defaults work out of the box. Environment variables (`LEDGER_ROOT_DIR`, `LEDGER_NOTES_DIR`, etc.) override the config file.
+All values are optional - defaults work out of the box. Environment variables
+(`LEDGER_ROOT_DIR`, `LEDGER_NOTES_DIR`, etc.) override the config file.
 
-### 3. Install the `/notes` skill
+### Set up hooks (recommended)
 
-The `/notes` skill lets your agent capture notes and sync durable memory to the ledger. Install it into your agent's skill folder:
+Add to `.claude/settings.json`:
 
-```bash
-./skills/install-skill.sh
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      {"type": "command", "command": "bash scripts/hooks/session_start.sh"}
+    ],
+    "Notification": [
+      {"type": "command", "command": "bash scripts/hooks/session_end_capture.sh"}
+    ]
+  }
+}
 ```
 
-This symlinks `skills/notes/` into `~/.claude/skills/`, `~/.codex/skills/`, and `~/.copilot/skills/`.
+### Try it
 
-Before first use, set `NOTES_DIR` and `LEDGER_DIR` in the skill's frontmatter (`skills/notes/SKILL.md`) or as environment variables:
-
-```bash
-export NOTES_DIR=~/Code/notes        # your existing notes tree
-export LEDGER_DIR=~/Code/cognitive-ledger
-```
-
-### 4. Try it
-
-Once the skill is installed, invoke `/notes` in your agent session. The skill will:
+Invoke `/notes` in your agent session:
 
 1. Read `notes/08_indices/context.md` for existing context
 2. Ask targeted questions about what you want to capture
 3. Write atomic notes to the ledger (and optionally to your notes tree)
+
+Or try `./scripts/ledger briefing` for a daily status overview.
 
 ## Plugging Into an Existing Notes Repository
 

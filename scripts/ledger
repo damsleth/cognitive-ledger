@@ -525,6 +525,35 @@ def handle_signal_command(args):
         raise SystemExit(1)
 
 
+def handle_init_command(args):
+    """Handle init subcommand."""
+    from ledger.init import init_ledger
+
+    report = init_ledger(
+        voice_dna_path=args.voice_dna,
+        source_root=args.source_root,
+        notes_dir=args.notes_dir,
+    )
+
+    if report["created"]:
+        print("Created:")
+        for item in report["created"]:
+            print(f"  + {item}")
+    if report["skipped"]:
+        print("Skipped (already exists):")
+        for item in report["skipped"]:
+            print(f"  = {item}")
+    if report["errors"]:
+        print("Errors:")
+        for item in report["errors"]:
+            print(f"  ! {item}")
+
+    print("\nNext steps:")
+    print("  1. Edit config.yaml if needed")
+    print("  2. Run: ./skills/install-skill.sh")
+    print("  3. Create your first note with /notes")
+
+
 def handle_ingest_command(args):
     """Handle ingest subcommands."""
     from ledger.ingest import scan_sources, diff_manifest, load_manifest, record_ingest
@@ -793,6 +822,12 @@ def main():
         help="Output format: boot (full payload), identity (identity notes only), json (scored items)",
     )
 
+    # Init subcommand
+    init_parser = subparsers.add_parser("init", help="Initialize a cognitive ledger")
+    init_parser.add_argument("--voice-dna", default=None, help="Path to voice-dna JSON file")
+    init_parser.add_argument("--source-root", default=None, help="Source notes root")
+    init_parser.add_argument("--notes-dir", default=None, help="Notes directory path")
+
     # Ingest subcommand
     ingest_parser = subparsers.add_parser("ingest", help="Source ingest pipeline")
     ingest_subparsers = ingest_parser.add_subparsers(dest="ingest_command")
@@ -894,6 +929,10 @@ def main():
 
         if args.command == "signal":
             handle_signal_command(args)
+            return
+
+        if args.command == "init":
+            handle_init_command(args)
             return
 
         if args.command == "ingest":
