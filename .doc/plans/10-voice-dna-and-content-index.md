@@ -56,6 +56,35 @@ Generate a browseable, content-oriented catalog as part of `sheep index`.
 4. Update AGENTS.md Boot section to document the two-tier strategy:
    `context.md` for boot, `index.md` for lookup
 
+### 1c. Obsidian-Friendly Retrieval API
+
+The content index and retrieval module should be queryable by external tools -
+specifically the `ledger-obsidian` CLI and a future Obsidian plugin. This
+means the lookup path must work with arbitrary text input, not just ledger
+note paths.
+
+1. Ensure `index.json` is stable and documented:
+   - Each entry includes: `path`, `title`, `summary`, `tags`, `note_type`,
+     `confidence`, `updated`
+   - Format is a JSON array (not JSONL) so external tools can parse it
+     without streaming
+2. Add a text-query entry point to `ledger/retrieval.py`:
+   - `related_to_text(text, top_k=5)` - tokenize arbitrary text (e.g. an
+     Obsidian note's contents), run it through the existing
+     `retrieve_candidates_from_index()` pipeline, return ranked results
+   - This is a thin wrapper - the retrieval machinery already exists
+3. Expose via `ledger-obsidian`:
+   - `ledger-obsidian related <path-to-obsidian-note>` - reads the file,
+     calls `related_to_text()`, prints matching ledger artifacts
+   - `ledger-obsidian related --query "deployment pipeline"` - free-text
+     variant
+4. Design for future plugin use: the same `related_to_text()` function
+   can back a local HTTP endpoint or be called directly by a Python-based
+   Obsidian bridge. Keep it dependency-free (no web framework required).
+
+This keeps the ledger notes in their own repo while letting Obsidian
+surface related artifacts on demand - tight integration without merging.
+
 ## Key Files
 
 - `templates/voice_dna_template.md` (new)
@@ -64,6 +93,8 @@ Generate a browseable, content-oriented catalog as part of `sheep index`.
 - `scripts/ledger` (add subcommands)
 - `schema.yaml`
 - `skills/notes/SKILL.md`
+- `ledger/retrieval.py` (add `related_to_text()`)
+- `ledger/obsidian/cli.py` (extend with `related` subcommand)
 - `AGENTS.md`
 
 ## Reuse
@@ -71,7 +102,9 @@ Generate a browseable, content-oriented catalog as part of `sheep index`.
 - `ledger/parsing/frontmatter.py` for all frontmatter parsing
 - `ledger/io/safe_write.py` for atomic writes
 - `ledger/maintenance.py:_iter_note_files()` for index generation
-- `ledger/timeline.py:append_timeline_entry()` for logging
+- `ledger/retrieval.py:retrieve_candidates_from_index()` for the Obsidian lookup
+- `ledger/io/safe_write.py:append_timeline_entry()` for logging
+- `ledger/timeline.py:append_timeline_jsonl()` for direct JSONL timeline writes
 
 ## Verification
 
