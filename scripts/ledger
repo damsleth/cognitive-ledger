@@ -410,6 +410,85 @@ def handle_eval_command(args):
         print(f"baseline_written: {args.write_baseline}")
 
 
+def handle_context_command(args):
+    """Output boot context for session start."""
+    from ledger.context import build_context
+    from ledger.notes import get_notes
+    from ledger.parsing import shorten
+
+    notes_dir = _config.notes_dir
+    fmt = getattr(args, "format", "boot")
+
+    if fmt == "boot":
+        # Full boot payload: context.md content + sheep status + signal stats
+        print(build_context(notes_dir))
+    elif fmt == "identity":
+        # Just identity notes
+        identity = get_notes("identity", notes_dir=notes_dir)
+        if not identity:
+            print("No identity notes found in notes/01_identity/")
+            return
+        for note in identity:
+            print(f"- `{note.path.name}` - {shorten(note.statement or note.title, 160)}")
+    elif fmt == "json":
+        from ledger.context import collect_profile_items
+        items = collect_profile_items(notes_dir)
+        rows = [
+            {
+                "path": str(item.path),
+                "type": item.type,
+                "title": item.title,
+                "summary": item.summary,
+                "score": round(item.score, 4),
+                "scope": item.scope,
+            }
+            for item in sorted(items, key=lambda i: i.score, reverse=True)[:20]
+        ]
+        print(json.dumps(rows, indent=2, ensure_ascii=False))
+
+
+def handle_signal_command(args):
+    """Handle signal subcommands."""
+    from ledger import signals as sig
+
+    sub = getattr(args, "signal_command", None)
+
+    if sub == "add":
+        entry = sig.append_signal(
+            args.type,
+            query=args.query or "",
+            note=args.note or "",
+            detail=args.detail or "",
+            rating=args.rating,
+            session=args.session or "",
+        )
+        print(json.dumps(entry, ensure_ascii=False))
+
+    elif sub == "summarize":
+        path = sig.write_summary()
+        print(f"Signal summary written to {path}")
+
+    elif sub == "stats":
+        stats = sig.signal_stats()
+        print(f"Total signals: {stats['total']}")
+        print(f"By type: {json.dumps(stats['by_type'], indent=2)}")
+        if stats["top_notes"]:
+            print("\nTop notes by hit count:")
+            for note_path, hits in stats["top_notes"][:5]:
+                print(f"  {hits:3d} hits  {note_path}")
+        if stats["corrections_pending"]:
+            print(f"\nNotes with corrections pending review: {stats['corrections_pending']}")
+        misses = stats.get("retrieval_misses", {})
+        if misses:
+            print("\nTop retrieval miss queries:")
+            for query, count in list(misses.items())[:5]:
+                print(f"  {count:3d}x  {query}")
+
+    else:
+        print("Usage: ledger signal {add|summarize|stats}")
+        raise SystemExit(1)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Cognitive Ledger retrieval helpers")
     subparsers = parser.add_subparsers(dest="command")
@@ -534,6 +613,35 @@ def main():
     eval_parser.add_argument("--write-baseline", dest="write_baseline", help="Write current metrics snapshot to JSON")
     eval_parser.add_argument("--json", action="store_true", dest="json")
 
+    # Context subcommand (session boot payload)
+    context_parser = subparsers.add_parser("context", help="Output boot context for session start")
+    context_parser.add_argument(
+        "--format",
+        choices=("boot", "identity", "json"),
+        default="boot",
+        help="Output format: boot (full payload), identity (identity notes only), json (scored items)",
+    )
+
+    # Signal subcommand (feedback loop)
+    signal_parser = subparsers.add_parser("signal", help="Capture and analyze feedback signals")
+    signal_subparsers = signal_parser.add_subparsers(dest="signal_command")
+
+    signal_add_parser = signal_subparsers.add_parser("add", help="Append a signal entry")
+    signal_add_parser.add_argument(
+        "--type", required=True,
+        choices=("retrieval_hit", "retrieval_miss", "correction", "affirmation",
+                 "stale_flag", "preference_applied", "rating"),
+        help="Signal type",
+    )
+    signal_add_parser.add_argument("--query", default=None, help="Query text (for retrieval signals)")
+    signal_add_parser.add_argument("--note", default=None, help="Note path")
+    signal_add_parser.add_argument("--detail", default=None, help="Free-text detail")
+    signal_add_parser.add_argument("--rating", type=int, default=None, help="Rating 1-10 (for rating type)")
+    signal_add_parser.add_argument("--session", default=None, help="Session identifier")
+
+    signal_subparsers.add_parser("summarize", help="Rebuild signal_summary.json")
+    signal_subparsers.add_parser("stats", help="Print signal statistics")
+
     args = parser.parse_args()
 
     def handle_listing_command(command_args):
@@ -559,6 +667,7 @@ def main():
         "query": handle_query_command,
         "discover-source": handle_discover_source_command,
         "eval": handle_eval_command,
+        "context": handle_context_command,
     }
     embed_handlers = {
         "build": handle_embed_build_command,
@@ -577,6 +686,10 @@ def main():
                 embed_handler(args)
                 return
             embed_parser.print_help()
+            return
+
+        if args.command == "signal":
+            handle_signal_command(args)
             return
 
         handler = command_handlers.get(args.command)
