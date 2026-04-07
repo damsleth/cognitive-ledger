@@ -33,6 +33,7 @@ def temp_notes_dir() -> Generator[Path, None, None]:
         # Create standard ledger folder structure
         folders = [
             "00_inbox",
+            "01_identity",
             "02_facts",
             "03_preferences",
             "04_goals",
