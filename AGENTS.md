@@ -11,8 +11,10 @@ folder as needed rather than duplicating its contents here.
 ### Boot
 
 ```bash
+./scripts/ledger context --format boot         # full boot payload (identity + loops + status)
 tail -20 notes/08_indices/timeline.md          # recent changes
 rg "<keyword>" notes -n                        # search content (show matches)
+fd "id__" notes/01_identity                    # identity notes
 fd "pref__" notes/03_preferences && fd "concept__" notes/06_concepts  # search by type (portable)
 ```
 
@@ -69,8 +71,23 @@ ledger-obsidian daemon start|status|stop --vault /path/to/vault   # macOS
 ./scripts/ledger eval --cases notes/08_indices/retrieval_eval_cases.yaml --k 3 --strict-cases
 ./scripts/ledger loops                 # compact list (default)
 ./scripts/ledger loops --interactive   # progressive disclosure
-./scripts/ledger notes --type <all|facts|preferences|goals|loops|concepts> --interactive
+./scripts/ledger notes --type <all|identity|facts|preferences|goals|loops|concepts> --interactive
+./scripts/ledger context --format boot # session boot payload
+./scripts/ledger context --format identity  # identity notes only
 ```
+
+### Signals (Feedback Loop)
+
+```bash
+./scripts/ledger signal add --type retrieval_hit --query "deploy" --note notes/02_facts/fact__k8s.md
+./scripts/ledger signal add --type correction --note notes/03_preferences/pref__x.md --detail "outdated"
+./scripts/ledger signal add --type rating --rating 8
+./scripts/ledger signal summarize      # rebuild signal_summary.json
+./scripts/ledger signal stats          # show signal counts, top notes, gaps
+```
+
+Signal types: `retrieval_hit`, `retrieval_miss`, `correction`, `affirmation`,
+`stale_flag`, `preference_applied`, `rating`.
 
 `<mode>`: `legacy`, `two_stage`, `compressed_attention`, `scope_type_prefilter`, `precomputed_index`, `progressive_disclosure`, `semantic_hybrid`.
 
@@ -97,12 +114,13 @@ Exit codes: `0` beneficial, `2` regression, `3` neutral, `4` invalid setup.
 ### Folder map
 
 ```
+notes/01_identity/     core identity: mission, beliefs, models, strategies, narratives
 notes/02_facts/        stable truths / decisions
 notes/03_preferences/  user preferences / policies
 notes/04_goals/        long-lived objectives
 notes/05_open_loops/   durable unresolved items (status lifecycle)
 notes/06_concepts/     definitions / frameworks / mental models
-notes/08_indices/      timeline, logs, import state, generated indexes
+notes/08_indices/      timeline, logs, import state, generated indexes, signals
 notes/09_archive/      superseded notes (do not delete)
 ```
 
@@ -158,6 +176,8 @@ purpose:
 | ----------------- | -------------------------------------------------------- |
 | `00_inbox/`       | Temporary capture zone. Notes here should be reviewed    |
 |                   | and either promoted or discarded during consolidation.   |
+| `01_identity/`    | Core identity documents (mission, beliefs, mental        |
+|                   | models, strategies, narratives). Max 5 files.            |
 | `02_facts/`       | Stable truths sourced from the user or external tools.   |
 | `03_preferences/` | Recorded user preferences, styles or habits.             |
 | `04_goals/`       | Long-term objectives and commitments.                    |
@@ -192,6 +212,7 @@ Pattern: `{type}__{slug}.md` where slug is lowercase with underscores.
 
 | Type       | Prefix      | Folder                              |
 | ---------- | ----------- | ----------------------------------- |
+| identity   | `id__`      | `notes/01_identity/`                |
 | fact       | `fact__`    | `notes/02_facts/`                   |
 | preference | `pref__`    | `notes/03_preferences/`             |
 | goal       | `goal__`    | `notes/04_goals/`                   |
@@ -237,9 +258,26 @@ Write or update a note when any of the following events occur:
 5. **New concept or framework** – You define or discover a useful concept.
 6. **Open loop** – An unresolved question or task arises that spans
    sessions.
+7. **Identity change** – The user expresses a core belief, mission shift,
+   strategic heuristic, or narrative reframing → persist to identity layer.
 
 If none of these triggers fire, do not persist anything. Noise kills
 future context.
+
+### Signal capture (feedback loop)
+
+In addition to note writes, capture feedback signals when:
+
+- A retrieved note was **used** in a response → `retrieval_hit`
+- A search found **nothing useful** → `retrieval_miss`
+- The user **corrects** the agent's use of a note → `correction`
+- The user **confirms** the agent got it right → `affirmation`
+- A note is referenced but its content is **outdated** → `stale_flag`
+
+Capture via: `./scripts/ledger signal add --type <type> [--query <q>] [--note <path>]`
+
+Do NOT capture signals speculatively or for trivial queries. Only log when
+there is clear user feedback or deliberate note usage.
 
 ## Cross-agent handoff (cross-agentism)
 
@@ -267,6 +305,8 @@ Agents should follow this loop on every user interaction:
      narrow down the search space.
    - Load only what is necessary; avoid concatenating entire archives into
      the prompt. Keep the working set small to preserve context window.
+   - Identity notes (`notes/01_identity/`) are always relevant context;
+     load them early in the session if not already loaded.
 2. **Respond** – Generate the user-facing answer or action.
 3. **Persist** – If a trigger fires:
    - Draft a new note using the appropriate template, or update an
@@ -276,9 +316,48 @@ Agents should follow this loop on every user interaction:
      resolution.
    - Keep cross-agent readability in mind: write so a different agent can pick up the thread
      using only the ledger + search tools.
-4. **Report** – Summarise what you changed. In the chat, list any
+4. **Signal** – If user feedback occurred (correction, affirmation, or
+   explicit rating), or a retrieved note was used in the response, log a
+   signal via `./scripts/ledger signal add`. See "Signal capture" above.
+5. **Report** – Summarise what you changed. In the chat, list any
    created or updated files with a one-line description. Do not dump
    the full note contents unless the user asks.
+
+## Session Lifecycle Hooks
+
+Hook scripts under `scripts/hooks/` automate common session patterns:
+
+| Hook               | Script                          | Purpose                                      |
+| ------------------ | ------------------------------- | -------------------------------------------- |
+| **session-start**  | `scripts/hooks/session_start.sh` | Load boot context: identity + loops + status |
+| **post-write**     | `scripts/hooks/post_write.sh`   | Append timeline entry after note operations  |
+| **session-end**    | `scripts/hooks/session_end.sh`  | Flush signals, report session activity       |
+
+Manual invocation: `bash scripts/hooks/session_start.sh`
+
+For Claude Code integration, configure in `.claude/settings.json`:
+```jsonc
+{
+  "hooks": {
+    "SessionStart": [{"type": "command", "command": "bash scripts/hooks/session_start.sh"}]
+  }
+}
+```
+
+## Identity Layer
+
+Identity notes in `notes/01_identity/` capture *who the user is* — their
+mission, beliefs, mental models, decision strategies, and personal narratives.
+These are high-signal, small files that provide rich context for interpreting
+requests.
+
+- Max 5 files (one per `identity_type`: mission, beliefs, models, strategies, narratives)
+- Always loaded at boot (via context profile or session-start hook)
+- Receive a retrieval score boost (identity notes surface above similarly-relevant notes)
+- Distinct from `06_concepts/` (general frameworks) — identity is *personal* axioms
+
+When to update: mission shifts, new beliefs, changed decision heuristics, or
+narrative reframing. Flag identity notes >90 days old during consolidation.
 
 ## Tooling hints
 
@@ -360,3 +439,21 @@ but still remain correct and reversible via git history.
 
 These conventions maintain transparency without flooding the user or
 future agents with unnecessary text.
+
+## Keeping docs in sync
+
+When you make changes to the ledger's **infrastructure** (new note types,
+config parameters, retrieval modes, CLI subcommands, schema changes, hooks,
+or other user-facing features):
+
+1. **`CHANGELOG.md`** – Append an entry under the current date. Use
+   `### Added`, `### Changed`, `### Fixed`, or `### Removed` headings
+   (keep-a-changelog style). One bullet per distinct change.
+2. **`README.md`** – Update if the change affects getting-started steps,
+   folder layout, CLI examples, or introduces a new top-level feature
+   section. Keep the README concise; link to `AGENTS.md` or `schema.yaml`
+   for details.
+
+Do **not** update these files for routine note operations (creating,
+updating, or archiving individual notes). Only infrastructure and tooling
+changes warrant doc updates.
