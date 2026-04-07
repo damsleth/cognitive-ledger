@@ -4,7 +4,7 @@ Deepening your agent's cognitive lightcone with a persistent, hybrid markdown+em
 ![Cognitive Lightcone](skills/notes/cognitive_lightcone.png)
 
 ## What
-A structured, file-based memory system for AI agents. Small atomic notes (facts, preferences, goals, open loops, concepts) stored as markdown with YAML frontmatter. Searchable, versionable, and designed to fit inside context windows.
+A structured, file-based memory system for AI agents. Small atomic notes (facts, preferences, goals, open loops, concepts, identity) stored as markdown with YAML frontmatter. Searchable, versionable, and designed to fit inside context windows. Includes a feedback loop that captures retrieval signals to improve ranking over time.
 
 ## Why
 Language models forget everything between sessions. The Cognitive Ledger gives them a persistent, inspectable memory - not by stuffing raw chat logs into the context window, but by distilling conversations into atomic, retrievable notes. Each note captures one durable idea (a decision, a preference, a goal, an open question) so that any agent can resume any thread by searching the ledger instead of re-reading the entire conversation history. The result is continuity across sessions, agents, and tools without blowing up context budgets.
@@ -99,6 +99,7 @@ ledger-obsidian doctor --vault /path/to/vault          # health check
 ./scripts/ledger query "calendar constraints" --bundle    # context-window-friendly output
 ./scripts/ledger loops                                    # list open loops
 ./scripts/ledger loops --interactive                      # progressive disclosure
+./scripts/ledger context --format boot                    # session boot payload
 ```
 
 ### Semantic search (optional)
@@ -120,17 +121,55 @@ ledger-obsidian doctor --vault /path/to/vault          # health check
 ```
 notes/
   00_inbox/         temporary capture (cleared on consolidation)
+  01_identity/      core identity: mission, beliefs, models, strategies, narratives (id__*.md)
   02_facts/         stable truths (fact__*.md)
   03_preferences/   user preferences (pref__*.md)
   04_goals/         long-term objectives (goal__*.md)
   05_open_loops/    unresolved items (loop__*.md)
   06_concepts/      definitions and frameworks (concept__*.md)
   07_projects/      project-specific subfolders
-  08_indices/       derived indices (timeline, tags, eval cases)
+  08_indices/       derived indices (timeline, tags, eval cases, signals)
   09_archive/       superseded notes
 ```
 
-Each note has YAML frontmatter with `created`, `updated`, `tags`, `confidence`, `source`, `scope`, and `lang`. See `schema.yaml` for the full spec and `templates/` for starter templates.
+Each note has YAML frontmatter with `created`, `updated`, `tags`, `confidence`, `source`, `scope`, and `lang`. Identity notes also have `identity_type`. See `schema.yaml` for the full spec and `templates/` for starter templates.
+
+## Identity Layer
+
+Identity notes in `notes/01_identity/` capture who the user is — mission, beliefs, mental models, decision strategies, and personal narratives. These are high-signal, small files (max 5) that provide rich context for interpreting requests. They receive a retrieval score boost and are loaded automatically at session start.
+
+```bash
+./scripts/ledger context --format identity   # list identity notes
+./scripts/ledger notes --type identity       # browse identity notes
+```
+
+## Signal Feedback Loop
+
+The ledger captures feedback signals — retrieval hits/misses, corrections, affirmations, and ratings — to improve retrieval ranking over time. Signals are stored as append-only JSONL and summarized into per-note scores that feed back into retrieval.
+
+```bash
+./scripts/ledger signal add --type retrieval_hit --query "deploy" --note notes/02_facts/fact__k8s.md
+./scripts/ledger signal add --type correction --note notes/03_preferences/pref__x.md --detail "outdated"
+./scripts/ledger signal add --type rating --rating 8
+./scripts/ledger signal summarize            # rebuild signal_summary.json
+./scripts/ledger signal stats                # counts, top notes, coverage gaps
+```
+
+Signal scoring is disabled by default (`score_weight_signal: 0.0`) until enough data accumulates. Enable via `config.yaml` once you have 20+ signals.
+
+## Session Lifecycle Hooks
+
+Hook scripts under `scripts/hooks/` automate common session patterns:
+
+- **`session_start.sh`** — loads boot context (identity notes, open loops, maintenance status, signal stats)
+- **`post_write.sh`** — appends timeline entries after note operations
+- **`session_end.sh`** — flushes signal summary, reports session activity
+
+```bash
+bash scripts/hooks/session_start.sh          # manual invocation
+```
+
+For Claude Code, configure hooks in `.claude/settings.json`. See `AGENTS.md` for integration details.
 
 ## Consolidation ("Electric Sheep")
 

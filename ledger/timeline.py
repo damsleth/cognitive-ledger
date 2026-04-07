@@ -30,6 +30,8 @@ MARKDOWN_LINE_RE = re.compile(
 
 def _infer_type(path: str) -> str:
     normalized = str(path or "").strip()
+    if normalized.startswith("notes/01_identity/"):
+        return "identity"
     if normalized.startswith("notes/02_facts/"):
         return "fact"
     if normalized.startswith("notes/03_preferences/"):

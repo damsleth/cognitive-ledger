@@ -52,6 +52,7 @@ class NoteTypeConfig:
 
 # Standard note types with their configurations
 NOTE_TYPE_CONFIGS: dict[str, NoteTypeConfig] = {
+    "identity": NoteTypeConfig(folder="01_identity", prefix="id__", label="id"),
     "facts": NoteTypeConfig(folder="02_facts", prefix="fact__", label="fact"),
     "preferences": NoteTypeConfig(folder="03_preferences", prefix="pref__", label="pref"),
     "goals": NoteTypeConfig(folder="04_goals", prefix="goal__", label="goal"),
@@ -61,6 +62,7 @@ NOTE_TYPE_CONFIGS: dict[str, NoteTypeConfig] = {
 
 CORE_NOTE_TYPES = tuple(NOTE_TYPE_CONFIGS.keys())
 LOOP_STATUSES = ("open", "closed", "blocked", "snoozed")
+IDENTITY_TYPES = ("mission", "beliefs", "models", "strategies", "narratives")
 
 
 @dataclass

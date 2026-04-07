@@ -15,6 +15,7 @@ from ledger.parsing import parse_timestamp, shorten
 SCOPES = ("personal", "work", "dev")
 ACTIVE_LOOP_STATUSES = {"open", "blocked", "snoozed"}
 NOTE_TYPE_MAP = {
+    "identity": "identity",
     "facts": "fact",
     "preferences": "preference",
     "goals": "goal",
@@ -76,15 +77,30 @@ def note_score(item: ContextProfileItem, now_dt: dt.datetime) -> float:
 
 
 def build_context(notes_dir: Path) -> str:
+    from ledger.config import get_config
+    min_confidence = get_config().boot_min_confidence
+
+    identity = get_notes("identity", notes_dir=notes_dir)
     facts = get_notes("facts", notes_dir=notes_dir)
     preferences = get_notes("preferences", notes_dir=notes_dir)
     goals = get_notes("goals", notes_dir=notes_dir)
     loops = get_notes("loops", notes_dir=notes_dir)
 
+    # Filter boot context by confidence threshold
+    identity = [n for n in identity if n.confidence >= min_confidence]
+    facts = [n for n in facts if n.confidence >= min_confidence]
+    preferences = [n for n in preferences if n.confidence >= min_confidence]
+    goals = [n for n in goals if n.confidence >= min_confidence]
+
     active_loops = [note for note in loops if (note.status or "open") in ACTIVE_LOOP_STATUSES]
-    all_updated = [note.updated for note in facts + preferences + goals + loops if note.updated]
+    all_notes = identity + facts + preferences + goals + loops
+    all_updated = [note.updated for note in all_notes if note.updated]
     latest_update = max(all_updated) if all_updated else "unknown"
 
+    identity_lines = [
+        f"- `{note.path.name}` - {shorten(note.statement or note.title, 160)}"
+        for note in identity
+    ]
     fact_lines = [
         f"- `{note.path.name}` - {shorten(note.statement or note.title, 160)}"
         for note in facts[:6]
@@ -109,12 +125,24 @@ def build_context(notes_dir: Path) -> str:
         "",
         "## Snapshot",
         "",
+        f"- Identity: {len(identity)}",
         f"- Facts: {len(facts)}",
         f"- Preferences: {len(preferences)}",
         f"- Goals: {len(goals)}",
         f"- Active loops: {len(active_loops)}",
         f"- Latest source update: {latest_update}",
         "",
+    ]
+
+    if identity_lines:
+        output.extend([
+            "## Identity",
+            "",
+            *identity_lines,
+            "",
+        ])
+
+    output.extend([
         "## Key Facts",
         "",
         *_render_list(fact_lines, "No facts available."),
@@ -130,6 +158,7 @@ def build_context(notes_dir: Path) -> str:
         "## When to Search Deeper",
         "",
         "Before responding about:",
+        "- Identity, mission, beliefs, strategies -> search `notes/01_identity/`",
         "- Personal details, history, family -> search `notes/02_facts/`",
         "- Past decisions or commitments -> search `notes/02_facts/` and `notes/08_indices/timeline.md`",
         "- User preferences or style -> search `notes/03_preferences/`",
@@ -138,7 +167,7 @@ def build_context(notes_dir: Path) -> str:
         "",
         "Rule: if about to guess or assume something about the user, search first.",
         "",
-    ]
+    ])
     return "\n".join(output)
 
 
@@ -195,6 +224,11 @@ def collect_profile_items(notes_dir: Path) -> list[ContextProfileItem]:
 def render_profile(scope: str, items: list[ContextProfileItem]) -> tuple[str, dict[str, Any]]:
     scope_items = [item for item in items if item.scope == scope]
 
+    # Identity notes appear in every profile (they're scope-independent)
+    identity = sorted(
+        (item for item in items if item.type == "identity"),
+        key=lambda item: item.score, reverse=True,
+    )
     facts = sorted((item for item in scope_items if item.type == "fact"), key=lambda item: item.score, reverse=True)[:6]
     preferences = sorted(
         (item for item in scope_items if item.type == "preference"),
@@ -219,13 +253,19 @@ def render_profile(scope: str, items: list[ContextProfileItem]) -> tuple[str, di
         "## Snapshot",
         "",
         f"- Scope: {scope}",
+        f"- Identity: {len(identity)}",
         f"- Facts: {len(facts)}",
         f"- Preferences: {len(preferences)}",
         f"- Active loops with next action: {len(loops)}",
         "",
-        "## Top Facts",
-        "",
     ]
+
+    if identity:
+        lines.extend(["## Identity", ""])
+        lines.extend(f"- `{item.name}` - {shorten(item.summary, 160)}" for item in identity)
+        lines.append("")
+
+    lines.extend(["## Top Facts", ""])
     if facts:
         lines.extend(f"- `{item.name}` - {shorten(item.summary, 160)}" for item in facts)
     else:
@@ -279,6 +319,7 @@ def render_profile(scope: str, items: list[ContextProfileItem]) -> tuple[str, di
 
     payload = {
         "scope": scope,
+        "identity": [_payload_row(item) for item in identity],
         "facts": [_payload_row(item) for item in facts],
         "preferences": [_payload_row(item) for item in preferences],
         "active_loops": [
