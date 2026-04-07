@@ -175,10 +175,18 @@ def summarize_signals(signals_path: Path | None = None) -> dict[str, Any]:
     for note_path, stats in notes.items():
         aff = stats["affirmations"]
         cor = stats["corrections"]
+        stale = stats["stale_flags"]
         hits = stats["hit_count"]
-        sentiment = (aff - cor) / (aff + cor + 1)
+        negative = cor + stale
+        sentiment = (aff - negative) / (aff + negative + 1)
+        # Usage factor: scales positive sentiment by hit frequency,
+        # but negative sentiment passes through even with zero hits
+        # so corrections/stale_flags always demote.
         usage = min(hits / 10.0, 1.0)
-        stats["signal_score"] = round(sentiment * usage, 4)
+        if sentiment >= 0:
+            stats["signal_score"] = round(sentiment * usage, 4)
+        else:
+            stats["signal_score"] = round(sentiment, 4)
 
     # Collect retrieval miss stats
     miss_queries: dict[str, int] = {}

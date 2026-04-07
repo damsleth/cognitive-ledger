@@ -420,8 +420,44 @@ def handle_context_command(args):
     fmt = getattr(args, "format", "boot")
 
     if fmt == "boot":
-        # Full boot payload: context.md content + sheep status + signal stats
+        # Full boot payload: context + maintenance status + signal stats
         print(build_context(notes_dir))
+
+        # Maintenance status (sheep)
+        import subprocess
+        sheep_script = _config.root_dir / "scripts" / "sheep"
+        if sheep_script.is_file():
+            try:
+                result = subprocess.run(
+                    ["bash", str(sheep_script), "status"],
+                    capture_output=True, text=True, timeout=5,
+                    cwd=str(_config.root_dir),
+                )
+                if result.stdout.strip():
+                    print("## Maintenance\n")
+                    print(result.stdout.strip())
+                    print()
+            except (subprocess.TimeoutExpired, OSError):
+                pass
+
+        # Signal stats
+        signals_path = _config.signals_path
+        if signals_path.is_file():
+            try:
+                from ledger import signals as sig
+                stats = sig.signal_stats(signals_path=signals_path)
+                if stats["total"] > 0:
+                    print("## Signals\n")
+                    print(f"- Total signals: {stats['total']}")
+                    if stats["corrections_pending"]:
+                        print(f"- Corrections pending review: {stats['corrections_pending']}")
+                    misses = stats.get("retrieval_misses", {})
+                    if misses:
+                        top_miss = next(iter(misses))
+                        print(f"- Top retrieval miss: \"{top_miss}\" ({misses[top_miss]}x)")
+                    print()
+            except Exception:
+                pass
     elif fmt == "identity":
         # Just identity notes
         identity = get_notes("identity", notes_dir=notes_dir)

@@ -77,11 +77,20 @@ def note_score(item: ContextProfileItem, now_dt: dt.datetime) -> float:
 
 
 def build_context(notes_dir: Path) -> str:
+    from ledger.config import get_config
+    min_confidence = get_config().boot_min_confidence
+
     identity = get_notes("identity", notes_dir=notes_dir)
     facts = get_notes("facts", notes_dir=notes_dir)
     preferences = get_notes("preferences", notes_dir=notes_dir)
     goals = get_notes("goals", notes_dir=notes_dir)
     loops = get_notes("loops", notes_dir=notes_dir)
+
+    # Filter boot context by confidence threshold
+    identity = [n for n in identity if n.confidence >= min_confidence]
+    facts = [n for n in facts if n.confidence >= min_confidence]
+    preferences = [n for n in preferences if n.confidence >= min_confidence]
+    goals = [n for n in goals if n.confidence >= min_confidence]
 
     active_loops = [note for note in loops if (note.status or "open") in ACTIVE_LOOP_STATUSES]
     all_notes = identity + facts + preferences + goals + loops
