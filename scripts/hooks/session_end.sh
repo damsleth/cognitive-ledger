@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Session end hook for Cognitive Ledger.
-# Flushes pending signals, appends session-end marker, reports activity.
+# Rebuilds signal summary when needed and reports session activity.
 #
 # Usage: bash scripts/hooks/session_end.sh
 # Integration: Claude Code Notification hook or manual invocation.

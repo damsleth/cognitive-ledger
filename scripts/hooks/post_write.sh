@@ -44,16 +44,16 @@ if [ -f "$TIMELINE_MD" ]; then
     echo "$TIMESTAMP | $ACTION | $REL_PATH | $DESCRIPTION" >> "$TIMELINE_MD" 2>/dev/null || true
 fi
 
-# Append to JSONL timeline
+# Append to JSONL timeline (pass values as argv to avoid injection)
 JSONL_ENTRY=$(python3 -c "
-import json
+import json, sys
 print(json.dumps({
-    'ts': '$TIMESTAMP',
-    'action': '$ACTION',
-    'path': '$REL_PATH',
-    'desc': '''$DESCRIPTION'''
+    'ts': sys.argv[1],
+    'action': sys.argv[2],
+    'path': sys.argv[3],
+    'desc': sys.argv[4],
 }, ensure_ascii=False))
-" 2>/dev/null || echo "")
+" "$TIMESTAMP" "$ACTION" "$REL_PATH" "$DESCRIPTION" 2>/dev/null || echo "")
 
 if [ -n "$JSONL_ENTRY" ]; then
     echo "$JSONL_ENTRY" >> "$TIMELINE_JSONL" 2>/dev/null || true
