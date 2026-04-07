@@ -984,6 +984,7 @@ def score_candidate(
     expansion_events: list[dict[str, Any]],
     include_reasons: bool = True,
     bm25_score: float = 0.0,
+    signal_summary: dict[str, Any] | None = None,
 ) -> tuple[float, list[str], ScoreComponents]:
     """Final score for candidate in lexical retrieval modes."""
     note_tokens = set(_candidate_value(candidate, "note_tokens", set()) or set())
@@ -1016,7 +1017,27 @@ def score_candidate(
         + (config.score_weight_confidence * confidence)
     )
 
-    reasons = []
+    # Identity note boost
+    if candidate_type == "id":
+        score += config.identity_score_boost
+        if include_reasons:
+            reasons_prefix = [f"identity_boost=+{config.identity_score_boost:.2f}"]
+        else:
+            reasons_prefix = []
+    else:
+        reasons_prefix = []
+
+    # Signal feedback score
+    if config.score_weight_signal > 0 and signal_summary is not None:
+        rel_path = str(_candidate_value(candidate, "rel_path", "") or "")
+        if rel_path:
+            from ledger.signals import get_signal_score
+            sig_score = get_signal_score(rel_path, summary=signal_summary)
+            score += config.score_weight_signal * sig_score
+            if include_reasons and sig_score != 0:
+                reasons_prefix.append(f"signal={sig_score:.3f}")
+
+    reasons = list(reasons_prefix)
     if include_reasons and bm25_score > 0:
         reasons.append(f"bm25={bm25_score:.3f}")
     if include_reasons and lexical_overlap_count > 0:
@@ -1166,6 +1187,16 @@ def rank_lexical(
     history_mode = any(token in HISTORY_HINTS for token in query_tokens)
     loop_mode = any(token in LOOP_HINTS for token in query_tokens)
     preference_mode = any(token in PREFERENCE_HINTS for token in query_tokens)
+
+    # Load signal summary once if signal scoring is enabled
+    config = _cfg()
+    _signal_summary: dict[str, Any] | None = None
+    if config.score_weight_signal > 0:
+        from ledger.signals import load_signal_summary
+        summary = load_signal_summary()
+        total = summary.get("_meta", {}).get("total_signals", 0)
+        if total >= config.signal_min_entries:
+            _signal_summary = summary
     include_reasons = True if mode == "legacy" else (limit <= _cfg().detailed_reasons_limit)
     if progressive_disclosure_active:
         include_reasons = False
@@ -1265,6 +1296,7 @@ def rank_lexical(
             expansion_events if include_reasons else [],
             include_reasons=include_reasons,
             bm25_score=bm25_scores.get(str(_candidate_value(candidate, "path", "") or ""), 0.0),
+            signal_summary=_signal_summary,
         )
 
         if score <= 0:

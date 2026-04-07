@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-04-07
+
+### Added
+- **Identity layer** (PAI/TELOS-inspired) — new `identity` note type with `id__` prefix in `notes/01_identity/`. Captures mission, beliefs, mental models, strategies, and narratives. Identity notes receive a retrieval score boost and are included in boot context profiles. New `identity_type` frontmatter field.
+- **Signal feedback loop** — new `ledger/signals.py` module with append-only JSONL storage (`signals.jsonl`) for retrieval hits/misses, corrections, affirmations, and ratings. Signal scores feed back into retrieval ranking when enabled. New `ledger signal` CLI subcommand (`add`, `summarize`, `stats`).
+- **Session lifecycle hooks** — three hook scripts in `scripts/hooks/`: `session_start.sh` (boot context loader), `post_write.sh` (auto timeline append), `session_end.sh` (signal flush and session summary).
+- `ledger context` CLI subcommand — generates boot payloads in three formats (`boot`, `identity`, `json`) for session-start automation.
+- `score_weight_signal`, `signal_min_entries`, `identity_score_boost`, `boot_min_confidence` config parameters.
+
+### Changed
+- `AGENTS.md` — updated operating loop to 5 steps (added Signal step), added Identity Layer and Hooks sections, expanded folder map and file naming table, added signal capture guidelines.
+- `SKILL.md` — routing table moved to top of intent mapping, added identity and signal capture entries.
+- `schema.yaml` — added `identity` type, `identity_type` enum, signal system spec.
+- `context.py` — boot context now includes Identity section, identity notes included in context profiles.
+- `retrieval.py` — `score_candidate()` applies identity boost and optional signal score.
+- Core note types expanded from 5 to 6 (added `identity`).
+
 ## 2026-03-31
 
 ### Added
