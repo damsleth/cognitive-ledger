@@ -15,8 +15,8 @@ Build `ledger briefing` as the central awareness tool.
 
 1. Create `ledger/briefing.py` (~200 lines):
    - `daily_briefing()` returns structured markdown:
-     - **Open loops** sorted by staleness (days since last update)
-     - **Nudge candidates**: loops open > 14 days, blocked > 7 days
+     - **Open loops** sorted by staleness (days since last `updated`)
+     - **Nudge candidates**: loops where `updated` > 14 days ago, blocked > 7 days
      - **Recent changes** from timeline (last 24h)
      - **Things3 tasks** due today/upcoming (if `things-cli` available)
      - **Maintenance status** (sheep status summary)
@@ -40,15 +40,16 @@ Extend briefing with staleness-aware nudges.
    - Loops open > 7 days, no updates: gentle nudge
    - Loops open > 21 days: "close, delegate, or snooze?"
    - Loops blocked > 14 days: "still blocked? what's needed?"
-   - **Staleness tracking**: Use `created` date (immutable) as the age
-     anchor, not `updated` (which gets bumped on every edit per AGENTS.md
-     rules). Track nudge history in a separate sidecar file
-     `notes/08_indices/nudge_log.json` keyed by note path:
+   - **Staleness tracking**: Use `updated` for freshness (a loop edited
+     yesterday is not stale regardless of age). The sidecar
+     `notes/08_indices/nudge_log.json` tracks nudge history to avoid
+     re-nudging recently nudged loops - keyed by note path:
      ```json
      {"notes/05_open_loops/loop__foo.md": {"last_nudge": "2026-04-07T10:00:00Z", "count": 2}}
      ```
-     This avoids the problem where editing a loop's frontmatter to record
-     a nudge would bump `updated` and make the loop look fresh.
+     This avoids the problem where recording a nudge in the loop's own
+     frontmatter would bump `updated` and suppress future staleness
+     detection. Nudge state lives in the sidecar; `updated` stays clean.
 2. Motivational framing: emphasize progress, not guilt.
    "You've closed 2 loops this week. 3 more are ready to wrap up."
 
@@ -57,7 +58,8 @@ Extend briefing with staleness-aware nudges.
 Make the agent proactively aware at session start.
 
 1. Extend SKILL.md Boot Sequence:
-   - After reading index.md and context.md, run `ledger briefing`
+   - After reading context.md (per Phase 1's two-tier model - index.md
+     is a lookup table, not a boot dependency), run `ledger briefing`
    - If urgent items (stale loops, overdue tasks): mention them
    - If nothing urgent: skip (don't waste context)
 2. Optionally extend `scripts/hooks/session_start.sh` to cache briefing
@@ -105,7 +107,7 @@ duplicates, triage inbox, review loops), so it shouldn't be automated.
 
 ## Reuse
 
-- `ledger/browse.py:load_loops()` for open loop analysis
+- `ledger/browse.py:sorted_items()` for open loop analysis (filter by `loop_status`)
 - `ledger/timeline.py` for recent changes
 - `ledger/maintenance.py` for sheep status
 - `ledger/notes/__init__.py:get_notes()` for type-filtered listing

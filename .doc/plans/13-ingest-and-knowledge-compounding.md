@@ -61,7 +61,10 @@ update files unless the user explicitly asks. Answer filing must respect this.
    - **Do not silently write during pure queries.** The read-only query
      contract is preserved unless the user explicitly opts in.
 2. Add `auto_file_synthesis` boolean to `config.yaml` (default: `false`)
-   for users who want automatic filing without being asked each time
+   for users who want automatic filing without being asked each time.
+   **Prerequisite**: Add a corresponding `auto_file_synthesis: bool` field
+   to `LedgerConfig` in `ledger/config.py` - the current config loader
+   ignores unknown keys, so without this the setting has no effect
 3. Add lint check in `ledger/maintenance.py`:
    - Notes tagged `synthesized` must have at least 1 outgoing link
 4. Update `schema.yaml` - add `synthesized` to recommended tags list

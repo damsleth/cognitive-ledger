@@ -45,6 +45,25 @@ configuration.
    This requires extracting the CLI logic from `scripts/ledger` into a
    proper `ledger/cli.py` module. Until then, `ledger init` only works
    from the repo root via `./scripts/ledger init`.
+6. **Ship templates and skill assets as package data**: The wheel currently
+   only packages the `ledger` Python package (`pyproject.toml` line 29).
+   A pip-installed `ledger init` would not find `templates/` or
+   `skills/install-skill.sh`. Fix with one of:
+   - **(a) Package data**: Add `templates/` under `ledger/` (e.g.
+     `ledger/templates/`) and declare it in `pyproject.toml`:
+     ```toml
+     [tool.hatch.build.targets.wheel]
+     packages = ["ledger"]
+     [tool.hatch.build.targets.wheel.force-include]
+     "templates" = "ledger/templates"
+     ```
+     Then `init.py` uses `importlib.resources` to locate them.
+   - **(b) Code-generated defaults**: `init.py` generates minimal template
+     content inline (frontmatter stubs) so no external files are needed.
+   Option (b) is simpler and avoids shipping files that users will
+   customize anyway. The generated defaults should match the current
+   templates but can omit the verbose examples. `install-skill.sh` is
+   only needed for repo-local setups and should not be in the wheel.
 
 ### 5b. Hook Configuration Documentation
 
