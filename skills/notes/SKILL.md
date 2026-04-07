@@ -24,8 +24,13 @@ Capture notes and maintain structured long-term memory across two repositories:
 ## Boot Sequence (Run on Activation)
 
 1. `cd $LEDGER_DIR`
-2. Read `notes/08_indices/context.md` — essential facts, active loops, key preferences
-3. Run `./scripts/sheep status` — check if maintenance needed
+2. Read `notes/08_indices/context.md` - essential facts, active loops, key preferences
+3. Run `./scripts/sheep status` - check if maintenance needed
+4. If `notes/01_identity/id__voice_dna.md` exists, read it - apply voice profile when writing notes longer than 2 sentences
+
+**Two-tier lookup strategy:**
+- `context.md` for boot (compact summary, always loaded)
+- `notes/08_indices/index.md` or `index.json` as a lightweight lookup table for deeper searches (do NOT load at boot)
 
 ## Write Modes
 
