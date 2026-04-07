@@ -18,6 +18,8 @@ dependencies = [
 
 [project.scripts]
 ledger-obsidian = "ledger.obsidian.cli:main"
+# Note: 'ledger' console script requires extracting CLI from scripts/ledger
+# into ledger/cli.py. Until then, use ./scripts/ledger from repo root.
 
 [project.optional-dependencies]
 dev = ["pyinstaller", "pytest>=8.0"]
