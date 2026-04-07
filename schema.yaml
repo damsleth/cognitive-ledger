@@ -6,6 +6,11 @@ version: 1
 
 # Note type definitions
 types:
+  identity:
+    prefix: "id__"
+    folder: "notes/01_identity"
+    description: "Core identity documents: mission, beliefs, models, strategies, narratives"
+    extra_fields: [identity_type]
   fact:
     prefix: "fact__"
     folder: "notes/02_facts"
@@ -45,6 +50,9 @@ frontmatter:
     status:
       when: "type == loop"
       required: true
+    identity_type:
+      when: "type == identity"
+      required: true
 
   # Enum definitions
   enums:
@@ -69,6 +77,12 @@ frontmatter:
       - closed     # resolved
       - blocked    # waiting on external
       - snoozed    # deferred intentionally
+    identity_type:
+      - mission    # north-star purpose
+      - beliefs    # core worldview axioms
+      - models     # personal mental models and frameworks
+      - strategies # recurring decision heuristics
+      - narratives # self-stories, framing, voice
 
   # Validation rules
   rules:
@@ -115,6 +129,7 @@ naming:
   full_filename:
     pattern: "{prefix}{slug}.md"
     examples:
+      - "id__mission.md"
       - "pref__short_concise_answers.md"
       - "concept__electric_sheep.md"
       - "loop__fix_login_bug.md"
@@ -124,5 +139,20 @@ limits:
   max_words: 400          # warn if exceeded
   max_tags: 10            # per note
   max_links: 20           # per note
+  max_identity_notes: 5   # one per identity_type
   sleep_interval_days: 7  # recommended
   sleep_change_threshold: 25
+
+# Signal feedback system
+signals:
+  path: "notes/08_indices/signals.jsonl"
+  summary_path: "notes/08_indices/signal_summary.json"
+  types:
+    - retrieval_hit       # agent used a retrieved note in response
+    - retrieval_miss      # agent searched but found nothing useful
+    - correction          # user corrects agent's use of a note
+    - affirmation         # user confirms agent got it right
+    - stale_flag          # note referenced but content is outdated
+    - preference_applied  # agent successfully applies a preference
+    - rating              # explicit 1-10 satisfaction rating
+  min_entries_for_scoring: 20  # signal scoring disabled below this threshold
