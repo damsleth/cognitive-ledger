@@ -157,3 +157,9 @@ signals:
     - preference_applied  # agent successfully applies a preference
     - rating              # explicit 1-10 satisfaction rating
   min_entries_for_scoring: 20  # signal scoring disabled below this threshold
+
+# Recommended tags (not enforced, but recognized by tooling)
+recommended_tags:
+  - synthesized    # note created from multi-source synthesis
+  - ingested       # note created from source ingest pipeline
+  - auto-capture   # note created by passive session-end capture
