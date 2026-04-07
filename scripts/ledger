@@ -525,6 +525,36 @@ def handle_signal_command(args):
         raise SystemExit(1)
 
 
+def handle_inbox_command(args):
+    """Handle inbox subcommands."""
+    from ledger.inbox import list_inbox, triage_suggestions
+
+    sub = getattr(args, "inbox_command", None)
+
+    if sub == "list":
+        items = list_inbox()
+        if not items:
+            print("Inbox is empty.")
+            return
+        print(f"Inbox ({len(items)} items):")
+        for item in items:
+            print(f"  {item['filename']} - {item['title']}")
+
+    elif sub == "triage":
+        suggestions = triage_suggestions()
+        if not suggestions:
+            print("Inbox is empty.")
+            return
+        print(f"Triage suggestions ({len(suggestions)} items):")
+        for s in suggestions:
+            print(f"  {s['filename']}")
+            print(f"    -> {s['suggested_type']} ({s['reason']})")
+
+    else:
+        print("Usage: ledger inbox {list|triage}")
+        raise SystemExit(1)
+
+
 def handle_voice_dna_command(args):
     """Handle voice-dna subcommands."""
     from ledger.voice import import_voice_dna, export_voice_dna
@@ -681,6 +711,12 @@ def main():
         help="Output format: boot (full payload), identity (identity notes only), json (scored items)",
     )
 
+    # Inbox subcommand
+    inbox_parser = subparsers.add_parser("inbox", help="Manage inbox captures")
+    inbox_subparsers = inbox_parser.add_subparsers(dest="inbox_command")
+    inbox_subparsers.add_parser("list", help="List inbox items")
+    inbox_subparsers.add_parser("triage", help="Suggest target types for inbox items")
+
     # Voice DNA subcommand
     voice_parser = subparsers.add_parser("voice-dna", help="Import or show voice DNA profile")
     voice_subparsers = voice_parser.add_subparsers(dest="voice_command")
@@ -756,6 +792,10 @@ def main():
 
         if args.command == "signal":
             handle_signal_command(args)
+            return
+
+        if args.command == "inbox":
+            handle_inbox_command(args)
             return
 
         if args.command == "voice-dna":

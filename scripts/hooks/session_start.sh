@@ -15,6 +15,17 @@ if [ -f "$ROOT_DIR/.venv/bin/activate" ]; then
     source "$ROOT_DIR/.venv/bin/activate" 2>/dev/null || true
 fi
 
+# Record session baseline for end-of-session capture
+BASELINE_FILE="$ROOT_DIR/notes/08_indices/.session_baseline"
+mkdir -p "$(dirname "$BASELINE_FILE")"
+{
+    echo "{"
+    echo "  \"head_sha\": \"$(git -C "$ROOT_DIR" rev-parse HEAD 2>/dev/null || echo "")\","
+    echo "  \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\","
+    echo "  \"working_tree\": $(git -C "$ROOT_DIR" status --porcelain=v1 --untracked-files=all 2>/dev/null | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))' 2>/dev/null || echo '""')"
+    echo "}"
+} > "$BASELINE_FILE" 2>/dev/null || true
+
 # Primary path: ledger context --format boot emits the full payload
 # (identity, facts, prefs, loops, maintenance status, signal stats)
 if [ -x "$ROOT_DIR/scripts/ledger" ]; then
