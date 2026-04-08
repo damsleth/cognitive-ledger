@@ -41,7 +41,10 @@ def _cfg():
 def _note_types() -> dict[str, dict[str, Any]]:
     config = _cfg()
     return {
-        name: {"dir": config.root_dir / info["dir"], "label": info["label"]}
+        name: {
+            "dir": config.notes_dir / info["dir"].removeprefix("notes/"),
+            "label": info["label"],
+        }
         for name, info in config.note_types.items()
     }
 
