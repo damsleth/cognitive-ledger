@@ -27,6 +27,14 @@ config, and initial indices. Optional flags:
 ./scripts/ledger init --source-root ~/notes               # set source for ingest
 ```
 
+If you use the bundled `/notes` skill, set `NOTES_DIR` and `LEDGER_DIR` in your shell startup file so the skill can find both trees consistently:
+
+```bash
+export NOTES_DIR="$HOME/path/to/notes"
+export LEDGER_DIR="$HOME/path/to/cognitive-ledger"
+source ~/.zshrc
+```
+
 ### Configure (optional)
 
 Edit `config.yaml` in the repo root:
