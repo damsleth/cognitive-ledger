@@ -17,6 +17,7 @@ from ledger import ab as ab_lib
 from ledger import context as context_mod
 from ledger import maintenance as maintenance_mod
 from ledger import retrieval as retrieval_mod
+from ledger.config import get_config
 from ledger.parsing import parse_timestamp
 
 
@@ -138,7 +139,7 @@ def main() -> int:
             bundle = ledger_script.bundle_results(results, word_budget=1200)
             bundle_token_samples.append(sum(len(str(item.get("excerpt", "")).split()) for item in bundle))
 
-    notes_dir = Path(os.environ["LEDGER_NOTES_DIR"]) if "LEDGER_NOTES_DIR" in os.environ else worktree / "notes"
+    notes_dir = get_config().notes_dir
     context_text = context_mod.build_context(notes_dir)
     profile_items = context_mod.collect_profile_items(notes_dir)
     profile_tokens = {}
