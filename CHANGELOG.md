@@ -2,6 +2,9 @@
 
 ## 2026-04-08
 
+### Changed
+- `/notes` skill now performs an environment preflight for `NOTES_DIR` and `LEDGER_DIR`: if either is unset, the agent should prompt for the missing path and advise adding both exports to `~/.zshrc` followed by `source ~/.zshrc`.
+
 ### Added
 - **Voice DNA integration** - new `ledger/voice.py` module for importing, exporting, and retrieving voice-dna-creator profiles as identity notes. New `voice-dna` CLI subcommand (`import`, `show`). Added `voice` to `identity_type` enum, bumped `max_identity_notes` to 6.
 - **Content index** - `sheep index` now generates `notes/08_indices/index.md` (human-readable) and `index.json` (machine-consumable) as a browseable catalog grouped by note type.
