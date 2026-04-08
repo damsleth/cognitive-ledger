@@ -1,10 +1,10 @@
 # Cognitive Ledger configuration - copy this file to config.yaml and edit values as needed
-# Values here are overridden by environment variables (LEDGER_ROOT_DIR, etc.)
+# Values here are overridden by environment variables (LEDGER_ROOT, etc.)
 
 # Paths (use ~ for home directory)
-# root_dir: ~/code/cognitive-ledger
-# notes_dir: ~/code/cognitive-ledger/notes
-# source_root: ~/notes
+# ledger_root: ~/code/cognitive-ledger
+# ledger_notes_dir: ~/code/cognitive-ledger/notes
+# source_notes_dir: ~/notes
 
 # A/B eval corpus (used with: scripts/ledger_ab --corpus <path>)
 # eval_corpus: ~/code/my-ledger-instance

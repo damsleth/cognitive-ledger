@@ -286,6 +286,7 @@ def append_timeline_entry(
     note_path: Path | str,
     description: str,
     root_dir: Path | None = None,
+    ledger_notes_dir: Path | None = None,
 ) -> None:
     """Append an entry to the timeline with proper locking.
 
@@ -298,6 +299,7 @@ def append_timeline_entry(
         note_path: Path to the affected note
         description: Brief description of the change
         root_dir: Root directory for making paths relative (optional)
+        ledger_notes_dir: Ledger notes dir for normalizing note paths to notes/... (optional)
 
     Raises:
         NoteWriteError: If the append fails.
@@ -308,12 +310,13 @@ def append_timeline_entry(
     timestamp = now.strftime("%Y-%m-%dT%H:%M:%SZ")
 
     # Make path relative to root if possible
-    note_path = Path(note_path)
-    if root_dir is not None:
-        try:
-            note_path = note_path.relative_to(root_dir)
-        except ValueError:
-            pass  # Keep absolute path if not under root
+    from ledger.layout import logical_path
+
+    note_path = logical_path(
+        note_path,
+        ledger_root=root_dir,
+        ledger_notes_dir=ledger_notes_dir,
+    )
 
     event = {
         "ts": timestamp,

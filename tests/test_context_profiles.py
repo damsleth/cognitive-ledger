@@ -89,7 +89,7 @@ class ContextProfileTests(unittest.TestCase):
             cmd = [
                 "python3",
                 str(SCRIPT),
-                "--notes-dir",
+                "--ledger-notes-dir",
                 str(notes_dir),
                 "--output-dir",
                 str(out_dir),

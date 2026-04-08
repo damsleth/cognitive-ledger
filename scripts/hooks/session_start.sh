@@ -8,7 +8,13 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+ROOT_DIR="${LEDGER_ROOT:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
+NOTES_DIR="${LEDGER_NOTES_DIR:-$ROOT_DIR/notes}"
+
+if [ -n "${LEDGER_ROOT_DIR:-}" ] || [ -n "${LEDGER_SOURCE_ROOT:-}" ]; then
+    echo "Deprecated ledger env vars detected. Use LEDGER_ROOT and LEDGER_SOURCE_NOTES_DIR." >&2
+    exit 2
+fi
 
 # Activate venv if available
 if [ -f "$ROOT_DIR/.venv/bin/activate" ]; then
@@ -16,7 +22,7 @@ if [ -f "$ROOT_DIR/.venv/bin/activate" ]; then
 fi
 
 # Record session baseline for end-of-session capture
-BASELINE_FILE="$ROOT_DIR/notes/08_indices/.session_baseline"
+BASELINE_FILE="$NOTES_DIR/08_indices/.session_baseline"
 mkdir -p "$(dirname "$BASELINE_FILE")"
 {
     echo "{"
@@ -37,7 +43,7 @@ echo "# Session Boot Context"
 echo ""
 
 # Identity notes (always load - small and high-signal)
-IDENTITY_DIR="$ROOT_DIR/notes/01_identity"
+IDENTITY_DIR="$NOTES_DIR/01_identity"
 if [ -d "$IDENTITY_DIR" ] && [ -n "$(ls -A "$IDENTITY_DIR"/*.md 2>/dev/null)" ]; then
     echo "## Identity"
     echo ""
@@ -63,7 +69,7 @@ bash "$ROOT_DIR/scripts/sheep" status 2>/dev/null || echo "- (could not check st
 echo ""
 
 # Signal stats
-SIGNALS_FILE="$ROOT_DIR/notes/08_indices/signals.jsonl"
+SIGNALS_FILE="$NOTES_DIR/08_indices/signals.jsonl"
 if [ -f "$SIGNALS_FILE" ]; then
     count=$(wc -l < "$SIGNALS_FILE" | tr -d ' ')
     corrections=$(grep -c '"correction"' "$SIGNALS_FILE" 2>/dev/null || echo "0")
