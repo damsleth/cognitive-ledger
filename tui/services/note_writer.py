@@ -107,17 +107,18 @@ class NoteWriter:
             section_name: Name of the section (without ##)
             content: Section content
         """
-        file_content = note.path.read_text(encoding="utf-8")
+        with FileLock(note.path):
+            file_content = note.path.read_text(encoding="utf-8")
 
-        # Add section before Links if it exists, otherwise at the end
-        new_section = f"\n## {section_name}\n{content}\n"
+            # Add section before Links if it exists, otherwise at the end
+            new_section = f"\n## {section_name}\n{content}\n"
 
-        if "## Links" in file_content:
-            file_content = file_content.replace("## Links", f"{new_section}## Links")
-        else:
-            file_content = file_content.rstrip() + new_section
+            if "## Links" in file_content:
+                file_content = file_content.replace("## Links", f"{new_section}## Links")
+            else:
+                file_content = file_content.rstrip() + new_section
 
-        safe_write_text(note.path, file_content, use_lock=True)
+            safe_write_text(note.path, file_content, use_lock=False)
 
         self.append_to_timeline("updated", note.path, f"added {section_name} section")
 
@@ -129,24 +130,24 @@ class NoteWriter:
             section_name: Section to add to (e.g., "Next action")
             checkbox_text: Text for the checkbox
         """
-        lines = note.path.read_text(encoding="utf-8").splitlines(keepends=True)
+        with FileLock(note.path):
+            lines = note.path.read_text(encoding="utf-8").splitlines(keepends=True)
 
-        # Find the section and add checkbox
-        in_section = False
-        insert_index = -1
+            # Find the section and add checkbox
+            in_section = False
+            insert_index = -1
 
-        for i, line in enumerate(lines):
-            if line.strip() == f"## {section_name}":
-                in_section = True
-                insert_index = i + 1
-            elif in_section and line.startswith("## "):
-                break
-            elif in_section:
-                insert_index = i + 1
+            for i, line in enumerate(lines):
+                if line.strip() == f"## {section_name}":
+                    in_section = True
+                    insert_index = i + 1
+                elif in_section and line.startswith("## "):
+                    break
+                elif in_section:
+                    insert_index = i + 1
 
-        if insert_index > 0:
-            lines.insert(insert_index, f"- [ ] {checkbox_text}\n")
+            if insert_index > 0:
+                lines.insert(insert_index, f"- [ ] {checkbox_text}\n")
+                safe_write_text(note.path, "".join(lines), use_lock=False)
 
-            safe_write_text(note.path, "".join(lines), use_lock=True)
-
-            self.append_to_timeline("updated", note.path, "added next action checkbox")
+        self.append_to_timeline("updated", note.path, "added next action checkbox")
