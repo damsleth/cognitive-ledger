@@ -16,10 +16,27 @@ metadata:
 
 Capture notes and maintain structured long-term memory across two repositories:
 
-- **Notes** (human-facing, Obsidian): `$NOTES_DIR` (default: `~/Code/notes`)
-- **Ledger** (atomic, searchable memory): `$LEDGER_DIR` (default: `~/Code/cog-led`)
+- **Notes** (human-facing, Obsidian): `$NOTES_DIR`
+- **Ledger** (atomic, searchable memory): `$LEDGER_DIR`
 
 > **Setup:** Set `NOTES_DIR` and `LEDGER_DIR` environment variables or edit the defaults in the frontmatter above.
+
+### Environment Preflight
+
+- Before any notes workflow, check whether `NOTES_DIR` and `LEDGER_DIR` are set.
+- If either variable is missing, stop and prompt the user for the missing path(s) before continuing.
+- After the user provides the path(s), advise them to add both exports to `~/.zshrc` so future sessions inherit them:
+
+```bash
+export NOTES_DIR="~/path/to/notes"
+export LEDGER_DIR="~/path/to/cognitive-ledger"
+```
+
+- Tell the user to reload their shell after updating `~/.zshrc`:
+
+```bash
+source ~/.zshrc
+```
 
 ## Boot Sequence (Run on Activation)
 
@@ -29,6 +46,7 @@ Capture notes and maintain structured long-term memory across two repositories:
 4. If `notes/01_identity/id__voice_dna.md` exists, read it - apply voice profile when writing notes longer than 2 sentences
 
 **Two-tier lookup strategy:**
+
 - `context.md` for boot (compact summary, always loaded)
 - `notes/08_indices/index.md` or `index.json` as a lightweight lookup table for deeper searches (do NOT load at boot)
 
@@ -95,6 +113,7 @@ Follow the ledger operations below for all writes to `$LEDGER_DIR`.
 ### Source of Truth
 
 Read these before writing (when guidance is needed; keep reads minimal):
+
 - `AGENTS.md` for operating rules, triggers, and quick reference
 - `schema.yaml` for frontmatter and enums
 - `templates/` for note structure
@@ -159,6 +178,7 @@ Only capture when there is clear evidence. Do not log signals speculatively.
 - Do not create or update files for pure queries unless the user explicitly asks to log the summary.
 
 **When to search deeper during conversation:**
+
 - Personal details, history, family → `rg "<topic>" $LEDGER_DIR/notes/02_facts/`
 - Past decisions or commitments → `rg "<topic>" $LEDGER_DIR/notes/02_facts/` + check timeline
 - User preferences or style → `rg "<topic>" $LEDGER_DIR/notes/03_preferences/`
@@ -204,6 +224,7 @@ If the user says "what's on my plate", "brief me", "what needs doing",
 ```
 
 The briefing surfaces:
+
 - Open loops sorted by staleness with nudges
 - Recent changes from the last 24h
 - Inbox items needing triage
@@ -235,6 +256,7 @@ Pull tasks early in planning conversations so the plan is grounded in actual due
 ### Automatic Maintenance Policy
 
 Before any operation that writes to the ledger:
+
 1. Run `./scripts/sheep status`.
 2. If status indicates sleep is due, run `./scripts/sheep sleep` and `./scripts/sheep index` before proceeding.
 3. Do not run sleep for pure query operations.
@@ -272,6 +294,7 @@ At the end of any session that created/modified/deleted files, even when
 4. If work was left incomplete: create/update an open loop with a concrete next action
 
 **When to capture (heuristics):**
+
 - Commit messages containing decisions or rationale
 - New architectural patterns established
 - Configuration choices made
