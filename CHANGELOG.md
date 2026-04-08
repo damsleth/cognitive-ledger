@@ -3,7 +3,8 @@
 ## 2026-04-08
 
 ### Changed
-- `/notes` skill now performs an environment preflight for `NOTES_DIR` and `LEDGER_DIR`: if either is unset, the agent should prompt for the missing path and advise adding both exports to `~/.zshrc` followed by `source ~/.zshrc`.
+- Canonical ledger path naming is now `ledger_root`, `ledger_notes_dir`, and `source_notes_dir` across config, CLI, TUI, docs, and the `/notes` skill. Removed config/env names now fail fast with explicit migration errors, and ledger note references persist as logical `notes/...` paths even when the corpus lives outside the repo root.
+- `/notes` skill now performs an environment preflight for `LEDGER_SOURCE_NOTES_DIR`, `LEDGER_ROOT`, and `LEDGER_NOTES_DIR`: if any are unset, the agent should prompt for the missing path(s) and advise adding the exports to `~/.zshrc` followed by `source ~/.zshrc`.
 
 ### Added
 - **Voice DNA integration** - new `ledger/voice.py` module for importing, exporting, and retrieving voice-dna-creator profiles as identity notes. New `voice-dna` CLI subcommand (`import`, `show`). Added `voice` to `identity_type` enum, bumped `max_identity_notes` to 6.

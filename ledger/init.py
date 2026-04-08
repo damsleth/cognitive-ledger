@@ -12,22 +12,11 @@ from pathlib import Path
 from typing import Any
 
 from ledger.config import get_config
+from ledger.layout import LEDGER_NOTE_SUBDIRS, indices_dir, timeline_jsonl_path, timeline_path
 from ledger.io.safe_write import safe_write_text
 
 
-# Directories to create under notes/
-NOTE_DIRS = [
-    "00_inbox",
-    "01_identity",
-    "02_facts",
-    "03_preferences",
-    "04_goals",
-    "05_open_loops",
-    "06_concepts",
-    "07_projects",
-    "08_indices",
-    "09_archive",
-]
+NOTE_DIRS = list(LEDGER_NOTE_SUBDIRS)
 
 # Minimal template content (generated inline, no external file dependency)
 GENERIC_TEMPLATE = """\
@@ -87,8 +76,8 @@ Motivation for closing this loop.
 def init_ledger(
     root: str | Path | None = None,
     voice_dna_path: str | Path | None = None,
-    source_root: str | Path | None = None,
-    notes_dir: str | Path | None = None,
+    source_notes_dir: str | Path | None = None,
+    ledger_notes_dir: str | Path | None = None,
 ) -> dict[str, Any]:
     """Initialize a cognitive ledger structure.
 
@@ -98,15 +87,17 @@ def init_ledger(
     Args:
         root: Ledger root directory (defaults to config root).
         voice_dna_path: Optional path to voice-dna JSON for import.
-        source_root: Optional source notes root for config.
-        notes_dir: Optional notes directory override.
+        source_notes_dir: Optional source notes root for config.
+        ledger_notes_dir: Optional notes directory override.
 
     Returns:
         Dict with created, skipped, and errors lists.
     """
     config = get_config()
-    root_path = Path(root) if root else config.root_dir
-    nd = Path(notes_dir) if notes_dir else root_path / "notes"
+    root_path = Path(root) if root else config.ledger_root
+    root_path = root_path.expanduser().resolve()
+    nd = Path(ledger_notes_dir) if ledger_notes_dir else root_path / "notes"
+    nd = nd.expanduser().resolve()
 
     report: dict[str, Any] = {
         "created": [],
@@ -154,9 +145,10 @@ def init_ledger(
 # Cognitive Ledger Configuration
 # See schema.yaml for full specification
 
-# Paths (override with env vars: LEDGER_ROOT_DIR, LEDGER_NOTES_DIR, LEDGER_SOURCE_ROOT)
-# root_dir: {root_path}
-# source_root: {source_root or '~/notes'}
+# Paths (override with env vars: LEDGER_ROOT, LEDGER_NOTES_DIR, LEDGER_SOURCE_NOTES_DIR)
+# ledger_root: {root_path}
+# ledger_notes_dir: {nd}
+# source_notes_dir: {source_notes_dir or '~/notes'}
 
 # Retrieval tuning (defaults are well-tested, change with care)
 # score_weight_bm25: 0.30
@@ -184,10 +176,10 @@ def init_ledger(
             report["errors"].append(f"voice-dna import failed: {exc}")
 
     # 5. Initialize timeline if not present
-    indices_dir = nd / "08_indices"
-    indices_dir.mkdir(parents=True, exist_ok=True)
-    timeline_md = indices_dir / "timeline.md"
-    timeline_jsonl = indices_dir / "timeline.jsonl"
+    notes_indices_dir = indices_dir(nd)
+    notes_indices_dir.mkdir(parents=True, exist_ok=True)
+    timeline_md = timeline_path(nd)
+    timeline_jsonl = timeline_jsonl_path(nd)
 
     if not timeline_md.is_file():
         from ledger.timeline import TIMELINE_MARKDOWN_HEADER

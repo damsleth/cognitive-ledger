@@ -4,6 +4,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from ledger.config import (
     LedgerConfig,
@@ -114,6 +115,87 @@ class TestLedgerConfig(unittest.TestCase):
 
         del os.environ["LEDGER_SHORTLIST_MIN"]
 
+    def test_path_env_overrides_use_canonical_names(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir) / "ledger"
+            notes = Path(tmpdir) / "corpus"
+            source = Path(tmpdir) / "source"
+            os.environ["LEDGER_ROOT"] = str(root)
+            os.environ["LEDGER_NOTES_DIR"] = str(notes)
+            os.environ["LEDGER_SOURCE_NOTES_DIR"] = str(source)
+
+            config = LedgerConfig.from_env()
+
+            self.assertEqual(config.ledger_root, root.resolve())
+            self.assertEqual(config.ledger_notes_dir, notes.resolve())
+            self.assertEqual(config.source_notes_dir, source.resolve())
+
+    def test_removed_env_var_fails_with_migration_error(self):
+        os.environ["LEDGER_ROOT_DIR"] = "/tmp/legacy-root"
+
+        with self.assertRaises(RuntimeError) as ctx:
+            LedgerConfig.from_env()
+
+        self.assertIn("LEDGER_ROOT", str(ctx.exception))
+
+    def test_yaml_with_canonical_path_keys_loads(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir) / "ledger"
+            root.mkdir()
+            config_path = root / "config.yaml"
+            config_path.write_text(
+                "\n".join(
+                    [
+                        f"ledger_root: {root}",
+                        f"ledger_notes_dir: {root / 'corpus'}",
+                        f"source_notes_dir: {root / 'source'}",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            os.environ["LEDGER_ROOT"] = str(root)
+
+            config = LedgerConfig.from_env()
+
+            self.assertEqual(config.ledger_root, root.resolve())
+            self.assertEqual(config.ledger_notes_dir, (root / "corpus").resolve())
+            self.assertEqual(config.source_notes_dir, (root / "source").resolve())
+
+    def test_removed_yaml_key_fails_with_migration_error(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir) / "ledger"
+            root.mkdir()
+            config_path = root / "config.yaml"
+            config_path.write_text("root_dir: ~/legacy-ledger\n", encoding="utf-8")
+            os.environ["LEDGER_ROOT"] = str(root)
+
+            with self.assertRaises(RuntimeError) as ctx:
+                LedgerConfig.from_env()
+
+            self.assertIn("ledger_root", str(ctx.exception))
+
+    def test_missing_yaml_support_fails_loudly(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir) / "ledger"
+            root.mkdir()
+            config_path = root / "config.yaml"
+            config_path.write_text("ledger_root: ~/ledger\n", encoding="utf-8")
+            os.environ["LEDGER_ROOT"] = str(root)
+
+            real_import = __import__
+
+            def guarded_import(name, *args, **kwargs):
+                if name == "yaml":
+                    raise ImportError("yaml unavailable")
+                return real_import(name, *args, **kwargs)
+
+            with patch("builtins.__import__", side_effect=guarded_import):
+                with self.assertRaises(RuntimeError) as ctx:
+                    LedgerConfig.from_env()
+
+            self.assertIn("PyYAML", str(ctx.exception))
+
 
 class TestConfigSingleton(unittest.TestCase):
     """Tests for config singleton functions."""
@@ -153,10 +235,10 @@ class TestConfigSingleton(unittest.TestCase):
 class TestConfigPaths(unittest.TestCase):
     """Tests for config path properties."""
 
-    def test_notes_dir(self):
-        """Test notes_dir property."""
+    def test_ledger_notes_dir(self):
+        """Test ledger_notes_dir property."""
         config = LedgerConfig()
-        self.assertTrue(str(config.notes_dir).endswith("notes"))
+        self.assertTrue(str(config.ledger_notes_dir).endswith("notes"))
 
     def test_aliases_path(self):
         """Test aliases_path property."""

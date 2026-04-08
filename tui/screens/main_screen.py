@@ -5,6 +5,7 @@ import re
 import subprocess
 from pathlib import Path
 
+from ledger.layout import logical_path, resolve_path
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
@@ -452,7 +453,11 @@ class MainScreen(Screen):
             path_str = item.get("path", "")
             if not path_str or not path_str.startswith("notes/"):
                 continue
-            full_path = (self.store.root_dir / path_str).resolve()
+            full_path = resolve_path(
+                path_str,
+                ledger_root=self.store.root_dir,
+                ledger_notes_dir=self.store.notes_dir,
+            )
             if full_path in seen:
                 continue
             score = None
@@ -474,7 +479,11 @@ class MainScreen(Screen):
         for item in result.results:
             path = Path(item.path)
             if not path.is_absolute():
-                path = (self.store.root_dir / path).resolve()
+                path = resolve_path(
+                    path,
+                    ledger_root=self.store.root_dir,
+                    ledger_notes_dir=self.store.notes_dir,
+                )
             hits.append((path, item.score, item.type))
         return hits
 
@@ -516,10 +525,11 @@ class MainScreen(Screen):
 
     def _to_relative_path(self, path: Path) -> str:
         """Render path relative to ledger root where possible."""
-        try:
-            return path.resolve().relative_to(self.store.root_dir.resolve()).as_posix()
-        except ValueError:
-            return str(path)
+        return logical_path(
+            path,
+            ledger_root=self.store.root_dir,
+            ledger_notes_dir=self.store.notes_dir,
+        ).as_posix()
 
     # Actions
     def action_focus_filter(self) -> None:

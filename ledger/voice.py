@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from ledger.config import get_config
+from ledger.layout import note_type_dir
 from ledger.io.safe_write import safe_write_text, append_timeline_entry
 from ledger.parsing.frontmatter import parse_frontmatter_text, serialize_frontmatter
 
@@ -21,8 +22,8 @@ VOICE_NOTE_FILENAME = "id__voice_dna.md"
 
 def _voice_note_path(notes_dir: Path | None = None) -> Path:
     config = get_config()
-    nd = notes_dir or config.notes_dir
-    return nd / "01_identity" / VOICE_NOTE_FILENAME
+    nd = notes_dir or config.ledger_notes_dir
+    return note_type_dir(nd, "identity") / VOICE_NOTE_FILENAME
 
 
 def import_voice_dna(
@@ -111,7 +112,8 @@ profile to tone, sentence structure, and vocabulary.
         action,
         dest,
         f"voice DNA {'updated' if is_update else 'imported'} from {json_path.name}",
-        root_dir=config.root_dir,
+        root_dir=config.ledger_root,
+        ledger_notes_dir=config.ledger_notes_dir,
     )
 
     return dest

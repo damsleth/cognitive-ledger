@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from ledger.config import get_config
+from ledger.layout import logical_path, note_type_dir
 from ledger.parsing import (
     extract_title,
     first_checkbox,
@@ -42,7 +43,7 @@ def _note_types() -> dict[str, dict[str, Any]]:
     config = _cfg()
     return {
         name: {
-            "dir": config.notes_dir / info["dir"].removeprefix("notes/"),
+            "dir": note_type_dir(config.ledger_notes_dir, name),
             "label": info["label"],
         }
         for name, info in config.note_types.items()
@@ -50,11 +51,16 @@ def _note_types() -> dict[str, dict[str, Any]]:
 
 
 def _root_dir() -> Path:
-    return _cfg().root_dir.resolve()
+    return _cfg().ledger_root.resolve()
 
 
 def _rel_display_path(path: str | Path) -> Path:
-    return Path(path).resolve().relative_to(_root_dir())
+    cfg = _cfg()
+    return logical_path(
+        path,
+        ledger_root=cfg.ledger_root,
+        ledger_notes_dir=cfg.ledger_notes_dir,
+    )
 
 
 def read_note(path: str | Path) -> tuple[dict[str, Any], str]:

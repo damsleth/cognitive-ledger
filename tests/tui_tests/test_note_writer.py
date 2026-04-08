@@ -16,7 +16,7 @@ class TestNoteWriter:
     """Tests for NoteWriter class."""
 
     def test_append_to_timeline(self, temp_ledger_root):
-        writer = NoteWriter(temp_ledger_root)
+        writer = NoteWriter(temp_ledger_root, temp_ledger_root / "notes")
 
         writer.append_to_timeline(
             "created",
@@ -29,7 +29,7 @@ class TestNoteWriter:
         assert "fact__test.md" in timeline
 
     def test_append_multiple_timeline_entries(self, temp_ledger_root):
-        writer = NoteWriter(temp_ledger_root)
+        writer = NoteWriter(temp_ledger_root, temp_ledger_root / "notes")
 
         writer.append_to_timeline("created", Path("notes/02_facts/fact__a.md"), "first")
         writer.append_to_timeline("updated", Path("notes/02_facts/fact__b.md"), "second")
@@ -41,7 +41,7 @@ class TestNoteWriter:
         assert "second" in timeline
 
     def test_update_frontmatter(self, populated_ledger):
-        writer = NoteWriter(populated_ledger)
+        writer = NoteWriter(populated_ledger, populated_ledger / "notes")
         parser = NoteParser()
 
         fact_path = populated_ledger / "notes" / "02_facts" / "fact__sample.md"
@@ -55,7 +55,7 @@ class TestNoteWriter:
         assert updated_note.frontmatter.confidence == 0.5
 
     def test_update_frontmatter_updates_timestamp(self, populated_ledger):
-        writer = NoteWriter(populated_ledger)
+        writer = NoteWriter(populated_ledger, populated_ledger / "notes")
         parser = NoteParser()
 
         fact_path = populated_ledger / "notes" / "02_facts" / "fact__sample.md"
@@ -68,7 +68,7 @@ class TestNoteWriter:
         assert updated_note.frontmatter.updated > original_updated
 
     def test_update_frontmatter_logs_to_timeline(self, populated_ledger):
-        writer = NoteWriter(populated_ledger)
+        writer = NoteWriter(populated_ledger, populated_ledger / "notes")
         parser = NoteParser()
 
         fact_path = populated_ledger / "notes" / "02_facts" / "fact__sample.md"
@@ -81,7 +81,7 @@ class TestNoteWriter:
         assert "confidence" in timeline
 
     def test_add_section(self, populated_ledger):
-        writer = NoteWriter(populated_ledger)
+        writer = NoteWriter(populated_ledger, populated_ledger / "notes")
         parser = NoteParser()
 
         fact_path = populated_ledger / "notes" / "02_facts" / "fact__sample.md"
@@ -94,7 +94,7 @@ class TestNoteWriter:
         assert "New content here." in content
 
     def test_add_checkbox(self, populated_ledger):
-        writer = NoteWriter(populated_ledger)
+        writer = NoteWriter(populated_ledger, populated_ledger / "notes")
         parser = NoteParser()
 
         loop_path = populated_ledger / "notes" / "05_open_loops" / "loop__sample.md"

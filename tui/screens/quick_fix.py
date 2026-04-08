@@ -150,7 +150,7 @@ class QuickFixScreen(ModalScreen):
 
         if new_value is not None:
             # Write the change
-            writer = NoteWriter(self.store.root_dir)
+            writer = NoteWriter(self.store.root_dir, self.store.notes_dir)
             writer.update_frontmatter(self.note, {self.selected_field: new_value})
 
             # Refresh store

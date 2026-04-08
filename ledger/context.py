@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from ledger.config import get_config
+from ledger.layout import logical_path
 from ledger.notes import get_notes
 from ledger.parsing import parse_timestamp, shorten
 
@@ -77,7 +79,6 @@ def note_score(item: ContextProfileItem, now_dt: dt.datetime) -> float:
 
 
 def build_context(notes_dir: Path) -> str:
-    from ledger.config import get_config
     min_confidence = get_config().boot_min_confidence
 
     identity = get_notes("identity", notes_dir=notes_dir)
@@ -303,10 +304,12 @@ def render_profile(scope: str, items: list[ContextProfileItem]) -> tuple[str, di
     )
 
     def _payload_row(item: ContextProfileItem) -> dict[str, Any]:
-        path_str = str(item.path)
-        home = str(Path.home())
-        if path_str.startswith(home + "/"):
-            path_str = "~" + path_str[len(home):]
+        config = get_config()
+        path_str = logical_path(
+            item.path,
+            ledger_root=config.ledger_root,
+            ledger_notes_dir=config.ledger_notes_dir,
+        ).as_posix()
         return {
             "path": path_str,
             "title": item.title,
