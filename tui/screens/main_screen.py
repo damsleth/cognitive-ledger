@@ -372,7 +372,16 @@ class MainScreen(Screen):
         try:
             command_exit_code, raw_output = await asyncio.to_thread(self._run_codex_query_command, query)
         except FileNotFoundError:
-            self.notify("codex CLI was not found in PATH.", severity="error")
+            try:
+                hits = await asyncio.to_thread(self._run_direct_query, query)
+            except Exception as exc:
+                self.notify(f"Query failed: {exc}", severity="error")
+                return
+            self._populate_query_results(hits)
+            if hits:
+                self.notify(f"Query complete: {len(hits)} match(es) (direct).")
+            else:
+                self.notify("Query complete: no matches found.", severity="warning")
             return
         except subprocess.TimeoutExpired:
             self.notify("Query command timed out.", severity="error")
@@ -381,7 +390,7 @@ class MainScreen(Screen):
             self.notify(f"Query failed: {exc}", severity="error")
             return
         else:
-            parsed_hits = self._parse_query_hits(raw_output)
+            parsed_hits = self._parse_json_hits(raw_output)
             self._populate_query_results(parsed_hits)
             self._show_query_summary(query, command_exit_code, parsed_hits, raw_output)
 
@@ -399,12 +408,17 @@ class MainScreen(Screen):
         """Run codex query command and return (exit_code, merged_output)."""
         import shlex
 
+        prompt = (
+            f"/notes query {shlex.quote(query)} -- "
+            'Respond with ONLY a JSON array. Each element: {"path": "notes/...", '
+            '"score": 0.0, "type": "...", "title": "..."}. No prose.'
+        )
         command = [
             "codex",
             "-c",
             "mcp_servers.playwright.enabled=false",
             "e",
-            f"/cognitive-ledger query {shlex.quote(query)}",
+            prompt,
         ]
         result = subprocess.run(
             command,
@@ -415,55 +429,54 @@ class MainScreen(Screen):
         )
         return result.returncode, (result.stdout or "") + (result.stderr or "")
 
-    def _parse_query_hits(self, output: str) -> list[tuple[Path, float | None, str]]:
-        """Extract ranked note paths from codex command output."""
+    def _parse_json_hits(self, output: str) -> list[tuple[Path, float | None, str]]:
+        """Extract ranked note paths from JSON array in codex output."""
+        import json
+
         results: list[tuple[Path, float | None, str]] = []
         seen: set[Path] = set()
 
-        patterns = [
-            re.compile(
-                r"^\s*\d+\.\s+`(?P<path>notes/[^`]+\.md)`\s+\(score\s+`(?P<score>[0-9.]+)`\)",
-                re.IGNORECASE,
-            ),
-            re.compile(
-                r"^\s*-\s*score\s+(?P<score>[0-9.]+)\s+\|\s+(?P<note_type>[a-z]+)\s+\|\s+(?P<path>notes/\S+?\.md)\b",
-                re.IGNORECASE,
-            ),
-            re.compile(r"\[(?:[^\]]*?/)?(?P<path>notes/[^]\s]+\.md)\]", re.IGNORECASE),
-        ]
+        start = output.find("[")
+        end = output.rfind("]") + 1
+        if start == -1 or end == 0:
+            return results
 
-        for raw_line in output.splitlines():
-            line = raw_line.strip()
-            if not line:
+        try:
+            items = json.loads(output[start:end])
+        except json.JSONDecodeError:
+            return results
+
+        for item in items:
+            if not isinstance(item, dict):
                 continue
-
-            for pattern in patterns:
-                match = pattern.search(line)
-                if not match:
-                    continue
-
-                path_str = match.group("path").strip().strip("`")
-                if not path_str.startswith("notes/"):
-                    continue
-
-                full_path = (self.store.root_dir / path_str).resolve()
-                if full_path in seen:
-                    break
-
-                score = None
-                score_text = match.groupdict().get("score")
-                if score_text:
-                    try:
-                        score = float(score_text)
-                    except ValueError:
-                        score = None
-
-                note_type = match.groupdict().get("note_type", "")
-                seen.add(full_path)
-                results.append((full_path, score, note_type))
-                break
+            path_str = item.get("path", "")
+            if not path_str or not path_str.startswith("notes/"):
+                continue
+            full_path = (self.store.root_dir / path_str).resolve()
+            if full_path in seen:
+                continue
+            score = None
+            try:
+                score = float(item.get("score", 0))
+            except (TypeError, ValueError):
+                pass
+            seen.add(full_path)
+            results.append((full_path, score, item.get("type", "")))
 
         return results
+
+    def _run_direct_query(self, query: str) -> list[tuple[Path, float | None, str]]:
+        """Direct rank_query_lexical fallback when codex is not on PATH."""
+        from ledger.query import rank_query_lexical
+
+        result = rank_query_lexical(query=query, scope="all", limit=8)
+        hits: list[tuple[Path, float | None, str]] = []
+        for item in result.results:
+            path = Path(item.path)
+            if not path.is_absolute():
+                path = (self.store.root_dir / path).resolve()
+            hits.append((path, item.score, item.type))
+        return hits
 
     def _populate_query_results(self, parsed_hits: list[tuple[Path, float | None, str]]) -> None:
         """Populate sidebar query result options."""
