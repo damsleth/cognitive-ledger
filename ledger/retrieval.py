@@ -70,7 +70,10 @@ def _note_index_path() -> Path:
 def _note_types() -> dict[str, dict[str, Any]]:
     config = _cfg()
     return {
-        name: {"dir": config.root_dir / info["dir"], "label": info["label"]}
+        name: {
+            "dir": config.notes_dir / info["dir"].removeprefix("notes/"),
+            "label": info["label"],
+        }
         for name, info in config.note_types.items()
     }
 
@@ -341,7 +344,15 @@ def _candidate_from_parts(
     confidence = confidence_value(frontmatter)
     source = str(frontmatter.get("source", "")).strip().lower()
 
-    rel_path = path.resolve().relative_to(_cfg().root_dir.resolve())
+    cfg = _cfg()
+    resolved = path.resolve()
+    try:
+        rel_path = resolved.relative_to(cfg.root_dir.resolve())
+    except ValueError:
+        try:
+            rel_path = resolved.relative_to(cfg.notes_dir.resolve())
+        except ValueError:
+            rel_path = resolved
     slug = path.stem
 
     searchable_text = " ".join([title, statement, body, " ".join(tags), slug])
