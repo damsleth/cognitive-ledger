@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from ledger.config import get_config
+from ledger.layout import inbox_dir as layout_inbox_dir, note_type_dir
 from ledger.io.safe_write import append_timeline_entry
 from ledger.parsing.frontmatter import parse_frontmatter_text
 
@@ -29,8 +30,8 @@ _TYPE_SIGNALS: list[tuple[str, list[str]]] = [
 
 def _inbox_dir(notes_dir: Path | None = None) -> Path:
     config = get_config()
-    nd = notes_dir or config.notes_dir
-    return nd / "00_inbox"
+    nd = notes_dir or config.ledger_notes_dir
+    return layout_inbox_dir(nd)
 
 
 def list_inbox(notes_dir: Path | None = None) -> list[dict[str, Any]]:
@@ -122,7 +123,7 @@ def promote(
         Path to the promoted note.
     """
     config = get_config()
-    nd = notes_dir or config.notes_dir
+    nd = notes_dir or config.ledger_notes_dir
     source = Path(path)
 
     if not source.is_file():
@@ -133,11 +134,11 @@ def promote(
         raise ValueError(f"Unknown note type: {target_type}")
 
     # Generate target filename
-    prefix = type_config["label"] + "__"
+    prefix = type_config["prefix"]
     slug = source.stem
     # Strip any existing prefix
     for nt in config.note_types.values():
-        p = nt["label"] + "__"
+        p = nt["prefix"]
         if slug.startswith(p):
             slug = slug[len(p):]
             break
@@ -146,7 +147,7 @@ def promote(
     if not slug:
         slug = "untitled"
 
-    target_dir = config.root_dir / type_config["dir"]
+    target_dir = note_type_dir(nd, target_type)
     target_dir.mkdir(parents=True, exist_ok=True)
     target = target_dir / f"{prefix}{slug}.md"
 
@@ -163,7 +164,8 @@ def promote(
         "created",
         target,
         f"promoted from inbox to {target_type}",
-        root_dir=config.root_dir,
+        root_dir=config.ledger_root,
+        ledger_notes_dir=config.ledger_notes_dir,
     )
 
     return target

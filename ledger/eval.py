@@ -12,12 +12,13 @@ from typing import Any, Callable
 
 from ledger.config import get_config
 from ledger.errors import EvalCaseValidationError
+from ledger.layout import logical_path, resolve_path
 from ledger.retrieval import rank_lexical, resolve_retrieval_mode
 from ledger.retrieval_types import RetrievalResult, ScoredResult
 
 
 def _root_dir() -> Path:
-    return get_config().root_dir.resolve()
+    return get_config().ledger_root.resolve()
 
 
 def _payload_results(payload: RetrievalResult | dict[str, Any]) -> list[ScoredResult | dict[str, Any]]:
@@ -134,13 +135,17 @@ def path_candidates_from_expected(value: str | Path) -> set[str]:
 
     if path.is_absolute():
         candidates.add(path.as_posix())
-        try:
-            rel = path.resolve().relative_to(_root_dir())
-            candidates.add(rel.as_posix())
-        except ValueError:
-            notes_rel = extract_notes_relative_path(raw)
-            if notes_rel:
-                candidates.add(notes_rel)
+        cfg = get_config()
+        candidates.add(
+            logical_path(
+                path,
+                ledger_root=cfg.ledger_root,
+                ledger_notes_dir=cfg.ledger_notes_dir,
+            ).as_posix()
+        )
+        notes_rel = extract_notes_relative_path(raw)
+        if notes_rel:
+            candidates.add(notes_rel)
     else:
         candidates.add(path.as_posix())
         candidates.add(str((_root_dir() / path).resolve()))
@@ -208,12 +213,19 @@ def validate_eval_cases(cases: list[dict[str, Any]], strict_cases: bool = False)
                 )
                 continue
 
-            resolved = (_root_dir() / rel_path).resolve()
+            resolved = resolve_path(
+                rel_path,
+                ledger_root=get_config().ledger_root,
+                ledger_notes_dir=get_config().ledger_notes_dir,
+            )
             try:
                 resolved.relative_to(root_resolved)
             except ValueError:
-                errors.append(f"{case_label}: expected_any path escapes repo root (got: {raw})")
-                continue
+                try:
+                    resolved.relative_to(get_config().ledger_notes_dir.resolve())
+                except ValueError:
+                    errors.append(f"{case_label}: expected_any path escapes ledger paths (got: {raw})")
+                    continue
 
             if not resolved.is_file():
                 errors.append(f"{case_label}: expected_any path not found (got: {raw})")

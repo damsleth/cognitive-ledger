@@ -3,8 +3,9 @@ name: notes
 description: Capture notes and maintain structured long-term memory. Writes human-readable notes to Obsidian and syncs durable facts, preferences, decisions, goals, and open loops to a cognitive ledger. Asks targeted questions before writing. Use when the user wants to take notes, log decisions, capture ideas, plan, journal, or remember something.
 license: WTFPL
 metadata:
-  notes_dir: "<notes-dir>"
-  ledger_dir: "<ledger-dir>"
+  source_notes_dir: "<notes-dir>"
+  ledger_root: "<ledger-dir>"
+  ledger_notes_dir: "<ledger-notes-dir>"
   defaults:
     mode: notes+ledger
     auto_write: true
@@ -16,20 +17,22 @@ metadata:
 
 Capture notes and maintain structured long-term memory across two repositories:
 
-- **Notes** (human-facing, Obsidian): `$NOTES_DIR`
-- **Ledger** (atomic, searchable memory): `$LEDGER_DIR`
+- **Notes** (human-facing, Obsidian): `$LEDGER_SOURCE_NOTES_DIR`
+- **Ledger Root** (repo, config, scripts): `$LEDGER_ROOT`
+- **Ledger Notes** (atomic, searchable memory): `$LEDGER_NOTES_DIR`
 
-> **Setup:** Set `NOTES_DIR` and `LEDGER_DIR` environment variables or edit the defaults in the frontmatter above.
+> **Setup:** Set `LEDGER_SOURCE_NOTES_DIR`, `LEDGER_ROOT`, and `LEDGER_NOTES_DIR` environment variables or edit the defaults in the frontmatter above.
 
 ### Environment Preflight
 
-- Before any notes workflow, check whether `NOTES_DIR` and `LEDGER_DIR` are set.
-- If either variable is missing, stop and prompt the user for the missing path(s) before continuing.
-- After the user provides the path(s), advise them to add both exports to `~/.zshrc` so future sessions inherit them:
+- Before any notes workflow, check whether `LEDGER_SOURCE_NOTES_DIR`, `LEDGER_ROOT`, and `LEDGER_NOTES_DIR` are set.
+- If any variable is missing, stop and prompt the user for the missing path(s) before continuing.
+- After the user provides the path(s), advise them to add the exports to `~/.zshrc` so future sessions inherit them:
 
 ```bash
-export NOTES_DIR="~/path/to/notes"
-export LEDGER_DIR="~/path/to/cognitive-ledger"
+export LEDGER_SOURCE_NOTES_DIR="~/path/to/notes"
+export LEDGER_ROOT="~/path/to/cognitive-ledger"
+export LEDGER_NOTES_DIR="$LEDGER_ROOT/notes"
 ```
 
 - Tell the user to reload their shell after updating `~/.zshrc`:
@@ -40,15 +43,15 @@ source ~/.zshrc
 
 ## Boot Sequence (Run on Activation)
 
-1. `cd $LEDGER_DIR`
-2. Read `notes/08_indices/context.md` - essential facts, active loops, key preferences
+1. `cd $LEDGER_ROOT`
+2. Read `$LEDGER_NOTES_DIR/08_indices/context.md` - essential facts, active loops, key preferences
 3. Run `./scripts/sheep status` - check if maintenance needed
-4. If `notes/01_identity/id__voice_dna.md` exists, read it - apply voice profile when writing notes longer than 2 sentences
+4. If `$LEDGER_NOTES_DIR/01_identity/id__voice_dna.md` exists, read it - apply voice profile when writing notes longer than 2 sentences
 
 **Two-tier lookup strategy:**
 
 - `context.md` for boot (compact summary, always loaded)
-- `notes/08_indices/index.md` or `index.json` as a lightweight lookup table for deeper searches (do NOT load at boot)
+- `$LEDGER_NOTES_DIR/08_indices/index.md` or `index.json` as a lightweight lookup table for deeper searches (do NOT load at boot)
 
 ## Write Modes
 
@@ -72,10 +75,10 @@ Infer the mode from context. When in doubt, default to `notes+ledger`.
 - Prefer specific prompts over generic "anything else?" prompts.
 - Skip questions entirely when the user's input is already complete.
 
-### 3. Choose Note Destination in `$NOTES_DIR`
+### 3. Choose Note Destination in `$LEDGER_SOURCE_NOTES_DIR`
 
 - Route using `references/question-playbook.md`.
-- Search for existing notes first: `rg "<topic>" $NOTES_DIR -l`
+- Search for existing notes first: `rg "<topic>" $LEDGER_SOURCE_NOTES_DIR -l`
 - Prefer updating over creating duplicates.
 - When uncertain between two folders, propose one default and ask once.
 
@@ -84,11 +87,11 @@ Infer the mode from context. When in doubt, default to `notes+ledger`.
 - Keep content concise and scannable.
 - Use practical headings; avoid template bloat.
 - Include decisions, next steps, owners, and dates when present.
-- Read `$NOTES_DIR/AGENTS.md` before first write if context is unclear (if it exists).
+- Read `$LEDGER_SOURCE_NOTES_DIR/AGENTS.md` before first write if context is unclear (if it exists).
 
 ### 5. Sync Durable Items to the Ledger
 
-Follow the ledger operations below for all writes to `$LEDGER_DIR`.
+Follow the ledger operations below for all writes to `$LEDGER_ROOT` and `$LEDGER_NOTES_DIR`.
 
 - Distill only durable memory from the note; do not copy full note text.
 - Map extracted items using the Intent → Artifact table below.
@@ -117,7 +120,7 @@ Read these before writing (when guidance is needed; keep reads minimal):
 - `AGENTS.md` for operating rules, triggers, and quick reference
 - `schema.yaml` for frontmatter and enums
 - `templates/` for note structure
-- `notes/08_indices/README.md` and `notes/08_indices/sleep_playbook.md` for indices/sleep
+- `$LEDGER_NOTES_DIR/08_indices/README.md` and `$LEDGER_NOTES_DIR/08_indices/sleep_playbook.md` for indices/sleep
 
 ### Core Rules
 
@@ -126,6 +129,7 @@ Read these before writing (when guidance is needed; keep reads minimal):
 - Never invent facts. Use `source: inferred` + `confidence < 0.7` if unsure.
 - Always bump `updated` on edits.
 - Always append to `notes/08_indices/timeline.md` after any note operation.
+- Persist ledger note identifiers as logical `notes/...` paths even if `$LEDGER_NOTES_DIR` lives outside `$LEDGER_ROOT`.
 
 ### Intent → Artifact Mapping (Routing Table)
 
@@ -153,7 +157,7 @@ Only capture when there is clear evidence. Do not log signals speculatively.
 
 ### Create or Update an Atomic Note
 
-1. Search: `rg "<topic>" $LEDGER_DIR/notes -l` and `fd "<type>__|<slug>" $LEDGER_DIR/notes`
+1. Search: `rg "<topic>" $LEDGER_NOTES_DIR -l` and `fd "<type>__|<slug>" $LEDGER_NOTES_DIR`
 2. Choose type and path: `notes/{folder}/{type}__{slug}.md`
 3. Use the appropriate template as reference.
 4. Write/update frontmatter and content.
@@ -179,11 +183,11 @@ Only capture when there is clear evidence. Do not log signals speculatively.
 
 **When to search deeper during conversation:**
 
-- Personal details, history, family → `rg "<topic>" $LEDGER_DIR/notes/02_facts/`
-- Past decisions or commitments → `rg "<topic>" $LEDGER_DIR/notes/02_facts/` + check timeline
-- User preferences or style → `rg "<topic>" $LEDGER_DIR/notes/03_preferences/`
-- Ongoing threads or open questions → `rg "<topic>" $LEDGER_DIR/notes/05_open_loops/`
-- Defined concepts or frameworks → `rg "<topic>" $LEDGER_DIR/notes/06_concepts/`
+- Personal details, history, family → `rg "<topic>" $LEDGER_NOTES_DIR/02_facts/`
+- Past decisions or commitments → `rg "<topic>" $LEDGER_NOTES_DIR/02_facts/` + check timeline
+- User preferences or style → `rg "<topic>" $LEDGER_NOTES_DIR/03_preferences/`
+- Ongoing threads or open questions → `rg "<topic>" $LEDGER_NOTES_DIR/05_open_loops/`
+- Defined concepts or frameworks → `rg "<topic>" $LEDGER_NOTES_DIR/06_concepts/`
 
 **Rule:** If about to guess or assume something about the user, search the ledger first.
 
@@ -273,7 +277,7 @@ Before any operation that writes to the ledger:
 
 ## Working Directory
 
-The ledger lives at `$LEDGER_DIR`. Notes live at `$NOTES_DIR`.
+The ledger repo lives at `$LEDGER_ROOT`. The ledger note corpus lives at `$LEDGER_NOTES_DIR`. Human notes live at `$LEDGER_SOURCE_NOTES_DIR`.
 
 - If the user is working in another repository, temporarily `cd` to the target repo for operations, then return to the original working directory.
 - Never modify unrelated repositories as part of note/ledger operations.

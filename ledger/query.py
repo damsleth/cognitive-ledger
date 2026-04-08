@@ -64,7 +64,7 @@ def scored_result_to_dict(item: RetrievalCandidate | ScoredResult | dict[str, An
         return item
     components = getattr(item, "components", None)
     return {
-        "path": item.path,
+        "path": item.rel_path or item.path,
         "rel_path": item.rel_path,
         "type": item.type,
         "title": item.title,
@@ -157,7 +157,7 @@ def query_result_to_json(
     results = payload_results(payload)
     for item in results:
         data = {
-            "path": result_get(item, "path"),
+            "path": result_get(item, "rel_path") or result_get(item, "path"),
             "title": result_get(item, "title"),
             "type": result_get(item, "type"),
             "score": round(float(result_get(item, "score", 0.0)), 6),
@@ -436,7 +436,7 @@ def bundle_results(results: list[ScoredResult | dict[str, Any]], word_budget: in
         words_left -= take
         bundle.append(
             {
-                "path": result_get(item, "path", ""),
+                "path": result_get(item, "rel_path", "") or result_get(item, "path", ""),
                 "title": result_get(item, "title", ""),
                 "excerpt": excerpt,
                 "words": take,

@@ -76,12 +76,12 @@ class LedgerEmbeddingsTests(unittest.TestCase):
             return vectors / norms
 
         self._patches = {
-            "ROOT_DIR": self.repo_root,
-            "LEDGER_NOTES_ROOT": self.notes_root,
+            "LEDGER_ROOT": self.repo_root,
+            "LEDGER_NOTES_DIR": self.notes_root,
             "SEMANTIC_ROOT": self.repo_root / ".smart-env" / "semantic",
             "LEDGER_TIMELINE_PATH": self.notes_root / "08_indices" / "timeline.md",
             "SEMANTIC_MANIFEST_PATH": self.notes_root / "08_indices" / "semantic_manifest.json",
-            "DEFAULT_SOURCE_ROOT": self.source_root,
+            "DEFAULT_SOURCE_NOTES_DIR": self.source_root,
             "embed_texts": fake_embed_texts,
         }
         self._originals = {}

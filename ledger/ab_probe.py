@@ -24,7 +24,7 @@ from ledger.parsing import parse_timestamp
 def main() -> int:
     payload = json.loads(sys.argv[1])
     worktree = Path(payload["worktree"]).resolve()
-    os.environ["LEDGER_ROOT_DIR"] = str(worktree)
+    os.environ["LEDGER_ROOT"] = str(worktree)
     if str(worktree) not in sys.path:
         sys.path.insert(0, str(worktree))
 
@@ -139,7 +139,8 @@ def main() -> int:
             bundle = ledger_script.bundle_results(results, word_budget=1200)
             bundle_token_samples.append(sum(len(str(item.get("excerpt", "")).split()) for item in bundle))
 
-    notes_dir = get_config().notes_dir
+    config = get_config()
+    notes_dir = config.ledger_notes_dir
     context_text = context_mod.build_context(notes_dir)
     profile_items = context_mod.collect_profile_items(notes_dir)
     profile_tokens = {}
@@ -161,9 +162,9 @@ def main() -> int:
     with contextlib.redirect_stdout(lint_output):
         for path in maintenance_mod._iter_note_files(include_indices=False):
             maintenance_mod._lint_note(path, counters)
-        maintenance_mod._lint_timeline(worktree / "notes" / "08_indices" / "timeline.md", counters)
+        maintenance_mod._lint_timeline(config.timeline_path, counters)
 
-    timeline_entries = maintenance_mod._timeline_entries(worktree / "notes" / "08_indices" / "timeline.md")
+    timeline_entries = maintenance_mod._timeline_entries(config.timeline_path)
     sleep_positions = [idx for idx, entry in enumerate(timeline_entries) if entry[2] == "sleep"]
     changes_since_sleep = 0
     days_since_sleep = None

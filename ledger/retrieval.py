@@ -22,6 +22,7 @@ from typing import Any, Union
 
 from ledger.config import get_config
 from ledger.io import safe_write_text
+from ledger.layout import indices_dir, logical_path, note_type_dir
 from ledger.parsing import (
     extract_link_tokens,
     extract_title,
@@ -64,14 +65,14 @@ def _cfg():
 
 
 def _note_index_path() -> Path:
-    return _cfg().notes_dir / "08_indices" / "note_index.json"
+    return indices_dir(_cfg().ledger_notes_dir) / "note_index.json"
 
 
 def _note_types() -> dict[str, dict[str, Any]]:
     config = _cfg()
     return {
         name: {
-            "dir": config.notes_dir / info["dir"].removeprefix("notes/"),
+            "dir": note_type_dir(config.ledger_notes_dir, name),
             "label": info["label"],
         }
         for name, info in config.note_types.items()
@@ -346,13 +347,11 @@ def _candidate_from_parts(
 
     cfg = _cfg()
     resolved = path.resolve()
-    try:
-        rel_path = resolved.relative_to(cfg.root_dir.resolve())
-    except ValueError:
-        try:
-            rel_path = resolved.relative_to(cfg.notes_dir.resolve())
-        except ValueError:
-            rel_path = resolved
+    rel_path = logical_path(
+        resolved,
+        ledger_root=cfg.ledger_root,
+        ledger_notes_dir=cfg.ledger_notes_dir,
+    )
     slug = path.stem
 
     searchable_text = " ".join([title, statement, body, " ".join(tags), slug])
@@ -507,7 +506,11 @@ def rebuild_note_index(index_path: Path | str | None = None) -> dict[str, Any]:
     updated_entries: dict[str, dict[str, Any]] = {}
 
     for note_type, note_path in _list_note_paths():
-        rel = note_path.resolve().relative_to(_cfg().root_dir.resolve()).as_posix()
+        rel = logical_path(
+            note_path,
+            ledger_root=_cfg().ledger_root,
+            ledger_notes_dir=_cfg().ledger_notes_dir,
+        ).as_posix()
         mtime = note_path.stat().st_mtime
         cached = existing_entries.get(rel, {})
         cached_mtime = float(cached.get("mtime", -1.0)) if cached else -1.0
@@ -1154,7 +1157,7 @@ def _maybe_log_query(result: "RetrievalResult") -> None:
     if os.environ.get("LEDGER_QUERY_LOG") != "1":
         return
     try:
-        log_path = _cfg().notes_dir / "08_indices" / "query_log.jsonl"
+        log_path = indices_dir(_cfg().ledger_notes_dir) / "query_log.jsonl"
         entry = json.dumps(
             {
                 "ts": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),

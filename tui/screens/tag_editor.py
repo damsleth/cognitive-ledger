@@ -110,7 +110,7 @@ class TagEditorScreen(ModalScreen):
         """Save tags and close."""
         # Only save if changed
         if set(self.current_tags) != set(self.note.frontmatter.tags):
-            writer = NoteWriter(self.store.root_dir)
+            writer = NoteWriter(self.store.root_dir, self.store.notes_dir)
             writer.update_frontmatter(self.note, {"tags": self.current_tags})
             self.store.refresh()
             self.notify(f"Updated tags: {', '.join(self.current_tags)}")

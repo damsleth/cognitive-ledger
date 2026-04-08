@@ -11,9 +11,9 @@ from .note_parser import NoteParser
 class NoteStore:
     """Central repository for all notes, loaded into memory."""
 
-    def __init__(self, root_dir: Path):
+    def __init__(self, root_dir: Path, ledger_notes_dir: Path):
         self.root_dir = root_dir
-        self.notes_dir = root_dir / "notes"
+        self.notes_dir = ledger_notes_dir
         self.parser = NoteParser()
         self._notes: dict[Path, Note] = {}
         self._by_type: dict[NoteType, list[Note]] = defaultdict(list)
@@ -31,7 +31,7 @@ class NoteStore:
 
         # Load from each note folder
         for note_type in NoteType:
-            folder = self.root_dir / note_type.folder
+            folder = self.notes_dir / note_type.subdir
             if not folder.exists():
                 continue
 
@@ -50,7 +50,7 @@ class NoteStore:
         """Return current note-file mtime snapshot for watch mode."""
         snapshot: dict[Path, float] = {}
         for note_type in NoteType:
-            folder = self.root_dir / note_type.folder
+            folder = self.notes_dir / note_type.subdir
             if not folder.exists():
                 continue
             for path in folder.glob("*.md"):

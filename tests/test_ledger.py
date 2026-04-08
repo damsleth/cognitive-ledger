@@ -187,7 +187,7 @@ class LedgerUnitTests(unittest.TestCase):
                 "What should I do next for release?\n",
                 encoding="utf-8",
             )
-            config = LedgerConfig(root_dir=tmp)
+            config = LedgerConfig(ledger_root=tmp)
             set_config(config)
             clear_candidate_cache()
             ledger.load_embeddings_module = lambda: FakeEmbeddings
@@ -292,7 +292,7 @@ class LedgerUnitTests(unittest.TestCase):
             with tempfile.TemporaryDirectory() as temp_dir:
                 tmp = Path(temp_dir)
                 (tmp / "notes" / "08_indices").mkdir(parents=True)
-                config = LedgerConfig(root_dir=tmp)
+                config = LedgerConfig(ledger_root=tmp)
                 set_config(config)
                 result = RetrievalResult(
                     query="calendar constraints",
@@ -536,7 +536,7 @@ class LedgerUnitTests(unittest.TestCase):
                 "# Test Pref\n\n## Statement\n\nStable work-style preferences for testing.\n",
                 encoding="utf-8",
             )
-            config = LedgerConfig(root_dir=tmp)
+            config = LedgerConfig(ledger_root=tmp)
             set_config(config)
             clear_candidate_cache()
             try:
@@ -784,7 +784,7 @@ class LedgerIntegrationTests(unittest.TestCase):
         cls._tmp = Path(cls._tmpdir.name)
         cls._notes_dir = _build_fixture_tree(cls._tmp)
         cls._cases_path = cls._notes_dir / "08_indices" / "retrieval_eval_cases.yaml"
-        cls._config = LedgerConfig(root_dir=cls._tmp)
+        cls._config = LedgerConfig(ledger_root=cls._tmp)
         set_config(cls._config)
         clear_candidate_cache()
 

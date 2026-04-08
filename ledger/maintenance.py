@@ -22,6 +22,7 @@ from typing import Any
 
 from ledger.config import get_config
 from ledger import context as context_lib
+from ledger.layout import indices_dir as layout_indices_dir, logical_path
 from ledger.parsing import (
     parse_frontmatter_text,
     parse_sections,
@@ -62,18 +63,19 @@ class LintCounters:
 
 def _config_paths() -> tuple[Path, Path, Path]:
     config = get_config()
-    notes_dir = config.notes_dir
-    indices_dir = notes_dir / "08_indices"
+    notes_dir = config.ledger_notes_dir
+    indices_dir = layout_indices_dir(notes_dir)
     timeline = config.timeline_path
     return notes_dir, indices_dir, timeline
 
 
 def _relative(path: Path) -> str:
-    root = get_config().root_dir
-    try:
-        return path.resolve().relative_to(root.resolve()).as_posix()
-    except ValueError:
-        return path.as_posix()
+    config = get_config()
+    return logical_path(
+        path,
+        ledger_root=config.ledger_root,
+        ledger_notes_dir=config.ledger_notes_dir,
+    ).as_posix()
 
 
 def _iter_note_files(include_indices: bool = False):
@@ -767,10 +769,11 @@ def _generate_links_index(indices_dir: Path) -> tuple[dict[str, Any], list[str],
             if target.startswith("../") or target.startswith("./"):
                 resolved = (path.parent / target).resolve()
                 config = get_config()
-                try:
-                    target = str(resolved.relative_to(config.root_dir))
-                except ValueError:
-                    pass
+                target = logical_path(
+                    resolved,
+                    ledger_root=config.ledger_root,
+                    ledger_notes_dir=config.ledger_notes_dir,
+                ).as_posix()
             outgoing.append(target)
 
         links_data[rel] = {
@@ -933,7 +936,7 @@ def _generate_recent(indices_dir: Path) -> None:
 
 
 def _run_subprocess(command: list[str], required: bool = True) -> tuple[int, str]:
-    proc = subprocess.run(command, cwd=str(get_config().root_dir), capture_output=True, text=True)
+    proc = subprocess.run(command, cwd=str(get_config().ledger_root), capture_output=True, text=True)
     output = "\n".join(part for part in [proc.stdout.strip(), proc.stderr.strip()] if part)
     if required and proc.returncode != 0:
         raise RuntimeError(output or f"command failed: {' '.join(command)}")
@@ -941,11 +944,11 @@ def _run_subprocess(command: list[str], required: bool = True) -> tuple[int, str
 
 
 def _generate_context(indices_dir: Path) -> None:
-    context_lib.write_context(indices_dir / "context.md", get_config().notes_dir)
+    context_lib.write_context(indices_dir / "context.md", get_config().ledger_notes_dir)
 
 
 def _generate_context_profiles(indices_dir: Path) -> None:
-    context_lib.write_context_profiles(indices_dir, get_config().notes_dir)
+    context_lib.write_context_profiles(indices_dir, get_config().ledger_notes_dir)
 
 
 def _write_context_metrics(indices_dir: Path) -> dict[str, Any]:
@@ -980,7 +983,7 @@ def _write_context_metrics(indices_dir: Path) -> dict[str, Any]:
 
 
 def _generate_semantic_index() -> None:
-    root = get_config().root_dir
+    root = get_config().ledger_root
     cmd = [
         str(root / "scripts" / "ledger"),
         "embed",

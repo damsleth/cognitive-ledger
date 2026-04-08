@@ -15,14 +15,14 @@ class TestNoteStore:
     """Tests for NoteStore class."""
 
     def test_load_all(self, populated_ledger):
-        store = NoteStore(populated_ledger)
+        store = NoteStore(populated_ledger, populated_ledger / "notes")
         store.load_all()
 
         notes = store.all_notes()
         assert len(notes) >= 2  # At least fact and loop
 
     def test_get_note_by_path(self, populated_ledger):
-        store = NoteStore(populated_ledger)
+        store = NoteStore(populated_ledger, populated_ledger / "notes")
         store.load_all()
 
         fact_path = populated_ledger / "notes" / "02_facts" / "fact__sample.md"
@@ -32,7 +32,7 @@ class TestNoteStore:
         assert note.title == "Sample Fact"
 
     def test_get_note_by_stem(self, populated_ledger):
-        store = NoteStore(populated_ledger)
+        store = NoteStore(populated_ledger, populated_ledger / "notes")
         store.load_all()
 
         note = store.get_note_by_stem("fact__sample")
@@ -41,7 +41,7 @@ class TestNoteStore:
         assert "sample" in note.path.stem.lower()
 
     def test_get_notes_by_type(self, populated_ledger):
-        store = NoteStore(populated_ledger)
+        store = NoteStore(populated_ledger, populated_ledger / "notes")
         store.load_all()
 
         facts = store.get_notes_by_type(NoteType.FACT)
@@ -51,7 +51,7 @@ class TestNoteStore:
             assert note.note_type == NoteType.FACT
 
     def test_get_notes_by_scope(self, populated_ledger):
-        store = NoteStore(populated_ledger)
+        store = NoteStore(populated_ledger, populated_ledger / "notes")
         store.load_all()
 
         dev_notes = store.get_notes_by_scope(Scope.DEV)
@@ -64,7 +64,7 @@ class TestNoteStore:
             assert note.frontmatter.scope == Scope.DEV
 
     def test_get_open_loops(self, populated_ledger):
-        store = NoteStore(populated_ledger)
+        store = NoteStore(populated_ledger, populated_ledger / "notes")
         store.load_all()
 
         loops = store.get_open_loops()
@@ -73,7 +73,7 @@ class TestNoteStore:
         assert loops[0].note_type == NoteType.LOOP
 
     def test_get_notes_by_tag(self, populated_ledger):
-        store = NoteStore(populated_ledger)
+        store = NoteStore(populated_ledger, populated_ledger / "notes")
         store.load_all()
 
         tagged = store.get_notes_by_tag("test")
@@ -83,7 +83,7 @@ class TestNoteStore:
             assert "test" in note.frontmatter.tags
 
     def test_all_tags(self, populated_ledger):
-        store = NoteStore(populated_ledger)
+        store = NoteStore(populated_ledger, populated_ledger / "notes")
         store.load_all()
 
         tags = store.all_tags()
@@ -91,7 +91,7 @@ class TestNoteStore:
         assert "test" in tags
 
     def test_search_finds_content(self, populated_ledger):
-        store = NoteStore(populated_ledger)
+        store = NoteStore(populated_ledger, populated_ledger / "notes")
         store.load_all()
 
         results = store.search("sample")
@@ -99,7 +99,7 @@ class TestNoteStore:
         assert len(results) >= 1
 
     def test_search_with_scope_filter(self, populated_ledger):
-        store = NoteStore(populated_ledger)
+        store = NoteStore(populated_ledger, populated_ledger / "notes")
         store.load_all()
 
         work_results = store.search("fact", scope=Scope.WORK)
@@ -109,7 +109,7 @@ class TestNoteStore:
         assert any("work" in str(n.path).lower() for n in work_results)
 
     def test_refresh_reloads(self, populated_ledger):
-        store = NoteStore(populated_ledger)
+        store = NoteStore(populated_ledger, populated_ledger / "notes")
         store.load_all()
 
         initial_count = len(store.all_notes())
@@ -138,13 +138,13 @@ A newly created fact.
         assert len(store.all_notes()) == initial_count + 1
 
     def test_filesystem_snapshot_includes_note_files(self, populated_ledger):
-        store = NoteStore(populated_ledger)
+        store = NoteStore(populated_ledger, populated_ledger / "notes")
         snapshot = store.filesystem_snapshot()
         assert snapshot
         assert all(str(path).endswith(".md") for path in snapshot)
 
     def test_sorted_by_updated(self, populated_ledger):
-        store = NoteStore(populated_ledger)
+        store = NoteStore(populated_ledger, populated_ledger / "notes")
         store.load_all()
 
         notes = store.all_notes()

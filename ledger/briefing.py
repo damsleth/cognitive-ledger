@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from ledger.config import get_config
+from ledger.layout import inbox_dir, indices_dir, logical_path
 from ledger.notes import get_notes, BaseNote
 from ledger.parsing.frontmatter import parse_frontmatter_text, parse_timestamp
 from ledger import timeline as timeline_lib
@@ -23,7 +24,7 @@ NUDGE_LOG_FILENAME = "nudge_log.json"
 
 def _nudge_log_path() -> Path:
     config = get_config()
-    return config.notes_dir / "08_indices" / NUDGE_LOG_FILENAME
+    return indices_dir(config.ledger_notes_dir) / NUDGE_LOG_FILENAME
 
 
 def _load_nudge_log() -> dict[str, Any]:
@@ -80,6 +81,13 @@ def daily_briefing() -> str:
         maintenance status, and suggested actions.
     """
     config = get_config()
+    def _logical_note_path(path: Path) -> str:
+        return logical_path(
+            path,
+            ledger_root=config.ledger_root,
+            ledger_notes_dir=config.ledger_notes_dir,
+        ).as_posix()
+
     now = datetime.now(timezone.utc)
     nudge_log = _load_nudge_log()
     lines: list[str] = ["# Daily Briefing", ""]
@@ -110,7 +118,7 @@ def daily_briefing() -> str:
 
             lines.append(f"- {loop.title}{status_tag}{stale_tag} ({staleness}d ago)")
 
-            if staleness > 7 and _should_nudge(str(loop.path), nudge_log, now):
+            if staleness > 7 and _should_nudge(_logical_note_path(loop.path), nudge_log, now):
                 nudge_candidates.append(loop)
 
         lines.append("")
@@ -127,7 +135,7 @@ def daily_briefing() -> str:
                     lines.append(f"- **{loop.title}** - blocked {staleness}d. Still blocked? What's needed?")
                 else:
                     lines.append(f"- **{loop.title}** - no update in {staleness}d. Quick update?")
-                _record_nudge(str(loop.path), nudge_log, now)
+                _record_nudge(_logical_note_path(loop.path), nudge_log, now)
             lines.append("")
 
             _save_nudge_log(nudge_log)
@@ -162,7 +170,8 @@ def daily_briefing() -> str:
 
     # Suggested actions
     stale_count = sum(1 for l in all_active if _loop_staleness(l, now) > 14)
-    inbox_count = len(list((config.notes_dir / "00_inbox").glob("*.md"))) if (config.notes_dir / "00_inbox").is_dir() else 0
+    inbox_path = inbox_dir(config.ledger_notes_dir)
+    inbox_count = len(list(inbox_path.glob("*.md"))) if inbox_path.is_dir() else 0
 
     suggestions: list[str] = []
     if stale_count:

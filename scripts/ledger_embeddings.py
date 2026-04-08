@@ -21,18 +21,19 @@ from typing import Any
 
 import numpy as np
 from ledger.config import get_config
+from ledger.layout import logical_path, note_type_dir
 from ledger.io import append_timeline_entry as append_timeline_entry_safe
 from ledger.parsing import extract_title, parse_frontmatter_text
 
 _cfg = get_config()
 
-ROOT_DIR = _cfg.root_dir
+LEDGER_ROOT = _cfg.ledger_root
 SEMANTIC_ROOT = _cfg.semantic_root
-LEDGER_NOTES_ROOT = _cfg.notes_dir
+LEDGER_NOTES_DIR = _cfg.ledger_notes_dir
 LEDGER_TIMELINE_PATH = _cfg.timeline_path
 SEMANTIC_MANIFEST_PATH = _cfg.semantic_manifest_path
 
-DEFAULT_SOURCE_ROOT = _cfg.source_root
+DEFAULT_SOURCE_NOTES_DIR = _cfg.source_notes_dir
 
 SUPPORTED_BACKENDS = ("local", "openai")
 SUPPORTED_TARGETS = ("ledger", "source", "both")
@@ -47,6 +48,7 @@ LEDGER_EMBED_NOTE_TYPES = {
     "notes/05_open_loops": "loop",
     "notes/06_concepts": "concept",
 }
+LEDGER_EMBED_LAYOUT_NAMES = ("facts", "preferences", "goals", "loops", "concepts")
 
 INDEX_ITEM_FIELDS = (
     "id",
@@ -93,9 +95,9 @@ def ensure_openai_api_key() -> str:
 
 def corpus_root_for_target(target: str, source_root: Path | None = None) -> Path:
     if target == "ledger":
-        return LEDGER_NOTES_ROOT
+        return LEDGER_NOTES_DIR
     if target == "source":
-        return Path(source_root or DEFAULT_SOURCE_ROOT).expanduser().resolve()
+        return Path(source_root or DEFAULT_SOURCE_NOTES_DIR).expanduser().resolve()
     raise ValueError(f"Unsupported corpus target: {target}")
 
 
@@ -154,7 +156,8 @@ def append_timeline_entry(action: str, rel_path: str, description: str) -> None:
         action=action,
         note_path=rel_path,
         description=description,
-        root_dir=ROOT_DIR,
+        root_dir=LEDGER_ROOT,
+        ledger_notes_dir=LEDGER_NOTES_DIR,
     )
 
 
@@ -165,8 +168,8 @@ def iso_from_mtime(path: Path) -> str:
 
 def collect_ledger_notes() -> list[Path]:
     files: list[Path] = []
-    for rel_prefix in LEDGER_EMBED_NOTE_TYPES:
-        note_dir = ROOT_DIR / rel_prefix
+    for note_type in LEDGER_EMBED_LAYOUT_NAMES:
+        note_dir = note_type_dir(LEDGER_NOTES_DIR, note_type)
         if not note_dir.is_dir():
             continue
         files.extend(sorted(note_dir.glob("*.md")))
@@ -185,10 +188,14 @@ def build_item_record(path: Path, target: str, source_root: Path | None = None) 
     frontmatter, body = parse_frontmatter_text(text)
 
     if target == "ledger":
-        rel_path = abs_path.relative_to(ROOT_DIR).as_posix()
+        rel_path = logical_path(
+            abs_path,
+            ledger_root=LEDGER_ROOT,
+            ledger_notes_dir=LEDGER_NOTES_DIR,
+        ).as_posix()
         note_type = infer_ledger_note_type(rel_path)
     else:
-        root = Path(source_root or DEFAULT_SOURCE_ROOT).expanduser().resolve()
+        root = Path(source_root or DEFAULT_SOURCE_NOTES_DIR).expanduser().resolve()
         rel_path = abs_path.relative_to(root).as_posix()
         note_type = "source"
 
@@ -218,7 +225,7 @@ def collect_target_items(target: str, source_root: Path | None = None) -> list[d
     if target == "ledger":
         files = collect_ledger_notes()
     elif target == "source":
-        files = collect_source_notes(Path(source_root or DEFAULT_SOURCE_ROOT))
+        files = collect_source_notes(Path(source_root or DEFAULT_SOURCE_NOTES_DIR))
     else:
         raise ValueError(f"Unsupported target: {target}")
 
@@ -545,7 +552,7 @@ def build_indices(
         raise ValueError(f"Unsupported target: {target}")
 
     resolved_model = str(model or default_model_for_backend(backend)).strip()
-    resolved_source_root = Path(source_root or DEFAULT_SOURCE_ROOT).expanduser().resolve()
+    resolved_source_root = Path(source_root or DEFAULT_SOURCE_NOTES_DIR).expanduser().resolve()
 
     targets = ["ledger", "source"] if target == "both" else [target]
     results: list[dict[str, Any]] = []
