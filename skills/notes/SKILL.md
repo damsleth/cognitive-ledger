@@ -3,9 +3,9 @@ name: notes
 description: Capture notes and maintain structured long-term memory. Writes human-readable notes to Obsidian and syncs durable facts, preferences, decisions, goals, and open loops to a cognitive ledger. Asks targeted questions before writing. Use when the user wants to take notes, log decisions, capture ideas, plan, journal, or remember something.
 license: WTFPL
 metadata:
-  source_notes_dir: "<notes-dir>"
-  ledger_root: "<ledger-dir>"
-  ledger_notes_dir: "<ledger-notes-dir>"
+  source_notes_dir: "<resolve-from-config>"
+  ledger_root: "<resolve-from-config>"
+  ledger_notes_dir: "<resolve-from-config>"
   defaults:
     mode: notes+ledger
     auto_write: true
@@ -23,23 +23,28 @@ Capture notes and maintain structured long-term memory across two repositories:
 
 > **Setup:** Set `LEDGER_SOURCE_NOTES_DIR`, `LEDGER_ROOT`, and `LEDGER_NOTES_DIR` environment variables or edit the defaults in the frontmatter above.
 
-### Environment Preflight
+### Path Resolution
 
-- Before any notes workflow, check whether `LEDGER_SOURCE_NOTES_DIR`, `LEDGER_ROOT`, and `LEDGER_NOTES_DIR` are set.
-- If any variable is missing, stop and prompt the user for the missing path(s) before continuing.
-- After the user provides the path(s), advise them to add the exports to `~/.zshrc` so future sessions inherit them:
+The only value that must be bootstrapped is `LEDGER_ROOT`. Everything else comes from `config.yaml` inside it.
 
-```bash
-export LEDGER_SOURCE_NOTES_DIR="~/path/to/notes"
-export LEDGER_ROOT="~/path/to/cognitive-ledger"
-export LEDGER_NOTES_DIR="$LEDGER_ROOT/notes"
-```
+**To find `LEDGER_ROOT`**, try in order:
+1. Current working directory contains `config.yaml` - use CWD as `LEDGER_ROOT`
+2. `$LEDGER_ROOT` env var is set - use that
+3. Ask the user for the path to the cognitive-ledger repo
 
-- Tell the user to reload their shell after updating `~/.zshrc`:
+**Once `LEDGER_ROOT` is known**, check whether `$LEDGER_ROOT/config.yaml` exists:
 
-```bash
-source ~/.zshrc
-```
+- **If it exists** - Read it with the Read tool and extract `ledger_notes_dir` and `source_notes_dir`.
+- **If it does not exist** - Onboarding flow:
+  1. Tell the user `config.yaml` is missing and that you'll create it from `config.sample.yaml`.
+  2. Ask for the three paths in one batch:
+     - `ledger_root` - path to this repo
+     - `ledger_notes_dir` - path to the atomic ledger notes directory
+     - `source_notes_dir` - path to the human-facing Obsidian notes directory
+  3. Read `$LEDGER_ROOT/config.sample.yaml`, substitute the provided values, and write the result to `$LEDGER_ROOT/config.yaml`.
+  4. Confirm the file was created before continuing.
+
+Expand any `~` to the user's home directory. All subsequent operations use these resolved paths.
 
 ## Boot Sequence (Run on Activation)
 
