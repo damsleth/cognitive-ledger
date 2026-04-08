@@ -89,10 +89,11 @@ def cmd_bootstrap(args: argparse.Namespace) -> int:
     root = _parse_root(args.root)
     config = default_config(root)
 
-    ensure_layout(config)
-    save_config(config)
-    write_bases(config)
-    validate_config(config)
+    if not args.dry_run:
+        ensure_layout(config)
+        save_config(config)
+        write_bases(config)
+        validate_config(config)
 
     result = run_import(
         config,
