@@ -73,7 +73,7 @@ ledger-obsidian daemon start|status|stop --vault /path/to/vault   # macOS
 ./scripts/ledger query "<topic>" --scope all --limit 8
 ./scripts/ledger query "<topic>" --scope all --limit 8 --retrieval-mode <mode>
 ./scripts/ledger query "<topic>" --scope dev --bundle
-./scripts/ledger discover-source "<topic>" --source-root <root> --limit 20
+./scripts/ledger discover-source "<topic>" --source-notes-dir <root> --limit 20
 ./scripts/ledger embed build --target ledger --backend local --model TaylorAI/bge-micro-v2
 ./scripts/ledger embed status --target both
 ./scripts/ledger eval --cases notes/08_indices/retrieval_eval_cases.yaml --k 3 --strict-cases

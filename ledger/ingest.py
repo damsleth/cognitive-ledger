@@ -24,7 +24,7 @@ MANIFEST_FILENAME = "source_manifest.json"
 
 def _manifest_path(notes_dir: Path | None = None) -> Path:
     config = get_config()
-    nd = notes_dir or config.notes_dir
+    nd = notes_dir or config.ledger_notes_dir
     return nd / "08_indices" / MANIFEST_FILENAME
 
 
@@ -68,13 +68,13 @@ def scan_sources(source_root: str | Path | None = None) -> list[dict[str, Any]]:
     """Scan source files and return metadata.
 
     Args:
-        source_root: Root directory of source notes. Defaults to config.source_root.
+        source_root: Root directory of source notes. Defaults to config.source_notes_dir.
 
     Returns:
         List of dicts with path, sha256, modified, size.
     """
     config = get_config()
-    root = Path(source_root) if source_root else config.source_root
+    root = Path(source_root) if source_root else config.source_notes_dir
     root = root.expanduser().resolve()
 
     if not root.is_dir():
@@ -138,7 +138,7 @@ def prepare_ingest_context(
         Dict with source_content, related_notes, and ingest_prompt.
     """
     config = get_config()
-    root = Path(source_root) if source_root else config.source_root
+    root = Path(source_root) if source_root else config.source_notes_dir
     root = root.expanduser().resolve()
 
     full_path = root / source_path
@@ -179,7 +179,7 @@ def record_ingest(
         notes_dir: Notes directory override.
     """
     config = get_config()
-    root = Path(source_root) if source_root else config.source_root
+    root = Path(source_root) if source_root else config.source_notes_dir
     root = root.expanduser().resolve()
     full_path = root / source_path
 
@@ -211,5 +211,6 @@ def record_ingest(
         "updated",
         f"notes/08_indices/{MANIFEST_FILENAME}",
         f"ingested {source_path} -> {len(derived_notes)} note(s)",
-        root_dir=config.root_dir,
+        root_dir=config.ledger_root,
+        ledger_notes_dir=config.ledger_notes_dir,
     )

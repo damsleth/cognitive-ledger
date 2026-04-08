@@ -6,6 +6,7 @@ from pathlib import Path
 
 import yaml
 
+from ledger.layout import timeline_path as ledger_timeline_path
 from ..models.note import Note
 from ledger.io import FileLock, safe_write_text, append_timeline_entry
 
@@ -13,9 +14,10 @@ from ledger.io import FileLock, safe_write_text, append_timeline_entry
 class NoteWriter:
     """Writes changes to note files and timeline."""
 
-    def __init__(self, root_dir: Path):
+    def __init__(self, root_dir: Path, ledger_notes_dir: Path):
         self.root_dir = root_dir
-        self.timeline_path = root_dir / "notes" / "08_indices" / "timeline.md"
+        self.ledger_notes_dir = ledger_notes_dir
+        self.timeline_path = ledger_timeline_path(ledger_notes_dir)
 
     def update_frontmatter(self, note: Note, changes: dict) -> None:
         """Update frontmatter fields in a note file.
@@ -97,6 +99,7 @@ class NoteWriter:
             note_path=path,
             description=description,
             root_dir=self.root_dir,
+            ledger_notes_dir=self.ledger_notes_dir,
         )
 
     def add_section(self, note: Note, section_name: str, content: str) -> None:

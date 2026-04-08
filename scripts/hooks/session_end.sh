@@ -10,15 +10,21 @@
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+ROOT_DIR="${LEDGER_ROOT:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
+NOTES_DIR="${LEDGER_NOTES_DIR:-$ROOT_DIR/notes}"
+
+if [ -n "${LEDGER_ROOT_DIR:-}" ] || [ -n "${LEDGER_SOURCE_ROOT:-}" ]; then
+    echo "Deprecated ledger env vars detected. Use LEDGER_ROOT and LEDGER_SOURCE_NOTES_DIR." >&2
+    exit 2
+fi
 
 # Activate venv if available
 if [ -f "$ROOT_DIR/.venv/bin/activate" ]; then
     source "$ROOT_DIR/.venv/bin/activate" 2>/dev/null || true
 fi
 
-SIGNALS_FILE="$ROOT_DIR/notes/08_indices/signals.jsonl"
-SUMMARY_FILE="$ROOT_DIR/notes/08_indices/signal_summary.json"
+SIGNALS_FILE="$NOTES_DIR/08_indices/signals.jsonl"
+SUMMARY_FILE="$NOTES_DIR/08_indices/signal_summary.json"
 
 # Rebuild signal summary if signals have been added since last summary
 if [ -f "$SIGNALS_FILE" ]; then

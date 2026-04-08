@@ -137,7 +137,7 @@ def validate_path_within_root(
 
     Args:
         path: The path to validate.
-        root: The root directory (defaults to config.notes_dir).
+        root: The root directory (defaults to config.ledger_notes_dir).
 
     Returns:
         The resolved, validated Path object.
@@ -151,7 +151,7 @@ def validate_path_within_root(
         raise PathValidationError(path_str, "path contains null bytes")
 
     if root is None:
-        root = get_config().notes_dir
+        root = get_config().ledger_notes_dir
 
     root = root.resolve()
 

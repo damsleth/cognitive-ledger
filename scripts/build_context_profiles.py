@@ -19,11 +19,11 @@ from ledger.venv import maybe_reexec_in_repo_venv
 
 def main():
     parser = argparse.ArgumentParser(description="Generate scoped context profiles from ledger notes")
-    parser.add_argument("--notes-dir", required=True)
+    parser.add_argument("--ledger-notes-dir", dest="ledger_notes_dir", required=True)
     parser.add_argument("--output-dir", required=True)
     args = parser.parse_args()
 
-    notes_dir = Path(args.notes_dir)
+    notes_dir = Path(args.ledger_notes_dir)
     output_dir = Path(args.output_dir)
     write_context_profiles(output_dir, notes_dir)
 

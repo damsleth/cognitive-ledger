@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from ledger.config import get_config
+from ledger.layout import NOTE_LAYOUTS, CORE_NOTE_TYPES as LAYOUT_CORE_NOTE_TYPES, logical_path
 from ledger.parsing import (
     parse_frontmatter_text,
     parse_sections,
@@ -50,15 +51,17 @@ class NoteType(Enum):
 
     @property
     def folder(self) -> str:
-        folders = {
-            "id": "notes/01_identity",
-            "fact": "notes/02_facts",
-            "pref": "notes/03_preferences",
-            "goal": "notes/04_goals",
-            "loop": "notes/05_open_loops",
-            "concept": "notes/06_concepts",
-        }
-        return folders[self.value]
+        for layout in NOTE_LAYOUTS.values():
+            if layout.label == self.value:
+                return layout.logical_dir.as_posix()
+        raise ValueError(f"Unknown note type label: {self.value}")
+
+    @property
+    def subdir(self) -> str:
+        for layout in NOTE_LAYOUTS.values():
+            if layout.label == self.value:
+                return layout.subdir
+        raise ValueError(f"Unknown note type label: {self.value}")
 
     @classmethod
     def from_path(cls, path: str) -> NoteType | None:
@@ -206,7 +209,7 @@ class NoteTypeConfig:
     def dir(self) -> Path:
         """Get the directory path for this note type."""
         config = get_config()
-        return config.notes_dir / self.folder
+        return config.ledger_notes_dir / self.folder
 
     def path_in(self, notes_dir: Path) -> Path:
         """Get the directory path for this note type under an explicit notes root."""
@@ -215,15 +218,11 @@ class NoteTypeConfig:
 
 # Standard note types with their configurations
 NOTE_TYPE_CONFIGS: dict[str, NoteTypeConfig] = {
-    "identity": NoteTypeConfig(folder="01_identity", prefix="id__", label="id"),
-    "facts": NoteTypeConfig(folder="02_facts", prefix="fact__", label="fact"),
-    "preferences": NoteTypeConfig(folder="03_preferences", prefix="pref__", label="pref"),
-    "goals": NoteTypeConfig(folder="04_goals", prefix="goal__", label="goal"),
-    "loops": NoteTypeConfig(folder="05_open_loops", prefix="loop__", label="loop"),
-    "concepts": NoteTypeConfig(folder="06_concepts", prefix="concept__", label="concept"),
+    name: NoteTypeConfig(folder=layout.subdir, prefix=layout.prefix, label=layout.label)
+    for name, layout in NOTE_LAYOUTS.items()
 }
 
-CORE_NOTE_TYPES = tuple(NOTE_TYPE_CONFIGS.keys())
+CORE_NOTE_TYPES = LAYOUT_CORE_NOTE_TYPES
 LOOP_STATUSES = ("open", "closed", "blocked", "snoozed")
 IDENTITY_TYPES = ("mission", "beliefs", "models", "strategies", "narratives", "voice")
 
@@ -356,7 +355,11 @@ class LoopNote(BaseNote):
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary (for backward compatibility)."""
         return {
-            "path": str(self.path),
+            "path": logical_path(
+                self.path,
+                ledger_root=get_config().ledger_root,
+                ledger_notes_dir=get_config().ledger_notes_dir,
+            ).as_posix(),
             "frontmatter": self.frontmatter.to_dict(),
             "question": self.question,
             "why": self.why,
@@ -410,7 +413,11 @@ class GenericNote(BaseNote):
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary (for backward compatibility)."""
         return {
-            "path": str(self.path),
+            "path": logical_path(
+                self.path,
+                ledger_root=get_config().ledger_root,
+                ledger_notes_dir=get_config().ledger_notes_dir,
+            ).as_posix(),
             "frontmatter": self.frontmatter.to_dict(),
             "title": self.title,
             "statement": self.statement,

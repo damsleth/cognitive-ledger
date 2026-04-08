@@ -37,10 +37,10 @@ Finish the release checklist
 
 
 def test_sorted_items_and_formatting_use_typed_browse_items(tmp_path):
-    config = LedgerConfig(root_dir=tmp_path)
+    config = LedgerConfig(ledger_root=tmp_path)
     set_config(config)
     try:
-        note = config.notes_dir / "05_open_loops" / "loop__release.md"
+        note = config.ledger_notes_dir / "05_open_loops" / "loop__release.md"
         _seed_loop(note)
 
         items = browse.sorted_items("loops")

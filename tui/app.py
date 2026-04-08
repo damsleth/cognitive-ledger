@@ -149,10 +149,10 @@ class LedgerApp(App):
     }
     """
 
-    def __init__(self, root_dir: Path):
+    def __init__(self, ledger_root: Path, ledger_notes_dir: Path):
         super().__init__()
-        self.root_dir = root_dir
-        self.store = NoteStore(root_dir)
+        self.root_dir = ledger_root
+        self.store = NoteStore(ledger_root, ledger_notes_dir)
 
     def on_mount(self) -> None:
         """Push the main screen."""

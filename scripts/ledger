@@ -269,7 +269,7 @@ def handle_embed_build_command(args):
         target=args.target,
         backend=args.backend,
         model=args.model,
-        source_root=args.source_root,
+        source_root=args.source_notes_dir,
         load_embeddings_module_fn=lambda: load_embeddings_module(),
         resolve_embed_model_fn=semantic_lib.resolve_embed_model,
     )
@@ -317,7 +317,7 @@ def handle_discover_source_command(args):
     result = semantic_lib.semantic_search_source(
         query=validated_query,
         limit=validated_limit,
-        source_root=args.source_root,
+        source_root=args.source_notes_dir,
         embed_backend=backend,
         embed_model=args.embed_model,
         allow_api_on_source=args.allow_api_on_source,
@@ -416,7 +416,7 @@ def handle_context_command(args):
     from ledger.notes import get_notes
     from ledger.parsing import shorten
 
-    notes_dir = _config.notes_dir
+    notes_dir = _config.ledger_notes_dir
     fmt = getattr(args, "format", "boot")
 
     if fmt == "boot":
@@ -425,13 +425,13 @@ def handle_context_command(args):
 
         # Maintenance status (sheep)
         import subprocess
-        sheep_script = _config.root_dir / "scripts" / "sheep"
+        sheep_script = _config.ledger_root / "scripts" / "sheep"
         if sheep_script.is_file():
             try:
                 result = subprocess.run(
                     ["bash", str(sheep_script), "status"],
                     capture_output=True, text=True, timeout=5,
-                    cwd=str(_config.root_dir),
+                    cwd=str(_config.ledger_root),
                 )
                 if result.stdout.strip():
                     print("## Maintenance\n")
@@ -531,8 +531,8 @@ def handle_init_command(args):
 
     report = init_ledger(
         voice_dna_path=args.voice_dna,
-        source_root=args.source_root,
-        notes_dir=args.notes_dir,
+        source_notes_dir=args.source_notes_dir,
+        ledger_notes_dir=args.ledger_notes_dir,
     )
 
     if report["created"]:
@@ -561,7 +561,7 @@ def handle_ingest_command(args):
     sub = getattr(args, "ingest_command", None)
 
     if sub == "scan":
-        sources = scan_sources(args.source_root)
+        sources = scan_sources(args.source_notes_dir)
         if not sources:
             print("No source files found.")
             return
@@ -571,7 +571,7 @@ def handle_ingest_command(args):
 
     elif sub == "diff":
         manifest = load_manifest()
-        scan = scan_sources(args.source_root)
+        scan = scan_sources(args.source_notes_dir)
         d = diff_manifest(manifest, scan)
         print(f"New: {len(d['new'])}, Modified: {len(d['modified'])}, Deleted: {len(d['deleted'])}")
         for s in d["new"][:10]:
@@ -582,7 +582,7 @@ def handle_ingest_command(args):
             print(f"  - {s['path']}")
 
     elif sub == "record":
-        record_ingest(args.source, args.notes, source_root=args.source_root)
+        record_ingest(args.source, args.notes, source_root=args.source_notes_dir)
         print(f"Recorded ingest: {args.source} -> {len(args.notes)} note(s)")
 
     else:
@@ -743,9 +743,10 @@ def main():
     )
     discover_parser.add_argument("text", help="query text")
     discover_parser.add_argument(
-        "--source-root",
-        default=str(Path.home() / "notes"),
-        help="Source notes root for discovery (default: ~/notes)",
+        "--source-notes-dir",
+        dest="source_notes_dir",
+        default=str(_config.source_notes_dir),
+        help="Source notes directory for discovery",
     )
     discover_parser.add_argument("--limit", type=int, default=20)
     discover_parser.add_argument(
@@ -774,9 +775,10 @@ def main():
     embed_build_parser.add_argument("--backend", choices=_config.embed_backends, required=True)
     embed_build_parser.add_argument("--model", default=None)
     embed_build_parser.add_argument(
-        "--source-root",
-        default=str(Path.home() / "notes"),
-        help="Source notes root (used for target=source|both)",
+        "--source-notes-dir",
+        dest="source_notes_dir",
+        default=str(_config.source_notes_dir),
+        help="Source notes directory (used for target=source|both)",
     )
     embed_build_parser.add_argument("--json", action="store_true", dest="json")
 
@@ -825,20 +827,20 @@ def main():
     # Init subcommand
     init_parser = subparsers.add_parser("init", help="Initialize a cognitive ledger")
     init_parser.add_argument("--voice-dna", default=None, help="Path to voice-dna JSON file")
-    init_parser.add_argument("--source-root", default=None, help="Source notes root")
-    init_parser.add_argument("--notes-dir", default=None, help="Notes directory path")
+    init_parser.add_argument("--source-notes-dir", dest="source_notes_dir", default=None, help="Source notes directory")
+    init_parser.add_argument("--ledger-notes-dir", dest="ledger_notes_dir", default=None, help="Ledger notes directory path")
 
     # Ingest subcommand
     ingest_parser = subparsers.add_parser("ingest", help="Source ingest pipeline")
     ingest_subparsers = ingest_parser.add_subparsers(dest="ingest_command")
     ingest_scan_parser = ingest_subparsers.add_parser("scan", help="Show new/changed sources")
-    ingest_scan_parser.add_argument("--source-root", default=None, help="Source notes root")
+    ingest_scan_parser.add_argument("--source-notes-dir", dest="source_notes_dir", default=None, help="Source notes directory")
     ingest_diff_parser = ingest_subparsers.add_parser("diff", help="Detailed diff against manifest")
-    ingest_diff_parser.add_argument("--source-root", default=None, help="Source notes root")
+    ingest_diff_parser.add_argument("--source-notes-dir", dest="source_notes_dir", default=None, help="Source notes directory")
     ingest_record_parser = ingest_subparsers.add_parser("record", help="Record ingest provenance")
     ingest_record_parser.add_argument("source", help="Source file relative path")
     ingest_record_parser.add_argument("notes", nargs="+", help="Derived note paths")
-    ingest_record_parser.add_argument("--source-root", default=None, help="Source notes root")
+    ingest_record_parser.add_argument("--source-notes-dir", dest="source_notes_dir", default=None, help="Source notes directory")
 
     # Links subcommand
     links_parser = subparsers.add_parser("links", help="Show link graph")

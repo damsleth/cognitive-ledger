@@ -22,10 +22,13 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT_DIR))
 
 from ledger.config import get_config
+from ledger.layout import inbox_dir, indices_dir
 from ledger.io.safe_write import safe_write_text, append_timeline_entry
 from ledger.parsing.frontmatter import serialize_frontmatter
 
-BASELINE_PATH = ROOT_DIR / "notes" / "08_indices" / ".session_baseline"
+
+def _baseline_path() -> Path:
+    return indices_dir(get_config().ledger_notes_dir) / ".session_baseline"
 
 # Keywords that signal durable artifacts in commit messages
 DECISION_SIGNALS = re.compile(
@@ -56,10 +59,11 @@ def _run_git(*args: str) -> str:
 
 
 def _load_baseline() -> dict | None:
-    if not BASELINE_PATH.is_file():
+    baseline_path = _baseline_path()
+    if not baseline_path.is_file():
         return None
     try:
-        return json.loads(BASELINE_PATH.read_text(encoding="utf-8"))
+        return json.loads(baseline_path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
         return None
 
@@ -80,8 +84,8 @@ def _classify_commit(message: str) -> str | None:
 def _write_inbox_note(title: str, content: str, tags: list[str]) -> Path:
     """Write a note to the inbox."""
     config = get_config()
-    inbox_dir = config.notes_dir / "00_inbox"
-    inbox_dir.mkdir(parents=True, exist_ok=True)
+    inbox_path = inbox_dir(config.ledger_notes_dir)
+    inbox_path.mkdir(parents=True, exist_ok=True)
 
     now = datetime.now(timezone.utc)
     ts = now.strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -100,7 +104,7 @@ def _write_inbox_note(title: str, content: str, tags: list[str]) -> Path:
     body = f"\n# {title}\n\n## Content\n{content}\n\n## Source\nAuto-captured by session-end hook.\n"
     note_content = serialize_frontmatter(fm) + body
 
-    path = inbox_dir / f"{slug}.md"
+    path = inbox_path / f"{slug}.md"
     counter = 1
     while path.exists():
         path = inbox_dir / f"{slug}_{counter}.md"
@@ -113,7 +117,8 @@ def _write_inbox_note(title: str, content: str, tags: list[str]) -> Path:
         "created",
         path,
         f"auto-captured: {title}",
-        root_dir=config.root_dir,
+        root_dir=config.ledger_root,
+        ledger_notes_dir=config.ledger_notes_dir,
     )
 
     return path
@@ -168,8 +173,9 @@ def main() -> int:
             notes_created += 1
 
     # Clean up baseline
-    if BASELINE_PATH.is_file():
-        BASELINE_PATH.unlink()
+    baseline_path = _baseline_path()
+    if baseline_path.is_file():
+        baseline_path.unlink()
 
     if notes_created:
         print(f"Captured {notes_created} item(s) to inbox.")
