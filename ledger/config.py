@@ -13,21 +13,74 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from ledger.layout import (
+    CORE_NOTE_TYPES,
+    indices_dir,
+    note_type_metadata,
+    note_type_dir as note_type_path,
+    timeline_jsonl_path as layout_timeline_jsonl_path,
+    timeline_path as layout_timeline_path,
+)
 
-def _get_root_dir() -> Path:
+
+REMOVED_CONFIG_KEYS = {
+    "root_dir": "ledger_root",
+    "notes_dir": "ledger_notes_dir",
+    "source_root": "source_notes_dir",
+}
+
+REMOVED_ENV_VARS = {
+    "LEDGER_ROOT_DIR": "LEDGER_ROOT",
+    "LEDGER_SOURCE_ROOT": "LEDGER_SOURCE_NOTES_DIR",
+}
+
+PATH_FIELDS = frozenset({"ledger_root", "ledger_notes_dir", "source_notes_dir"})
+
+
+def _default_ledger_root() -> Path:
     """Determine the ledger root directory."""
-    # Check environment variable first
-    if env_root := os.getenv("LEDGER_ROOT_DIR"):
-        return Path(env_root).resolve()
-    # Default: parent of this package (cog-led repo root)
+    if env_root := os.getenv("LEDGER_ROOT"):
+        return Path(env_root).expanduser().resolve()
     return Path(__file__).resolve().parents[1]
 
 
-def _get_source_root() -> Path:
-    """Determine the source notes root for discovery."""
-    if env_root := os.getenv("LEDGER_SOURCE_ROOT"):
-        return Path(env_root).expanduser().resolve()
+def _default_source_notes_dir() -> Path:
+    """Determine the default source notes directory."""
     return Path.home() / "notes"
+
+
+def _raise_migration_error(items: list[str]) -> None:
+    raise RuntimeError("\n".join(items))
+
+
+def _fail_on_removed_config_keys(data: dict[str, Any], path: Path) -> None:
+    removed = [
+        f"config key '{old}' in {path} has been removed; use '{new}' instead"
+        for old, new in REMOVED_CONFIG_KEYS.items()
+        if old in data
+    ]
+    if removed:
+        _raise_migration_error(removed)
+
+
+def _fail_on_removed_env_vars() -> None:
+    removed = [
+        f"environment variable '{old}' has been removed; use '{new}' instead"
+        for old, new in REMOVED_ENV_VARS.items()
+        if os.getenv(old) is not None
+    ]
+    if removed:
+        _raise_migration_error(removed)
+
+
+def _coerce_value(key: str, value: Any, current: Any) -> Any:
+    if key in PATH_FIELDS:
+        return Path(str(value)).expanduser()
+    if isinstance(current, Path):
+        return Path(str(value)).expanduser()
+    if isinstance(current, (tuple, frozenset)):
+        return current
+    return value
 
 
 def _apply_dict(config: "LedgerConfig", data: dict) -> None:
@@ -35,33 +88,66 @@ def _apply_dict(config: "LedgerConfig", data: dict) -> None:
     for key, value in data.items():
         if not hasattr(config, key):
             continue
-        # Skip read-only properties (e.g. notes_dir)
+        if key in {"_ledger_notes_dir_explicit", "_source_notes_dir_explicit"}:
+            continue
         if isinstance(getattr(type(config), key, None), property):
             continue
         current = getattr(config, key)
-        if isinstance(current, Path):
-            value = Path(str(value)).expanduser()
-        elif isinstance(current, (tuple, frozenset)):
-            continue  # skip complex types
+        value = _coerce_value(key, value, current)
         setattr(config, key, value)
+        if key == "ledger_notes_dir":
+            config._ledger_notes_dir_explicit = True
+        elif key == "source_notes_dir":
+            config._source_notes_dir_explicit = True
+    config._finalize_paths()
+
+
+def _load_yaml_data(path: Path) -> dict[str, Any] | None:
+    if not path.is_file():
+        return None
+    try:
+        import yaml
+    except ImportError as exc:  # pragma: no cover - depends on env
+        raise RuntimeError(
+            f"YAML support is required to read {path}. "
+            "Install PyYAML or run ./scripts/setup-venv.sh."
+        ) from exc
+
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if data is None:
+        return {}
+    if not isinstance(data, dict):
+        raise RuntimeError(f"Expected {path} to contain a mapping at the top level.")
+    _fail_on_removed_config_keys(data, path)
+    return data
 
 
 def _apply_yaml_config(config: "LedgerConfig", path: Path) -> "LedgerConfig":
     """Apply config.yaml overrides if the file exists."""
-    if not path.is_file():
-        return config
-    try:
-        import yaml
-        data = yaml.safe_load(path.read_text(encoding="utf-8"))
-        if isinstance(data, dict):
-            _apply_dict(config, data)
-    except (ImportError, OSError, TypeError, ValueError):
-        pass
+    data = _load_yaml_data(path)
+    if data is not None:
+        _apply_dict(config, data)
     return config
 
 
 def _apply_env_overrides(config: "LedgerConfig") -> "LedgerConfig":
     """Apply environment variable overrides to an existing config instance."""
+    _fail_on_removed_env_vars()
+
+    path_mappings = {
+        "LEDGER_ROOT": "ledger_root",
+        "LEDGER_NOTES_DIR": "ledger_notes_dir",
+        "LEDGER_SOURCE_NOTES_DIR": "source_notes_dir",
+    }
+    for env_var, attr in path_mappings.items():
+        if (value := os.getenv(env_var)) is None:
+            continue
+        setattr(config, attr, Path(value).expanduser())
+        if attr == "ledger_notes_dir":
+            config._ledger_notes_dir_explicit = True
+        elif attr == "source_notes_dir":
+            config._source_notes_dir_explicit = True
+
     # Integer overrides
     int_mappings = {
         "LEDGER_SHORTLIST_MIN": "shortlist_min_candidates",
@@ -95,6 +181,7 @@ def _apply_env_overrides(config: "LedgerConfig") -> "LedgerConfig":
         except ValueError:
             pass
 
+    config._finalize_paths()
     return config
 
 
@@ -110,28 +197,21 @@ class LedgerConfig:
     # Paths
     # =========================================================================
 
-    root_dir: Path = field(default_factory=_get_root_dir)
+    ledger_root: Path = field(default_factory=_default_ledger_root)
     """Root directory of the cognitive ledger repository."""
 
-    source_root: Path = field(default_factory=_get_source_root)
+    ledger_notes_dir: Path | None = None
+    """Physical directory containing the ledger note corpus."""
+
+    source_notes_dir: Path | None = None
     """Root directory for source notes (used in discovery mode)."""
+
+    _ledger_notes_dir_explicit: bool = field(default=False, init=False, repr=False)
+    _source_notes_dir_explicit: bool = field(default=False, init=False, repr=False)
 
     # =========================================================================
     # Note Type Configuration
     # =========================================================================
-
-    note_types: dict[str, dict[str, Any]] = field(default_factory=lambda: {
-        "identity": {"dir": "notes/01_identity", "label": "id"},
-        "facts": {"dir": "notes/02_facts", "label": "fact"},
-        "preferences": {"dir": "notes/03_preferences", "label": "pref"},
-        "goals": {"dir": "notes/04_goals", "label": "goal"},
-        "loops": {"dir": "notes/05_open_loops", "label": "loop"},
-        "concepts": {"dir": "notes/06_concepts", "label": "concept"},
-    })
-    """Mapping of note type names to their directories and labels."""
-
-    core_note_types: tuple[str, ...] = ("identity", "facts", "preferences", "goals", "loops", "concepts")
-    """Core note types included in retrieval."""
 
     # =========================================================================
     # Identity Scoring
@@ -362,63 +442,76 @@ class LedgerConfig:
     # Methods
     # =========================================================================
 
-    @property
-    def notes_dir(self) -> Path:
-        """Path to the notes directory.
+    def __post_init__(self) -> None:
+        self._ledger_notes_dir_explicit = self.ledger_notes_dir is not None
+        self._source_notes_dir_explicit = self.source_notes_dir is not None
+        self._finalize_paths()
 
-        Overridable via LEDGER_NOTES_DIR env var to decouple note corpus
-        from code root (e.g. for A/B testing against an external ledger).
-        """
-        if env_notes := os.getenv("LEDGER_NOTES_DIR"):
-            return Path(env_notes).expanduser().resolve()
-        return self.root_dir / "notes"
+    def _finalize_paths(self) -> None:
+        self.ledger_root = Path(self.ledger_root).expanduser().resolve()
+        if self._ledger_notes_dir_explicit and self.ledger_notes_dir is not None:
+            self.ledger_notes_dir = Path(self.ledger_notes_dir).expanduser().resolve()
+        else:
+            self.ledger_notes_dir = self.ledger_root / "notes"
+        if self._source_notes_dir_explicit and self.source_notes_dir is not None:
+            self.source_notes_dir = Path(self.source_notes_dir).expanduser().resolve()
+        else:
+            self.source_notes_dir = _default_source_notes_dir().expanduser().resolve()
+
+    @property
+    def note_types(self) -> dict[str, dict[str, Any]]:
+        """Mapping of note type names to their directories and labels."""
+        return note_type_metadata()
+
+    @property
+    def core_note_types(self) -> tuple[str, ...]:
+        """Core note types included in retrieval."""
+        return CORE_NOTE_TYPES
 
     @property
     def signals_path(self) -> Path:
         """Path to signals JSONL."""
-        return self.notes_dir / "08_indices" / "signals.jsonl"
+        return indices_dir(self.ledger_notes_dir) / "signals.jsonl"
 
     @property
     def signal_summary_path(self) -> Path:
         """Path to precomputed signal summary JSON."""
-        return self.notes_dir / "08_indices" / "signal_summary.json"
+        return indices_dir(self.ledger_notes_dir) / "signal_summary.json"
 
     @property
     def aliases_path(self) -> Path:
         """Path to query aliases JSON."""
-        return self.notes_dir / "08_indices" / "aliases.json"
+        return indices_dir(self.ledger_notes_dir) / "aliases.json"
 
     @property
     def timeline_path(self) -> Path:
         """Path to timeline markdown."""
-        return self.notes_dir / "08_indices" / "timeline.md"
+        return layout_timeline_path(self.ledger_notes_dir)
 
     @property
     def timeline_jsonl_path(self) -> Path:
         """Path to machine-readable timeline JSONL."""
-        return self.notes_dir / "08_indices" / "timeline.jsonl"
+        return layout_timeline_jsonl_path(self.ledger_notes_dir)
 
     @property
     def semantic_root(self) -> Path:
         """Path to semantic index root."""
-        return self.root_dir / ".smart-env" / "semantic"
+        return self.ledger_root / ".smart-env" / "semantic"
 
     @property
     def semantic_manifest_path(self) -> Path:
         """Path to semantic manifest JSON."""
-        return self.notes_dir / "08_indices" / "semantic_manifest.json"
+        return indices_dir(self.ledger_notes_dir) / "semantic_manifest.json"
 
     def note_type_dir(self, note_type: str) -> Path:
         """Get the directory for a note type."""
-        if note_type not in self.note_types:
-            raise ValueError(f"Unknown note type: {note_type}")
-        return self.root_dir / self.note_types[note_type]["dir"]
+        return note_type_path(self.ledger_notes_dir, note_type)
 
     @classmethod
     def from_env(cls) -> "LedgerConfig":
         """Load config from config.yaml (if present) with env var overrides."""
         config = cls()
-        config_path = config.root_dir / "config.yaml"
+        config_path = config.ledger_root / "config.yaml"
         config = _apply_yaml_config(config, config_path)
         return _apply_env_overrides(config)
 
@@ -432,9 +525,10 @@ class LedgerConfig:
             try:
                 data = json.loads(path.read_text(encoding="utf-8"))
                 if isinstance(data, dict):
+                    _fail_on_removed_config_keys(data, path)
                     _apply_dict(config, data)
             except (json.JSONDecodeError, OSError, TypeError, ValueError):
-                pass
+                raise
         return _apply_env_overrides(config)
 
 

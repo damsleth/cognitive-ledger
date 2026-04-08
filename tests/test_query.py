@@ -36,11 +36,11 @@ lang: en
 
 
 def test_rank_query_semantic_hybrid_returns_typed_payload(tmp_path):
-    config = LedgerConfig(root_dir=tmp_path)
+    config = LedgerConfig(ledger_root=tmp_path)
     set_config(config)
     clear_candidate_cache()
     try:
-        note = config.notes_dir / "02_facts" / "fact__semantic.md"
+        note = config.ledger_notes_dir / "02_facts" / "fact__semantic.md"
         _seed_note(note, "Ship the release when tests are green")
 
         class FakeEmbeddings:
@@ -82,10 +82,10 @@ def test_rank_query_semantic_hybrid_returns_typed_payload(tmp_path):
 
 
 def test_query_result_to_json_builds_cli_shape(tmp_path):
-    config = LedgerConfig(root_dir=tmp_path)
+    config = LedgerConfig(ledger_root=tmp_path)
     set_config(config)
     try:
-        note = config.notes_dir / "05_open_loops" / "loop__release.md"
+        note = config.ledger_notes_dir / "05_open_loops" / "loop__release.md"
         _seed_note(note, "Ship the release checklist")
 
         result = query.rank_query(

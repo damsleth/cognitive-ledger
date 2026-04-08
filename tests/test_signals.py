@@ -39,8 +39,7 @@ def signals_path(signals_dir):
 def mock_config(signals_dir):
     """Patch get_config to use temp paths."""
     from ledger.config import LedgerConfig
-    config = LedgerConfig()
-    config.root_dir = signals_dir
+    config = LedgerConfig(ledger_root=signals_dir)
     with patch("ledger.signals.get_config", return_value=config):
         yield config
 

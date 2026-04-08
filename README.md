@@ -24,14 +24,15 @@ config, and initial indices. Optional flags:
 
 ```bash
 ./scripts/ledger init --voice-dna ~/voice-profile.json   # import your writing voice
-./scripts/ledger init --source-root ~/notes               # set source for ingest
+./scripts/ledger init --source-notes-dir ~/notes          # set source for ingest
 ```
 
-If you use the bundled `/notes` skill, set `NOTES_DIR` and `LEDGER_DIR` in your shell startup file so the skill can find both trees consistently:
+If you use the bundled `/notes` skill, set `LEDGER_SOURCE_NOTES_DIR` and `LEDGER_ROOT` in your shell startup file so the skill can find both trees consistently:
 
 ```bash
-export NOTES_DIR="$HOME/path/to/notes"
-export LEDGER_DIR="$HOME/path/to/cognitive-ledger"
+export LEDGER_SOURCE_NOTES_DIR="$HOME/path/to/notes"
+export LEDGER_ROOT="$HOME/path/to/cognitive-ledger"
+export LEDGER_NOTES_DIR="$LEDGER_ROOT/notes"
 source ~/.zshrc
 ```
 
@@ -41,12 +42,12 @@ Edit `config.yaml` in the repo root:
 
 ```yaml
 # config.yaml
-source_root: ~/Code/notes
+source_notes_dir: ~/Code/notes
 # auto_file_synthesis: false  # set true to auto-file query syntheses
 ```
 
 All values are optional - defaults work out of the box. Environment variables
-(`LEDGER_ROOT_DIR`, `LEDGER_NOTES_DIR`, etc.) override the config file.
+(`LEDGER_ROOT`, `LEDGER_NOTES_DIR`, etc.) override the config file.
 
 ### Set up hooks (recommended)
 

@@ -14,11 +14,11 @@ from ledger.venv import maybe_reexec_in_repo_venv
 
 def main():
     parser = argparse.ArgumentParser(description="Generate deterministic boot context index from ledger notes")
-    parser.add_argument("--notes-dir", required=True, help="Path to notes directory")
+    parser.add_argument("--ledger-notes-dir", dest="ledger_notes_dir", required=True, help="Path to ledger notes directory")
     parser.add_argument("--output", required=True, help="Path to output markdown file")
     args = parser.parse_args()
 
-    notes_dir = Path(args.notes_dir)
+    notes_dir = Path(args.ledger_notes_dir)
     output = Path(args.output)
     write_context(output, notes_dir)
 
