@@ -21,16 +21,20 @@ Capture notes and maintain structured long-term memory across two repositories:
 - **Ledger Root** (repo, config, scripts): `$LEDGER_ROOT`
 - **Ledger Notes** (atomic, searchable memory): `$LEDGER_NOTES_DIR`
 
-> **Setup:** Set `LEDGER_SOURCE_NOTES_DIR`, `LEDGER_ROOT`, and `LEDGER_NOTES_DIR` environment variables or edit the defaults in the frontmatter above.
+> **Setup:** On first run the skill will ask for your `ledger_root` path and save it to `~/.config/cognitive-ledger/config.yaml`. All other paths are read from `{ledger_root}/config.yaml`.
 
 ### Path Resolution
 
 The only value that must be bootstrapped is `LEDGER_ROOT`. Everything else comes from `config.yaml` inside it.
 
-**To find `LEDGER_ROOT`**, try in order:
-1. Current working directory contains `config.yaml` - use CWD as `LEDGER_ROOT`
-2. `$LEDGER_ROOT` env var is set - use that
-3. Ask the user for the path to the cognitive-ledger repo
+**To find `LEDGER_ROOT`** - use ONLY the Read tool, no Bash:
+1. Read `~/.config/cognitive-ledger/config.yaml`. If it exists and contains `ledger_root`, use that value.
+2. If that fails, ask the user for the path to their cognitive-ledger repo, then write it to `~/.config/cognitive-ledger/config.yaml` so it's never needed again:
+   ```yaml
+   ledger_root: /path/to/cognitive-ledger
+   ```
+
+Never run a Bash command to check or echo environment variables. The Read tool is sufficient and requires no user approval.
 
 **Once `LEDGER_ROOT` is known**, check whether `$LEDGER_ROOT/config.yaml` exists:
 
@@ -48,15 +52,16 @@ Expand any `~` to the user's home directory. All subsequent operations use these
 
 ## Boot Sequence (Run on Activation)
 
-1. `cd $LEDGER_ROOT`
-2. Read `$LEDGER_NOTES_DIR/08_indices/context.md` - essential facts, active loops, key preferences
-3. Run `./scripts/sheep status` - check if maintenance needed
-4. If `$LEDGER_NOTES_DIR/01_identity/id__voice_dna.md` exists, read it - apply voice profile when writing notes longer than 2 sentences
+After resolving paths from `config.yaml`, use the literal resolved values - never `$VAR` syntax in Bash commands, as it triggers permission prompts regardless of whether the variable is set.
+
+1. Use the Read tool on `{ledger_notes_dir}/08_indices/context.md` - essential facts, active loops, key preferences
+2. Run `./scripts/sheep status` from `{ledger_root}` - check if maintenance needed
+3. Use the Read tool on `{ledger_notes_dir}/01_identity/id__voice_dna.md` if it exists - apply voice profile when writing notes longer than 2 sentences
 
 **Two-tier lookup strategy:**
 
 - `context.md` for boot (compact summary, always loaded)
-- `$LEDGER_NOTES_DIR/08_indices/index.md` or `index.json` as a lightweight lookup table for deeper searches (do NOT load at boot)
+- `{ledger_notes_dir}/08_indices/index.md` or `index.json` as a lightweight lookup table for deeper searches (do NOT load at boot)
 
 ## Write Modes
 
