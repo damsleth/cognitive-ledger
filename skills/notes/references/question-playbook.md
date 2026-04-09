@@ -56,12 +56,12 @@ If destination is ambiguous, propose one folder and ask for confirmation once.
 
 ## Note-to-Ledger Mapping
 
-Convert note fragments into atomic ledger writes:
+Convert note fragments into atomic ledger writes. All paths relative to `{ledger_notes_dir}`:
 
-- Stable preference -> `notes/03_preferences/pref__*.md`
-- Fact or commitment -> `notes/02_facts/fact__*.md`
-- Goal or objective -> `notes/04_goals/goal__*.md`
-- New concept/definition -> `notes/06_concepts/concept__*.md`
-- Unresolved item / revisit -> `notes/05_open_loops/loop__*.md`
+- Stable preference -> `03_preferences/pref__*.md`
+- Fact or commitment -> `02_facts/fact__*.md`
+- Goal or objective -> `04_goals/goal__*.md`
+- New concept/definition -> `06_concepts/concept__*.md`
+- Unresolved item / revisit -> `05_open_loops/loop__*.md`
 
 Do not mirror full notes into the ledger. Store only durable atomic memory.
