@@ -32,6 +32,18 @@ mkdir -p "$(dirname "$BASELINE_FILE")"
     echo "}"
 } > "$BASELINE_FILE" 2>/dev/null || true
 
+# First-run setup: inject FIRSTRUN.md if first_run: true in config.yaml
+CONFIG_FILE="$ROOT_DIR/config.yaml"
+FIRSTRUN_FILE="$ROOT_DIR/FIRSTRUN.md"
+if [ -f "$CONFIG_FILE" ] && grep -q "^first_run: true" "$CONFIG_FILE" 2>/dev/null; then
+    if [ -f "$FIRSTRUN_FILE" ]; then
+        echo "# Ledger Context (First Run)"
+        echo ""
+        cat "$FIRSTRUN_FILE"
+        exit 0
+    fi
+fi
+
 # Primary path: ledger context --format boot emits the full payload
 # (identity, facts, prefs, loops, maintenance status, signal stats)
 if [ -x "$ROOT_DIR/scripts/ledger" ]; then

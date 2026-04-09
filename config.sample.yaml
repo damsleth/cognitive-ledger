@@ -1,6 +1,11 @@
 # Cognitive Ledger configuration - copy this file to config.yaml and edit values as needed
 # Values here are overridden by environment variables (LEDGER_ROOT, etc.)
 
+# Set to true on first install. The session_start hook will inject setup instructions
+# for the agent and prompt it to build your platform's memory index (e.g. MEMORY.md).
+# The agent will set this to false once setup is complete.
+first_run: true
+
 # Paths (use ~ for home directory)
 # ledger_root: ~/code/cognitive-ledger
 # ledger_notes_dir: ~/code/cognitive-ledger/notes

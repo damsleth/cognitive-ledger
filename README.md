@@ -19,8 +19,9 @@ cd cognitive-ledger
 ./skills/install-skill.sh            # install /notes skill for your agents
 ```
 
-That's it. The `init` command creates the full directory structure, templates,
-config, and initial indices. Optional flags:
+That's it. The `init` command creates the full directory structure, templates, config, and initial indices. `config.yaml` is created with `first_run: true` - on your first agent session, the hook will inject setup instructions and guide the agent through bootstrapping your platform's memory index. The agent sets `first_run: false` when done.
+
+Optional flags:
 
 ```bash
 ./scripts/ledger init --voice-dna ~/voice-profile.json   # import your writing voice
