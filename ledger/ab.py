@@ -15,6 +15,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from ledger.layout import logical_path, resolve_path
+
 EXIT_BENEFICIAL = 0
 EXIT_REGRESSION = 2
 EXIT_NEUTRAL = 3
@@ -38,6 +40,22 @@ MAINTENANCE_METRIC_KEYS = (
 )
 PROFILE_TOKEN_SCOPES = ("personal", "work", "dev")
 EMBED_BACKENDS = ("local", "openai")
+CORPUS_PATTERNS = (
+    "02_facts/**/*.md",
+    "03_preferences/**/*.md",
+    "04_goals/**/*.md",
+    "05_open_loops/**/*.md",
+    "06_concepts/**/*.md",
+    "08_indices/aliases.json",
+)
+CORPUS_REQUIRED_DIRS = (
+    "02_facts",
+    "03_preferences",
+    "04_goals",
+    "05_open_loops",
+    "06_concepts",
+    "08_indices",
+)
 
 
 class InvalidSetupError(Exception):
@@ -64,16 +82,29 @@ class LatencySummary:
         }
 
 
-def normalize_cases_path(repo_root: Path, cases_arg: str) -> Path:
+def normalize_cases_path(base_root: Path, cases_arg: str) -> Path:
     candidate = Path(cases_arg)
     if candidate.is_absolute():
         try:
-            return candidate.resolve().relative_to(repo_root.resolve())
+            return candidate.resolve().relative_to(base_root.resolve())
         except ValueError as exc:
             raise InvalidSetupError(
-                "--cases absolute path must point inside the ledger repository"
+                "--cases absolute path must point inside the configured corpus"
             ) from exc
     return candidate
+
+
+def normalize_corpus_root(root: Path | str) -> Path:
+    candidate = Path(root).expanduser().resolve()
+    notes_child = candidate / "notes"
+    if notes_child.is_dir() and not (candidate / "08_indices").is_dir():
+        return notes_child.resolve()
+    return candidate
+
+
+def is_corpus_root(root: Path | str) -> bool:
+    corpus_root = normalize_corpus_root(root)
+    return all((corpus_root / dirname).is_dir() for dirname in CORPUS_REQUIRED_DIRS)
 
 
 def sha256_file(path: Path) -> str:
@@ -85,25 +116,21 @@ def sha256_file(path: Path) -> str:
 
 
 def collect_corpus_paths(worktree_root: Path, cases_rel_path: Path) -> list[Path]:
-    patterns = [
-        "notes/02_facts/**/*.md",
-        "notes/03_preferences/**/*.md",
-        "notes/04_goals/**/*.md",
-        "notes/05_open_loops/**/*.md",
-        "notes/06_concepts/**/*.md",
-        "notes/08_indices/aliases.json",
-    ]
-
+    corpus_root = normalize_corpus_root(worktree_root)
     files: set[Path] = set()
-    for pattern in patterns:
-        for path in sorted(worktree_root.glob(pattern)):
+    for pattern in CORPUS_PATTERNS:
+        for path in sorted(corpus_root.glob(pattern)):
             if path.is_file():
                 files.add(path.resolve())
 
-    cases_path = (worktree_root / cases_rel_path).resolve()
+    cases_path = resolve_path(
+        cases_rel_path,
+        ledger_root=corpus_root,
+        ledger_notes_dir=corpus_root,
+    )
     if not cases_path.is_file():
         raise InvalidSetupError(
-            f"Cases file not found in worktree: {cases_rel_path.as_posix()}"
+            f"Cases file not found in corpus: {cases_rel_path.as_posix()}"
         )
     files.add(cases_path)
 
@@ -111,9 +138,10 @@ def collect_corpus_paths(worktree_root: Path, cases_rel_path: Path) -> list[Path
 
 
 def build_corpus_file_map(worktree_root: Path, cases_rel_path: Path) -> dict[str, str]:
+    corpus_root = normalize_corpus_root(worktree_root)
     file_map: dict[str, str] = {}
     for path in collect_corpus_paths(worktree_root, cases_rel_path):
-        rel = path.relative_to(worktree_root.resolve()).as_posix()
+        rel = logical_path(path, ledger_notes_dir=corpus_root).as_posix()
         file_map[rel] = sha256_file(path)
     return file_map
 
@@ -671,7 +699,7 @@ def apply_probe_results(
 def finalize_direct_probe_report(
     report: dict[str, Any],
     *,
-    repo_root: Path,
+    corpus_root: Path,
     cases_rel: Path,
     baseline_ref: str,
     candidate_ref: str,
@@ -679,7 +707,7 @@ def finalize_direct_probe_report(
     candidate_probe: dict[str, Any],
     decision: dict[str, Any],
 ) -> dict[str, Any]:
-    corpus = compute_corpus_fingerprint(repo_root, cases_rel)
+    corpus = compute_corpus_fingerprint(corpus_root, cases_rel)
     report["baseline"]["commit"] = baseline_ref
     report["candidate"]["commit"] = candidate_ref
     report["baseline"]["corpus"] = {

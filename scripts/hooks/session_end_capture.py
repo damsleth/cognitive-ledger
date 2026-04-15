@@ -58,6 +58,35 @@ def _run_git(*args: str) -> str:
     return result.stdout.strip()
 
 
+def _run_git_in(cwd: Path, *args: str) -> str:
+    result = subprocess.run(
+        ["git"] + list(args),
+        capture_output=True,
+        text=True,
+        timeout=10,
+        cwd=str(cwd),
+    )
+    if result.returncode != 0:
+        return ""
+    return result.stdout.strip()
+
+
+def _notes_dirty_paths() -> list[str]:
+    notes_dir = get_config().ledger_notes_dir
+    if not _run_git_in(notes_dir, "rev-parse", "--show-toplevel"):
+        return []
+
+    tracked = _run_git_in(notes_dir, "diff", "--name-only", "--relative", "HEAD", "--", ".")
+    untracked = _run_git_in(notes_dir, "ls-files", "--others", "--exclude-standard", "--", ".")
+    paths: set[str] = set()
+    for rel in (tracked.splitlines() + untracked.splitlines()):
+        normalized = rel.strip().replace("\\", "/")
+        if not normalized or normalized.startswith("08_indices/"):
+            continue
+        paths.add(f"notes/{normalized}")
+    return sorted(paths)
+
+
 def _load_baseline() -> dict | None:
     baseline_path = _baseline_path()
     if not baseline_path.is_file():
@@ -151,8 +180,7 @@ def main() -> int:
                     notes_created += 1
 
         # Check for work left incomplete (uncommitted changes in notes/)
-        dirty = _run_git("diff", "--name-only")
-        note_changes = [f for f in dirty.splitlines() if f.startswith("notes/") and not f.startswith("notes/08_indices/")]
+        note_changes = _notes_dirty_paths()
         if note_changes:
             _write_inbox_note(
                 title="Uncommitted note changes",
@@ -162,8 +190,7 @@ def main() -> int:
             notes_created += 1
     else:
         # No baseline - check for uncommitted working-tree diffs only
-        dirty = _run_git("diff", "--name-only")
-        note_changes = [f for f in dirty.splitlines() if f.startswith("notes/") and not f.startswith("notes/08_indices/")]
+        note_changes = _notes_dirty_paths()
         if note_changes:
             _write_inbox_note(
                 title="Session notes (no baseline)",

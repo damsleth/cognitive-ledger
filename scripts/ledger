@@ -483,6 +483,28 @@ def handle_context_command(args):
         print(json.dumps(rows, indent=2, ensure_ascii=False))
 
 
+def handle_paths_command(args):
+    """Print resolved ledger paths from config/env."""
+    payload = {
+        "ledger_root": str(_config.ledger_root),
+        "ledger_notes_dir": str(_config.ledger_notes_dir),
+        "source_notes_dir": str(_config.source_notes_dir),
+        "timeline_path": str(_config.timeline_path),
+    }
+
+    field = getattr(args, "field", None)
+    if field:
+        print(payload[field])
+        return
+
+    if getattr(args, "json", False):
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return
+
+    for key, value in payload.items():
+        print(f"{key}: {value}")
+
+
 def handle_signal_command(args):
     """Handle signal subcommands."""
     from ledger import signals as sig
@@ -549,9 +571,10 @@ def handle_init_command(args):
             print(f"  ! {item}")
 
     print("\nNext steps:")
-    print("  1. Edit config.yaml if needed")
-    print("  2. Run: ./skills/install-skill.sh")
-    print("  3. Create your first note with /notes")
+    print("  1. Run: ./scripts/ledger paths")
+    print("  2. Edit config.yaml if needed")
+    print("  3. Run: ./skills/install-skill.sh")
+    print("  4. Create your first note with /notes")
 
 
 def handle_ingest_command(args):
@@ -824,6 +847,14 @@ def main():
         help="Output format: boot (full payload), identity (identity notes only), json (scored items)",
     )
 
+    paths_parser = subparsers.add_parser("paths", help="Show resolved ledger/source paths")
+    paths_parser.add_argument(
+        "--field",
+        choices=("ledger_root", "ledger_notes_dir", "source_notes_dir", "timeline_path"),
+        help="Print a single field with no label",
+    )
+    paths_parser.add_argument("--json", action="store_true", dest="json")
+
     # Init subcommand
     init_parser = subparsers.add_parser("init", help="Initialize a cognitive ledger")
     init_parser.add_argument("--voice-dna", default=None, help="Path to voice-dna JSON file")
@@ -909,6 +940,7 @@ def main():
         "discover-source": handle_discover_source_command,
         "eval": handle_eval_command,
         "context": handle_context_command,
+        "paths": handle_paths_command,
     }
     embed_handlers = {
         "build": handle_embed_build_command,

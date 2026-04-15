@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-04-15
+
+### Changed
+- `ledger init` now writes `first_run: true` plus active `ledger_notes_dir` / `source_notes_dir` values into `config.yaml` when provided, and its initial index build now targets the configured external corpus instead of the in-memory default config.
+- Session hooks and `sheep-auto.sh` now resolve `ledger_notes_dir` from config via `./scripts/ledger paths`, so config-only split-repo setups work without exporting `LEDGER_NOTES_DIR`.
+- `scripts/ledger_ab` now uses the configured `ledger_notes_dir` as its default corpus and accepts direct external corpus roots (for example `~/Code/llm-notes`) instead of assuming a bundled repo-local `notes/` sample tree.
+
+### Added
+- `ledger paths` CLI subcommand for printing resolved `ledger_root`, `ledger_notes_dir`, `source_notes_dir`, and `timeline_path`.
+
+### Removed
+- Bundled public `notes/` seed corpus from the repository; retrieval eval fixture comments now live under `tests/fixtures/`.
+
 ## 2026-04-08
 
 ### Changed
