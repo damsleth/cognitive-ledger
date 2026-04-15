@@ -4,6 +4,9 @@
 
 Machine-readable spec: `schema.yaml`. Note templates: `templates/`.
 
+Resolve the active physical corpus path with `./scripts/ledger paths --field ledger_notes_dir`.
+Logical note references remain `notes/...` even when the corpus lives outside this repo.
+
 The canonical `cognitive-ledger` skill lives in `skills/` and is intended
 for use outside this repository. Install it into your agent's user-level skills
 folder as needed rather than duplicating its contents here.
@@ -11,11 +14,12 @@ folder as needed rather than duplicating its contents here.
 ### Boot
 
 ```bash
+LEDGER_NOTES_DIR="$(./scripts/ledger paths --field ledger_notes_dir)"
 ./scripts/ledger context --format boot         # full boot payload (identity + loops + status)
-tail -20 notes/08_indices/timeline.md          # recent changes
-rg "<keyword>" notes -n                        # search content (show matches)
-fd "id__" notes/01_identity                    # identity notes
-fd "pref__" notes/03_preferences && fd "concept__" notes/06_concepts  # search by type (portable)
+tail -20 "$LEDGER_NOTES_DIR/08_indices/timeline.md"          # recent changes
+rg "<keyword>" "$LEDGER_NOTES_DIR" -n                        # search content (show matches)
+fd "id__" "$LEDGER_NOTES_DIR/01_identity"                    # identity notes
+fd "pref__" "$LEDGER_NOTES_DIR/03_preferences" && fd "concept__" "$LEDGER_NOTES_DIR/06_concepts"  # search by type
 ```
 
 **Two-tier lookup strategy:**
@@ -76,7 +80,7 @@ ledger-obsidian daemon start|status|stop --vault /path/to/vault   # macOS
 ./scripts/ledger discover-source "<topic>" --source-notes-dir <root> --limit 20
 ./scripts/ledger embed build --target ledger --backend local --model TaylorAI/bge-micro-v2
 ./scripts/ledger embed status --target both
-./scripts/ledger eval --cases notes/08_indices/retrieval_eval_cases.yaml --k 3 --strict-cases
+./scripts/ledger eval --cases "$(./scripts/ledger paths --field ledger_notes_dir)/08_indices/retrieval_eval_cases.yaml" --k 3 --strict-cases
 ./scripts/ledger loops                 # compact list (default)
 ./scripts/ledger loops --interactive   # progressive disclosure
 ./scripts/ledger notes --type <all|identity|facts|preferences|goals|loops|concepts> --interactive
@@ -102,7 +106,8 @@ Signal types: `retrieval_hit`, `retrieval_miss`, `correction`, `affirmation`,
 ### A/B Testing
 
 ```bash
-./scripts/ledger_ab --baseline-ref main --candidate-ref HEAD
+./scripts/ledger_ab --baseline-ref main --candidate-ref HEAD   # uses ledger_notes_dir from config.yaml
+./scripts/ledger_ab --corpus ~/Code/llm-notes --baseline-ref main --candidate-ref HEAD
 ./scripts/ledger_ab --baseline-ref main --candidate-ref HEAD --eval-runs 7 --query-runs 5
 ./scripts/ledger_ab --baseline-ref main --candidate-ref HEAD --query-runs 5 --cold-query
 ```

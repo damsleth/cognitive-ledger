@@ -18,6 +18,7 @@ from ledger import context as context_mod
 from ledger import maintenance as maintenance_mod
 from ledger import retrieval as retrieval_mod
 from ledger.config import get_config
+from ledger.layout import resolve_path
 from ledger.parsing import parse_timestamp
 
 
@@ -30,9 +31,15 @@ def main() -> int:
 
     corpus_dir = payload.get("corpus_dir")
     if corpus_dir:
-        corpus_path = Path(corpus_dir).resolve()
-        os.environ["LEDGER_NOTES_DIR"] = str(corpus_path / "notes")
-        cases_path = str((corpus_path / payload["cases_rel"]).resolve())
+        corpus_path = ab_lib.normalize_corpus_root(Path(corpus_dir).resolve())
+        os.environ["LEDGER_NOTES_DIR"] = str(corpus_path)
+        cases_path = str(
+            resolve_path(
+                payload["cases_rel"],
+                ledger_root=corpus_path,
+                ledger_notes_dir=corpus_path,
+            )
+        )
     else:
         cases_path = str((worktree / payload["cases_rel"]).resolve())
 

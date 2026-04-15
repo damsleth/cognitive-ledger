@@ -29,6 +29,8 @@ InvalidSetupError = ab_lib.InvalidSetupError
 
 LatencySummary = ab_lib.LatencySummary
 normalize_cases_path = ab_lib.normalize_cases_path
+normalize_corpus_root = ab_lib.normalize_corpus_root
+is_corpus_root = ab_lib.is_corpus_root
 sha256_file = ab_lib.sha256_file
 collect_corpus_paths = ab_lib.collect_corpus_paths
 build_corpus_file_map = ab_lib.build_corpus_file_map
@@ -86,7 +88,7 @@ def resolve_ref(repo_root: Path, ref: str) -> str:
 def finalize_direct_probe_report(
     *,
     report: dict[str, Any],
-    repo_root: Path,
+    corpus_root: Path,
     cases_rel: Path,
     args: argparse.Namespace,
     baseline_probe: dict[str, Any],
@@ -106,7 +108,7 @@ def finalize_direct_probe_report(
     )
     ab_lib.finalize_direct_probe_report(
         report,
-        repo_root=repo_root,
+        corpus_root=corpus_root,
         cases_rel=cases_rel,
         baseline_ref=args.baseline_ref,
         candidate_ref=args.candidate_ref,
@@ -168,7 +170,7 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--cases",
         default="notes/08_indices/retrieval_eval_cases.yaml",
-        help="Repo-relative path to retrieval eval cases",
+        help="Logical or corpus-relative path to retrieval eval cases",
     )
     parser.add_argument("--k", type=int, default=3)
     parser.add_argument(
@@ -190,9 +192,9 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--corpus",
         default=None,
-        help="Path to external ledger corpus. When set, both sides use this "
-             "corpus for notes and eval cases instead of the worktree's "
-             "bundled samples. The corpus must contain a notes/ subdirectory.",
+        help="Path to the ledger notes corpus root. When omitted, the harness "
+             "uses ledger_notes_dir from config.yaml. Legacy repo roots that "
+             "contain a notes/ subdirectory are also accepted.",
     )
     return parser
 
@@ -229,13 +231,21 @@ def run_harness(args: argparse.Namespace) -> int:
         str(args.candidate_embed_model).strip() if args.candidate_embed_model else None
     )
 
+    configured_corpus_dir = normalize_corpus_root(_get_config().ledger_notes_dir)
     corpus_dir: Path | None = None
     if args.corpus:
-        corpus_dir = Path(args.corpus).expanduser().resolve()
-        if not (corpus_dir / "notes").is_dir():
-            raise InvalidSetupError(
-                f"--corpus path does not contain a notes/ directory: {corpus_dir}"
-            )
+        corpus_dir = normalize_corpus_root(Path(args.corpus).expanduser().resolve())
+    elif is_corpus_root(configured_corpus_dir):
+        corpus_dir = configured_corpus_dir
+
+    if corpus_dir is None:
+        raise InvalidSetupError(
+            "A/B harness requires --corpus or a configured ledger_notes_dir with an initialized corpus"
+        )
+    if not is_corpus_root(corpus_dir):
+        raise InvalidSetupError(
+            f"Corpus path is missing the ledger note layout: {corpus_dir}"
+        )
 
     out_dir = Path(args.out_dir).resolve() if args.out_dir else Path(
         tempfile.mkdtemp(prefix="ledger-ab-")
@@ -292,7 +302,7 @@ def run_harness(args: argparse.Namespace) -> int:
             if args.baseline_ref != args.candidate_ref:
                 raise
 
-            cases_rel = normalize_cases_path(corpus_dir or repo_root, args.cases)
+            cases_rel = normalize_cases_path(corpus_dir, args.cases)
             direct_probe_baseline = run_probe_for_side(
                 repo_root,
                 repo_root,
@@ -323,7 +333,7 @@ def run_harness(args: argparse.Namespace) -> int:
             )
             return finalize_direct_probe_report(
                 report=report,
-                repo_root=repo_root,
+                corpus_root=corpus_dir,
                 cases_rel=cases_rel,
                 args=args,
                 baseline_probe=direct_probe_baseline,
@@ -335,7 +345,7 @@ def run_harness(args: argparse.Namespace) -> int:
         report["baseline"]["commit"] = baseline_commit
         report["candidate"]["commit"] = candidate_commit
 
-        cases_rel = normalize_cases_path(corpus_dir or repo_root, args.cases)
+        cases_rel = normalize_cases_path(corpus_dir, args.cases)
 
         if baseline_commit == candidate_commit:
             direct_probe_baseline = run_probe_for_side(
@@ -368,7 +378,7 @@ def run_harness(args: argparse.Namespace) -> int:
             )
             return finalize_direct_probe_report(
                 report=report,
-                repo_root=repo_root,
+                corpus_root=corpus_dir,
                 cases_rel=cases_rel,
                 args=args,
                 baseline_probe=direct_probe_baseline,
@@ -387,12 +397,11 @@ def run_harness(args: argparse.Namespace) -> int:
         create_worktree(repo_root, args.candidate_ref, candidate_wt)
         worktree_paths.append(candidate_wt)
 
-        corpus_scan_root = corpus_dir if corpus_dir else None
         baseline_corpus = compute_corpus_fingerprint(
-            corpus_scan_root or baseline_wt, cases_rel
+            corpus_dir, cases_rel
         )
         candidate_corpus = compute_corpus_fingerprint(
-            corpus_scan_root or candidate_wt, cases_rel
+            corpus_dir, cases_rel
         )
 
         report["baseline"]["corpus"] = {
