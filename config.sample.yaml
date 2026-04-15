@@ -8,11 +8,10 @@ first_run: true
 
 # Paths (use ~ for home directory)
 # ledger_root: ~/code/cognitive-ledger
-# ledger_notes_dir: ~/code/cognitive-ledger/notes
-# source_notes_dir: ~/notes
+# ledger_notes_dir: ~/Code/llm-notes
+# source_notes_dir: ~/Code/notes
 
-# A/B eval corpus (used with: scripts/ledger_ab --corpus <path>)
-# eval_corpus: ~/code/my-ledger-instance
+# A/B uses ledger_notes_dir by default. Override with: scripts/ledger_ab --corpus <path>
 
 # Retrieval tuning
 # retrieval_mode: legacy
