@@ -15,17 +15,18 @@ Language models forget everything between sessions. The Cognitive Ledger gives t
 git clone https://github.com/<you>/cognitive-ledger.git
 cd cognitive-ledger
 ./scripts/setup-venv.sh
-./scripts/ledger init                # one-command setup
+./scripts/ledger init --ledger-notes-dir ~/Code/llm-notes --source-notes-dir ~/Code/notes
 ./skills/install-skill.sh            # install /notes skill for your agents
 ```
 
-That's it. The `init` command creates the full directory structure, templates, config, and initial indices. `config.yaml` is created with `first_run: true` - on your first agent session, the hook will inject setup instructions and guide the agent through bootstrapping your platform's memory index. The agent sets `first_run: false` when done.
+The repo does not need to carry a bundled `notes/` corpus. `init` can scaffold your ledger into a separate notes repo, persist those paths into `config.yaml`, and generate the initial indices there. `config.yaml` is created with `first_run: true` so the session-start hook can inject setup guidance on the first agent session.
 
 Optional flags:
 
 ```bash
 ./scripts/ledger init --voice-dna ~/voice-profile.json   # import your writing voice
-./scripts/ledger init --source-notes-dir ~/notes          # set source for ingest
+./scripts/ledger init --ledger-notes-dir ~/Code/llm-notes --source-notes-dir ~/Code/notes
+./scripts/ledger paths                                     # verify resolved locations
 ```
 
 If you use the bundled `/notes` skill, set `LEDGER_SOURCE_NOTES_DIR` and `LEDGER_ROOT` in your shell startup file so the skill can find both trees consistently:
@@ -33,7 +34,7 @@ If you use the bundled `/notes` skill, set `LEDGER_SOURCE_NOTES_DIR` and `LEDGER
 ```bash
 export LEDGER_SOURCE_NOTES_DIR="$HOME/path/to/notes"
 export LEDGER_ROOT="$HOME/path/to/cognitive-ledger"
-export LEDGER_NOTES_DIR="$LEDGER_ROOT/notes"
+export LEDGER_NOTES_DIR="$HOME/path/to/llm-notes"
 source ~/.zshrc
 ```
 
@@ -43,12 +44,13 @@ Edit `config.yaml` in the repo root:
 
 ```yaml
 # config.yaml
+ledger_notes_dir: ~/Code/llm-notes
 source_notes_dir: ~/Code/notes
 # auto_file_synthesis: false  # set true to auto-file query syntheses
 ```
 
-All values are optional - defaults work out of the box. Environment variables
-(`LEDGER_ROOT`, `LEDGER_NOTES_DIR`, etc.) override the config file.
+Environment variables (`LEDGER_ROOT`, `LEDGER_NOTES_DIR`, etc.) override the
+config file.
 
 ### Set up hooks (recommended)
 
@@ -71,7 +73,7 @@ Add to `.claude/settings.json`:
 
 Invoke `/notes` in your agent session:
 
-1. Read `notes/08_indices/context.md` for existing context
+1. Read `$(./scripts/ledger paths --field ledger_notes_dir)/08_indices/context.md` for existing context
 2. Ask targeted questions about what you want to capture
 3. Write atomic notes to the ledger (and optionally to your notes tree)
 
@@ -132,8 +134,9 @@ ledger-obsidian doctor --vault /path/to/vault          # health check
 ### Eval and A/B testing
 
 ```bash
-./scripts/ledger eval --cases notes/08_indices/retrieval_eval_cases.yaml --k 3
-./scripts/ledger_ab --baseline-ref main --candidate-ref HEAD --runs 5
+./scripts/ledger eval --cases "$(./scripts/ledger paths --field ledger_notes_dir)/08_indices/retrieval_eval_cases.yaml" --k 3
+./scripts/ledger_ab --baseline-ref main --candidate-ref HEAD --runs 5     # uses ledger_notes_dir from config.yaml
+./scripts/ledger_ab --corpus ~/Code/llm-notes --baseline-ref main --candidate-ref HEAD --runs 5
 ```
 
 ## Folder Layout

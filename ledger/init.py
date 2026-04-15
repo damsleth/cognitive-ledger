@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from ledger.config import get_config
+from ledger.config import LedgerConfig, get_config, set_config
 from ledger.layout import LEDGER_NOTE_SUBDIRS, indices_dir, timeline_jsonl_path, timeline_path
 from ledger.io.safe_write import safe_write_text
 
@@ -71,6 +71,68 @@ Motivation for closing this loop.
 ## Links
 - Related notes.
 """
+
+
+def _display_path(path: str | Path | None) -> str | None:
+    """Render a path for config.yaml, preferring ~/ for home-relative values."""
+    if path is None:
+        return None
+
+    resolved = Path(path).expanduser().resolve()
+    home = Path.home().resolve()
+
+    try:
+        relative = resolved.relative_to(home)
+    except ValueError:
+        return resolved.as_posix()
+    return f"~/{relative.as_posix()}"
+
+
+def _build_config_content(
+    *,
+    root_path: Path,
+    ledger_notes_dir: Path | None,
+    source_notes_dir: str | Path | None,
+) -> str:
+    ledger_notes_setting = _display_path(ledger_notes_dir)
+    source_notes_setting = _display_path(source_notes_dir)
+
+    lines = [
+        "# Cognitive Ledger configuration",
+        "# See schema.yaml for full specification",
+        "",
+        "# Set to true on first install. The session_start hook will inject setup guidance.",
+        "first_run: true",
+        "",
+        "# Paths (override with env vars: LEDGER_ROOT, LEDGER_NOTES_DIR, LEDGER_SOURCE_NOTES_DIR)",
+        f"# ledger_root: {_display_path(root_path)}",
+    ]
+
+    if ledger_notes_setting is not None:
+        lines.append(f"ledger_notes_dir: {ledger_notes_setting}")
+    else:
+        lines.append("# ledger_notes_dir: ~/Code/llm-notes")
+
+    if source_notes_setting is not None:
+        lines.append(f"source_notes_dir: {source_notes_setting}")
+    else:
+        lines.append("# source_notes_dir: ~/Code/notes")
+
+    lines.extend([
+        "",
+        "# Retrieval tuning (defaults are well-tested, change with care)",
+        "# score_weight_bm25: 0.30",
+        "# score_weight_lexical: 0.15",
+        "# score_weight_tag: 0.15",
+        "# score_weight_scope: 0.15",
+        "# score_weight_recency: 0.15",
+        "# score_weight_confidence: 0.10",
+        "",
+        "# Knowledge compounding",
+        "# auto_file_synthesis: false",
+        "",
+    ])
+    return "\n".join(lines)
 
 
 def init_ledger(
@@ -141,26 +203,11 @@ def init_ledger(
     # 3. Generate initial config.yaml if not present
     config_path = root_path / "config.yaml"
     if not config_path.is_file():
-        config_content = f"""\
-# Cognitive Ledger Configuration
-# See schema.yaml for full specification
-
-# Paths (override with env vars: LEDGER_ROOT, LEDGER_NOTES_DIR, LEDGER_SOURCE_NOTES_DIR)
-# ledger_root: {root_path}
-# ledger_notes_dir: {nd}
-# source_notes_dir: {source_notes_dir or '~/notes'}
-
-# Retrieval tuning (defaults are well-tested, change with care)
-# score_weight_bm25: 0.30
-# score_weight_lexical: 0.15
-# score_weight_tag: 0.15
-# score_weight_scope: 0.15
-# score_weight_recency: 0.15
-# score_weight_confidence: 0.10
-
-# Knowledge compounding
-# auto_file_synthesis: false
-"""
+        config_content = _build_config_content(
+            root_path=root_path,
+            ledger_notes_dir=Path(ledger_notes_dir).expanduser().resolve() if ledger_notes_dir else None,
+            source_notes_dir=source_notes_dir,
+        )
         safe_write_text(config_path, config_content)
         report["created"].append("config.yaml")
     else:
@@ -197,7 +244,17 @@ def init_ledger(
     # 6. Run initial index generation
     try:
         from ledger.maintenance import cmd_index
-        cmd_index()
+        previous_config = get_config()
+        init_config = LedgerConfig(
+            ledger_root=root_path,
+            ledger_notes_dir=nd,
+            source_notes_dir=Path(source_notes_dir).expanduser().resolve() if source_notes_dir else None,
+        )
+        set_config(init_config)
+        try:
+            cmd_index()
+        finally:
+            set_config(previous_config)
         report["created"].append("indices (via sheep index)")
     except Exception as exc:
         report["errors"].append(f"index generation failed: {exc}")

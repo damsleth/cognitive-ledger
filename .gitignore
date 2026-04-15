@@ -9,6 +9,7 @@ dist/
 .plans/done
 # Claude worktrees
 .claude/
+.claude-mem/
 # Ignore Smart Environment folder
 .smart-env
 # Build artifacts

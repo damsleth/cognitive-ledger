@@ -15,19 +15,27 @@ DESCRIPTION="${3:-}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="${LEDGER_ROOT:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
-NOTES_DIR="${LEDGER_NOTES_DIR:-$ROOT_DIR/notes}"
-
-# Early exit if not a notes/ operation
-case "$NOTE_PATH" in
-    notes/*) ;;
-    */notes/*) ;;
-    "$NOTES_DIR"/*) ;;
-    *) exit 0 ;;
-esac
 
 if [ -n "${LEDGER_ROOT_DIR:-}" ] || [ -n "${LEDGER_SOURCE_ROOT:-}" ]; then
     exit 2
 fi
+
+resolve_notes_dir() {
+    if [ -n "${LEDGER_NOTES_DIR:-}" ]; then
+        printf '%s\n' "$LEDGER_NOTES_DIR"
+        return
+    fi
+    python3 "$ROOT_DIR/scripts/ledger" paths --field ledger_notes_dir 2>/dev/null || printf '%s\n' "$ROOT_DIR/notes"
+}
+
+NOTES_DIR="$(resolve_notes_dir)"
+
+case "$NOTE_PATH" in
+    "$NOTES_DIR"/*) ;;
+    notes/*) ;;
+    */notes/*) ;;
+    *) exit 0 ;;
+esac
 
 # Validate action
 case "$ACTION" in
