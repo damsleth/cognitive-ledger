@@ -126,6 +126,33 @@ class LedgerABFingerprintTests(unittest.TestCase):
         )
         (root / "notes/08_indices/retrieval_eval_cases.yaml").write_text(cases, encoding="utf-8")
 
+    def _build_fixture_corpus(self, root: Path, aliases_content: str, case_query: str) -> None:
+        directories = [
+            "02_facts",
+            "03_preferences",
+            "04_goals",
+            "05_open_loops",
+            "06_concepts",
+            "08_indices",
+        ]
+        for directory in directories:
+            (root / directory).mkdir(parents=True, exist_ok=True)
+
+        (root / "02_facts/fact__one.md").write_text("# fact one\n", encoding="utf-8")
+        (root / "03_preferences/pref__one.md").write_text("# pref one\n", encoding="utf-8")
+        (root / "04_goals/goal__one.md").write_text("# goal one\n", encoding="utf-8")
+        (root / "05_open_loops/loop__one.md").write_text("# loop one\n", encoding="utf-8")
+        (root / "06_concepts/concept__one.md").write_text("# concept one\n", encoding="utf-8")
+        (root / "08_indices/aliases.json").write_text(aliases_content, encoding="utf-8")
+
+        cases = (
+            f'- query: "{case_query}"\n'
+            '  scope: "all"\n'
+            "  expected_any:\n"
+            '    - "notes/02_facts/fact__one.md"\n'
+        )
+        (root / "08_indices/retrieval_eval_cases.yaml").write_text(cases, encoding="utf-8")
+
     def test_same_input_produces_same_fingerprint(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -159,6 +186,21 @@ class LedgerABFingerprintTests(unittest.TestCase):
 
     def test_script_delegates_fingerprint_logic_to_library(self):
         self.assertIs(self.ledger_ab.compute_corpus_fingerprint, ab_lib.compute_corpus_fingerprint)
+
+    def test_external_corpus_root_without_notes_wrapper_is_supported(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            corpus_root = Path(temp_dir) / "llm-notes"
+            self._build_fixture_corpus(corpus_root, '{"alex": ["example_user"]}\n', "hello")
+
+            first = self.ledger_ab.compute_corpus_fingerprint(
+                corpus_root, Path("notes/08_indices/retrieval_eval_cases.yaml")
+            )
+            second = self.ledger_ab.compute_corpus_fingerprint(
+                corpus_root, Path("notes/08_indices/retrieval_eval_cases.yaml")
+            )
+
+            self.assertTrue(self.ledger_ab.is_corpus_root(corpus_root))
+            self.assertEqual(first["fingerprint"], second["fingerprint"])
 
 
 class LedgerABRetrievalModePassThroughTests(unittest.TestCase):

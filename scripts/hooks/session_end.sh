@@ -11,7 +11,6 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="${LEDGER_ROOT:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
-NOTES_DIR="${LEDGER_NOTES_DIR:-$ROOT_DIR/notes}"
 
 if [ -n "${LEDGER_ROOT_DIR:-}" ] || [ -n "${LEDGER_SOURCE_ROOT:-}" ]; then
     echo "Deprecated ledger env vars detected. Use LEDGER_ROOT and LEDGER_SOURCE_NOTES_DIR." >&2
@@ -22,6 +21,16 @@ fi
 if [ -f "$ROOT_DIR/.venv/bin/activate" ]; then
     source "$ROOT_DIR/.venv/bin/activate" 2>/dev/null || true
 fi
+
+resolve_notes_dir() {
+    if [ -n "${LEDGER_NOTES_DIR:-}" ]; then
+        printf '%s\n' "$LEDGER_NOTES_DIR"
+        return
+    fi
+    python3 "$ROOT_DIR/scripts/ledger" paths --field ledger_notes_dir 2>/dev/null || printf '%s\n' "$ROOT_DIR/notes"
+}
+
+NOTES_DIR="$(resolve_notes_dir)"
 
 SIGNALS_FILE="$NOTES_DIR/08_indices/signals.jsonl"
 SUMMARY_FILE="$NOTES_DIR/08_indices/signal_summary.json"
@@ -39,9 +48,18 @@ if [ -f "$SIGNALS_FILE" ]; then
     fi
 fi
 
-# Report notes modified this session (via git)
-cd "$ROOT_DIR" 2>/dev/null || exit 0
-modified=$(git diff --name-only HEAD 2>/dev/null | grep '^notes/' | wc -l | tr -d ' ')
+# Report notes modified this session (via git, against the resolved notes dir)
+modified=0
+if git -C "$NOTES_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    tracked=$(git -C "$NOTES_DIR" diff --name-only --relative HEAD -- . 2>/dev/null || true)
+    untracked=$(git -C "$NOTES_DIR" ls-files --others --exclude-standard -- . 2>/dev/null || true)
+    modified=$(
+        {
+            printf '%s\n' "$tracked"
+            printf '%s\n' "$untracked"
+        } | awk 'NF && $0 !~ /^08_indices\//' | wc -l | tr -d ' '
+    )
+fi
 
 if [ "$modified" -gt 0 ]; then
     echo "Session summary: $modified note(s) modified."

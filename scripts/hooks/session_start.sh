@@ -9,7 +9,6 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="${LEDGER_ROOT:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
-NOTES_DIR="${LEDGER_NOTES_DIR:-$ROOT_DIR/notes}"
 
 if [ -n "${LEDGER_ROOT_DIR:-}" ] || [ -n "${LEDGER_SOURCE_ROOT:-}" ]; then
     echo "Deprecated ledger env vars detected. Use LEDGER_ROOT and LEDGER_SOURCE_NOTES_DIR." >&2
@@ -20,6 +19,16 @@ fi
 if [ -f "$ROOT_DIR/.venv/bin/activate" ]; then
     source "$ROOT_DIR/.venv/bin/activate" 2>/dev/null || true
 fi
+
+resolve_notes_dir() {
+    if [ -n "${LEDGER_NOTES_DIR:-}" ]; then
+        printf '%s\n' "$LEDGER_NOTES_DIR"
+        return
+    fi
+    python3 "$ROOT_DIR/scripts/ledger" paths --field ledger_notes_dir 2>/dev/null || printf '%s\n' "$ROOT_DIR/notes"
+}
+
+NOTES_DIR="$(resolve_notes_dir)"
 
 # Record session baseline for end-of-session capture
 BASELINE_FILE="$NOTES_DIR/08_indices/.session_baseline"

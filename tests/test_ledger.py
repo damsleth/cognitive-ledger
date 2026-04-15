@@ -11,7 +11,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 LEDGER_PATH = ROOT / "scripts" / "ledger"
-CASES_PATH = ROOT / "notes" / "08_indices" / "retrieval_eval_cases.yaml"
+CASES_PATH = ROOT / "tests" / "fixtures" / "retrieval_eval_cases.yaml"
 
 # Ensure ledger package is importable
 if str(ROOT) not in sys.path:
