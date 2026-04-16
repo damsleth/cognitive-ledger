@@ -251,17 +251,19 @@ def handle_query_command(args):
         embed_model=args.embed_model,
     )
 
+    view = getattr(args, "view", "context")
+
     if args.json:
         print(
             json.dumps(
-                query_lib.query_result_to_json(payload, include_bundle=args.bundle),
+                query_lib.query_result_to_json(payload, include_bundle=args.bundle, view=view),
                 indent=2,
                 ensure_ascii=False,
             )
         )
         return
 
-    print(query_lib.format_query_results_human(payload, include_bundle=args.bundle))
+    print(query_lib.format_query_results_human(payload, include_bundle=args.bundle, view=view))
 
 
 def handle_embed_build_command(args):
@@ -757,6 +759,12 @@ def main():
         "--embed-model",
         default=None,
         help="Optional embedding model override for semantic_hybrid mode",
+    )
+    query_parser.add_argument(
+        "--view",
+        choices=("index", "context", "detail"),
+        default="context",
+        help="Result detail level: index (compact), context (default), detail (full bodies)",
     )
     query_parser.add_argument("--json", action="store_true", dest="json")
     query_parser.add_argument("--bundle", action="store_true")

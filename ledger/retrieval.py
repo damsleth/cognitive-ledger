@@ -46,7 +46,7 @@ except ImportError:  # pragma: no cover - optional dependency fallback
     BM25Okapi = None
 
 
-NOTE_INDEX_VERSION = 2
+NOTE_INDEX_VERSION = 3
 
 # Intent detection hints
 HISTORY_HINTS = frozenset({"history", "closed", "past"})
