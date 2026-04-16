@@ -107,7 +107,7 @@ Signal types: `retrieval_hit`, `retrieval_miss`, `correction`, `affirmation`,
 
 ```bash
 ./scripts/ledger_ab --baseline-ref main --candidate-ref HEAD   # uses ledger_notes_dir from config.yaml
-./scripts/ledger_ab --corpus ~/Code/llm-notes --baseline-ref main --candidate-ref HEAD
+./scripts/ledger_ab --corpus ~/Code/ledger-notes --baseline-ref main --candidate-ref HEAD
 ./scripts/ledger_ab --baseline-ref main --candidate-ref HEAD --eval-runs 7 --query-runs 5
 ./scripts/ledger_ab --baseline-ref main --candidate-ref HEAD --query-runs 5 --cold-query
 ```
