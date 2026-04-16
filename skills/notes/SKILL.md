@@ -25,7 +25,7 @@ This is a symlink to the repo's config and contains all three paths:
 
 ```yaml
 ledger_root: ~/Code/cognitive-ledger
-ledger_notes_dir: ~/Code/llm-notes
+ledger_notes_dir: ~/Code/ledger-notes
 source_notes_dir: ~/Code/notes
 ```
 
