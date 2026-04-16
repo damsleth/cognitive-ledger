@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-04-16
+
+### Added
+- **Privacy fences** - `<private>...</private>` tag stripping in all ingestion paths (retrieval candidates, Obsidian import, extraction, session-end capture). Balanced-tag parser handles nested fences safely by over-redacting when unclosed.
+- **Cost hints** - `word_count` field on `RetrievalCandidate` flows through scoring, serialization, and query output. Human-readable results show `~Nw` per result. Note index bumped to v3.
+- **Activity type on timeline** - optional `activity_type` field on timeline JSONL entries (decision, bugfix, feature, refactor, discovery, change). Backward compatible - omitted when empty, not in markdown format.
+- **Three-layer retrieval UX** - `--view index|context|detail` flag on `ledger query`. Index (~20-30 tokens/result) for scanning, context (default, ~80-120 tokens) for reasoning, detail (~200-1000 tokens) for full bodies. Agents start compact and drill into what they need.
+- **Session wrap-up template** - structured 5-question prompt in `/notes` skill for surfacing durable artifacts at session end (task, explored, discovered, completed, still open).
+- A/B baseline results for retrieval modes: `progressive_disclosure` beneficial (MRR +0.004), `compressed_attention` regression, `precomputed_index` 6x faster with quality tied.
+
+### Changed
+- `schema.yaml` - added `activity_types` enum for timeline entries
+- `SKILL.md` - query section rewritten with three-layer workflow, session wrap-up expanded
+- `NOTE_INDEX_VERSION` bumped from 2 to 3 (forces rebuild to populate `word_count`)
+
 ## 2026-04-15
 
 ### Changed
