@@ -189,7 +189,7 @@ class LedgerABFingerprintTests(unittest.TestCase):
 
     def test_external_corpus_root_without_notes_wrapper_is_supported(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            corpus_root = Path(temp_dir) / "llm-notes"
+            corpus_root = Path(temp_dir) / "ledger-notes"
             self._build_fixture_corpus(corpus_root, '{"alex": ["example_user"]}\n', "hello")
 
             first = self.ledger_ab.compute_corpus_fingerprint(

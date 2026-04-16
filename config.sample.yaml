@@ -8,7 +8,7 @@ first_run: true
 
 # Paths (use ~ for home directory)
 # ledger_root: ~/code/cognitive-ledger
-# ledger_notes_dir: ~/Code/llm-notes
+# ledger_notes_dir: ~/Code/ledger-notes
 # source_notes_dir: ~/Code/notes
 
 # A/B uses ledger_notes_dir by default. Override with: scripts/ledger_ab --corpus <path>

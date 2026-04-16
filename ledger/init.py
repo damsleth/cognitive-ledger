@@ -111,7 +111,7 @@ def _build_config_content(
     if ledger_notes_setting is not None:
         lines.append(f"ledger_notes_dir: {ledger_notes_setting}")
     else:
-        lines.append("# ledger_notes_dir: ~/Code/llm-notes")
+        lines.append("# ledger_notes_dir: ~/Code/ledger-notes")
 
     if source_notes_setting is not None:
         lines.append(f"source_notes_dir: {source_notes_setting}")

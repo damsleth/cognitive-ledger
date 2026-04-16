@@ -11,4 +11,4 @@
 #
 # Run eval:   ./scripts/ledger eval --cases /absolute/path/to/retrieval_eval_cases.yaml --k 3
 # Run A/B:    ./scripts/ledger_ab --baseline-ref main --candidate-ref HEAD
-# External:   ./scripts/ledger_ab --corpus ~/Code/llm-notes --baseline-ref main --candidate-ref HEAD
+# External:   ./scripts/ledger_ab --corpus ~/Code/ledger-notes --baseline-ref main --candidate-ref HEAD
