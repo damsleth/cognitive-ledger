@@ -116,6 +116,7 @@ def _copy_candidate(candidate: CandidateLike) -> RetrievalCandidate:
         attention_tokens=set(_candidate_value(candidate, "attention_tokens", set()) or set()),
         snippet=str(_candidate_value(candidate, "snippet", "") or ""),
         has_next_action_checkbox=bool(_candidate_value(candidate, "has_next_action_checkbox", False)),
+        word_count=int(_candidate_value(candidate, "word_count", 0) or 0),
     )
 
 
@@ -145,6 +146,7 @@ def _scored_result(
         attention_tokens=set(base.attention_tokens),
         snippet=base.snippet,
         has_next_action_checkbox=base.has_next_action_checkbox,
+        word_count=base.word_count,
         score=score,
         reasons=list(reasons),
         components=components,
@@ -314,6 +316,8 @@ def _candidate_from_parts(
     body: str,
 ) -> RetrievalCandidate:
     """Build retrieval candidate from parsed note content."""
+    from ledger.parsing import strip_private_tags
+    body = strip_private_tags(body)
     sections = parse_sections(body)
     title = extract_title(body) or path.stem.replace("_", " ")
 
@@ -395,6 +399,7 @@ def _candidate_from_parts(
         attention_tokens=attention_tokens,
         snippet=snippet_source,
         has_next_action_checkbox=bool(next_action),
+        word_count=len(body.split()),
     )
 
 
@@ -424,6 +429,7 @@ def _candidate_to_json(candidate: RetrievalCandidate) -> dict[str, Any]:
         "attention_tokens": sorted(candidate.attention_tokens),
         "snippet": candidate.snippet,
         "has_next_action_checkbox": candidate.has_next_action_checkbox,
+        "word_count": candidate.word_count,
     }
 
 
@@ -453,6 +459,7 @@ def _candidate_from_json(candidate_json: dict[str, Any]) -> RetrievalCandidate:
         attention_tokens=set(candidate_json.get("attention_tokens", [])),
         snippet=str(candidate_json.get("snippet", "")),
         has_next_action_checkbox=bool(candidate_json.get("has_next_action_checkbox", False)),
+        word_count=int(candidate_json.get("word_count", 0) or 0),
     )
 
 
