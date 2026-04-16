@@ -287,6 +287,7 @@ def append_timeline_entry(
     description: str,
     root_dir: Path | None = None,
     ledger_notes_dir: Path | None = None,
+    activity_type: str = "",
 ) -> None:
     """Append an entry to the timeline with proper locking.
 
@@ -300,6 +301,8 @@ def append_timeline_entry(
         description: Brief description of the change
         root_dir: Root directory for making paths relative (optional)
         ledger_notes_dir: Ledger notes dir for normalizing note paths to notes/... (optional)
+        activity_type: Optional activity classification
+            (decision|bugfix|feature|refactor|discovery|change)
 
     Raises:
         NoteWriteError: If the append fails.
@@ -324,6 +327,8 @@ def append_timeline_entry(
         "path": str(note_path),
         "desc": description,
     }
+    if activity_type:
+        event["activity_type"] = activity_type
 
     timeline_path = Path(timeline_path)
     from ledger.timeline import append_timeline_jsonl
