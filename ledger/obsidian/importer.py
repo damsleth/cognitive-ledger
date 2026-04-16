@@ -396,6 +396,8 @@ def run_import(
         path = row.path_abs
         try:
             content = path.read_text(encoding="utf-8")
+            from ledger.parsing import strip_private_tags
+            content = strip_private_tags(content)
             file_hash = sha1_file(path)
         except (OSError, UnicodeDecodeError):
             continue

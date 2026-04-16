@@ -156,6 +156,8 @@ def _modal_line_looks_actionable(stmt: str) -> bool:
 
 
 def extract_candidates(content: str) -> list[Candidate]:
+    from ledger.parsing import strip_private_tags
+    content = strip_private_tags(content)
     candidates: list[Candidate] = []
 
     for match in re.finditer(r"^(?:-\s*)?(?:I prefer|I want you to|Going forward|From now on)\s+(.+)$", content, re.I | re.M):

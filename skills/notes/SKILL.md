@@ -136,7 +136,15 @@ Do not create files for pure queries unless explicitly asked.
 
 ## Session Wrap-Up
 
-At session end, scan actions for durable artifacts (decisions, preferences, patterns, config choices, diagnoses). Search ledger first, then create/update the appropriate note type. File incomplete work as open loops with concrete next actions.
+At session end, prompt the user with these five questions to surface durable artifacts:
+
+1. **What was the task?** - File as `fact__` if it was a decision, or update an existing `loop__` if it was ongoing work.
+2. **What was explored?** - Only file if the exploration path itself is reusable knowledge (e.g., "X approach doesn't work because Y").
+3. **What was discovered?** - File as `fact__` (stable truth), `concept__` (reusable framework), or `pref__` (validated preference).
+4. **What was completed?** - Update existing `loop__` status to `closed`, or append a timeline entry with appropriate `activity_type`.
+5. **What's still open?** - File as `loop__` with `status: open` and a concrete next-action checkbox.
+
+Not every question produces a note. Skip any that yield nothing durable. Search the ledger first - prefer updating existing notes over creating new ones.
 
 ## Safety
 

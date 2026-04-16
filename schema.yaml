@@ -117,6 +117,14 @@ timeline:
     - closed     # loop resolved (alternative to updated for loops)
     - sleep      # consolidation marker
   timestamp_format: "ISO 8601 UTC"
+  # Optional activity classification on JSONL events (not in markdown format)
+  activity_types:
+    - decision   # architectural or product decision
+    - bugfix     # bug fix or error resolution
+    - feature    # new capability added
+    - refactor   # restructuring without behavior change
+    - discovery  # learned something new
+    - change     # general modification
 
 # File naming
 naming:

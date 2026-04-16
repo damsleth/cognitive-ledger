@@ -82,6 +82,7 @@ def scored_result_to_dict(item: RetrievalCandidate | ScoredResult | dict[str, An
         "attention_tokens": sorted(item.attention_tokens),
         "snippet": item.snippet,
         "has_next_action_checkbox": item.has_next_action_checkbox,
+        "word_count": item.word_count,
         "score": float(getattr(item, "score", 0.0) or 0.0),
         "reasons": list(getattr(item, "reasons", [])),
         "components": {
@@ -166,6 +167,7 @@ def query_result_to_json(
             "confidence": result_get(item, "confidence"),
             "source": result_get(item, "source"),
             "scope": result_get(item, "scope"),
+            "word_count": result_get(item, "word_count", 0),
         }
         if result_get(item, "type") == "loop":
             data["status"] = result_get(item, "status", "")
@@ -205,6 +207,7 @@ def _scored_result_from_candidate(
         attention_tokens=set(result_get(candidate, "attention_tokens", set()) or set()),
         snippet=str(result_get(candidate, "snippet", "") or ""),
         has_next_action_checkbox=bool(result_get(candidate, "has_next_action_checkbox", False)),
+        word_count=int(result_get(candidate, "word_count", 0) or 0),
         score=score,
         reasons=reasons,
         components=components,
@@ -470,9 +473,11 @@ def format_query_results_human(payload: RetrievalResult | dict[str, Any], includ
         rationale = ", ".join(result_get(item, "reasons", [])[:3])
         level = result_get(item, "disclosure_level", "")
         level_segment = f"{level} | " if level else ""
+        wc = result_get(item, "word_count", 0) or 0
+        cost_hint = f" ~{wc}w" if wc else ""
         lines.append(
             f"- score {result_get(item, 'score', 0.0):.3f} | "
-            f"{result_get(item, 'type', '')} | {result_get(item, 'rel_path', '')} | "
+            f"{result_get(item, 'type', '')} | {result_get(item, 'rel_path', '')}{cost_hint} | "
             f"{level_segment}{rationale}"
         )
 
