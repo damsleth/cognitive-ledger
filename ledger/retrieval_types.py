@@ -40,6 +40,7 @@ class RetrievalCandidate:
     attention_tokens: set[str]
     snippet: str
     has_next_action_checkbox: bool
+    word_count: int = 0
 
 
 @dataclass
