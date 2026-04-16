@@ -1,48 +1,56 @@
 # A/B Baseline Results - 2026-04-16
 
-Baseline experiments run after Phase 1 commit (825dcce). All tests compare
-retrieval modes on the same ref (HEAD) with 5 runs each.
+Full matrix of retrieval mode comparisons on the current corpus (HEAD, 5 runs each).
 
-## Summary
+## All Modes vs Legacy
 
-| ID | Experiment | Decision | hit@1 | hit@k | MRR (delta) | Latency |
-|---|---|---|---|---|---|---|
-| H1 | legacy vs progressive_disclosure | beneficial | 0.578 | 0.867 | +0.004 | slower p95 |
-| H2 | legacy vs semantic_hybrid | blocked | - | - | - | numpy/torch version conflict |
-| H3 | two_stage vs compressed_attention | regression | 0.578 | -0.022 | -0.006 | faster p95 |
-| H4 | scope_type_prefilter vs precomputed_index | beneficial | 0.578 | tied | tied | 6x faster |
-| H5 | warm vs cold query (legacy) | beneficial | 0.578 | tied | tied | ~same |
+| Candidate mode | Decision | MRR delta | hit@k delta | p95 query (ms) |
+|---|---|---|---|---|
+| two_stage | beneficial | +0.004 | 0 | 5.1 -> 7.7 |
+| compressed_attention | **regression** | -0.002 | **-0.022** | 5.0 -> 4.8 |
+| scope_type_prefilter | beneficial | +0.004 | 0 | 5.0 -> 40.5 |
+| precomputed_index | beneficial | +0.004 | 0 | 4.6 -> 6.1 |
+| progressive_disclosure | beneficial | +0.004 | 0 | 5.3 -> 7.3 |
+| semantic_hybrid | blocked | - | - | numpy/torch conflict |
 
-## Key Findings
+## Cross-Mode (Top Performers)
 
-**H1 - progressive_disclosure is beneficial.** MRR improves slightly (+0.004) with
-no hit rate change. Latency is higher (7.7ms vs 5.5ms p95 query), which is acceptable
-for a presentation-layer mode. This validates building the three-layer retrieval UX
-on top of progressive_disclosure.
+| Baseline | Candidate | Decision | MRR delta | p95 query (ms) |
+|---|---|---|---|---|
+| two_stage | precomputed_index | beneficial | +0.001 | 12.0 -> 7.5 |
+| two_stage | progressive_disclosure | beneficial (latency) | 0 | 10.0 -> 7.7 |
+| precomputed_index | progressive_disclosure | **regression** | -0.001 | 6.2 -> 7.6 |
+| scope_type_prefilter | precomputed_index | beneficial (latency) | 0 | 39.9 -> 5.7 |
+| scope_type_prefilter | progressive_disclosure | **regression** | -0.001 | 39.7 -> 7.6 |
 
-**H2 - semantic_hybrid blocked.** The local sentence-transformers dependency has a
-numpy 2.x / torch 2.2 conflict. Needs `pip install --upgrade torch numpy` or pinning.
-Not a retrieval quality issue.
+## Other
 
-**H3 - compressed_attention is a regression.** hit@k drops -0.022 and MRR drops -0.006.
-The mode is faster (4ms vs 7.7ms p95) but quality loss is not worth it. Do not use
-compressed_attention as the default mode.
+| Test | Decision | Notes |
+|---|---|---|
+| warm vs cold query (legacy) | beneficial (latency) | <1ms difference, cache not a factor |
 
-**H4 - precomputed_index is a clear win.** Quality identical, latency 6x faster
-(6.5ms vs 41ms p95 query). The precomputed index eliminates repeated candidate
-building. Strong candidate for default mode.
+## Rankings
 
-**H5 - cache behavior is not masking real costs.** Warm and cold query latency are
-within 1ms of each other, suggesting the candidate cache isn't a significant factor
-in production queries.
+By MRR (highest first):
+1. **precomputed_index** - 0.7259 (best quality, fast)
+2. **scope_type_prefilter** - 0.7259 (same quality, slow without precompute)
+3. **two_stage** - 0.7254
+4. **progressive_disclosure** - 0.7254
+5. **legacy** - 0.7217
+6. **compressed_attention** - 0.7198 (regression, do not use)
 
-## Recommendation for Three-Layer Retrieval UX
+By latency (fastest first):
+1. **compressed_attention** - ~4.8ms (but quality regression)
+2. **legacy** - ~5.0ms
+3. **precomputed_index** - ~6.1ms
+4. **progressive_disclosure** - ~7.3ms
+5. **two_stage** - ~7.7ms
+6. **scope_type_prefilter** - ~40ms (rebuilds candidates every query)
 
-Use `progressive_disclosure` as the base retrieval mode for the three-layer UX.
-Consider `precomputed_index` as the default scoring backend (6x latency win with
-no quality loss). The three-layer UX is a presentation concern on top of whichever
-scoring mode is active.
+## Recommendations
 
-## Full Reports
-
-Detailed per-query breakdowns available in `.claude-mem/ab-results/h1..h5/ab_eval.md`.
+1. **Default mode: `precomputed_index`** - Best MRR, second-fastest latency. Clear winner.
+2. **Presentation layer: `progressive_disclosure`** - Same MRR as two_stage, adds disclosure levels for the three-layer UX.
+3. **Avoid: `compressed_attention`** - Only mode that regresses on hit@k.
+4. **Avoid: `scope_type_prefilter` standalone** - Same quality as precomputed_index but 7x slower. Only useful as a pipeline stage, not as the top-level mode.
+5. **Fix: `semantic_hybrid`** - Blocked on torch/numpy version. Upgrade torch>=2.4 and numpy<2.
