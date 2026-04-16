@@ -35,7 +35,7 @@ class InitTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             tmp = Path(temp_dir)
             repo_root = tmp / "repo"
-            ledger_notes_dir = tmp / "llm-notes"
+            ledger_notes_dir = tmp / "ledger-notes"
             source_notes_dir = tmp / "notes"
             repo_root.mkdir()
 
@@ -65,7 +65,7 @@ class InitTests(unittest.TestCase):
             tmp = Path(temp_dir)
             config = LedgerConfig(
                 ledger_root=tmp / "repo",
-                ledger_notes_dir=tmp / "llm-notes",
+                ledger_notes_dir=tmp / "ledger-notes",
                 source_notes_dir=tmp / "notes",
             )
             set_config(config)

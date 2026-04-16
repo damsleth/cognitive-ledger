@@ -15,7 +15,7 @@ Language models forget everything between sessions. The Cognitive Ledger gives t
 git clone https://github.com/<you>/cognitive-ledger.git
 cd cognitive-ledger
 ./scripts/setup-venv.sh
-./scripts/ledger init --ledger-notes-dir ~/Code/llm-notes --source-notes-dir ~/Code/notes
+./scripts/ledger init --ledger-notes-dir ~/Code/ledger-notes --source-notes-dir ~/Code/notes
 ./skills/install-skill.sh            # install /notes skill for your agents
 ```
 
@@ -25,7 +25,7 @@ Optional flags:
 
 ```bash
 ./scripts/ledger init --voice-dna ~/voice-profile.json   # import your writing voice
-./scripts/ledger init --ledger-notes-dir ~/Code/llm-notes --source-notes-dir ~/Code/notes
+./scripts/ledger init --ledger-notes-dir ~/Code/ledger-notes --source-notes-dir ~/Code/notes
 ./scripts/ledger paths                                     # verify resolved locations
 ```
 
@@ -34,7 +34,7 @@ If you use the bundled `/notes` skill, set `LEDGER_SOURCE_NOTES_DIR` and `LEDGER
 ```bash
 export LEDGER_SOURCE_NOTES_DIR="$HOME/path/to/notes"
 export LEDGER_ROOT="$HOME/path/to/cognitive-ledger"
-export LEDGER_NOTES_DIR="$HOME/path/to/llm-notes"
+export LEDGER_NOTES_DIR="$HOME/path/to/ledger-notes"
 source ~/.zshrc
 ```
 
@@ -44,7 +44,7 @@ Edit `config.yaml` in the repo root:
 
 ```yaml
 # config.yaml
-ledger_notes_dir: ~/Code/llm-notes
+ledger_notes_dir: ~/Code/ledger-notes
 source_notes_dir: ~/Code/notes
 # auto_file_synthesis: false  # set true to auto-file query syntheses
 ```
@@ -136,7 +136,7 @@ ledger-obsidian doctor --vault /path/to/vault          # health check
 ```bash
 ./scripts/ledger eval --cases "$(./scripts/ledger paths --field ledger_notes_dir)/08_indices/retrieval_eval_cases.yaml" --k 3
 ./scripts/ledger_ab --baseline-ref main --candidate-ref HEAD --runs 5     # uses ledger_notes_dir from config.yaml
-./scripts/ledger_ab --corpus ~/Code/llm-notes --baseline-ref main --candidate-ref HEAD --runs 5
+./scripts/ledger_ab --corpus ~/Code/ledger-notes --baseline-ref main --candidate-ref HEAD --runs 5
 ```
 
 ## Folder Layout
