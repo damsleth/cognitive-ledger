@@ -130,6 +130,8 @@ def _write_inbox_note(title: str, content: str, tags: list[str]) -> Path:
         "lang": "en",
     }
 
+    from ledger.parsing import strip_private_tags
+    content = strip_private_tags(content)
     body = f"\n# {title}\n\n## Content\n{content}\n\n## Source\nAuto-captured by session-end hook.\n"
     note_content = serialize_frontmatter(fm) + body
 

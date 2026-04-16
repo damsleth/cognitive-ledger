@@ -35,6 +35,9 @@ from .links import (
     extract_link_tokens,
     NoteLink,
 )
+from .privacy import (
+    strip_private_tags,
+)
 from .tokenizer import (
     tokenize,
 )
@@ -63,6 +66,8 @@ __all__ = [
     "extract_links",
     "extract_link_tokens",
     "NoteLink",
+    # Privacy
+    "strip_private_tags",
     # Tokenizer
     "tokenize",
 ]
