@@ -47,7 +47,7 @@ def test_rebuild_note_index_writes_entries(tmp_path):
         payload = retrieval_mod.rebuild_note_index()
         note_index_path = config.ledger_notes_dir / "08_indices" / "note_index.json"
 
-        assert payload["version"] == 2
+        assert payload["version"] == retrieval.NOTE_INDEX_VERSION
         assert payload["entries"]
         assert payload["inverted"]
         assert note_index_path.is_file()

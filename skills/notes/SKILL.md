@@ -105,12 +105,25 @@ Capture only with clear evidence, not speculatively:
 ./scripts/ledger signal add --type affirmation --note <path>
 ```
 
-### Query
+### Query (Three-Layer Retrieval)
+
+Start with the compact index view, then drill into detail only for what you need:
 
 ```
+# Layer 1 - Index: scan results, see cost per note (~20-30 tokens each)
+./scripts/ledger query "<topic>" --scope all --limit 8 --view index
+
+# Layer 2 - Context (default): statements, snippets, tags (~80-120 tokens each)
 ./scripts/ledger query "<topic>" --scope all --limit 8
+
+# Layer 3 - Detail: full bodies, score components (~200-1000 tokens each)
+./scripts/ledger query "<topic>" --scope all --limit 8 --view detail
+
+# Bundle mode (context-window-friendly excerpts within a word budget)
 ./scripts/ledger query "<topic>" --scope dev --bundle
 ```
+
+**Workflow:** Start with `--view index` to see what's available and how large each note is. Then fetch `--view detail` for only the items you need. This saves tokens on broad queries.
 
 For targeted follow-up use `rg` in the relevant subfolder of `{ledger_notes_dir}`:
 `02_facts/` (history, decisions), `03_preferences/` (style), `05_open_loops/` (threads), `06_concepts/` (frameworks).

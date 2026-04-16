@@ -129,15 +129,80 @@ def retrieval_result_to_dict(payload: RetrievalResult | dict[str, Any]) -> dict[
     }
 
 
+def _result_index_fields(item: ScoredResult | dict[str, Any]) -> dict[str, Any]:
+    """Compact index fields (~20-30 tokens per result)."""
+    data: dict[str, Any] = {
+        "path": result_get(item, "rel_path") or result_get(item, "path"),
+        "title": result_get(item, "title"),
+        "type": result_get(item, "type"),
+        "score": round(float(result_get(item, "score", 0.0)), 6),
+        "updated": result_get(item, "updated"),
+        "confidence": result_get(item, "confidence"),
+        "scope": result_get(item, "scope"),
+        "word_count": result_get(item, "word_count", 0),
+    }
+    if result_get(item, "type") == "loop":
+        data["status"] = result_get(item, "status", "")
+    return data
+
+
+def _result_context_fields(item: ScoredResult | dict[str, Any]) -> dict[str, Any]:
+    """Context fields - index plus statement, snippet, tags (~80-120 tokens)."""
+    data = _result_index_fields(item)
+    data["statement"] = result_get(item, "statement", "")
+    data["snippet"] = result_get(item, "snippet", "")
+    data["tags"] = list(result_get(item, "tags", []) or [])
+    data["source"] = result_get(item, "source")
+    data["reasons"] = result_get(item, "reasons", [])
+    if result_get(item, "disclosure_level"):
+        data["disclosure_level"] = result_get(item, "disclosure_level")
+    return data
+
+
+def _result_detail_fields(item: ScoredResult | dict[str, Any]) -> dict[str, Any]:
+    """Full detail - everything including body and score components."""
+    data = _result_context_fields(item)
+    data["body"] = result_get(item, "body", "")
+    data["note_tokens"] = sorted(result_get(item, "note_tokens", set()) or set())
+    data["tag_tokens"] = sorted(result_get(item, "tag_tokens", set()) or set())
+    data["attention_tokens"] = sorted(result_get(item, "attention_tokens", set()) or set())
+    data["has_next_action_checkbox"] = result_get(item, "has_next_action_checkbox", False)
+    components = result_get(item, "components", None)
+    if components is not None:
+        data["components"] = {
+            "bm25_score": float(getattr(components, "bm25_score", 0.0) or 0.0),
+            "lexical_match": float(getattr(components, "lexical_match", 0.0) or 0.0),
+            "tag_overlap": float(getattr(components, "tag_overlap", 0.0) or 0.0),
+            "scope_match": float(getattr(components, "scope_match", 0.0) or 0.0),
+            "recency": float(getattr(components, "recency", 0.0) or 0.0),
+            "confidence": float(getattr(components, "confidence", 0.0) or 0.0),
+            "semantic_similarity": float(getattr(components, "semantic_similarity", 0.0) or 0.0),
+            "lexical_score": float(getattr(components, "lexical_score", 0.0) or 0.0),
+            "scope_component": float(getattr(components, "scope_component", 0.0) or 0.0),
+            "recency_component": float(getattr(components, "recency_component", 0.0) or 0.0),
+        }
+    return data
+
+
+_VIEW_FORMATTERS = {
+    "index": _result_index_fields,
+    "context": _result_context_fields,
+    "detail": _result_detail_fields,
+}
+
+
 def query_result_to_json(
     payload: RetrievalResult | dict[str, Any],
     *,
     include_bundle: bool = False,
     bundle_word_budget: int = 1200,
+    view: str = "context",
 ) -> dict[str, Any]:
+    formatter = _VIEW_FORMATTERS.get(view, _result_context_fields)
     out = {
         "query": payload_get(payload, "query"),
         "scope": payload_get(payload, "scope"),
+        "view": view,
         "retrieval_mode": payload_get(payload, "retrieval_mode", "legacy"),
         "effective_retrieval_mode": payload_get(
             payload,
@@ -157,23 +222,7 @@ def query_result_to_json(
 
     results = payload_results(payload)
     for item in results:
-        data = {
-            "path": result_get(item, "rel_path") or result_get(item, "path"),
-            "title": result_get(item, "title"),
-            "type": result_get(item, "type"),
-            "score": round(float(result_get(item, "score", 0.0)), 6),
-            "reasons": result_get(item, "reasons", []),
-            "updated": result_get(item, "updated"),
-            "confidence": result_get(item, "confidence"),
-            "source": result_get(item, "source"),
-            "scope": result_get(item, "scope"),
-            "word_count": result_get(item, "word_count", 0),
-        }
-        if result_get(item, "type") == "loop":
-            data["status"] = result_get(item, "status", "")
-        if result_get(item, "disclosure_level"):
-            data["disclosure_level"] = result_get(item, "disclosure_level")
-        out["results"].append(data)
+        out["results"].append(formatter(item))
 
     if include_bundle:
         out["bundle"] = bundle_results(results, word_budget=bundle_word_budget)
@@ -448,13 +497,19 @@ def bundle_results(results: list[ScoredResult | dict[str, Any]], word_budget: in
     return bundle
 
 
-def format_query_results_human(payload: RetrievalResult | dict[str, Any], include_bundle: bool = False) -> str:
+def format_query_results_human(
+    payload: RetrievalResult | dict[str, Any],
+    include_bundle: bool = False,
+    view: str = "context",
+) -> str:
     results = payload_results(payload)
     lines = [
         f"query: {_payload_get(payload, 'query', '')}",
         f"scope: {_payload_get(payload, 'scope', 'all')}",
         f"retrieval_mode: {_payload_get(payload, 'retrieval_mode', 'legacy')}",
     ]
+    if view != "context":
+        lines.append(f"view: {view}")
     if _payload_get(payload, "effective_retrieval_mode") and _payload_get(
         payload, "effective_retrieval_mode"
     ) != _payload_get(payload, "retrieval_mode"):
@@ -470,16 +525,45 @@ def format_query_results_human(payload: RetrievalResult | dict[str, Any], includ
     lines.append(f"results: {len(results)}")
 
     for item in results:
-        rationale = ", ".join(result_get(item, "reasons", [])[:3])
-        level = result_get(item, "disclosure_level", "")
-        level_segment = f"{level} | " if level else ""
         wc = result_get(item, "word_count", 0) or 0
         cost_hint = f" ~{wc}w" if wc else ""
-        lines.append(
-            f"- score {result_get(item, 'score', 0.0):.3f} | "
-            f"{result_get(item, 'type', '')} | {result_get(item, 'rel_path', '')}{cost_hint} | "
-            f"{level_segment}{rationale}"
-        )
+
+        if view == "index":
+            # Compact: score, type, path, cost
+            lines.append(
+                f"- {result_get(item, 'score', 0.0):.3f} | "
+                f"{result_get(item, 'type', '')} | "
+                f"{result_get(item, 'rel_path', '')}{cost_hint}"
+            )
+        elif view == "detail":
+            # Full: score line, then statement, body excerpt, tags
+            rationale = ", ".join(result_get(item, "reasons", [])[:3])
+            lines.append(
+                f"- {result_get(item, 'score', 0.0):.3f} | "
+                f"{result_get(item, 'type', '')} | "
+                f"{result_get(item, 'rel_path', '')}{cost_hint} | "
+                f"{rationale}"
+            )
+            statement = result_get(item, "statement", "")
+            if statement:
+                lines.append(f"  statement: {shorten(statement, 200)}")
+            body = result_get(item, "body", "")
+            if body:
+                lines.append(f"  body: {shorten(body, 400)}")
+            tags = result_get(item, "tags", [])
+            if tags:
+                lines.append(f"  tags: {', '.join(tags)}")
+        else:
+            # Context (default): score, type, path, cost, reasons
+            rationale = ", ".join(result_get(item, "reasons", [])[:3])
+            level = result_get(item, "disclosure_level", "")
+            level_segment = f"{level} | " if level else ""
+            lines.append(
+                f"- {result_get(item, 'score', 0.0):.3f} | "
+                f"{result_get(item, 'type', '')} | "
+                f"{result_get(item, 'rel_path', '')}{cost_hint} | "
+                f"{level_segment}{rationale}"
+            )
 
     if include_bundle:
         lines.append("")
