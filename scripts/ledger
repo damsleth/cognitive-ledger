@@ -175,7 +175,7 @@ from ledger.retrieval import (  # noqa: E402,F811
     build_attention_tokens, candidate_from_note, build_candidates,
     clear_candidate_cache, build_candidate_index,
     retrieve_candidates_from_index, coarse_candidate_score,
-    shortlist_candidates, shortlist_attention_candidates,
+    shortlist_candidates,
     prefilter_candidates_by_scope_and_type, score_candidate,
     compute_recency_component, expand_query_tokens,
 )
