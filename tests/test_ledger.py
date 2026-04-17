@@ -204,7 +204,7 @@ class LedgerUnitTests(unittest.TestCase):
                 reset_config()
 
         self.assertEqual(payload_get(payload, "retrieval_mode"), "semantic_hybrid")
-        self.assertEqual(payload_get(payload, "effective_retrieval_mode"), "legacy")
+        self.assertEqual(payload_get(payload, "effective_retrieval_mode"), "precomputed_index")
         self.assertEqual(payload_get(payload, "semantic")["reason"], "missing_index")
         self.assertTrue(payload_results(payload))
 
