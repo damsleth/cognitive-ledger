@@ -12,6 +12,7 @@ from ledger.config import get_config
 from ledger.layout import logical_path
 from ledger.notes import get_notes
 from ledger.parsing import parse_timestamp, shorten
+from ledger.retrieval import canonical_scope
 
 
 SCOPES = ("personal", "work", "dev")
@@ -46,13 +47,6 @@ def _render_list(lines: list[str], fallback_text: str) -> list[str]:
     if not lines:
         return [f"- {fallback_text}"]
     return lines
-
-
-def canonical_scope(scope: str | None) -> str:
-    lowered = str(scope or "").strip().lower()
-    if lowered == "life":
-        return "personal"
-    return lowered
 
 
 def source_weight(source: str | None) -> float:
