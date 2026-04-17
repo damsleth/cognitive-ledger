@@ -116,9 +116,22 @@ ledger-obsidian doctor --vault /path/to/vault          # health check
 
 ### Query your notes
 
+Three detail levels let agents control the cost/detail tradeoff:
+
 ```bash
+# Index view - compact scan (~20-30 tokens per result)
+./scripts/ledger query "calendar constraints" --scope all --limit 8 --view index
+
+# Context view (default) - statements, snippets, tags (~80-120 tokens)
 ./scripts/ledger query "calendar constraints" --scope all --limit 8
-./scripts/ledger query "calendar constraints" --bundle    # context-window-friendly output
+
+# Detail view - full bodies, score components (~200-1000 tokens)
+./scripts/ledger query "calendar constraints" --scope all --limit 8 --view detail
+
+# Bundle mode - context-window-friendly excerpts within a word budget
+./scripts/ledger query "calendar constraints" --bundle
+
+# Other
 ./scripts/ledger loops                                    # list open loops
 ./scripts/ledger loops --interactive                      # progressive disclosure
 ./scripts/ledger context --format boot                    # session boot payload
@@ -138,6 +151,24 @@ ledger-obsidian doctor --vault /path/to/vault          # health check
 ./scripts/ledger_ab --baseline-ref main --candidate-ref HEAD --runs 5     # uses ledger_notes_dir from config.yaml
 ./scripts/ledger_ab --corpus ~/Code/ledger-notes --baseline-ref main --candidate-ref HEAD --runs 5
 ```
+
+### Retrieval Mode A/B Results
+
+All modes were benchmarked against `legacy` (5 runs each, same corpus). `precomputed_index` is now the default.
+
+| Mode | MRR | hit@k | p95 (ms) | Decision | Status |
+|---|---|---|---|---|---|
+| **precomputed_index** | 0.726 | 0.867 | 6.1 | beneficial (+0.004 MRR) | **default** |
+| progressive_disclosure | 0.725 | 0.867 | 7.3 | beneficial (+0.004 MRR) | available |
+| two_stage | 0.725 | 0.867 | 7.7 | beneficial (+0.004 MRR) | available |
+| scope_type_prefilter | 0.726 | 0.867 | 40.5 | beneficial (+0.004 MRR) | available (slow) |
+| legacy | 0.722 | 0.867 | 5.0 | baseline | available |
+| semantic_hybrid | - | - | - | blocked (torch/numpy) | available when deps fixed |
+| compressed_attention | 0.720 | 0.844 | 4.8 | **regression** (-0.022 hit@k) | **removed** |
+
+Cross-mode findings: `precomputed_index` beats `two_stage` on both MRR (+0.001) and latency (7.5ms vs 12ms). `progressive_disclosure` adds disclosure levels for the three-layer UX at marginal quality cost vs `precomputed_index`.
+
+Override the default with `--retrieval-mode <mode>`, `LEDGER_RETRIEVAL_MODE` env var, or `retrieval_mode` in `config.yaml`.
 
 ## Folder Layout
 
@@ -165,6 +196,18 @@ Identity notes in `notes/01_identity/` capture who the user is — mission, beli
 ./scripts/ledger context --format identity   # list identity notes
 ./scripts/ledger notes --type identity       # browse identity notes
 ```
+
+## Privacy Fences
+
+Wrap sensitive content in `<private>...</private>` tags to prevent it from entering the retrieval index, search results, or generated artifacts:
+
+```markdown
+Public context here.
+<private>This will be stripped before indexing.</private>
+More public content.
+```
+
+Privacy stripping runs on all ingestion paths: retrieval candidate building, Obsidian import, extraction, and session-end capture. Nested tags and unclosed fences are handled safely (unclosed tags strip the remainder to avoid leaking).
 
 ## Signal Feedback Loop
 
