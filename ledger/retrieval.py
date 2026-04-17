@@ -185,8 +185,6 @@ def scope_matches(note_scope: str, query_scope: str) -> bool:
 
 def resolve_retrieval_mode(retrieval_mode: str | None) -> str:
     """Resolve retrieval mode from argument or environment."""
-    import os
-
     config = get_config()
     if retrieval_mode is None:
         retrieval_mode = os.getenv("LEDGER_RETRIEVAL_MODE", "semantic_hybrid")
@@ -198,8 +196,6 @@ def resolve_retrieval_mode(retrieval_mode: str | None) -> str:
 
 def resolve_embed_backend(embed_backend: str | None) -> str:
     """Resolve embedding backend from argument or environment."""
-    import os
-
     config = get_config()
     if embed_backend is None:
         embed_backend = os.getenv("LEDGER_EMBED_BACKEND", "local")
