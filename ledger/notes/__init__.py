@@ -522,6 +522,8 @@ def get_notes(
 def compute_recency_score(updated_ts: datetime | None, now_dt: datetime) -> float:
     """Compute recency score (0.0-1.0) based on age.
 
+    Delegates to the canonical implementation in ledger.retrieval.
+
     Args:
         updated_ts: When the note was last updated.
         now_dt: Current datetime.
@@ -529,7 +531,5 @@ def compute_recency_score(updated_ts: datetime | None, now_dt: datetime) -> floa
     Returns:
         Recency score where 1.0 is very recent, 0.0 is old (> 90 days).
     """
-    if not updated_ts:
-        return 0.0
-    age_days = max(0.0, (now_dt - updated_ts).total_seconds() / 86400.0)
-    return max(0.0, 1.0 - (age_days / 90.0))
+    from ledger.retrieval import compute_recency_component
+    return compute_recency_component(updated_ts, now_dt)
