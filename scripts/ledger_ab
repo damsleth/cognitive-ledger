@@ -196,6 +196,22 @@ def build_argument_parser() -> argparse.ArgumentParser:
              "uses ledger_notes_dir from config.yaml. Legacy repo roots that "
              "contain a notes/ subdirectory are also accepted.",
     )
+    parser.add_argument(
+        "--baseline-env",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="Config override for baseline arm (repeatable). "
+             "Example: --baseline-env score_weight_signal=0.0",
+    )
+    parser.add_argument(
+        "--candidate-env",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="Config override for candidate arm (repeatable). "
+             "Example: --candidate-env score_weight_signal=0.15",
+    )
     return parser
 
 
@@ -291,6 +307,23 @@ def run_harness(args: argparse.Namespace) -> int:
     if corpus_dir:
         report["settings"]["corpus"] = str(corpus_dir)
 
+    def _parse_env_overrides(raw: list[str]) -> dict[str, str]:
+        overrides: dict[str, str] = {}
+        for item in raw:
+            if "=" not in item:
+                print(f"warning: ignoring malformed env override (expected KEY=VALUE): {item}", file=sys.stderr)
+                continue
+            key, value = item.split("=", 1)
+            overrides[key.strip()] = value.strip()
+        return overrides
+
+    baseline_env_overrides = _parse_env_overrides(args.baseline_env)
+    candidate_env_overrides = _parse_env_overrides(args.candidate_env)
+    if baseline_env_overrides:
+        report["baseline"]["env_overrides"] = baseline_env_overrides
+    if candidate_env_overrides:
+        report["candidate"]["env_overrides"] = candidate_env_overrides
+
     worktree_paths: list[Path] = []
     temp_worktree_root: Path | None = None
 
@@ -316,6 +349,7 @@ def run_harness(args: argparse.Namespace) -> int:
                 embed_model=baseline_embed_model,
                 side_label="baseline",
                 corpus_dir=corpus_dir,
+                env_overrides=baseline_env_overrides or None,
             )
             direct_probe_candidate = run_probe_for_side(
                 repo_root,
@@ -330,6 +364,7 @@ def run_harness(args: argparse.Namespace) -> int:
                 embed_model=candidate_embed_model,
                 side_label="candidate",
                 corpus_dir=corpus_dir,
+                env_overrides=candidate_env_overrides or None,
             )
             return finalize_direct_probe_report(
                 report=report,
@@ -361,6 +396,7 @@ def run_harness(args: argparse.Namespace) -> int:
                 embed_model=baseline_embed_model,
                 side_label="baseline",
                 corpus_dir=corpus_dir,
+                env_overrides=baseline_env_overrides or None,
             )
             direct_probe_candidate = run_probe_for_side(
                 repo_root,
@@ -375,6 +411,7 @@ def run_harness(args: argparse.Namespace) -> int:
                 embed_model=candidate_embed_model,
                 side_label="candidate",
                 corpus_dir=corpus_dir,
+                env_overrides=candidate_env_overrides or None,
             )
             return finalize_direct_probe_report(
                 report=report,
@@ -444,6 +481,7 @@ def run_harness(args: argparse.Namespace) -> int:
             embed_model=baseline_embed_model,
             side_label="baseline",
             corpus_dir=corpus_dir,
+            env_overrides=baseline_env_overrides or None,
         )
         candidate_probe = run_probe_for_side(
             repo_root,
@@ -458,6 +496,7 @@ def run_harness(args: argparse.Namespace) -> int:
             embed_model=candidate_embed_model,
             side_label="candidate",
             corpus_dir=corpus_dir,
+            env_overrides=candidate_env_overrides or None,
         )
 
         baseline_quality = baseline_probe["quality"]
