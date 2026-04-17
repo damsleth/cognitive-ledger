@@ -137,11 +137,13 @@ Three detail levels let agents control the cost/detail tradeoff:
 ./scripts/ledger context --format boot                    # session boot payload
 ```
 
-### Semantic search (optional)
+### Semantic search (recommended)
+
+Build the embedding index to activate `semantic_hybrid` (the default retrieval mode). Without this, queries fall back to `precomputed_index`.
 
 ```bash
 ./scripts/ledger embed build --target ledger --backend local --model TaylorAI/bge-micro-v2
-./scripts/ledger query "calendar constraints" --retrieval-mode semantic_hybrid --embed-backend local
+./scripts/ledger embed status --target ledger    # verify index exists
 ```
 
 ### Eval and A/B testing
@@ -158,15 +160,15 @@ All modes were benchmarked against `legacy` (5 runs each, same corpus). `precomp
 
 | Mode | MRR | hit@1 | hit@k | p95 (ms) | Decision | Status |
 |---|---|---|---|---|---|---|
-| **semantic_hybrid** | **0.830** | **0.733** | **0.933** | 2.4 | beneficial (+0.108 MRR) | available (requires embeddings) |
-| **precomputed_index** | 0.726 | 0.578 | 0.867 | 6.1 | beneficial (+0.004 MRR) | **default** |
+| **semantic_hybrid** | **0.830** | **0.733** | **0.933** | 2.4 | beneficial (+0.108 MRR) | **default** (falls back to precomputed_index without embeddings) |
+| precomputed_index | 0.726 | 0.578 | 0.867 | 6.1 | beneficial (+0.004 MRR) | fallback default |
 | progressive_disclosure | 0.725 | 0.578 | 0.867 | 7.3 | beneficial (+0.004 MRR) | available |
 | two_stage | 0.725 | 0.578 | 0.867 | 7.7 | beneficial (+0.004 MRR) | available |
 | scope_type_prefilter | 0.726 | 0.578 | 0.867 | 40.5 | beneficial (+0.004 MRR) | available (slow) |
 | legacy | 0.722 | 0.578 | 0.867 | 5.0 | baseline | available |
 | compressed_attention | 0.720 | 0.578 | 0.844 | 4.8 | **regression** (-0.022 hit@k) | **removed** |
 
-`semantic_hybrid` dominates every quality metric (+15.6% hit@1, +6.7% hit@k, +10.8% MRR vs legacy) and is also the fastest at query time (2.4ms p95) because scoring uses precomputed embeddings. It requires a one-time `ledger embed build` step. `precomputed_index` is the default for lexical-only setups that don't want the embedding dependency.
+`semantic_hybrid` is the default. It dominates every quality metric (+15.6% hit@1, +6.7% hit@k, +10.8% MRR vs legacy) and is also the fastest at query time (2.4ms p95) because scoring uses precomputed embeddings. It requires a one-time `ledger embed build` step - without it, queries gracefully fall back to `precomputed_index` (best lexical mode).
 
 Override the default with `--retrieval-mode <mode>`, `LEDGER_RETRIEVAL_MODE` env var, or `retrieval_mode` in `config.yaml`.
 
