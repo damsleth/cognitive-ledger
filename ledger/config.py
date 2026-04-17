@@ -405,13 +405,13 @@ class LedgerConfig:
     retrieval_modes: tuple[str, ...] = (
         "legacy",
         "two_stage",
-        "compressed_attention",
         "scope_type_prefilter",
         "precomputed_index",
         "progressive_disclosure",
         "semantic_hybrid",
     )
-    """Available retrieval modes."""
+    """Available retrieval modes. Default: precomputed_index (best MRR + fast).
+    compressed_attention was removed after A/B testing showed hit@k regression."""
 
     embed_backends: tuple[str, ...] = ("local", "openai")
     """Available embedding backends."""
