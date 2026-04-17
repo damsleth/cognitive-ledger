@@ -12,7 +12,7 @@ from ledger.config import get_config
 from ledger.layout import logical_path
 from ledger.notes import get_notes
 from ledger.parsing import parse_timestamp, shorten
-from ledger.retrieval import canonical_scope
+from ledger.retrieval import canonical_scope, compute_recency_component
 
 
 SCOPES = ("personal", "work", "dev")
@@ -60,15 +60,8 @@ def source_weight(source: str | None) -> float:
     return 0.5
 
 
-def recency_score(updated_ts: dt.datetime | None, now_dt: dt.datetime) -> float:
-    if not updated_ts:
-        return 0.0
-    age_days = max(0.0, (now_dt - updated_ts).total_seconds() / 86400.0)
-    return max(0.0, 1.0 - (age_days / 90.0))
-
-
 def note_score(item: ContextProfileItem, now_dt: dt.datetime) -> float:
-    recency = recency_score(item.updated_ts, now_dt)
+    recency = compute_recency_component(item.updated_ts, now_dt)
     return (0.55 * recency) + (0.25 * item.confidence) + (0.20 * source_weight(item.source))
 
 
