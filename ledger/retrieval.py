@@ -189,10 +189,10 @@ def resolve_retrieval_mode(retrieval_mode: str | None) -> str:
 
     config = get_config()
     if retrieval_mode is None:
-        retrieval_mode = os.getenv("LEDGER_RETRIEVAL_MODE", "precomputed_index")
-    mode = str(retrieval_mode or "").strip().lower() or "precomputed_index"
+        retrieval_mode = os.getenv("LEDGER_RETRIEVAL_MODE", "semantic_hybrid")
+    mode = str(retrieval_mode or "").strip().lower() or "semantic_hybrid"
     if mode not in config.retrieval_modes:
-        return "precomputed_index"
+        return "semantic_hybrid"
     return mode
 
 
