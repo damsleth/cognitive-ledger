@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-04-18
+
+### Fixed
+- **`related_to_text()` crash** - function called `build_candidate_index()` and `score_candidate()` with wrong signatures, causing TypeError on any call. Source ingest pipeline and Obsidian `related` command were non-functional.
+- **Semantic hybrid weights ignored config** - `rank_query_semantic_hybrid()` hardcoded weights (0.55, 0.30, 0.10, 0.05) instead of reading `config.semantic_weight_*` fields. Tuning via config.yaml or A/B harness env overrides now takes effect.
+- **`reset_embeddings_cache()`** - added missing cache reset function for `_EMBEDDINGS_MODULE_CACHE` in `semantic.py`, matching the pattern of `clear_candidate_cache()` for test isolation.
+
+### Changed
+- **Deduplicated `canonical_scope()`** - removed identical copy in `context.py`, now imports from `retrieval.py` (the canonical location).
+- **Consolidated recency score** - three identical 90-day linear decay implementations (in `retrieval.py`, `context.py`, `notes/__init__.py`) consolidated to single source in `retrieval.py`.
+- **Removed dead `compressed_attention` code** - ~105 lines of unreachable code removed from `retrieval.py` after mode was already removed from `retrieval_modes`. AGENTS.md modes list updated to match.
+- **Removed redundant local `import os`** in `retrieval.py` (already imported at module level).
+
+### Added
+- **Tests for `related_to_text()` and ingest pipeline** - 19 new tests covering the previously untested source ingest pipeline and related-text retrieval function.
+
 ## 2026-04-17
 
 ### Changed
