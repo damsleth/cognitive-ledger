@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-04-17
+
+### Changed
+- **Default retrieval mode is now `precomputed_index`** - A/B tested all six lexical modes against `legacy`. `precomputed_index` has the best MRR (0.726) at 6.1ms p95 query latency. Full results table in README.
+- **Removed `compressed_attention` mode** - Only mode that regressed on hit@k (-0.022). Code left in place for research but removed from available modes list.
+- README updated with A/B results table, three-layer query docs, and privacy fences section
+- `config.yaml` default changed from `legacy` to `precomputed_index`
+
 ## 2026-04-16
 
 ### Added
@@ -8,7 +16,7 @@
 - **Activity type on timeline** - optional `activity_type` field on timeline JSONL entries (decision, bugfix, feature, refactor, discovery, change). Backward compatible - omitted when empty, not in markdown format.
 - **Three-layer retrieval UX** - `--view index|context|detail` flag on `ledger query`. Index (~20-30 tokens/result) for scanning, context (default, ~80-120 tokens) for reasoning, detail (~200-1000 tokens) for full bodies. Agents start compact and drill into what they need.
 - **Session wrap-up template** - structured 5-question prompt in `/notes` skill for surfacing durable artifacts at session end (task, explored, discovered, completed, still open).
-- A/B baseline results for retrieval modes: `progressive_disclosure` beneficial (MRR +0.004), `compressed_attention` regression, `precomputed_index` 6x faster with quality tied.
+- A/B baseline results for retrieval modes: full pairwise matrix across 10 experiments.
 
 ### Changed
 - `schema.yaml` - added `activity_types` enum for timeline entries

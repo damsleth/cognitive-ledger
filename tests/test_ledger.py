@@ -821,28 +821,26 @@ class LedgerIntegrationTests(unittest.TestCase):
         self.assertIsNotNone(payload_get(payload, "shortlist_size"))
         self.assertLessEqual(payload_get(payload, "shortlist_size"), payload_get(payload, "candidate_pool_size"))
 
-    def test_query_reports_compressed_attention_metadata(self):
+    def test_query_reports_precomputed_index_metadata(self):
         payload = self.ledger.rank_query(
             "What should I do next for release?",
             scope="dev",
             limit=8,
-            retrieval_mode="compressed_attention",
+            retrieval_mode="precomputed_index",
         )
-        self.assertEqual(payload_get(payload, "retrieval_mode"), "compressed_attention")
+        self.assertEqual(payload_get(payload, "retrieval_mode"), "precomputed_index")
         self.assertIsNotNone(payload_get(payload, "candidate_pool_size"))
         self.assertIsNotNone(payload_get(payload, "shortlist_size"))
         self.assertLessEqual(payload_get(payload, "shortlist_size"), payload_get(payload, "candidate_pool_size"))
 
-    def test_query_compressed_attention_shortlists_eval_limit(self):
+    def test_query_precomputed_index_shortlists_eval_limit(self):
         payload = self.ledger.rank_query(
             "What should I do next for release?",
             scope="dev",
             limit=50,
-            retrieval_mode="compressed_attention",
+            retrieval_mode="precomputed_index",
         )
         self.assertLessEqual(payload_get(payload, "shortlist_size"), payload_get(payload, "candidate_pool_size"))
-        if payload_get(payload, "candidate_pool_size") > self.ledger.ATTENTION_SHORTLIST_MAX_CANDIDATES:
-            self.assertLess(payload_get(payload, "shortlist_size"), payload_get(payload, "candidate_pool_size"))
 
     def test_query_scope_type_prefilter_reports_prefilter_size(self):
         payload = self.ledger.rank_query(
