@@ -156,17 +156,17 @@ Three detail levels let agents control the cost/detail tradeoff:
 
 All modes were benchmarked against `legacy` (5 runs each, same corpus). `precomputed_index` is now the default.
 
-| Mode | MRR | hit@k | p95 (ms) | Decision | Status |
-|---|---|---|---|---|---|
-| **precomputed_index** | 0.726 | 0.867 | 6.1 | beneficial (+0.004 MRR) | **default** |
-| progressive_disclosure | 0.725 | 0.867 | 7.3 | beneficial (+0.004 MRR) | available |
-| two_stage | 0.725 | 0.867 | 7.7 | beneficial (+0.004 MRR) | available |
-| scope_type_prefilter | 0.726 | 0.867 | 40.5 | beneficial (+0.004 MRR) | available (slow) |
-| legacy | 0.722 | 0.867 | 5.0 | baseline | available |
-| semantic_hybrid | - | - | - | blocked (torch/numpy) | available when deps fixed |
-| compressed_attention | 0.720 | 0.844 | 4.8 | **regression** (-0.022 hit@k) | **removed** |
+| Mode | MRR | hit@1 | hit@k | p95 (ms) | Decision | Status |
+|---|---|---|---|---|---|---|
+| **semantic_hybrid** | **0.830** | **0.733** | **0.933** | 2.4 | beneficial (+0.108 MRR) | available (requires embeddings) |
+| **precomputed_index** | 0.726 | 0.578 | 0.867 | 6.1 | beneficial (+0.004 MRR) | **default** |
+| progressive_disclosure | 0.725 | 0.578 | 0.867 | 7.3 | beneficial (+0.004 MRR) | available |
+| two_stage | 0.725 | 0.578 | 0.867 | 7.7 | beneficial (+0.004 MRR) | available |
+| scope_type_prefilter | 0.726 | 0.578 | 0.867 | 40.5 | beneficial (+0.004 MRR) | available (slow) |
+| legacy | 0.722 | 0.578 | 0.867 | 5.0 | baseline | available |
+| compressed_attention | 0.720 | 0.578 | 0.844 | 4.8 | **regression** (-0.022 hit@k) | **removed** |
 
-Cross-mode findings: `precomputed_index` beats `two_stage` on both MRR (+0.001) and latency (7.5ms vs 12ms). `progressive_disclosure` adds disclosure levels for the three-layer UX at marginal quality cost vs `precomputed_index`.
+`semantic_hybrid` dominates every quality metric (+15.6% hit@1, +6.7% hit@k, +10.8% MRR vs legacy) and is also the fastest at query time (2.4ms p95) because scoring uses precomputed embeddings. It requires a one-time `ledger embed build` step. `precomputed_index` is the default for lexical-only setups that don't want the embedding dependency.
 
 Override the default with `--retrieval-mode <mode>`, `LEDGER_RETRIEVAL_MODE` env var, or `retrieval_mode` in `config.yaml`.
 

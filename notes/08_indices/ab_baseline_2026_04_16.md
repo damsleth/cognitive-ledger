@@ -11,7 +11,7 @@ Full matrix of retrieval mode comparisons on the current corpus (HEAD, 5 runs ea
 | scope_type_prefilter | beneficial | +0.004 | 0 | 5.0 -> 40.5 |
 | precomputed_index | beneficial | +0.004 | 0 | 4.6 -> 6.1 |
 | progressive_disclosure | beneficial | +0.004 | 0 | 5.3 -> 7.3 |
-| semantic_hybrid | blocked | - | - | numpy/torch conflict |
+| semantic_hybrid | **beneficial** | **+0.108** | **+0.067** | 5.0 -> 2.4 |
 
 ## Cross-Mode (Top Performers)
 
@@ -32,15 +32,16 @@ Full matrix of retrieval mode comparisons on the current corpus (HEAD, 5 runs ea
 ## Rankings
 
 By MRR (highest first):
-1. **precomputed_index** - 0.7259 (best quality, fast)
-2. **scope_type_prefilter** - 0.7259 (same quality, slow without precompute)
-3. **two_stage** - 0.7254
-4. **progressive_disclosure** - 0.7254
-5. **legacy** - 0.7217
-6. **compressed_attention** - 0.7198 (regression, do not use)
+1. **semantic_hybrid** - 0.8296 (best quality AND fastest query, requires embeddings)
+2. **precomputed_index** - 0.7259 (best lexical, fast)
+3. **scope_type_prefilter** - 0.7259 (same quality, slow without precompute)
+4. **two_stage** - 0.7254
+5. **progressive_disclosure** - 0.7254
+6. **legacy** - 0.7217
+7. **compressed_attention** - 0.7198 (regression, removed)
 
 By latency (fastest first):
-1. **compressed_attention** - ~4.8ms (but quality regression)
+1. **semantic_hybrid** - ~2.4ms (precomputed embeddings)
 2. **legacy** - ~5.0ms
 3. **precomputed_index** - ~6.1ms
 4. **progressive_disclosure** - ~7.3ms
@@ -49,8 +50,7 @@ By latency (fastest first):
 
 ## Recommendations
 
-1. **Default mode: `precomputed_index`** - Best MRR, second-fastest latency. Clear winner.
-2. **Presentation layer: `progressive_disclosure`** - Same MRR as two_stage, adds disclosure levels for the three-layer UX.
-3. **Avoid: `compressed_attention`** - Only mode that regresses on hit@k.
-4. **Avoid: `scope_type_prefilter` standalone** - Same quality as precomputed_index but 7x slower. Only useful as a pipeline stage, not as the top-level mode.
-5. **Fix: `semantic_hybrid`** - Blocked on torch/numpy version. Upgrade torch>=2.4 and numpy<2.
+1. **Best overall: `semantic_hybrid`** - Dominates every metric. +10.8% MRR, +15.6% hit@1, +6.7% hit@k vs legacy. Fastest at query time (2.4ms). Requires one-time `ledger embed build`.
+2. **Default lexical: `precomputed_index`** - Best lexical MRR, second-fastest. No embedding dependency.
+3. **Presentation layer: `progressive_disclosure`** - Same MRR as two_stage, adds disclosure levels for the three-layer UX.
+4. **Removed: `compressed_attention`** - Only mode that regresses on hit@k.
