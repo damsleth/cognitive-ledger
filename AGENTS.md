@@ -101,7 +101,7 @@ ledger-obsidian daemon start|status|stop --vault /path/to/vault   # macOS
 Signal types: `retrieval_hit`, `retrieval_miss`, `correction`, `affirmation`,
 `stale_flag`, `preference_applied`, `rating`.
 
-`<mode>`: `legacy`, `two_stage`, `compressed_attention`, `scope_type_prefilter`, `precomputed_index`, `progressive_disclosure`, `semantic_hybrid`.
+`<mode>`: `legacy`, `two_stage`, `scope_type_prefilter`, `precomputed_index`, `progressive_disclosure`, `semantic_hybrid`.
 
 ### A/B Testing
 
