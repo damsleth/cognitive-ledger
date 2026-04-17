@@ -801,113 +801,6 @@ def shortlist_candidates(
     return [item[1] for item in top_scored]
 
 
-def compressed_attention_candidate_score(
-    candidate: CandidateLike,
-    query_tokens: set[str],
-    query_scope: str,
-    history_mode: bool,
-    loop_mode: bool,
-    preference_mode: bool,
-) -> tuple[float, dict[str, float | int]]:
-    """Cheap score variant that includes attention-token overlap."""
-    attention_tokens = set(_candidate_value(candidate, "attention_tokens", set()) or set())
-    note_tokens = set(_candidate_value(candidate, "note_tokens", set()) or set())
-    tag_tokens = set(_candidate_value(candidate, "tag_tokens", set()) or set())
-    candidate_type = str(_candidate_value(candidate, "type", "") or "")
-    status = str(_candidate_value(candidate, "status", "") or "")
-
-    if query_tokens:
-        attention_overlap_count = len(attention_tokens & query_tokens)
-        attention_overlap = attention_overlap_count / len(query_tokens)
-        lexical_overlap_count = len(note_tokens & query_tokens)
-        lexical_match = lexical_overlap_count / len(query_tokens)
-        tag_overlap_count = len(tag_tokens & query_tokens)
-        tag_overlap = tag_overlap_count / len(query_tokens)
-    else:
-        attention_overlap_count = 0
-        attention_overlap = 0.0
-        lexical_overlap_count = 0
-        lexical_match = 0.0
-        tag_overlap_count = 0
-        tag_overlap = 0.0
-
-    scope_match = 1.0 if scope_matches(str(_candidate_value(candidate, "scope", "") or ""), query_scope) else 0.0
-    score = (0.55 * attention_overlap) + (0.20 * lexical_match) + (0.15 * tag_overlap) + (0.10 * scope_match)
-
-    if query_scope != "all":
-        score += 0.04 if scope_match >= 1.0 else -0.04
-    if candidate_type == "loop" and status == "closed" and not history_mode:
-        score -= 0.05
-    if history_mode and candidate_type == "loop" and status == "closed":
-        score += 0.06
-    if loop_mode and candidate_type == "loop" and status == "open":
-        score += 0.05
-    if preference_mode and candidate_type == "pref":
-        score += 0.05
-
-    return score, {
-        "attention_overlap_count": attention_overlap_count,
-        "lexical_overlap_count": lexical_overlap_count,
-        "tag_overlap_count": tag_overlap_count,
-        "scope_match": scope_match,
-    }
-
-
-def shortlist_attention_candidates(
-    candidates: list[CandidateLike],
-    query_tokens: set[str],
-    query_scope: str,
-    history_mode: bool,
-    loop_mode: bool,
-    preference_mode: bool,
-    limit: int,
-) -> list[CandidateLike]:
-    """Shortlist candidate set using compressed-attention coarse score."""
-    if not candidates:
-        return []
-
-    shortlist_target = min(
-        len(candidates),
-        max(
-            _cfg().attention_shortlist_min,
-            min(
-                _cfg().attention_shortlist_max,
-                max(1, limit) * _cfg().attention_shortlist_limit_multiplier,
-            ),
-        ),
-    )
-
-    scored = []
-    for candidate in candidates:
-        coarse_score, coarse_components = compressed_attention_candidate_score(
-            candidate,
-            query_tokens,
-            query_scope,
-            history_mode,
-            loop_mode,
-            preference_mode,
-        )
-
-        if (
-            query_scope == "all"
-            and coarse_components["attention_overlap_count"] == 0
-            and coarse_components["lexical_overlap_count"] == 0
-            and coarse_components["tag_overlap_count"] == 0
-        ):
-            continue
-        if query_scope == "all" and coarse_score <= 0:
-            continue
-
-        scored.append((coarse_score, candidate))
-
-    top_scored = heapq.nlargest(
-        shortlist_target,
-        scored,
-        key=lambda item: (item[0], *_candidate_sort_key(item[1])),
-    )
-    return [item[1] for item in top_scored]
-
-
 def has_token_overlap(candidate: CandidateLike, query_tokens: set[str]) -> bool:
     """Whether candidate has overlap with note/tag tokens."""
     if not query_tokens:
@@ -1196,7 +1089,6 @@ def rank_lexical(
     now_dt = now_dt or now_utc()
     mode = resolve_retrieval_mode(retrieval_mode)
     two_stage_active = mode in {"legacy", "two_stage"}
-    compressed_attention_active = mode in {"legacy", "compressed_attention"}
     scope_prefilter_active = mode in {"legacy", "scope_type_prefilter"}
     precomputed_index_active = mode in {"legacy", "precomputed_index"}
     progressive_disclosure_active = mode in {"legacy", "progressive_disclosure"}
@@ -1236,7 +1128,7 @@ def rank_lexical(
     else:
         candidates = build_candidates(
             use_cache=(
-                mode in {"two_stage", "compressed_attention", "progressive_disclosure"}
+                mode in {"two_stage", "progressive_disclosure"}
             )
             or two_stage_active
         )
@@ -1255,17 +1147,7 @@ def rank_lexical(
         )
     t_prefilter = time.perf_counter()
 
-    if compressed_attention_active and limit <= _cfg().attention_shortlist_max:
-        shortlisted = shortlist_attention_candidates(
-            prefiltered_candidates,
-            expanded_tokens,
-            scope,
-            history_mode,
-            loop_mode,
-            preference_mode,
-            limit=limit,
-        )
-    elif two_stage_active and limit <= _cfg().shortlist_max_candidates:
+    if two_stage_active and limit <= _cfg().shortlist_max_candidates:
         shortlisted = shortlist_candidates(
             prefiltered_candidates,
             expanded_tokens,
@@ -1401,8 +1283,6 @@ __all__ = [
     "retrieve_candidates_from_index",
     "coarse_candidate_score",
     "shortlist_candidates",
-    "compressed_attention_candidate_score",
-    "shortlist_attention_candidates",
     "has_token_overlap",
     "compute_bm25_scores",
     "prefilter_candidates_by_scope_and_type",

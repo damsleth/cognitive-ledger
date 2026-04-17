@@ -446,43 +446,6 @@ class LedgerUnitTests(unittest.TestCase):
         self.assertIn("/tmp/match.md", shortlisted_paths)
         self.assertNotIn("/tmp/miss.md", shortlisted_paths)
 
-    def test_shortlist_attention_candidates_reduces_candidate_pool(self):
-        candidates = []
-        for idx in range(120):
-            candidates.append(
-                {
-                    "path": f"/tmp/path_{idx}.md",
-                    "updated": f"2026-02-10T00:{idx % 60:02d}:00Z",
-                    "note_tokens": {"target", f"token{idx}"},
-                    "attention_tokens": {"target", f"capsule{idx}"},
-                    "tag_tokens": set(),
-                    "scope": "dev",
-                    "type": "fact",
-                    "status": "",
-                }
-            )
-
-        shortlist = self.ledger.shortlist_attention_candidates(
-            candidates=candidates,
-            query_tokens={"target"},
-            query_scope="all",
-            history_mode=False,
-            loop_mode=False,
-            preference_mode=False,
-            limit=50,
-        )
-        expected_len = min(
-            len(candidates),
-            max(
-                self.ledger.ATTENTION_SHORTLIST_MIN_CANDIDATES,
-                min(
-                    self.ledger.ATTENTION_SHORTLIST_MAX_CANDIDATES,
-                    max(1, 50) * self.ledger.ATTENTION_SHORTLIST_LIMIT_MULTIPLIER,
-                ),
-            ),
-        )
-        self.assertEqual(len(shortlist), expected_len)
-
     def test_scope_type_prefilter_filters_non_overlapping_intent_noise(self):
         loop_candidate = {
             "path": "/tmp/loop.md",
@@ -898,7 +861,7 @@ class LedgerIntegrationTests(unittest.TestCase):
         payload = self.ledger.rank_query("What should I do next for release?", scope="dev", limit=8)
         self.assertEqual(payload_get(payload, "retrieval_mode"), "legacy")
         self.assertLessEqual(payload_get(payload, "shortlist_size"), payload_get(payload, "candidate_pool_size"))
-        if payload_get(payload, "candidate_pool_size") > self.ledger.ATTENTION_SHORTLIST_MAX_CANDIDATES:
+        if payload_get(payload, "candidate_pool_size") > self.ledger.SHORTLIST_MAX_CANDIDATES:
             self.assertLess(payload_get(payload, "shortlist_size"), payload_get(payload, "candidate_pool_size"))
 
     def test_query_legacy_keeps_reasons_for_large_limit(self):
