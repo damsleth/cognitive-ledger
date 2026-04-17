@@ -3,8 +3,7 @@
 ## 2026-04-17
 
 ### Changed
-- **Default retrieval mode is now `precomputed_index`** - A/B tested all modes. `precomputed_index` has the best lexical MRR (0.726) at 6.1ms p95. Full results table in README.
-- **`semantic_hybrid` unblocked and benchmarked** - Recreated venv with arm64 Python 3.12 to get torch>=2.4. Results: MRR 0.830, hit@1 0.733, hit@k 0.933 - dominates all lexical modes by a wide margin (+10.8% MRR vs legacy). Fastest query latency at 2.4ms p95 (precomputed embeddings).
+- **Default retrieval mode is now `semantic_hybrid`** - A/B tested all modes. `semantic_hybrid` dominates: MRR 0.830 (+10.8%), hit@1 0.733 (+15.6%), hit@k 0.933 (+6.7%) vs legacy, and fastest at 2.4ms p95 (precomputed embeddings). Falls back gracefully to `precomputed_index` (best lexical mode, MRR 0.726) when no embedding index is built.
 - **Removed `compressed_attention` mode** - Only mode that regressed on hit@k (-0.022). Code left in place for research but removed from available modes list.
 - README updated with complete A/B results table, three-layer query docs, and privacy fences section
 

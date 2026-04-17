@@ -331,10 +331,10 @@ def rank_query_semantic_hybrid(
                 limit=limit,
                 aliases_path=_aliases_path(aliases_path),
                 now_dt=now_dt,
-                retrieval_mode="legacy",
+                retrieval_mode="precomputed_index",
             )
             fallback.retrieval_mode = "semantic_hybrid"
-            fallback.effective_retrieval_mode = "legacy"
+            fallback.effective_retrieval_mode = "precomputed_index"
             fallback.semantic = {
                 "available": False,
                 "reason": "missing_index",
