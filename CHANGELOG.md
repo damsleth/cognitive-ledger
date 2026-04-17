@@ -3,10 +3,13 @@
 ## 2026-04-17
 
 ### Changed
-- **Default retrieval mode is now `precomputed_index`** - A/B tested all six lexical modes against `legacy`. `precomputed_index` has the best MRR (0.726) at 6.1ms p95 query latency. Full results table in README.
+- **Default retrieval mode is now `precomputed_index`** - A/B tested all modes. `precomputed_index` has the best lexical MRR (0.726) at 6.1ms p95. Full results table in README.
+- **`semantic_hybrid` unblocked and benchmarked** - Recreated venv with arm64 Python 3.12 to get torch>=2.4. Results: MRR 0.830, hit@1 0.733, hit@k 0.933 - dominates all lexical modes by a wide margin (+10.8% MRR vs legacy). Fastest query latency at 2.4ms p95 (precomputed embeddings).
 - **Removed `compressed_attention` mode** - Only mode that regressed on hit@k (-0.022). Code left in place for research but removed from available modes list.
-- README updated with A/B results table, three-layer query docs, and privacy fences section
-- `config.yaml` default changed from `legacy` to `precomputed_index`
+- README updated with complete A/B results table, three-layer query docs, and privacy fences section
+
+### Fixed
+- **Semantic hybrid dependency blocker** - The venv was using x86_64 Python (Rosetta), which only has torch 2.2.x wheels. PyTorch stopped publishing macOS x86_64 wheels after 2.2.x, and sentence-transformers requires torch>=2.4. Fix: recreate venv with arm64 Python (`/opt/homebrew/bin/python3.12`). Installed: torch 2.11.0, numpy 2.4.4, sentence-transformers 5.4.1, transformers 5.5.4.
 
 ## 2026-04-16
 
