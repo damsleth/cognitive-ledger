@@ -300,6 +300,7 @@ def rank_query_semantic_hybrid(
     resolve_embed_model: Callable[[str, str | None], str],
 ) -> dict[str, Any]:
     started = time.perf_counter()
+    config = get_config()
     now_dt = now_dt or now_utc()
     aliases = load_aliases(_aliases_path(aliases_path))
     query_tokens = tokenize(query)
@@ -356,10 +357,10 @@ def rank_query_semantic_hybrid(
         recency_component = compute_recency_component(result_get(candidate, "updated_ts"), now_dt)
 
         final_score = (
-            (0.55 * semantic_component)
-            + (0.30 * lexical_score)
-            + (0.10 * scope_component)
-            + (0.05 * recency_component)
+            (config.semantic_weight_vector * semantic_component)
+            + (config.semantic_weight_lexical * lexical_score)
+            + (config.semantic_weight_scope * scope_component)
+            + (config.semantic_weight_recency * recency_component)
         )
         final_score = max(0.0, min(1.0, final_score))
 
