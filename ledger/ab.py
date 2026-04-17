@@ -515,6 +515,7 @@ def run_probe_for_side(
     embed_model: str | None,
     side_label: str,
     corpus_dir: "Path | None" = None,
+    env_overrides: "dict[str, str] | None" = None,
 ) -> dict[str, Any]:
     probe_payload = {
         "worktree": str(worktree_root),
@@ -529,6 +530,8 @@ def run_probe_for_side(
     }
     if corpus_dir is not None:
         probe_payload["corpus_dir"] = str(corpus_dir)
+    if env_overrides:
+        probe_payload["env_overrides"] = env_overrides
     process = subprocess.run(
         [repo_python(repo_root), "-m", "ledger.ab_probe", json.dumps(probe_payload)],
         cwd=str(worktree_root),
@@ -767,6 +770,20 @@ def build_markdown_report(payload: dict[str, Any]) -> str:
         f"| Candidate | `{candidate.get('ref', '')}` | `{candidate.get('commit', '')}` | `{candidate.get('retrieval_mode', 'legacy')}` | `{candidate_embed}` |"
     )
     lines.append("")
+
+    baseline_env = baseline.get("env_overrides", {})
+    candidate_env = candidate.get("env_overrides", {})
+    if baseline_env or candidate_env:
+        lines.append("## Config Overrides")
+        lines.append("")
+        all_keys = sorted(set(list(baseline_env.keys()) + list(candidate_env.keys())))
+        lines.append("| Key | Baseline | Candidate |")
+        lines.append("| --- | --- | --- |")
+        for key in all_keys:
+            b_val = baseline_env.get(key, "(default)")
+            c_val = candidate_env.get(key, "(default)")
+            lines.append(f"| `{key}` | `{b_val}` | `{c_val}` |")
+        lines.append("")
 
     if baseline.get("quality") and candidate.get("quality"):
         lines.append("## Quality")

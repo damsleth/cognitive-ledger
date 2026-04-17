@@ -43,6 +43,27 @@ def main() -> int:
     else:
         cases_path = str((worktree / payload["cases_rel"]).resolve())
 
+    # Apply config overrides before any queries run.
+    # Keys are config field names (e.g. score_weight_signal=0.15).
+    env_overrides = payload.get("env_overrides", {})
+    if env_overrides:
+        from ledger.config import reset_config
+        reset_config()
+        cfg = get_config()
+        for key, value in env_overrides.items():
+            if not hasattr(cfg, key):
+                print(f"warning: unknown config key: {key}", file=sys.stderr)
+                continue
+            current = getattr(cfg, key)
+            if isinstance(current, float):
+                setattr(cfg, key, float(value))
+            elif isinstance(current, int):
+                setattr(cfg, key, int(value))
+            elif isinstance(current, str):
+                setattr(cfg, key, str(value))
+            elif isinstance(current, bool):
+                setattr(cfg, key, str(value).lower() in ("true", "1", "yes"))
+
     ledger_script = ab_lib.load_module_from_script(
         worktree / "scripts" / "ledger",
         "ledger_side_module",
