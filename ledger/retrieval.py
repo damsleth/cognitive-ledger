@@ -1441,27 +1441,26 @@ def related_to_text(
     if not query_tokens:
         return []
 
-    candidates = build_candidates()
-    if not candidates:
+    index = build_candidate_index(use_cache=True)
+    if not index.get("candidates"):
         return []
 
-    index = build_candidate_index(candidates)
-    shortlisted = retrieve_candidates_from_index(index, query_tokens)
-
-    if scope != "all":
-        shortlisted = [c for c in shortlisted if scope_matches(c.scope, scope)]
+    shortlisted = retrieve_candidates_from_index(index, query_tokens, scope)
 
     now = now_utc()
     scored: list[ScoredResult] = []
     for candidate in shortlisted:
-        result = score_candidate(
+        sc, reasons, components = score_candidate(
             candidate,
             query_tokens,
-            aliases={},
-            scope=scope,
-            now_dt=now,
+            scope,
+            False,
+            False,
+            False,
+            now,
+            [],
         )
-        scored.append(result)
+        scored.append(_scored_result(candidate, sc, reasons, components))
 
     scored.sort(key=lambda r: r.score, reverse=True)
 
