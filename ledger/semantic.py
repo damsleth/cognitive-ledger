@@ -34,6 +34,12 @@ class SourceSearchResult:
 _EMBEDDINGS_MODULE_CACHE: Any | None = None
 
 
+def reset_embeddings_cache() -> None:
+    """Clear the cached embeddings module for test isolation."""
+    global _EMBEDDINGS_MODULE_CACHE
+    _EMBEDDINGS_MODULE_CACHE = None
+
+
 def load_embeddings_module(scripts_dir: str | Path | None = None) -> Any:
     global _EMBEDDINGS_MODULE_CACHE
     if _EMBEDDINGS_MODULE_CACHE is not None:
