@@ -26,6 +26,42 @@ def load_ledger_ab_module():
     return module
 
 
+def write_smoke_corpus(root: Path) -> None:
+    for directory in (
+        "02_facts",
+        "03_preferences",
+        "04_goals",
+        "05_open_loops",
+        "06_concepts",
+        "08_indices",
+    ):
+        (root / directory).mkdir(parents=True, exist_ok=True)
+
+    (root / "02_facts" / "fact__one.md").write_text(
+        "---\n"
+        "created: 2026-01-01T00:00:00Z\n"
+        "updated: 2026-01-01T00:00:00Z\n"
+        "tags: [hello]\n"
+        "confidence: 0.9\n"
+        "source: user\n"
+        "scope: dev\n"
+        "lang: en\n"
+        "---\n\n"
+        "# Fact One\n\n"
+        "## Statement\n\n"
+        "Hello smoke corpus fact.\n",
+        encoding="utf-8",
+    )
+    (root / "08_indices" / "retrieval_eval_cases.yaml").write_text(
+        '- query: "hello smoke corpus"\n'
+        "  id: hello_smoke\n"
+        '  scope: "dev"\n'
+        "  expected_any:\n"
+        '    - "notes/02_facts/fact__one.md"\n',
+        encoding="utf-8",
+    )
+
+
 class LedgerABDecisionTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -456,7 +492,11 @@ class LedgerABCacheResetTests(unittest.TestCase):
 
 class LedgerABSmokeIntegrationTests(unittest.TestCase):
     def test_head_vs_head_smoke(self):
-        with tempfile.TemporaryDirectory() as out_dir:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            corpus_dir = temp_root / "corpus"
+            out_dir = temp_root / "out"
+            write_smoke_corpus(corpus_dir)
             process = subprocess.run(
                 [
                     sys.executable,
@@ -473,8 +513,10 @@ class LedgerABSmokeIntegrationTests(unittest.TestCase):
                     "1",
                     "--query-runs",
                     "1",
+                    "--corpus",
+                    str(corpus_dir),
                     "--out-dir",
-                    out_dir,
+                    str(out_dir),
                 ],
                 cwd=str(ROOT),
                 capture_output=True,
@@ -503,7 +545,11 @@ class LedgerABSmokeIntegrationTests(unittest.TestCase):
             self.assertNotIn("composite_quality_score", payload)
 
     def test_head_vs_head_smoke_with_cold_query(self):
-        with tempfile.TemporaryDirectory() as out_dir:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            corpus_dir = temp_root / "corpus"
+            out_dir = temp_root / "out"
+            write_smoke_corpus(corpus_dir)
             process = subprocess.run(
                 [
                     sys.executable,
@@ -521,8 +567,10 @@ class LedgerABSmokeIntegrationTests(unittest.TestCase):
                     "--query-runs",
                     "1",
                     "--cold-query",
+                    "--corpus",
+                    str(corpus_dir),
                     "--out-dir",
-                    out_dir,
+                    str(out_dir),
                 ],
                 cwd=str(ROOT),
                 capture_output=True,
@@ -536,7 +584,11 @@ class LedgerABSmokeIntegrationTests(unittest.TestCase):
             self.assertTrue(payload["candidate"]["latency"]["query"]["cold_query"])
 
     def test_head_vs_head_smoke_with_runs_shortcut(self):
-        with tempfile.TemporaryDirectory() as out_dir:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            corpus_dir = temp_root / "corpus"
+            out_dir = temp_root / "out"
+            write_smoke_corpus(corpus_dir)
             process = subprocess.run(
                 [
                     sys.executable,
@@ -551,8 +603,10 @@ class LedgerABSmokeIntegrationTests(unittest.TestCase):
                     "legacy",
                     "--runs",
                     "1",
+                    "--corpus",
+                    str(corpus_dir),
                     "--out-dir",
-                    out_dir,
+                    str(out_dir),
                 ],
                 cwd=str(ROOT),
                 capture_output=True,

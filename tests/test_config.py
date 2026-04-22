@@ -37,6 +37,9 @@ class TestLedgerConfig(unittest.TestCase):
         self.assertEqual(config.attention_shortlist_max, 72)
         self.assertEqual(config.detailed_reasons_limit, 20)
         self.assertEqual(config.progressive_rationale_top, 3)
+        self.assertEqual(config.retrieval_mode, "semantic_hybrid")
+        self.assertEqual(config.embed_backend, "local")
+        self.assertIsNone(config.embed_model)
 
     def test_score_weights_sum_to_one(self):
         """Test that lexical score weights sum to approximately 1.0."""
@@ -162,6 +165,47 @@ class TestLedgerConfig(unittest.TestCase):
             self.assertEqual(config.ledger_notes_dir, (root / "corpus").resolve())
             self.assertEqual(config.source_notes_dir, (root / "source").resolve())
 
+    def test_yaml_retrieval_defaults_load(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir) / "ledger"
+            root.mkdir()
+            config_path = root / "config.yaml"
+            config_path.write_text(
+                "\n".join(
+                    [
+                        f"ledger_root: {root}",
+                        "retrieval_mode: precomputed_index",
+                        "embed_backend: openai",
+                        "embed_model: text-embedding-3-small",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            os.environ["LEDGER_ROOT"] = str(root)
+
+            config = LedgerConfig.from_env()
+
+            self.assertEqual(config.retrieval_mode, "precomputed_index")
+            self.assertEqual(config.embed_backend, "openai")
+            self.assertEqual(config.embed_model, "text-embedding-3-small")
+
+    def test_retrieval_mode_env_overrides_yaml(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir) / "ledger"
+            root.mkdir()
+            config_path = root / "config.yaml"
+            config_path.write_text(
+                f"ledger_root: {root}\nretrieval_mode: precomputed_index\n",
+                encoding="utf-8",
+            )
+            os.environ["LEDGER_ROOT"] = str(root)
+            os.environ["LEDGER_RETRIEVAL_MODE"] = "two_stage"
+
+            config = LedgerConfig.from_env()
+
+            self.assertEqual(config.retrieval_mode, "two_stage")
+
     def test_removed_yaml_key_fails_with_migration_error(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir) / "ledger"
@@ -230,6 +274,15 @@ class TestConfigSingleton(unittest.TestCase):
         config = get_config()
 
         self.assertEqual(config.shortlist_min_candidates, 100)
+
+    def test_resolve_retrieval_mode_uses_config_default(self):
+        from ledger.retrieval import resolve_retrieval_mode
+
+        custom = LedgerConfig()
+        custom.retrieval_mode = "precomputed_index"
+        set_config(custom)
+
+        self.assertEqual(resolve_retrieval_mode(None), "precomputed_index")
 
 
 class TestConfigPaths(unittest.TestCase):
