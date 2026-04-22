@@ -55,6 +55,13 @@ def test_rebuild_note_index_writes_entries(tmp_path):
         disk = json.loads(note_index_path.read_text(encoding="utf-8"))
         assert disk["entries"]
         assert disk["inverted"]
+        entry = disk["entries"]["notes/02_facts/fact__one.md"]["candidate"]
+        assert entry["path"] == "notes/02_facts/fact__one.md"
+        assert not Path(entry["path"]).is_absolute()
+
+        candidates = retrieval_mod.build_candidates()
+        assert Path(candidates[0].path).is_absolute()
+        assert candidates[0].rel_path == "notes/02_facts/fact__one.md"
     finally:
         reset_config()
         importlib.reload(retrieval)

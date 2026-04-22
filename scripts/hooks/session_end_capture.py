@@ -83,6 +83,8 @@ def _notes_dirty_paths() -> list[str]:
         normalized = rel.strip().replace("\\", "/")
         if not normalized or normalized.startswith("08_indices/"):
             continue
+        if normalized.endswith(".lock"):
+            continue
         paths.add(f"notes/{normalized}")
     return sorted(paths)
 
@@ -138,7 +140,7 @@ def _write_inbox_note(title: str, content: str, tags: list[str]) -> Path:
     path = inbox_path / f"{slug}.md"
     counter = 1
     while path.exists():
-        path = inbox_dir / f"{slug}_{counter}.md"
+        path = inbox_path / f"{slug}_{counter}.md"
         counter += 1
 
     safe_write_text(path, note_content)

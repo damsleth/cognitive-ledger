@@ -747,7 +747,7 @@ def main():
         "--retrieval-mode",
         choices=_config.retrieval_modes,
         default=resolve_retrieval_mode(None),
-        help="Retrieval strategy (default: legacy; override with LEDGER_RETRIEVAL_MODE)",
+        help="Retrieval strategy (default from config; override with LEDGER_RETRIEVAL_MODE)",
     )
     query_parser.add_argument(
         "--embed-backend",
@@ -757,7 +757,7 @@ def main():
     )
     query_parser.add_argument(
         "--embed-model",
-        default=None,
+        default=_config.embed_model,
         help="Optional embedding model override for semantic_hybrid mode",
     )
     query_parser.add_argument(
@@ -828,7 +828,7 @@ def main():
         "--retrieval-mode",
         choices=_config.retrieval_modes,
         default=resolve_retrieval_mode(None),
-        help="Retrieval strategy used during eval (default: legacy; override with LEDGER_RETRIEVAL_MODE)",
+        help="Retrieval strategy used during eval (default from config; override with LEDGER_RETRIEVAL_MODE)",
     )
     eval_parser.add_argument(
         "--embed-backend",
@@ -838,7 +838,7 @@ def main():
     )
     eval_parser.add_argument(
         "--embed-model",
-        default=None,
+        default=_config.embed_model,
         help="Optional embedding model override for semantic_hybrid mode",
     )
     eval_parser.add_argument("--strict-cases", action="store_true", help="Fail when eval cases violate strict schema/path rules")

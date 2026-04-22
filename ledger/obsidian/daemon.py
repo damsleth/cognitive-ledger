@@ -26,7 +26,9 @@ def daemon_label(config: ObsidianLedgerConfig) -> str:
 
 
 def plist_path(config: ObsidianLedgerConfig) -> Path:
-    return Path.home() / "Library" / "LaunchAgents" / f"{daemon_label(config)}.plist"
+    launch_agents_dir = os.getenv("LEDGER_LAUNCH_AGENTS_DIR")
+    base_dir = Path(launch_agents_dir).expanduser() if launch_agents_dir else Path.home() / "Library" / "LaunchAgents"
+    return base_dir / f"{daemon_label(config)}.plist"
 
 
 def _domain_target() -> str:

@@ -22,6 +22,7 @@ def test_daemon_start_status_stop_with_mocked_launchctl(tmp_path, monkeypatch):
     config.ledger_root.mkdir(parents=True, exist_ok=True)
 
     monkeypatch.setattr("platform.system", lambda: "Darwin")
+    monkeypatch.setenv("LEDGER_LAUNCH_AGENTS_DIR", str(tmp_path / "LaunchAgents"))
 
     calls: list[list[str]] = []
 
