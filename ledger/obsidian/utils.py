@@ -9,6 +9,9 @@ from pathlib import Path
 from typing import Any
 
 from ledger.io import safe_append_line, safe_read_text, safe_write_text
+from ledger.io.safe_write import append_timeline_entry
+from ledger.layout import logical_path
+from ledger.timeline import append_timeline_jsonl
 
 
 TIMELINE_HEADER = """# Timeline
@@ -107,9 +110,35 @@ def ensure_timeline(path: Path) -> None:
 
 
 def append_timeline(path: Path, action: str, rel_path: str, description: str, ts: str | None = None) -> None:
-    ensure_timeline(path)
-    ts_value = ts or now_iso()
-    safe_append_line(path, f"{ts_value} | {action} | {rel_path} | {description}")
+    notes_root = path.parent.parent
+    ledger_root = notes_root.parent
+    normalized_path = rel_path.strip().replace("\\", "/")
+    vault_prefix = f"{ledger_root.name}/notes/"
+    if normalized_path.startswith(vault_prefix):
+        normalized_path = normalized_path[len(ledger_root.name) + 1 :]
+    note_path = logical_path(
+        normalized_path,
+        ledger_root=ledger_root,
+        ledger_notes_dir=notes_root,
+    ).as_posix()
+
+    if ts is not None:
+        ensure_timeline(path)
+        append_timeline_jsonl(
+            path.with_name("timeline.jsonl"),
+            {"ts": ts, "action": action, "path": note_path, "desc": description},
+        )
+        safe_append_line(path, f"{ts} | {action} | {note_path} | {description}")
+        return
+
+    append_timeline_entry(
+        timeline_path=path,
+        action=action,
+        note_path=note_path,
+        description=description,
+        root_dir=ledger_root,
+        ledger_notes_dir=notes_root,
+    )
 
 
 def append_log(path: Path, lines: list[str], ts: str | None = None) -> None:
