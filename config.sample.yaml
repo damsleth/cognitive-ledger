@@ -14,7 +14,7 @@ first_run: true
 # A/B uses ledger_notes_dir by default. Override with: scripts/ledger_ab --corpus <path>
 
 # Retrieval tuning
-# retrieval_mode: legacy
+# retrieval_mode: semantic_hybrid
 # embed_backend: local
 # embed_model: TaylorAI/bge-micro-v2
 

@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-04-22
+
+### Fixed
+- `retrieval_mode`, `embed_backend`, and `embed_model` in `config.yaml` now act as CLI defaults, with environment variables still taking precedence.
+- Obsidian import and queue promotion timeline writes now update both `timeline.jsonl` and `timeline.md` through the canonical append path.
+- Session-end inbox capture now handles duplicate note titles and ignores `.lock` artifacts when reporting dirty note paths.
+- Generated `note_index.json` now serializes logical `notes/...` paths instead of machine-local absolute paths.
+- Obsidian daemon tests can redirect LaunchAgents plist writes with `LEDGER_LAUNCH_AGENTS_DIR`.
+- `ledger init` now seeds notes-corpus `.gitignore` entries for lock files and ephemeral/generated index artifacts.
+
 ## 2026-04-18
 
 ### Fixed

@@ -58,6 +58,10 @@ class InitTests(unittest.TestCase):
 
             self.assertFalse((repo_root / "notes").exists())
             self.assertTrue((ledger_notes_dir / "08_indices" / "timeline.md").is_file())
+            gitignore = (ledger_notes_dir / ".gitignore").read_text(encoding="utf-8")
+            self.assertIn("*.lock", gitignore)
+            self.assertIn("08_indices/note_index.json", gitignore)
+            self.assertIn("08_indices/.session_baseline", gitignore)
             self.assertIn("config.yaml", report["created"])
 
     def test_paths_command_uses_resolved_config(self):

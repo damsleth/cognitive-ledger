@@ -17,6 +17,12 @@ from ledger.io.safe_write import safe_write_text
 
 
 NOTE_DIRS = list(LEDGER_NOTE_SUBDIRS)
+LEDGER_NOTES_GITIGNORE_LINES = (
+    ".DS_Store",
+    "*.lock",
+    "08_indices/.session_baseline",
+    "08_indices/note_index.json",
+)
 
 # Minimal template content (generated inline, no external file dependency)
 GENERIC_TEMPLATE = """\
@@ -135,6 +141,26 @@ def _build_config_content(
     return "\n".join(lines)
 
 
+def _ensure_notes_gitignore(notes_dir: Path) -> bool:
+    """Ensure generated ledger artifacts stay out of corpus git status."""
+    gitignore_path = notes_dir / ".gitignore"
+    existing_lines: list[str] = []
+    if gitignore_path.is_file():
+        existing_lines = gitignore_path.read_text(encoding="utf-8").splitlines()
+
+    present = {line.strip() for line in existing_lines}
+    missing = [line for line in LEDGER_NOTES_GITIGNORE_LINES if line not in present]
+    if not missing:
+        return False
+
+    next_lines = list(existing_lines)
+    if next_lines and next_lines[-1].strip():
+        next_lines.append("")
+    next_lines.extend(missing)
+    safe_write_text(gitignore_path, "\n".join(next_lines).rstrip() + "\n")
+    return True
+
+
 def init_ledger(
     root: str | Path | None = None,
     voice_dna_path: str | Path | None = None,
@@ -179,6 +205,11 @@ def init_ledger(
             gitkeep = dir_path / ".gitkeep"
             if not gitkeep.exists():
                 gitkeep.touch()
+
+    if _ensure_notes_gitignore(nd):
+        report["created"].append("notes/.gitignore")
+    else:
+        report["skipped"].append("notes/.gitignore")
 
     # 2. Generate templates if not present
     templates_dir = root_path / "templates"

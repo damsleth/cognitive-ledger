@@ -181,6 +181,18 @@ def _apply_env_overrides(config: "LedgerConfig") -> "LedgerConfig":
         except ValueError:
             pass
 
+    string_mappings = {
+        "LEDGER_RETRIEVAL_MODE": "retrieval_mode",
+        "LEDGER_EMBED_BACKEND": "embed_backend",
+        "LEDGER_EMBED_MODEL": "embed_model",
+    }
+    for env_var, attr in string_mappings.items():
+        if (value := os.getenv(env_var)) is None:
+            continue
+        cleaned = str(value).strip()
+        if cleaned:
+            setattr(config, attr, cleaned)
+
     config._finalize_paths()
     return config
 
@@ -415,6 +427,15 @@ class LedgerConfig:
 
     embed_backends: tuple[str, ...] = ("local", "openai")
     """Available embedding backends."""
+
+    retrieval_mode: str = "semantic_hybrid"
+    """Default retrieval mode when no CLI flag or environment override is set."""
+
+    embed_backend: str = "local"
+    """Default embedding backend for semantic_hybrid mode."""
+
+    embed_model: str | None = None
+    """Optional default embedding model override for semantic_hybrid mode."""
 
     # =========================================================================
     # Text Processing
