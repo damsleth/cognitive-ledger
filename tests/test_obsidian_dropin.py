@@ -8,6 +8,7 @@ from ledger.obsidian.cli import main as obsidian_main
 from ledger.obsidian.config import load_config
 from ledger.obsidian.importer import run_import
 from ledger.obsidian.queue import sync_queue
+from ledger.timeline import load_timeline_jsonl
 
 
 def _make_vault(tmp_path: Path) -> Path:
@@ -85,6 +86,10 @@ def test_import_applies_gates_and_does_not_modify_source_files(tmp_path):
     assert source_pref.read_text(encoding="utf-8") == pref_before
     assert source_loop.read_text(encoding="utf-8") == loop_before
 
+    events = load_timeline_jsonl(vault / "cognitive-ledger" / "notes" / "08_indices" / "timeline.jsonl")
+    assert any(event["desc"] == "imported from Obsidian" for event in events)
+    assert all(str(event["path"]).startswith("notes/") for event in events)
+
 
 def test_reimport_is_idempotent_for_unchanged_files(tmp_path):
     vault = _make_vault(tmp_path)
@@ -143,6 +148,12 @@ def test_queue_sync_promotes_approved_candidates_idempotently(tmp_path):
     timeline = (vault / "cognitive-ledger" / "notes" / "08_indices" / "timeline.md").read_text(encoding="utf-8")
     assert "promoted from candidate queue" in timeline
     assert "candidate promoted" in timeline
+
+    timeline_jsonl = vault / "cognitive-ledger" / "notes" / "08_indices" / "timeline.jsonl"
+    events = load_timeline_jsonl(timeline_jsonl)
+    assert any(event["desc"] == "promoted from candidate queue" for event in events)
+    assert any(event["desc"] == "candidate promoted" for event in events)
+    assert all(str(event["path"]).startswith("notes/") for event in events)
 
 
 def test_bootstrap_supports_generic_markdown_root_via_root_alias(tmp_path):

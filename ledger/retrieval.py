@@ -22,7 +22,7 @@ from typing import Any, Union
 
 from ledger.config import get_config
 from ledger.io import safe_write_text
-from ledger.layout import indices_dir, logical_path, note_type_dir
+from ledger.layout import indices_dir, logical_path, note_type_dir, resolve_path
 from ledger.parsing import (
     extract_link_tokens,
     extract_title,
@@ -184,10 +184,10 @@ def scope_matches(note_scope: str, query_scope: str) -> bool:
 
 
 def resolve_retrieval_mode(retrieval_mode: str | None) -> str:
-    """Resolve retrieval mode from argument or environment."""
+    """Resolve retrieval mode from argument, environment, or config."""
     config = get_config()
     if retrieval_mode is None:
-        retrieval_mode = os.getenv("LEDGER_RETRIEVAL_MODE", "semantic_hybrid")
+        retrieval_mode = os.getenv("LEDGER_RETRIEVAL_MODE") or config.retrieval_mode
     mode = str(retrieval_mode or "").strip().lower() or "semantic_hybrid"
     if mode not in config.retrieval_modes:
         return "semantic_hybrid"
@@ -195,10 +195,10 @@ def resolve_retrieval_mode(retrieval_mode: str | None) -> str:
 
 
 def resolve_embed_backend(embed_backend: str | None) -> str:
-    """Resolve embedding backend from argument or environment."""
+    """Resolve embedding backend from argument, environment, or config."""
     config = get_config()
     if embed_backend is None:
-        embed_backend = os.getenv("LEDGER_EMBED_BACKEND", "local")
+        embed_backend = os.getenv("LEDGER_EMBED_BACKEND") or config.embed_backend
     backend = str(embed_backend or "").strip().lower() or "local"
     if backend not in config.embed_backends:
         return "local"
@@ -407,8 +407,13 @@ def candidate_from_note(path: Path, note_type: str) -> RetrievalCandidate:
 
 def _candidate_to_json(candidate: RetrievalCandidate) -> dict[str, Any]:
     """Serialize candidate to JSON-friendly payload."""
+    persisted_path = candidate.rel_path or logical_path(
+        candidate.path,
+        ledger_root=_cfg().ledger_root,
+        ledger_notes_dir=_cfg().ledger_notes_dir,
+    ).as_posix()
     return {
-        "path": candidate.path,
+        "path": persisted_path,
         "rel_path": candidate.rel_path,
         "type": candidate.type,
         "title": candidate.title,
@@ -432,13 +437,32 @@ def _candidate_to_json(candidate: RetrievalCandidate) -> dict[str, Any]:
 def _candidate_from_json(candidate_json: dict[str, Any]) -> RetrievalCandidate:
     """Deserialize candidate from JSON-friendly payload."""
     updated = str(candidate_json.get("updated", ""))
+    raw_path = str(candidate_json.get("path", "") or "")
+    rel_path = str(candidate_json.get("rel_path", "") or "")
+    resolved_candidate_path = raw_path
+    if raw_path and not Path(raw_path).is_absolute():
+        resolved_candidate_path = str(
+            resolve_path(
+                raw_path,
+                ledger_root=_cfg().ledger_root,
+                ledger_notes_dir=_cfg().ledger_notes_dir,
+            )
+        )
+    elif not raw_path and rel_path:
+        resolved_candidate_path = str(
+            resolve_path(
+                rel_path,
+                ledger_root=_cfg().ledger_root,
+                ledger_notes_dir=_cfg().ledger_notes_dir,
+            )
+        )
     try:
         confidence = float(candidate_json.get("confidence", 0.0) or 0.0)
     except (TypeError, ValueError):
         confidence = 0.0
     return RetrievalCandidate(
-        path=str(candidate_json.get("path", "")),
-        rel_path=str(candidate_json.get("rel_path", "")),
+        path=resolved_candidate_path,
+        rel_path=rel_path,
         type=str(candidate_json.get("type", "")),
         title=str(candidate_json.get("title", "")),
         statement=str(candidate_json.get("statement", "")),

@@ -39,6 +39,26 @@ def result_get(result, key, default=None):
     return getattr(result, key, default) if hasattr(result, key) else result.get(key, default)
 
 
+def write_minimal_fact(notes_dir: Path, statement: str = "Cache fixture statement") -> None:
+    note = notes_dir / "02_facts" / "fact__cache_fixture.md"
+    note.parent.mkdir(parents=True, exist_ok=True)
+    note.write_text(
+        "---\n"
+        "created: 2026-01-01T00:00:00Z\n"
+        "updated: 2026-01-01T00:00:00Z\n"
+        "tags: [cache]\n"
+        "confidence: 0.9\n"
+        "source: user\n"
+        "scope: dev\n"
+        "lang: en\n"
+        "---\n\n"
+        "# Cache Fixture\n\n"
+        "## Statement\n\n"
+        f"{statement}\n",
+        encoding="utf-8",
+    )
+
+
 class LedgerUnitTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -209,6 +229,9 @@ class LedgerUnitTests(unittest.TestCase):
         self.assertTrue(payload_results(payload))
 
     def test_semantic_hybrid_openai_fails_without_api_key(self):
+        from ledger.config import LedgerConfig, set_config, reset_config
+        from ledger.retrieval import clear_candidate_cache
+
         ledger = self.ledger
         original_loader = ledger.load_embeddings_module
         original_key = os.environ.get("OPENAI_API_KEY")
@@ -222,22 +245,33 @@ class LedgerUnitTests(unittest.TestCase):
             def ensure_openai_api_key():
                 raise RuntimeError("OPENAI_API_KEY is required for OpenAI embedding backend")
 
-        ledger.load_embeddings_module = lambda: FakeEmbeddings
-        if "OPENAI_API_KEY" in os.environ:
-            del os.environ["OPENAI_API_KEY"]
-        try:
-            with self.assertRaises(RuntimeError):
-                ledger.rank_query(
-                    "test openai",
-                    retrieval_mode="semantic_hybrid",
-                    embed_backend="openai",
-                )
-        finally:
-            ledger.load_embeddings_module = original_loader
-            if original_key is not None:
-                os.environ["OPENAI_API_KEY"] = original_key
+        with tempfile.TemporaryDirectory() as temp_dir:
+            tmp = Path(temp_dir)
+            config = LedgerConfig(ledger_root=tmp)
+            set_config(config)
+            write_minimal_fact(config.ledger_notes_dir)
+            clear_candidate_cache()
+            ledger.load_embeddings_module = lambda: FakeEmbeddings
+            if "OPENAI_API_KEY" in os.environ:
+                del os.environ["OPENAI_API_KEY"]
+            try:
+                with self.assertRaises(RuntimeError):
+                    ledger.rank_query(
+                        "test openai",
+                        retrieval_mode="semantic_hybrid",
+                        embed_backend="openai",
+                    )
+            finally:
+                ledger.load_embeddings_module = original_loader
+                clear_candidate_cache()
+                reset_config()
+                if original_key is not None:
+                    os.environ["OPENAI_API_KEY"] = original_key
 
     def test_semantic_hybrid_uses_ledger_target_only(self):
+        from ledger.config import LedgerConfig, set_config, reset_config
+        from ledger.retrieval import clear_candidate_cache
+
         ledger = self.ledger
         original_loader = ledger.load_embeddings_module
         seen_targets = []
@@ -259,16 +293,24 @@ class LedgerUnitTests(unittest.TestCase):
                     },
                 }
 
-        ledger.load_embeddings_module = lambda: FakeEmbeddings
-        try:
-            payload = ledger.rank_query(
-                "release checklist",
-                scope="dev",
-                limit=3,
-                retrieval_mode="semantic_hybrid",
-            )
-        finally:
-            ledger.load_embeddings_module = original_loader
+        with tempfile.TemporaryDirectory() as temp_dir:
+            tmp = Path(temp_dir)
+            config = LedgerConfig(ledger_root=tmp)
+            set_config(config)
+            write_minimal_fact(config.ledger_notes_dir, "Release checklist")
+            clear_candidate_cache()
+            ledger.load_embeddings_module = lambda: FakeEmbeddings
+            try:
+                payload = ledger.rank_query(
+                    "release checklist",
+                    scope="dev",
+                    limit=3,
+                    retrieval_mode="semantic_hybrid",
+                )
+            finally:
+                ledger.load_embeddings_module = original_loader
+                clear_candidate_cache()
+                reset_config()
 
         self.assertEqual(seen_targets, ["ledger"])
         self.assertEqual(payload_get(payload, "retrieval_mode"), "semantic_hybrid")
@@ -336,18 +378,44 @@ class LedgerUnitTests(unittest.TestCase):
         self.assertIn("attention", tokens)
 
     def test_build_candidates_uses_process_cache(self):
-        first_no_cache = self.ledger.build_candidates()
-        second_no_cache = self.ledger.build_candidates()
-        self.assertIsNot(first_no_cache, second_no_cache)
+        from ledger.config import LedgerConfig, set_config, reset_config
+        from ledger.retrieval import clear_candidate_cache
 
-        first_cached = self.ledger.build_candidates(use_cache=True)
-        second_cached = self.ledger.build_candidates(use_cache=True)
-        self.assertIs(first_cached, second_cached)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            tmp = Path(temp_dir)
+            config = LedgerConfig(ledger_root=tmp)
+            set_config(config)
+            write_minimal_fact(config.ledger_notes_dir)
+            clear_candidate_cache()
+            try:
+                first_no_cache = self.ledger.build_candidates()
+                second_no_cache = self.ledger.build_candidates()
+                self.assertIsNot(first_no_cache, second_no_cache)
+
+                first_cached = self.ledger.build_candidates(use_cache=True)
+                second_cached = self.ledger.build_candidates(use_cache=True)
+                self.assertIs(first_cached, second_cached)
+            finally:
+                clear_candidate_cache()
+                reset_config()
 
     def test_build_candidate_index_uses_process_cache(self):
-        first = self.ledger.build_candidate_index(use_cache=True)
-        second = self.ledger.build_candidate_index(use_cache=True)
-        self.assertIs(first, second)
+        from ledger.config import LedgerConfig, set_config, reset_config
+        from ledger.retrieval import clear_candidate_cache
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            tmp = Path(temp_dir)
+            config = LedgerConfig(ledger_root=tmp)
+            set_config(config)
+            write_minimal_fact(config.ledger_notes_dir)
+            clear_candidate_cache()
+            try:
+                first = self.ledger.build_candidate_index(use_cache=True)
+                second = self.ledger.build_candidate_index(use_cache=True)
+                self.assertIs(first, second)
+            finally:
+                clear_candidate_cache()
+                reset_config()
 
     def test_retrieve_candidates_from_index_prefers_matching_tokens(self):
         candidates = [
