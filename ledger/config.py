@@ -437,6 +437,23 @@ class LedgerConfig:
     embed_model: str | None = None
     """Optional default embedding model override for semantic_hybrid mode."""
 
+    embed_text_template: str = "none"
+    """Text template applied to passages at index time and queries at search time.
+
+    Values:
+      - "none": no transformation (default; correct for bge / sentence-transformers).
+      - "e5_prefix": prepend "passage: " to documents and "query: " to queries.
+        Required by the intfloat/e5-* family for correct retrieval.
+
+    The template used at build time is stored in the semantic index payload and
+    re-applied automatically on the query side, so a build-time setting is
+    sufficient (the query side reads it from the index, not from this config).
+    Stored here for build-time defaults and documentation.
+    """
+
+    embed_text_templates: tuple[str, ...] = ("none", "e5_prefix")
+    """Allowed values for embed_text_template."""
+
     # =========================================================================
     # Text Processing
     # =========================================================================

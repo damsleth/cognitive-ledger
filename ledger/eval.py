@@ -278,8 +278,14 @@ def run_eval(
     embed_backend: str = "local",
     embed_model: str | None = None,
     rank_query_fn: Callable[..., RetrievalResult | dict[str, Any]] | None = None,
+    emit_ranks: bool = False,
 ) -> dict[str, Any]:
-    """Run retrieval benchmark and compute hit@1/hit@k/MRR."""
+    """Run retrieval benchmark and compute hit@1/hit@k/MRR.
+
+    When emit_ranks=True the result includes a `per_case` list with the rank
+    of each expected_any path under the candidate ranking (None if not ranked
+    within `limit=50`). Used for diagnostic comparisons across runs.
+    """
     cases = parse_eval_cases(cases_path)
     validation_errors = validate_eval_cases(cases, strict_cases=strict_cases)
     if validation_errors:
@@ -301,6 +307,7 @@ def run_eval(
     hitk_count = 0
     rr_total = 0.0
     failed = []
+    per_case: list[dict[str, Any]] = []
 
     for idx, case in enumerate(cases, start=1):
         case_id = str(case.get("id", "")).strip() or f"case_{idx}"
@@ -342,7 +349,28 @@ def run_eval(
                 }
             )
 
-    return {
+        if emit_ranks:
+            expected_paths = case.get("expected_any", [])
+            ranks_per_expected: dict[str, int | None] = {}
+            for exp_path, exp_set in zip(expected_paths, expected_sets):
+                exp_rank: int | None = None
+                for r_idx, result in enumerate(results, start=1):
+                    if set(_result_path(result)) & exp_set:
+                        exp_rank = r_idx
+                        break
+                ranks_per_expected[exp_path] = exp_rank
+            per_case.append({
+                "id": case_id,
+                "query": case["query"],
+                "scope": case.get("scope", "all"),
+                "expected_any": expected_paths,
+                "n_expected": len(expected_paths),
+                "best_rank": best_rank,
+                "ranks_per_expected": ranks_per_expected,
+                "top_results": [_result_rel_path(item) for item in results[:10]],
+            })
+
+    out: dict[str, Any] = {
         "retrieval_mode": resolve_retrieval_mode(retrieval_mode),
         "cases": total,
         "hit1": hit1_count / total,
@@ -353,6 +381,9 @@ def run_eval(
         "hit1_count": hit1_count,
         "hitk_count": hitk_count,
     }
+    if emit_ranks:
+        out["per_case"] = per_case
+    return out
 
 
 def print_eval_result(result: dict[str, Any]) -> None:
