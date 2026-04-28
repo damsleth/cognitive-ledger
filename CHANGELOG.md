@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-04-28
+
+### Added
+- **`ledger init --root`** flag exposing the `init_ledger(root=...)` parameter on the CLI. Lets a brew-installed `ledger` scaffold a writable ledger root (e.g. `~/.config/cognitive-ledger`) without needing to set `LEDGER_ROOT` first.
+
 ## 2026-04-22
 
 ### Fixed
