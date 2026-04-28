@@ -64,8 +64,36 @@ INDEX_ITEM_FIELDS = (
 )
 
 _LOCAL_ENCODER_CACHE: dict[str, Any] = {}
-_QUERY_VECTOR_CACHE: OrderedDict[tuple[str, str, str], np.ndarray] = OrderedDict()
+# Cache key now includes the text template so a query template change
+# invalidates cached query vectors.
+_QUERY_VECTOR_CACHE: OrderedDict[tuple[str, str, str, str], np.ndarray] = OrderedDict()
 _QUERY_VECTOR_CACHE_MAX = 256
+
+SUPPORTED_TEXT_TEMPLATES = ("none", "e5_prefix")
+
+
+def normalize_text_template(template: str | None) -> str:
+    value = (str(template) if template is not None else "none").strip().lower() or "none"
+    if value not in SUPPORTED_TEXT_TEMPLATES:
+        raise ValueError(
+            f"Unsupported embed text template: {template!r}. "
+            f"Allowed: {SUPPORTED_TEXT_TEMPLATES}"
+        )
+    return value
+
+
+def apply_passage_template(text: str, template: str) -> str:
+    template = normalize_text_template(template)
+    if template == "e5_prefix":
+        return f"passage: {text}"
+    return text
+
+
+def apply_query_template(text: str, template: str) -> str:
+    template = normalize_text_template(template)
+    if template == "e5_prefix":
+        return f"query: {text}"
+    return text
 
 
 def now_iso() -> str:
@@ -318,14 +346,26 @@ def embed_texts(texts: list[str], backend: str, model: str) -> np.ndarray:
     raise ValueError(f"Unsupported embedding backend: {backend}")
 
 
-def embed_query_text(query: str, backend: str, model: str) -> np.ndarray:
-    cache_key = (str(backend or "").strip().lower(), str(model or "").strip(), str(query))
+def embed_query_text(
+    query: str,
+    backend: str,
+    model: str,
+    text_template: str = "none",
+) -> np.ndarray:
+    template = normalize_text_template(text_template)
+    cache_key = (
+        str(backend or "").strip().lower(),
+        str(model or "").strip(),
+        template,
+        str(query),
+    )
     cached = _QUERY_VECTOR_CACHE.get(cache_key)
     if cached is not None:
         _QUERY_VECTOR_CACHE.move_to_end(cache_key)
         return cached
 
-    vectors = embed_texts([query], backend=backend, model=model)
+    transformed = apply_query_template(query, template)
+    vectors = embed_texts([transformed], backend=backend, model=model)
     _QUERY_VECTOR_CACHE[cache_key] = vectors
     _QUERY_VECTOR_CACHE.move_to_end(cache_key)
     while len(_QUERY_VECTOR_CACHE) > _QUERY_VECTOR_CACHE_MAX:
@@ -379,6 +419,7 @@ def write_semantic_index(
     source_root: Path,
     items: list[dict[str, Any]],
     vectors: np.ndarray,
+    text_template: str = "none",
 ) -> dict[str, Any]:
     target_dir = semantic_dir(target, backend, model)
     target_dir.mkdir(parents=True, exist_ok=True)
@@ -392,6 +433,7 @@ def write_semantic_index(
         "corpus": target,
         "source_root": source_root.as_posix(),
         "built_at": now_iso(),
+        "text_template": normalize_text_template(text_template),
         "item_count": len(items),
         "items": [_public_item(item, row) for row, item in enumerate(items)],
     }
@@ -429,10 +471,20 @@ def _rebuild_target_index(
     backend: str,
     model: str,
     source_root: Path,
+    text_template: str = "none",
 ) -> dict[str, Any]:
+    template = normalize_text_template(text_template)
     items = collect_target_items(target=target, source_root=source_root)
     previous_index, previous_vectors = load_semantic_index(target, backend, model)
-    prev_map = _previous_vector_map(previous_index, previous_vectors)
+    # If the previous index used a different template, its vectors live in a
+    # different subspace and cannot be reused even if content_hash matches.
+    prev_template = normalize_text_template(
+        (previous_index or {}).get("text_template", "none")
+    )
+    if prev_template != template:
+        prev_map: dict[str, dict[str, Any]] = {}
+    else:
+        prev_map = _previous_vector_map(previous_index, previous_vectors)
 
     vectors: np.ndarray | None = None
     embed_positions: list[int] = []
@@ -451,7 +503,7 @@ def _rebuild_target_index(
                 continue
 
         embed_positions.append(idx)
-        embed_batch.append(item["embedding_text"])
+        embed_batch.append(apply_passage_template(item["embedding_text"], template))
 
     if embed_batch:
         embedded = embed_texts(embed_batch, backend=backend, model=model)
@@ -486,6 +538,7 @@ def _rebuild_target_index(
         source_root=source_root,
         items=items,
         vectors=vectors,
+        text_template=template,
     )
 
     prev_ids = {
@@ -540,6 +593,7 @@ def build_indices(
     source_root: Path | None = None,
     write_manifest: bool = True,
     append_timeline: bool = True,
+    text_template: str | None = None,
 ) -> dict[str, Any]:
     backend = str(backend or "").strip().lower()
     if backend not in SUPPORTED_BACKENDS:
@@ -553,6 +607,9 @@ def build_indices(
 
     resolved_model = str(model or default_model_for_backend(backend)).strip()
     resolved_source_root = Path(source_root or DEFAULT_SOURCE_NOTES_DIR).expanduser().resolve()
+    resolved_template = normalize_text_template(
+        text_template if text_template is not None else getattr(_cfg, "embed_text_template", "none")
+    )
 
     targets = ["ledger", "source"] if target == "both" else [target]
     results: list[dict[str, Any]] = []
@@ -564,6 +621,7 @@ def build_indices(
             backend=backend,
             model=resolved_model,
             source_root=current_root,
+            text_template=resolved_template,
         )
         results.append(result)
 
@@ -748,7 +806,13 @@ def semantic_score_map(
             "score_by_rel_path": {},
         }
 
-    query_vector = embed_query_text(query, backend=backend, model=resolved_model)
+    index_template = normalize_text_template(index_data.get("text_template", "none"))
+    query_vector = embed_query_text(
+        query,
+        backend=backend,
+        model=resolved_model,
+        text_template=index_template,
+    )
     if query_vector.ndim != 2 or query_vector.shape[0] == 0:
         return {
             "available": False,
