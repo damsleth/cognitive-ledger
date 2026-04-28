@@ -7,9 +7,9 @@ Machine-readable spec: `schema.yaml`. Note templates: `templates/`.
 Resolve the active physical corpus path with `./scripts/ledger paths --field ledger_notes_dir`.
 Logical note references remain `notes/...` even when the corpus lives outside this repo.
 
-The canonical `cognitive-ledger` skill lives in `skills/` and is intended
-for use outside this repository. Install it into your agent's user-level skills
-folder as needed rather than duplicating its contents here.
+The canonical `/notes` agent skill is maintained in a separate repository:
+https://github.com/damsleth/SKILLS. Install it from there rather than
+duplicating its contents here.
 
 ### Boot
 
