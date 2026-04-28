@@ -1,7 +1,7 @@
 # Cognitive Ledger
 Deepening your agent's cognitive lightcone with a persistent, hybrid markdown+embeddings based memory system. Includes dreams-based consolidation (`electric sheep`), a drop-in `/notes` skill for agents, and tools for bootstrapping from existing notes trees.  
 
-![Cognitive Lightcone](skills/notes/cognitive_lightcone.png)
+![Cognitive Lightcone](cognitive_lightcone.png)
 
 ## What
 A structured, file-based memory system for AI agents. Small atomic notes (facts, preferences, goals, open loops, concepts, identity) stored as markdown with YAML frontmatter. Searchable, versionable, and designed to fit inside context windows. Includes a feedback loop that captures retrieval signals to improve ranking over time.
@@ -12,31 +12,44 @@ Language models forget everything between sessions. The Cognitive Ledger gives t
 ## Quick Start
 
 ```bash
-git clone https://github.com/<you>/cognitive-ledger.git
-cd cognitive-ledger
-./scripts/setup-venv.sh
-./scripts/ledger init --ledger-notes-dir ~/Code/ledger-notes --source-notes-dir ~/Code/notes
-./skills/install-skill.sh            # install /notes skill for your agents
+brew tap damsleth/tap
+brew install cognitive-ledger
+ledger init --root "$HOME/.config/cognitive-ledger" \
+  --ledger-notes-dir ~/Code/ledger-notes \
+  --source-notes-dir ~/Code/notes
 ```
 
-The repo does not need to carry a bundled `notes/` corpus. `init` can scaffold your ledger into a separate notes repo, persist those paths into `config.yaml`, and generate the initial indices there. `config.yaml` is created with `first_run: true` so the session-start hook can inject setup guidance on the first agent session.
+`ledger init` scaffolds the notes tree (`01_identity/` … `09_archive/`), writes `config.yaml`, and emits templates + schema into `--root`. `config.yaml` is created with `first_run: true` so the session-start hook can inject setup guidance on the first agent session.
 
 Optional flags:
 
 ```bash
-./scripts/ledger init --voice-dna ~/voice-profile.json   # import your writing voice
-./scripts/ledger init --ledger-notes-dir ~/Code/ledger-notes --source-notes-dir ~/Code/notes
-./scripts/ledger paths                                     # verify resolved locations
+ledger init --voice-dna ~/voice-profile.json   # import your writing voice
+ledger paths                                    # verify resolved locations
 ```
 
-If you use the bundled `/notes` skill, set `LEDGER_SOURCE_NOTES_DIR` and `LEDGER_ROOT` in your shell startup file so the skill can find both trees consistently:
+Persist `LEDGER_ROOT` in your shell rc so the brew-installed CLIs find your config (otherwise they default to a read-only Cellar path):
 
 ```bash
-export LEDGER_SOURCE_NOTES_DIR="$HOME/path/to/notes"
-export LEDGER_ROOT="$HOME/path/to/cognitive-ledger"
-export LEDGER_NOTES_DIR="$HOME/path/to/ledger-notes"
+echo 'export LEDGER_ROOT="$HOME/.config/cognitive-ledger"' >> ~/.zshrc
 source ~/.zshrc
 ```
+
+## Agent Skill
+
+The `/notes` agent skill that drives this ledger lives in a separate repo:
+
+> https://github.com/damsleth/SKILLS
+
+Clone it and run the installer to symlink the skill into your agent's user-level skills folder (Claude, Codex, Copilot):
+
+```bash
+git clone https://github.com/damsleth/SKILLS.git
+cd SKILLS
+./install-skill.sh        # interactive checkbox UI
+```
+
+The skill's first run will brew-install this package automatically if it's missing - so you can install in either order.
 
 ### Configure (optional)
 
