@@ -421,9 +421,12 @@ class LedgerConfig:
         "precomputed_index",
         "progressive_disclosure",
         "semantic_hybrid",
+        "semantic_rerank",
     )
     """Available retrieval modes. Default: precomputed_index (best MRR + fast).
-    compressed_attention was removed after A/B testing showed hit@k regression."""
+    compressed_attention was removed after A/B testing showed hit@k regression.
+    semantic_rerank runs semantic_hybrid then re-orders the top-N with a
+    cross-encoder; trades 50-200ms latency for top-1 precision."""
 
     embed_backends: tuple[str, ...] = ("local", "openai")
     """Available embedding backends."""
@@ -453,6 +456,39 @@ class LedgerConfig:
 
     embed_text_templates: tuple[str, ...] = ("none", "e5_prefix")
     """Allowed values for embed_text_template."""
+
+    # =========================================================================
+    # Reranker (semantic_rerank mode)
+    # =========================================================================
+
+    rerank_model: str = "BAAI/bge-reranker-base"
+    """Cross-encoder model used by semantic_rerank mode.
+
+    Options tested:
+      - BAAI/bge-reranker-base: ~278M params, English-leaning, ~50ms/pair on CPU.
+      - BAAI/bge-reranker-v2-m3: ~568M params, multilingual incl. Norwegian.
+    """
+
+    rerank_input_k: int = 20
+    """Number of candidates fetched from semantic_hybrid for reranking.
+
+    Larger pools give the cross-encoder more candidates but cost more latency.
+    Each candidate pair adds ~50ms for bge-reranker-base on CPU.
+    """
+
+    rerank_output_k: int = 8
+    """Final number of results returned after reranking. Truncates the
+    top-N reranked candidates."""
+
+    rerank_batch_size: int = 32
+    """Cross-encoder batch size. Higher = better throughput, more peak memory."""
+
+    rerank_max_length: int = 512
+    """Cross-encoder max token length per (query, document) pair.
+
+    Long documents are truncated by the tokenizer; we also pre-truncate text
+    by characters before tokenization to bound memory.
+    """
 
     # =========================================================================
     # Text Processing
