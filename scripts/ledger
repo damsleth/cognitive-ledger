@@ -212,6 +212,7 @@ def run_eval(
     retrieval_mode="legacy",
     embed_backend="local",
     embed_model=None,
+    emit_ranks=False,
 ):
     return eval_lib.run_eval(
         cases_path=cases_path,
@@ -221,6 +222,7 @@ def run_eval(
         embed_backend=embed_backend,
         embed_model=embed_model,
         rank_query_fn=rank_query,
+        emit_ranks=emit_ranks,
     )
 
 
@@ -272,6 +274,7 @@ def handle_embed_build_command(args):
         backend=args.backend,
         model=args.model,
         source_root=args.source_notes_dir,
+        text_template=getattr(args, "text_template", None),
         load_embeddings_module_fn=lambda: load_embeddings_module(),
         resolve_embed_model_fn=semantic_lib.resolve_embed_model,
     )
@@ -365,12 +368,18 @@ def handle_eval_command(args):
             retrieval_mode=args.retrieval_mode,
             embed_backend=backend,
             embed_model=model,
+            emit_ranks=getattr(args, "emit_ranks", False),
         )
     except eval_lib.EvalCaseValidationError as exc:
         print("eval_case_validation_errors:")
         for error in exc.errors:
             print(f"- {error}")
         raise SystemExit(2)
+
+    if getattr(args, "emit_ranks", False):
+        for case_row in result.get("per_case", []):
+            print(json.dumps(case_row, ensure_ascii=False))
+        return
 
     if args.json:
         baseline_written = None
@@ -812,6 +821,13 @@ def main():
         default=str(_config.source_notes_dir),
         help="Source notes directory (used for target=source|both)",
     )
+    embed_build_parser.add_argument(
+        "--text-template",
+        dest="text_template",
+        choices=_config.embed_text_templates,
+        default=None,
+        help="Passage/query text template applied at index time. Use 'e5_prefix' for intfloat/e5-* models. Defaults to config.embed_text_template (none).",
+    )
     embed_build_parser.add_argument("--json", action="store_true", dest="json")
 
     embed_status_parser = embed_subparsers.add_parser("status", help="Show semantic index status")
@@ -846,6 +862,12 @@ def main():
     eval_parser.add_argument("--baseline", help="Optional baseline metrics JSON path for regression check")
     eval_parser.add_argument("--write-baseline", dest="write_baseline", help="Write current metrics snapshot to JSON")
     eval_parser.add_argument("--json", action="store_true", dest="json")
+    eval_parser.add_argument(
+        "--emit-ranks",
+        dest="emit_ranks",
+        action="store_true",
+        help="Emit per-case rank diagnostics as JSONL on stdout (one line per case). Implies --json semantics for per-case rows.",
+    )
 
     # Context subcommand (session boot payload)
     context_parser = subparsers.add_parser("context", help="Output boot context for session start")
