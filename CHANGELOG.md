@@ -4,6 +4,12 @@
 
 ### Added
 - **`ledger init --root`** flag exposing the `init_ledger(root=...)` parameter on the CLI. Lets a brew-installed `ledger` scaffold a writable ledger root (e.g. `~/.config/cognitive-ledger`) without needing to set `LEDGER_ROOT` first.
+- Consolidated A/B test plan archive under `.plans/done/19-*.md` through `.plans/done/32-*.md`, covering retrieval modes, semantic defaulting, external corpus validation, capture/privacy experiments, and future derived-context tests.
+- A/B performance chart artifacts under `docs/ab/charts/` plus `docs/ab/performance_series.json` for MRR, hit@k, and p95 query latency per run (paired baseline-vs-candidate bars). Regenerate with `python scripts/build_ab_charts.py`.
+
+### Changed
+- README now embeds the three A/B performance-over-time charts and clarifies that `semantic_hybrid` is the default with `precomputed_index` fallback.
+- A/B performance charts switched from delta plots to paired baseline-vs-candidate bars per run so the absolute metric reached is visible, not just the change.
 
 ## 2026-04-22
 
