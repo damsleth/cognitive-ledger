@@ -554,6 +554,7 @@ def handle_init_command(args):
     from ledger.init import init_ledger
 
     report = init_ledger(
+        root=args.root,
         voice_dna_path=args.voice_dna,
         source_notes_dir=args.source_notes_dir,
         ledger_notes_dir=args.ledger_notes_dir,
@@ -865,6 +866,7 @@ def main():
 
     # Init subcommand
     init_parser = subparsers.add_parser("init", help="Initialize a cognitive ledger")
+    init_parser.add_argument("--root", default=None, help="Ledger root directory (where config.yaml and templates/ live). Defaults to LEDGER_ROOT env var or the package install dir.")
     init_parser.add_argument("--voice-dna", default=None, help="Path to voice-dna JSON file")
     init_parser.add_argument("--source-notes-dir", dest="source_notes_dir", default=None, help="Source notes directory")
     init_parser.add_argument("--ledger-notes-dir", dest="ledger_notes_dir", default=None, help="Ledger notes directory path")
