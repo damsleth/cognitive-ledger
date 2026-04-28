@@ -169,7 +169,7 @@ Build the embedding index to activate `semantic_hybrid` (the default retrieval m
 
 ### Retrieval Mode A/B Results
 
-All modes were benchmarked against `legacy` (5 runs each, same corpus). `precomputed_index` is now the default.
+All modes were benchmarked against `legacy` on the ledger corpus (5 runs each). `semantic_hybrid` is the default and falls back to `precomputed_index` when embeddings are unavailable.
 
 | Mode | MRR | hit@1 | hit@k | p95 (ms) | Decision | Status |
 |---|---|---|---|---|---|---|
@@ -181,7 +181,17 @@ All modes were benchmarked against `legacy` (5 runs each, same corpus). `precomp
 | legacy | 0.722 | 0.578 | 0.867 | 5.0 | baseline | available |
 | compressed_attention | 0.720 | 0.578 | 0.844 | 4.8 | **regression** (-0.022 hit@k) | **removed** |
 
-`semantic_hybrid` is the default. It dominates every quality metric (+15.6% hit@1, +6.7% hit@k, +10.8% MRR vs legacy) and is also the fastest at query time (2.4ms p95) because scoring uses precomputed embeddings. It requires a one-time `ledger embed build` step - without it, queries gracefully fall back to `precomputed_index` (best lexical mode).
+`semantic_hybrid` dominates every quality metric (+15.6% hit@1, +6.7% hit@k, +10.8% MRR vs legacy) and is also the fastest at query time (2.4ms p95) because scoring uses precomputed embeddings. It requires a one-time `ledger embed build` step - without it, queries gracefully fall back to `precomputed_index` (best lexical mode).
+
+#### A/B performance over time
+
+Canonical A/B artifacts were consolidated under `.plans/done/19-*.md` through `.plans/done/32-*.md`; duplicate and superseded raw runs were removed. Source data for these charts lives in `docs/ab/performance_series.json` and they are regenerated with `python scripts/build_ab_charts.py`. Each run shows baseline and candidate as paired bars so absolute values are visible, not just deltas.
+
+![MRR per A/B run (baseline vs candidate)](docs/ab/charts/mrr_over_time.png)
+
+![hit@k per A/B run (baseline vs candidate)](docs/ab/charts/hitk_over_time.png)
+
+![p95 query latency per A/B run (baseline vs candidate)](docs/ab/charts/p95_query_over_time.png)
 
 Override the default with `--retrieval-mode <mode>`, `LEDGER_RETRIEVAL_MODE` env var, or `retrieval_mode` in `config.yaml`.
 
