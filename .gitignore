@@ -6,7 +6,7 @@ dist/
 .obsidian/
 .misc/
 .tmp/
-.plans/done
+.plans/
 # Claude worktrees
 .claude/
 .claude-mem/
