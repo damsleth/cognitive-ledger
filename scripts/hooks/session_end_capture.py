@@ -81,7 +81,9 @@ def _notes_dirty_paths() -> list[str]:
     paths: set[str] = set()
     for rel in (tracked.splitlines() + untracked.splitlines()):
         normalized = rel.strip().replace("\\", "/")
-        if not normalized or normalized.startswith("08_indices/"):
+        if not normalized:
+            continue
+        if normalized.startswith("08_indices/") or normalized.startswith("00_inbox/"):
             continue
         if normalized.endswith(".lock"):
             continue

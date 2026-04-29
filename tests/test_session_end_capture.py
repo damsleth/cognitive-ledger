@@ -38,11 +38,31 @@ def test_notes_dirty_paths_ignores_lock_files(tmp_path):
     config = _set_temp_config(tmp_path)
     try:
         subprocess.run(["git", "init"], cwd=config.ledger_notes_dir, check=True, capture_output=True, text=True)
-        lock_path = config.ledger_notes_dir / "00_inbox" / "candidate.md.lock"
-        note_path = config.ledger_notes_dir / "00_inbox" / "candidate.md"
+        facts_dir = config.ledger_notes_dir / "02_facts"
+        facts_dir.mkdir(parents=True, exist_ok=True)
+        lock_path = facts_dir / "candidate.md.lock"
+        note_path = facts_dir / "candidate.md"
         lock_path.write_text("", encoding="utf-8")
         note_path.write_text("# Candidate\n", encoding="utf-8")
 
-        assert session_end_capture._notes_dirty_paths() == ["notes/00_inbox/candidate.md"]
+        assert session_end_capture._notes_dirty_paths() == ["notes/02_facts/candidate.md"]
+    finally:
+        reset_config()
+
+
+def test_notes_dirty_paths_skips_inbox(tmp_path):
+    """Inbox is .gitkeep-only by design; skipping prevents auto-capture
+    recursion where the hook captures its own previous outputs."""
+    config = _set_temp_config(tmp_path)
+    try:
+        subprocess.run(["git", "init"], cwd=config.ledger_notes_dir, check=True, capture_output=True, text=True)
+        inbox_note = config.ledger_notes_dir / "00_inbox" / "uncommitted_note_changes.md"
+        facts_dir = config.ledger_notes_dir / "02_facts"
+        facts_dir.mkdir(parents=True, exist_ok=True)
+        real_note = facts_dir / "fact__example.md"
+        inbox_note.write_text("# inbox auto-capture\n", encoding="utf-8")
+        real_note.write_text("# real fact\n", encoding="utf-8")
+
+        assert session_end_capture._notes_dirty_paths() == ["notes/02_facts/fact__example.md"]
     finally:
         reset_config()
