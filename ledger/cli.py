@@ -612,8 +612,28 @@ def handle_inbox_command(args):
             print(f"  {s['filename']}")
             print(f"    -> {s['suggested_type']} ({s['reason']})")
 
+    elif sub == "cleanup":
+        from ledger.inbox import cleanup_inbox
+        result = cleanup_inbox(stale_days=args.days, apply=args.apply)
+        orphaned = result["orphaned_locks"]
+        stale = result["stale_items"]
+        label = "Removed" if args.apply else "Would remove"
+        if not orphaned and not stale:
+            print("Nothing to clean up.")
+            return
+        if orphaned:
+            print(f"{label} {len(orphaned)} orphaned lock file(s):")
+            for f in orphaned:
+                print(f"  {f}")
+        if stale:
+            print(f"{label} {len(stale)} stale auto-generated item(s):")
+            for f in stale:
+                print(f"  {f}")
+        if not args.apply:
+            print("\nRun with --apply to remove these files.")
+
     else:
-        print("Usage: ledger inbox {list|triage}")
+        print("Usage: ledger inbox {list|triage|cleanup}")
         raise SystemExit(1)
 
 
@@ -868,6 +888,9 @@ def main(argv=None) -> int:
     inbox_subparsers = inbox_parser.add_subparsers(dest="inbox_command")
     inbox_subparsers.add_parser("list", help="List inbox items")
     inbox_subparsers.add_parser("triage", help="Suggest target types for inbox items")
+    cleanup_parser = inbox_subparsers.add_parser("cleanup", help="Remove orphaned locks and stale auto-generated items")
+    cleanup_parser.add_argument("--days", type=int, default=14, help="Age threshold for stale items (default: 14)")
+    cleanup_parser.add_argument("--apply", action="store_true", help="Actually delete (default is dry-run)")
 
     voice_parser = subparsers.add_parser("voice-dna", help="Import or show voice DNA profile")
     voice_subparsers = voice_parser.add_subparsers(dest="voice_command")

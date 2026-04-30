@@ -104,6 +104,62 @@ def triage_suggestions(notes_dir: Path | None = None) -> list[dict[str, Any]]:
     return suggestions
 
 
+def cleanup_inbox(
+    notes_dir: Path | None = None,
+    stale_days: int = 14,
+    apply: bool = False,
+) -> dict[str, list[str]]:
+    """Remove orphaned lock files and archive stale auto-generated inbox items.
+
+    Orphaned locks: a .lock file with no corresponding .md file.
+    Stale auto-generated: session__* or uncommitted_note_changes* files older
+    than stale_days days. These are produced by the ledger pipeline itself and
+    accumulate when sessions end without cleanup.
+
+    Args:
+        notes_dir: Optional notes directory override.
+        stale_days: Age threshold in days for auto-generated items.
+        apply: If False, only report what would be removed (dry-run).
+
+    Returns:
+        Dict with keys "orphaned_locks", "stale_items", each a list of filenames.
+    """
+    inbox = _inbox_dir(notes_dir)
+    if not inbox.is_dir():
+        return {"orphaned_locks": [], "stale_items": []}
+
+    now = datetime.now(timezone.utc)
+    orphaned_locks: list[str] = []
+    stale_items: list[str] = []
+
+    _AUTO_PREFIXES = ("session__", "uncommitted_note_changes")
+
+    for lock_file in sorted(inbox.glob("*.lock")):
+        md_file = lock_file.with_suffix("")
+        if not md_file.exists():
+            orphaned_locks.append(lock_file.name)
+            if apply:
+                lock_file.unlink()
+
+    for md_file in sorted(inbox.glob("*.md")):
+        if not any(md_file.name.startswith(p) for p in _AUTO_PREFIXES):
+            continue
+        try:
+            age_days = (now - datetime.fromtimestamp(md_file.stat().st_mtime, tz=timezone.utc)).days
+        except OSError:
+            continue
+        if age_days < stale_days:
+            continue
+        stale_items.append(md_file.name)
+        if apply:
+            md_file.unlink()
+            lock_file = md_file.with_suffix(".md.lock")
+            if lock_file.exists():
+                lock_file.unlink()
+
+    return {"orphaned_locks": orphaned_locks, "stale_items": stale_items}
+
+
 def promote(
     path: str | Path,
     target_type: str,
