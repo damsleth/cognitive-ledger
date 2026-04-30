@@ -1,19 +1,12 @@
-#!/usr/bin/env python3
+"""Cognitive Ledger CLI - installed entry point for the `ledger` command."""
+
+from __future__ import annotations
+
 import argparse
-import curses
 import json
 import sys
 from pathlib import Path
 
-# Add ledger package to path if needed
-SCRIPT_DIR = Path(__file__).resolve().parent
-ROOT_DIR = SCRIPT_DIR.parent
-if str(ROOT_DIR) not in sys.path:
-    sys.path.insert(0, str(ROOT_DIR))
-
-# ---------------------------------------------------------------------------
-# Imports from ledger/ package — single source of truth
-# ---------------------------------------------------------------------------
 from ledger.config import get_config
 from ledger.validation import validate_query, validate_scope, validate_limit
 from ledger.errors import QueryValidationError, ScopeValidationError
@@ -27,7 +20,6 @@ from ledger.retrieval import (
     resolve_retrieval_mode,
     resolve_embed_backend,
 )
-from ledger.venv import maybe_reexec_in_repo_venv
 
 _config = get_config()
 
@@ -43,7 +35,7 @@ RETRIEVAL_MODES = _config.retrieval_modes
 
 
 def load_embeddings_module():
-    return semantic_lib.load_embeddings_module(SCRIPT_DIR)
+    return semantic_lib.load_embeddings_module()
 
 
 def resolve_embed_model(backend, embed_model):
@@ -62,6 +54,60 @@ compact_line = browse_lib.compact_line
 compact_loop_line = browse_lib.compact_loop_line
 compact_generic_line = browse_lib.compact_generic_line
 format_detail = browse_lib.format_detail
+
+# Re-exports for test compatibility
+from ledger.retrieval import (  # noqa: E402,F811
+    build_attention_tokens, candidate_from_note, build_candidates,
+    clear_candidate_cache, build_candidate_index,
+    retrieve_candidates_from_index, coarse_candidate_score,
+    shortlist_candidates,
+    prefilter_candidates_by_scope_and_type, score_candidate,
+    compute_recency_component, expand_query_tokens,
+)
+from ledger.eval import (  # noqa: E402,F811
+    EvalCaseValidationError, parse_eval_cases, extract_notes_relative_path,
+    path_candidates_from_expected, normalize_expected_path,
+    validate_eval_cases, print_eval_result, baseline_metrics,
+    build_baseline_snapshot, write_baseline_snapshot,
+    compare_with_baseline, format_baseline_comparison, eval_result_to_json,
+)
+from ledger.query import (  # noqa: E402,F811
+    bundle_results, format_query_results_human, query_result_to_json,
+)
+
+
+def maybe_log_query_telemetry(**_kwargs):
+    pass
+
+
+def rank_query(*args, **kwargs):
+    return query_lib.rank_query(
+        *args,
+        load_embeddings_module=load_embeddings_module,
+        resolve_embed_model=resolve_embed_model,
+        **kwargs,
+    )
+
+
+def run_eval(
+    cases_path,
+    k,
+    strict_cases=False,
+    retrieval_mode="legacy",
+    embed_backend="local",
+    embed_model=None,
+    emit_ranks=False,
+):
+    return eval_lib.run_eval(
+        cases_path=cases_path,
+        k=k,
+        strict_cases=strict_cases,
+        retrieval_mode=retrieval_mode,
+        embed_backend=embed_backend,
+        embed_model=embed_model,
+        rank_query_fn=rank_query,
+        emit_ranks=emit_ranks,
+    )
 
 
 def list_items(args, note_type, loop_status=None):
@@ -100,135 +146,7 @@ def verbose_items(args, note_type, loop_status=None):
         print("")
 
 
-def interactive_items(_args, note_type, loop_status=None):
-    items = sorted_items(note_type, loop_status=loop_status)
-    if not items:
-        print("No notes found.")
-        return
-
-    def draw(stdscr):
-        curses.curs_set(0)
-        idx = 0
-        offset = 0
-        while True:
-            stdscr.erase()
-            h, w = stdscr.getmaxyx()
-
-            status_label = f", status={loop_status}" if note_type == "loops" and loop_status else ""
-            header = f"{note_type}{status_label} (up/down or j/k to navigate, q to quit)"
-            stdscr.addstr(0, 0, shorten(header, w - 1))
-
-            list_h = max(6, h // 2)
-            list_start = 1
-            list_lines = list_h - list_start
-
-            if idx < offset:
-                offset = idx
-            if idx >= offset + list_lines:
-                offset = idx - list_lines + 1
-
-            for i in range(list_lines):
-                item_index = offset + i
-                if item_index >= len(items):
-                    break
-                line = compact_line(
-                    items[item_index],
-                    width=w - 1,
-                    show_path=False,
-                    prefix_type=(note_type == "all"),
-                )
-                if item_index == idx:
-                    stdscr.addstr(list_start + i, 0, line.ljust(w - 1), curses.A_REVERSE)
-                else:
-                    stdscr.addstr(list_start + i, 0, line.ljust(w - 1))
-
-            sep_y = list_h
-            if sep_y < h - 1:
-                stdscr.hline(sep_y, 0, "-", w - 1)
-
-            detail_y = sep_y + 1
-            detail_lines = format_detail(items[idx], width=w - 1)
-            for i, line in enumerate(detail_lines):
-                if detail_y + i >= h:
-                    break
-                stdscr.addstr(detail_y + i, 0, shorten(line, w - 1))
-
-            stdscr.refresh()
-            ch = stdscr.getch()
-            if ch in (ord("q"), 27):
-                break
-            if ch in (curses.KEY_UP, ord("k")):
-                idx = max(0, idx - 1)
-            elif ch in (curses.KEY_DOWN, ord("j")):
-                idx = min(len(items) - 1, idx + 1)
-
-    try:
-        curses.wrapper(draw)
-    except curses.error:
-        print("Interactive view requires a larger terminal.")
-
-
-
-
-# Re-exports for test compatibility (tests import scripts/ledger as a module)
-from ledger.retrieval import (  # noqa: E402,F811
-    build_attention_tokens, candidate_from_note, build_candidates,
-    clear_candidate_cache, build_candidate_index,
-    retrieve_candidates_from_index, coarse_candidate_score,
-    shortlist_candidates,
-    prefilter_candidates_by_scope_and_type, score_candidate,
-    compute_recency_component, expand_query_tokens,
-)
-from ledger.eval import (  # noqa: E402,F811
-    EvalCaseValidationError, parse_eval_cases, extract_notes_relative_path,
-    path_candidates_from_expected, normalize_expected_path,
-    validate_eval_cases, print_eval_result, baseline_metrics,
-    build_baseline_snapshot, write_baseline_snapshot,
-    compare_with_baseline, format_baseline_comparison, eval_result_to_json,
-)
-from ledger.query import (  # noqa: E402,F811
-    bundle_results, format_query_results_human, query_result_to_json,
-)
-
-
-def maybe_log_query_telemetry(**_kwargs):
-    """No-op: telemetry now handled by ledger.retrieval._maybe_log_query."""
-    pass
-
-
-def rank_query(*args, **kwargs):
-    return query_lib.rank_query(
-        *args,
-        load_embeddings_module=load_embeddings_module,
-        resolve_embed_model=resolve_embed_model,
-        **kwargs,
-    )
-
-
-def run_eval(
-    cases_path,
-    k,
-    strict_cases=False,
-    retrieval_mode="legacy",
-    embed_backend="local",
-    embed_model=None,
-    emit_ranks=False,
-):
-    return eval_lib.run_eval(
-        cases_path=cases_path,
-        k=k,
-        strict_cases=strict_cases,
-        retrieval_mode=retrieval_mode,
-        embed_backend=embed_backend,
-        embed_model=embed_model,
-        rank_query_fn=rank_query,
-        emit_ranks=emit_ranks,
-    )
-
-
-
 def handle_query_command(args):
-    # Validate inputs at entry point
     try:
         validated_query = validate_query(args.text)
         validated_scope = validate_scope(args.scope)
@@ -307,7 +225,6 @@ def handle_embed_clean_command(args):
 
 
 def handle_discover_source_command(args):
-    # Validate inputs at entry point
     try:
         validated_query = validate_query(args.text)
         validated_limit = validate_limit(args.limit, min_val=1, max_val=1000)
@@ -344,15 +261,13 @@ def handle_discover_source_command(args):
 
 
 def handle_eval_command(args):
-    # Validate write-baseline path if provided
     if args.write_baseline:
         baseline_path = Path(args.write_baseline).resolve()
-        # Check path is within repo or explicitly allowed
         try:
-            baseline_path.relative_to(ROOT_DIR)
+            baseline_path.relative_to(_config.ledger_root)
         except ValueError:
             print(
-                f"error: --write-baseline path must be within repo root ({ROOT_DIR})",
+                f"error: --write-baseline path must be within ledger root ({_config.ledger_root})",
                 file=sys.stderr,
             )
             print("hint: use a path like 'notes/08_indices/baseline.json'", file=sys.stderr)
@@ -422,36 +337,46 @@ def handle_eval_command(args):
 
 
 def handle_context_command(args):
-    """Output boot context for session start."""
+    context_command = getattr(args, "context_command", None)
+
+    if context_command == "build":
+        from ledger.context import write_context
+        notes_dir = Path(args.ledger_notes_dir)
+        output = Path(args.output)
+        write_context(output, notes_dir)
+        return
+
+    if context_command == "profiles":
+        from ledger.context import write_context_profiles
+        notes_dir = Path(args.ledger_notes_dir)
+        output_dir = Path(args.output_dir)
+        write_context_profiles(output_dir, notes_dir)
+        return
+
     from ledger.context import build_context
     from ledger.notes import get_notes
-    from ledger.parsing import shorten
 
     notes_dir = _config.ledger_notes_dir
     fmt = getattr(args, "format", "boot")
 
     if fmt == "boot":
-        # Full boot payload: context + maintenance status + signal stats
         print(build_context(notes_dir))
 
-        # Maintenance status (sheep)
-        import subprocess
-        sheep_script = _config.ledger_root / "scripts" / "sheep"
-        if sheep_script.is_file():
-            try:
-                result = subprocess.run(
-                    ["bash", str(sheep_script), "status"],
-                    capture_output=True, text=True, timeout=5,
-                    cwd=str(_config.ledger_root),
-                )
-                if result.stdout.strip():
-                    print("## Maintenance\n")
-                    print(result.stdout.strip())
-                    print()
-            except (subprocess.TimeoutExpired, OSError):
-                pass
+        import io
+        from ledger import maintenance as _maint
+        buf = io.StringIO()
+        old_stdout = sys.stdout
+        sys.stdout = buf
+        try:
+            _maint.cmd_status()
+        finally:
+            sys.stdout = old_stdout
+        status_output = buf.getvalue().strip()
+        if status_output:
+            print("## Maintenance\n")
+            print(status_output)
+            print()
 
-        # Signal stats
         signals_path = _config.signals_path
         if signals_path.is_file():
             try:
@@ -470,7 +395,6 @@ def handle_context_command(args):
             except Exception:
                 pass
     elif fmt == "identity":
-        # Just identity notes
         identity = get_notes("identity", notes_dir=notes_dir)
         if not identity:
             print("No identity notes found in notes/01_identity/")
@@ -495,12 +419,12 @@ def handle_context_command(args):
 
 
 def handle_paths_command(args):
-    """Print resolved ledger paths from config/env."""
+    cfg = get_config()
     payload = {
-        "ledger_root": str(_config.ledger_root),
-        "ledger_notes_dir": str(_config.ledger_notes_dir),
-        "source_notes_dir": str(_config.source_notes_dir),
-        "timeline_path": str(_config.timeline_path),
+        "ledger_root": str(cfg.ledger_root),
+        "ledger_notes_dir": str(cfg.ledger_notes_dir),
+        "source_notes_dir": str(cfg.source_notes_dir),
+        "timeline_path": str(cfg.timeline_path),
     }
 
     field = getattr(args, "field", None)
@@ -517,7 +441,6 @@ def handle_paths_command(args):
 
 
 def handle_signal_command(args):
-    """Handle signal subcommands."""
     from ledger import signals as sig
 
     sub = getattr(args, "signal_command", None)
@@ -559,7 +482,6 @@ def handle_signal_command(args):
 
 
 def handle_init_command(args):
-    """Handle init subcommand."""
     from ledger.init import init_ledger
 
     report = init_ledger(
@@ -583,14 +505,13 @@ def handle_init_command(args):
             print(f"  ! {item}")
 
     print("\nNext steps:")
-    print("  1. Run: ./scripts/ledger paths")
+    print("  1. Run: ledger paths")
     print("  2. Edit config.yaml if needed")
     print("  3. Run: ./skills/install-skill.sh")
     print("  4. Create your first note with /notes")
 
 
 def handle_ingest_command(args):
-    """Handle ingest subcommands."""
     from ledger.ingest import scan_sources, diff_manifest, load_manifest, record_ingest
 
     sub = getattr(args, "ingest_command", None)
@@ -626,14 +547,12 @@ def handle_ingest_command(args):
 
 
 def handle_links_command(args):
-    """Handle links subcommand."""
     from ledger.maintenance import _generate_links_index, _config_paths
 
     _notes_dir, indices_dir, _timeline = _config_paths()
     links_data, orphans, broken = _generate_links_index(indices_dir)
 
     if args.note_path:
-        # Show links for specific note
         entry = links_data.get(args.note_path)
         if entry is None:
             print(f"Note not found in links index: {args.note_path}")
@@ -646,7 +565,6 @@ def handle_links_command(args):
         for link in entry["incoming"]:
             print(f"    <- {link}")
     else:
-        # Summary
         total_links = sum(len(d["outgoing"]) for d in links_data.values())
         print(f"Link graph: {len(links_data)} notes, {total_links} outgoing links")
         print(f"Orphans: {len(orphans)}")
@@ -662,7 +580,6 @@ def handle_links_command(args):
 
 
 def handle_briefing_command(args):
-    """Handle briefing subcommand."""
     from ledger.briefing import daily_briefing, weekly_review
 
     if args.weekly:
@@ -672,7 +589,6 @@ def handle_briefing_command(args):
 
 
 def handle_inbox_command(args):
-    """Handle inbox subcommands."""
     from ledger.inbox import list_inbox, triage_suggestions
 
     sub = getattr(args, "inbox_command", None)
@@ -702,7 +618,6 @@ def handle_inbox_command(args):
 
 
 def handle_voice_dna_command(args):
-    """Handle voice-dna subcommands."""
     from ledger.voice import import_voice_dna, export_voice_dna
 
     sub = getattr(args, "voice_command", None)
@@ -724,7 +639,40 @@ def handle_voice_dna_command(args):
         raise SystemExit(1)
 
 
-def main():
+def handle_sleep_command(args):
+    from ledger import maintenance as maint
+    subargs = getattr(args, "subargs", []) or []
+    raise SystemExit(maint.main(subargs))
+
+
+def handle_ab_command(args, ab_parser):
+    ab_command = getattr(args, "ab_command", None)
+
+    if ab_command == "run":
+        from ledger.ab import main_cli as ab_main
+        subargs = getattr(args, "abargs", []) or []
+        raise SystemExit(ab_main(subargs))
+
+    if ab_command == "charts":
+        from ledger.ab_charts import main as charts_main
+        charts_main()
+        return
+
+    ab_parser.print_help()
+
+
+def main(argv=None) -> int:
+    raw = list(sys.argv[1:] if argv is None else argv)
+
+    # argparse.REMAINDER misroutes when nested under subparsers (bpo-9334),
+    # so dispatch these passthrough commands before argparse sees them.
+    if raw[:2] == ["ab", "run"]:
+        from ledger.ab import main_cli as ab_main
+        return ab_main(raw[2:])
+    if raw[:1] == ["sleep"]:
+        from ledger import maintenance as maint
+        return maint.main(raw[1:])
+
     parser = argparse.ArgumentParser(description="Cognitive Ledger retrieval helpers")
     subparsers = parser.add_subparsers(dest="command")
 
@@ -734,7 +682,6 @@ def main():
     loops_parser.add_argument("--paths", action="store_true")
     loops_parser.add_argument("--status", choices=list(_config.loop_statuses) + ["all"], default="open")
     loops_parser.add_argument("--verbose", action="store_true")
-    loops_parser.add_argument("--interactive", action="store_true")
 
     notes_parser = subparsers.add_parser("notes", help="List notes by type")
     notes_parser.add_argument(
@@ -747,7 +694,6 @@ def main():
     notes_parser.add_argument("--width", type=int, default=120)
     notes_parser.add_argument("--paths", action="store_true")
     notes_parser.add_argument("--verbose", action="store_true")
-    notes_parser.add_argument("--interactive", action="store_true")
 
     query_parser = subparsers.add_parser("query", help="Rank notes for a query")
     query_parser.add_argument("text", help="query text")
@@ -826,7 +772,7 @@ def main():
         dest="text_template",
         choices=_config.embed_text_templates,
         default=None,
-        help="Passage/query text template applied at index time. Use 'e5_prefix' for intfloat/e5-* models. Defaults to config.embed_text_template (none).",
+        help="Passage/query text template applied at index time. Use 'e5_prefix' for intfloat/e5-* models.",
     )
     embed_build_parser.add_argument("--json", action="store_true", dest="json")
 
@@ -866,17 +812,26 @@ def main():
         "--emit-ranks",
         dest="emit_ranks",
         action="store_true",
-        help="Emit per-case rank diagnostics as JSONL on stdout (one line per case). Implies --json semantics for per-case rows.",
+        help="Emit per-case rank diagnostics as JSONL on stdout (one line per case).",
     )
 
-    # Context subcommand (session boot payload)
-    context_parser = subparsers.add_parser("context", help="Output boot context for session start")
+    # Context subcommand
+    context_parser = subparsers.add_parser("context", help="Output boot context or build context files")
     context_parser.add_argument(
         "--format",
         choices=("boot", "identity", "json"),
         default="boot",
         help="Output format: boot (full payload), identity (identity notes only), json (scored items)",
     )
+    context_subparsers = context_parser.add_subparsers(dest="context_command")
+
+    context_build_parser = context_subparsers.add_parser("build", help="Write context.md index file")
+    context_build_parser.add_argument("--ledger-notes-dir", dest="ledger_notes_dir", required=True)
+    context_build_parser.add_argument("--output", required=True, help="Path to output markdown file")
+
+    context_profiles_parser = context_subparsers.add_parser("profiles", help="Write scoped context profile files")
+    context_profiles_parser.add_argument("--ledger-notes-dir", dest="ledger_notes_dir", required=True)
+    context_profiles_parser.add_argument("--output-dir", dest="output_dir", required=True)
 
     paths_parser = subparsers.add_parser("paths", help="Show resolved ledger/source paths")
     paths_parser.add_argument(
@@ -886,47 +841,40 @@ def main():
     )
     paths_parser.add_argument("--json", action="store_true", dest="json")
 
-    # Init subcommand
     init_parser = subparsers.add_parser("init", help="Initialize a cognitive ledger")
-    init_parser.add_argument("--root", default=None, help="Ledger root directory (where config.yaml and templates/ live). Defaults to LEDGER_ROOT env var or the package install dir.")
+    init_parser.add_argument("--root", default=None, help="Ledger root directory")
     init_parser.add_argument("--voice-dna", default=None, help="Path to voice-dna JSON file")
-    init_parser.add_argument("--source-notes-dir", dest="source_notes_dir", default=None, help="Source notes directory")
-    init_parser.add_argument("--ledger-notes-dir", dest="ledger_notes_dir", default=None, help="Ledger notes directory path")
+    init_parser.add_argument("--source-notes-dir", dest="source_notes_dir", default=None)
+    init_parser.add_argument("--ledger-notes-dir", dest="ledger_notes_dir", default=None)
 
-    # Ingest subcommand
     ingest_parser = subparsers.add_parser("ingest", help="Source ingest pipeline")
     ingest_subparsers = ingest_parser.add_subparsers(dest="ingest_command")
     ingest_scan_parser = ingest_subparsers.add_parser("scan", help="Show new/changed sources")
-    ingest_scan_parser.add_argument("--source-notes-dir", dest="source_notes_dir", default=None, help="Source notes directory")
+    ingest_scan_parser.add_argument("--source-notes-dir", dest="source_notes_dir", default=None)
     ingest_diff_parser = ingest_subparsers.add_parser("diff", help="Detailed diff against manifest")
-    ingest_diff_parser.add_argument("--source-notes-dir", dest="source_notes_dir", default=None, help="Source notes directory")
+    ingest_diff_parser.add_argument("--source-notes-dir", dest="source_notes_dir", default=None)
     ingest_record_parser = ingest_subparsers.add_parser("record", help="Record ingest provenance")
     ingest_record_parser.add_argument("source", help="Source file relative path")
     ingest_record_parser.add_argument("notes", nargs="+", help="Derived note paths")
-    ingest_record_parser.add_argument("--source-notes-dir", dest="source_notes_dir", default=None, help="Source notes directory")
+    ingest_record_parser.add_argument("--source-notes-dir", dest="source_notes_dir", default=None)
 
-    # Links subcommand
     links_parser = subparsers.add_parser("links", help="Show link graph")
     links_parser.add_argument("note_path", nargs="?", help="Show links for a specific note")
 
-    # Briefing subcommand
     briefing_parser = subparsers.add_parser("briefing", help="Daily or weekly briefing")
-    briefing_parser.add_argument("--weekly", action="store_true", help="Weekly review instead of daily")
+    briefing_parser.add_argument("--weekly", action="store_true")
 
-    # Inbox subcommand
     inbox_parser = subparsers.add_parser("inbox", help="Manage inbox captures")
     inbox_subparsers = inbox_parser.add_subparsers(dest="inbox_command")
     inbox_subparsers.add_parser("list", help="List inbox items")
     inbox_subparsers.add_parser("triage", help="Suggest target types for inbox items")
 
-    # Voice DNA subcommand
     voice_parser = subparsers.add_parser("voice-dna", help="Import or show voice DNA profile")
     voice_subparsers = voice_parser.add_subparsers(dest="voice_command")
     voice_import_parser = voice_subparsers.add_parser("import", help="Import voice DNA from JSON")
     voice_import_parser.add_argument("json_path", help="Path to voice-dna JSON file")
     voice_subparsers.add_parser("show", help="Show current voice DNA profile")
 
-    # Signal subcommand (feedback loop)
     signal_parser = subparsers.add_parser("signal", help="Capture and analyze feedback signals")
     signal_subparsers = signal_parser.add_subparsers(dest="signal_command")
 
@@ -935,33 +883,41 @@ def main():
         "--type", required=True,
         choices=("retrieval_hit", "retrieval_miss", "correction", "affirmation",
                  "stale_flag", "preference_applied", "rating"),
-        help="Signal type",
     )
-    signal_add_parser.add_argument("--query", default=None, help="Query text (for retrieval signals)")
-    signal_add_parser.add_argument("--note", default=None, help="Note path")
-    signal_add_parser.add_argument("--detail", default=None, help="Free-text detail")
-    signal_add_parser.add_argument("--rating", type=int, default=None, help="Rating 1-10 (for rating type)")
-    signal_add_parser.add_argument("--session", default=None, help="Session identifier")
+    signal_add_parser.add_argument("--query", default=None)
+    signal_add_parser.add_argument("--note", default=None)
+    signal_add_parser.add_argument("--detail", default=None)
+    signal_add_parser.add_argument("--rating", type=int, default=None)
+    signal_add_parser.add_argument("--session", default=None)
 
     signal_subparsers.add_parser("summarize", help="Rebuild signal_summary.json")
     signal_subparsers.add_parser("stats", help="Print signal statistics")
 
-    args = parser.parse_args()
+    # sleep subcommand - delegates to ledger.maintenance
+    sleep_parser = subparsers.add_parser("sleep", help="Electric Sheep maintenance (sleep, lint, index, status, sync)")
+    sleep_parser.add_argument("subargs", nargs=argparse.REMAINDER, help=argparse.SUPPRESS)
+
+    # ab subcommand - A/B testing and performance charts
+    ab_parser = subparsers.add_parser("ab", help="A/B testing and performance charts")
+    ab_subparsers = ab_parser.add_subparsers(dest="ab_command")
+
+    ab_run_parser = ab_subparsers.add_parser("run", help="Run A/B retrieval quality harness")
+    ab_run_parser.add_argument("abargs", nargs=argparse.REMAINDER, help=argparse.SUPPRESS)
+
+    ab_subparsers.add_parser("charts", help="Render A/B performance charts from performance_series.json")
+
+    args = parser.parse_args(argv)
 
     def handle_listing_command(command_args):
         if command_args.command == "loops":
-            if command_args.interactive:
-                interactive_items(command_args, "loops", loop_status=command_args.status)
-            elif command_args.verbose:
+            if command_args.verbose:
                 verbose_items(command_args, "loops", loop_status=command_args.status)
             else:
                 list_items(command_args, "loops", loop_status=command_args.status)
             return
 
         if command_args.command == "notes":
-            if command_args.interactive:
-                interactive_items(command_args, command_args.type)
-            elif command_args.verbose:
+            if command_args.verbose:
                 verbose_items(command_args, command_args.type)
             else:
                 list_items(command_args, command_args.type)
@@ -983,55 +939,60 @@ def main():
     try:
         if args.command in {"loops", "notes"}:
             handle_listing_command(args)
-            return
+            return 0
 
         if args.command == "embed":
             embed_handler = embed_handlers.get(args.embed_command)
             if embed_handler is not None:
                 embed_handler(args)
-                return
+                return 0
             embed_parser.print_help()
-            return
+            return 0
 
         if args.command == "signal":
             handle_signal_command(args)
-            return
+            return 0
 
         if args.command == "init":
             handle_init_command(args)
-            return
+            return 0
 
         if args.command == "ingest":
             handle_ingest_command(args)
-            return
+            return 0
 
         if args.command == "links":
             handle_links_command(args)
-            return
+            return 0
 
         if args.command == "briefing":
             handle_briefing_command(args)
-            return
+            return 0
 
         if args.command == "inbox":
             handle_inbox_command(args)
-            return
+            return 0
 
         if args.command == "voice-dna":
             handle_voice_dna_command(args)
-            return
+            return 0
+
+        if args.command == "sleep":
+            handle_sleep_command(args)
+            return 0
+
+        if args.command == "ab":
+            handle_ab_command(args, ab_parser)
+            return 0
 
         handler = command_handlers.get(args.command)
         if handler is not None:
             handler(args)
-            return
+            return 0
+
     except RuntimeError as exc:
         print(f"error: {exc}")
-        raise SystemExit(2)
+        return 2
 
     parser.print_help()
-
-
-if __name__ == "__main__":
-    maybe_reexec_in_repo_venv(ROOT_DIR, script_path=Path(__file__).resolve())
-    main()
+    return 0

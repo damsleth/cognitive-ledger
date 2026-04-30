@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
@@ -40,18 +39,12 @@ def reset_embeddings_cache() -> None:
     _EMBEDDINGS_MODULE_CACHE = None
 
 
-def load_embeddings_module(scripts_dir: str | Path | None = None) -> Any:
+def load_embeddings_module() -> Any:
     global _EMBEDDINGS_MODULE_CACHE
     if _EMBEDDINGS_MODULE_CACHE is not None:
         return _EMBEDDINGS_MODULE_CACHE
 
-    if scripts_dir is not None:
-        resolved_dir = str(Path(scripts_dir).resolve())
-        if resolved_dir not in sys.path:
-            sys.path.insert(0, resolved_dir)
-
-    import ledger_embeddings as module
-
+    from ledger import embeddings as module
     _EMBEDDINGS_MODULE_CACHE = module
     return _EMBEDDINGS_MODULE_CACHE
 

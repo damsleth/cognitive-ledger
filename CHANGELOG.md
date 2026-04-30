@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-04-30
+
+### Changed
+- **Refactor: scripts to package modules.** The monolithic `scripts/ledger` (~1050 lines) and `scripts/ledger_ab` (~570 lines) are now thin entry points exposed by the installed `ledger` CLI (`pyproject.toml` declares `ledger = ledger.cli:main`). Logic lives in `ledger/cli.py`, `ledger/ab.py`, `ledger/ab_charts.py`, `ledger/embeddings.py`, and `ledger/__main__.py`.
+- Compatibility shims `scripts/ledger`, `scripts/ledger_ab`, `scripts/sheep`, and the duplicate `scripts/ledger_embeddings.py` removed. Use `ledger ...`, `ledger ab run ...`, and `ledger sleep ...` instead.
+- Hooks (`scripts/hooks/*.sh`) and `scripts/sheep-auto.sh` now require `ledger` on `$PATH`. Run `./scripts/add-to-path.sh` (pipx editable install) after cloning.
+- `ledger ab run` and `ledger sleep` are pre-routed in `cli.main()` to work around argparse.REMAINDER misbehaving inside nested subparsers (bpo-9334).
+
+### Fixed
+- `ledger.__version__` now matches `pyproject.toml` (`0.2.2`).
+
+### Added
+- `tests/test_cli.py` covers the CLI dispatch surface: argument validation, subcommand routing, exit codes, JSON-vs-human output, and a regression guard for `__version__` consistency.
+
 ## 2026-04-28
 
 ### Added
