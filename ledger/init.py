@@ -21,6 +21,7 @@ LEDGER_NOTES_GITIGNORE_LINES = (
     ".DS_Store",
     "*.lock",
     "08_indices/.session_baseline",
+    "08_indices/.last_dirty_paths_hash",
     "08_indices/note_index.json",
 )
 

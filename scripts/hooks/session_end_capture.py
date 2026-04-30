@@ -30,6 +30,22 @@ from ledger.parsing.frontmatter import serialize_frontmatter
 def _baseline_path() -> Path:
     return indices_dir(get_config().ledger_notes_dir) / ".session_baseline"
 
+
+def _dirty_hash_path() -> Path:
+    return indices_dir(get_config().ledger_notes_dir) / ".last_dirty_paths_hash"
+
+
+def _dirty_paths_already_captured(paths: list[str]) -> bool:
+    """Return True if these dirty paths match the last capture (dedup)."""
+    import hashlib
+    digest = hashlib.sha256("\n".join(sorted(paths)).encode("utf-8")).hexdigest()
+    sentinel = _dirty_hash_path()
+    if sentinel.is_file() and sentinel.read_text(encoding="utf-8").strip() == digest:
+        return True
+    sentinel.parent.mkdir(parents=True, exist_ok=True)
+    sentinel.write_text(digest + "\n", encoding="utf-8")
+    return False
+
 # Keywords that signal durable artifacts in commit messages
 DECISION_SIGNALS = re.compile(
     r"(?:decide|chose|pick|select|switch|adopt|migrate|replace|introduce|add|create|implement)",
@@ -187,7 +203,7 @@ def main() -> int:
 
         # Check for work left incomplete (uncommitted changes in notes/)
         note_changes = _notes_dirty_paths()
-        if note_changes:
+        if note_changes and not _dirty_paths_already_captured(note_changes):
             _write_inbox_note(
                 title="Uncommitted note changes",
                 content="The following notes have uncommitted changes:\n" + "\n".join(f"- {f}" for f in note_changes),
@@ -197,7 +213,7 @@ def main() -> int:
     else:
         # No baseline - check for uncommitted working-tree diffs only
         note_changes = _notes_dirty_paths()
-        if note_changes:
+        if note_changes and not _dirty_paths_already_captured(note_changes):
             _write_inbox_note(
                 title="Session notes (no baseline)",
                 content="Notes modified this session (no baseline available):\n" + "\n".join(f"- {f}" for f in note_changes),
