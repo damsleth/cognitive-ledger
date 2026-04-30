@@ -1,28 +1,9 @@
 #!/usr/bin/env python3
-import argparse
+"""Compatibility shim - use `ledger context build` instead."""
 import sys
 from pathlib import Path
-
-SCRIPT_DIR = Path(__file__).resolve().parent
-ROOT_DIR = SCRIPT_DIR.parent
-if str(ROOT_DIR) not in sys.path:
-    sys.path.insert(0, str(ROOT_DIR))
-
-from ledger.context import build_context, write_context
-from ledger.venv import maybe_reexec_in_repo_venv
-
-
-def main():
-    parser = argparse.ArgumentParser(description="Generate deterministic boot context index from ledger notes")
-    parser.add_argument("--ledger-notes-dir", dest="ledger_notes_dir", required=True, help="Path to ledger notes directory")
-    parser.add_argument("--output", required=True, help="Path to output markdown file")
-    args = parser.parse_args()
-
-    notes_dir = Path(args.ledger_notes_dir)
-    output = Path(args.output)
-    write_context(output, notes_dir)
-
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from ledger.cli import main
 
 if __name__ == "__main__":
-    maybe_reexec_in_repo_venv(ROOT_DIR, script_path=Path(__file__).resolve())
-    main()
+    sys.exit(main(["context", "build"] + sys.argv[1:]))

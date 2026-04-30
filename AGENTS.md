@@ -4,7 +4,7 @@
 
 Machine-readable spec: `schema.yaml`. Note templates: `templates/`.
 
-Resolve the active physical corpus path with `./scripts/ledger paths --field ledger_notes_dir`.
+Resolve the active physical corpus path with `ledger paths --field ledger_notes_dir`.
 Logical note references remain `notes/...` even when the corpus lives outside this repo.
 
 The canonical `/notes` agent skill is maintained in a separate repository:
@@ -14,8 +14,8 @@ duplicating its contents here.
 ### Boot
 
 ```bash
-LEDGER_NOTES_DIR="$(./scripts/ledger paths --field ledger_notes_dir)"
-./scripts/ledger context --format boot         # full boot payload (identity + loops + status)
+LEDGER_NOTES_DIR="$(ledger paths --field ledger_notes_dir)"
+ledger context --format boot         # full boot payload (identity + loops + status)
 tail -20 "$LEDGER_NOTES_DIR/08_indices/timeline.md"          # recent changes
 rg "<keyword>" "$LEDGER_NOTES_DIR" -n                        # search content (show matches)
 fd "id__" "$LEDGER_NOTES_DIR/01_identity"                    # identity notes
@@ -74,28 +74,27 @@ ledger-obsidian daemon start|status|stop --vault /path/to/vault   # macOS
 ### Retrieve & Eval
 
 ```bash
-./scripts/ledger query "<topic>" --scope all --limit 8
-./scripts/ledger query "<topic>" --scope all --limit 8 --retrieval-mode <mode>
-./scripts/ledger query "<topic>" --scope dev --bundle
-./scripts/ledger discover-source "<topic>" --source-notes-dir <root> --limit 20
-./scripts/ledger embed build --target ledger --backend local --model TaylorAI/bge-micro-v2
-./scripts/ledger embed status --target both
-./scripts/ledger eval --cases "$(./scripts/ledger paths --field ledger_notes_dir)/08_indices/retrieval_eval_cases.yaml" --k 3 --strict-cases
-./scripts/ledger loops                 # compact list (default)
-./scripts/ledger loops --interactive   # progressive disclosure
-./scripts/ledger notes --type <all|identity|facts|preferences|goals|loops|concepts> --interactive
-./scripts/ledger context --format boot # session boot payload
-./scripts/ledger context --format identity  # identity notes only
+ledger query "<topic>" --scope all --limit 8
+ledger query "<topic>" --scope all --limit 8 --retrieval-mode <mode>
+ledger query "<topic>" --scope dev --bundle
+ledger discover-source "<topic>" --source-notes-dir <root> --limit 20
+ledger embed build --target ledger --backend local --model TaylorAI/bge-micro-v2
+ledger embed status --target both
+ledger eval --cases "$(ledger paths --field ledger_notes_dir)/08_indices/retrieval_eval_cases.yaml" --k 3 --strict-cases
+ledger loops                 # compact list (default)
+ledger notes --type <all|identity|facts|preferences|goals|loops|concepts>
+ledger context --format boot # session boot payload
+ledger context --format identity  # identity notes only
 ```
 
 ### Signals (Feedback Loop)
 
 ```bash
-./scripts/ledger signal add --type retrieval_hit --query "deploy" --note notes/02_facts/fact__k8s.md
-./scripts/ledger signal add --type correction --note notes/03_preferences/pref__x.md --detail "outdated"
-./scripts/ledger signal add --type rating --rating 8
-./scripts/ledger signal summarize      # rebuild signal_summary.json
-./scripts/ledger signal stats          # show signal counts, top notes, gaps
+ledger signal add --type retrieval_hit --query "deploy" --note notes/02_facts/fact__k8s.md
+ledger signal add --type correction --note notes/03_preferences/pref__x.md --detail "outdated"
+ledger signal add --type rating --rating 8
+ledger signal summarize      # rebuild signal_summary.json
+ledger signal stats          # show signal counts, top notes, gaps
 ```
 
 Signal types: `retrieval_hit`, `retrieval_miss`, `correction`, `affirmation`,
@@ -106,10 +105,10 @@ Signal types: `retrieval_hit`, `retrieval_miss`, `correction`, `affirmation`,
 ### A/B Testing
 
 ```bash
-./scripts/ledger_ab --baseline-ref main --candidate-ref HEAD   # uses ledger_notes_dir from config.yaml
-./scripts/ledger_ab --corpus ~/Code/ledger-notes --baseline-ref main --candidate-ref HEAD
-./scripts/ledger_ab --baseline-ref main --candidate-ref HEAD --eval-runs 7 --query-runs 5
-./scripts/ledger_ab --baseline-ref main --candidate-ref HEAD --query-runs 5 --cold-query
+ledger ab run --baseline-ref main --candidate-ref HEAD   # uses ledger_notes_dir from config.yaml
+ledger ab run --corpus ~/Code/ledger-notes --baseline-ref main --candidate-ref HEAD
+ledger ab run --baseline-ref main --candidate-ref HEAD --eval-runs 7 --query-runs 5
+ledger ab run --baseline-ref main --candidate-ref HEAD --query-runs 5 --cold-query
 ```
 
 Exit codes: `0` beneficial, `2` regression, `3` neutral, `4` invalid setup.
@@ -117,11 +116,11 @@ Exit codes: `0` beneficial, `2` regression, `3` neutral, `4` invalid setup.
 ### Electric Sheep (sleep / consolidation)
 
 ```bash
-./scripts/sheep status
-./scripts/sheep sync --check && ./scripts/sheep sync --apply
-./scripts/sheep sleep
-./scripts/sheep lint    # if present
-./scripts/sheep index   # if present
+ledger sleep status
+ledger sleep sync --check && ledger sleep sync --apply
+ledger sleep sleep
+ledger sleep lint
+ledger sleep index
 ```
 
 ### Folder map
@@ -318,7 +317,7 @@ In addition to note writes, capture feedback signals when:
 - The user **confirms** the agent got it right → `affirmation`
 - A note is referenced but its content is **outdated** → `stale_flag`
 
-Capture via: `./scripts/ledger signal add --type <type> [--query <q>] [--note <path>]`
+Capture via: `ledger signal add --type <type> [--query <q>] [--note <path>]`
 
 Do NOT capture signals speculatively or for trivial queries. Only log when
 there is clear user feedback or deliberate note usage.
@@ -362,7 +361,7 @@ Agents should follow this loop on every user interaction:
      using only the ledger + search tools.
 4. **Signal** – If user feedback occurred (correction, affirmation, or
    explicit rating), or a retrieved note was used in the response, log a
-   signal via `./scripts/ledger signal add`. See "Signal capture" above.
+   signal via `ledger signal add`. See "Signal capture" above.
 5. **Report** – Summarise what you changed. In the chat, list any
    created or updated files with a one-line description. Do not dump
    the full note contents unless the user asks.

@@ -86,11 +86,11 @@ Add to `.claude/settings.json`:
 
 Invoke `/notes` in your agent session:
 
-1. Read `$(./scripts/ledger paths --field ledger_notes_dir)/08_indices/context.md` for existing context
+1. Read `$(ledger paths --field ledger_notes_dir)/08_indices/context.md` for existing context
 2. Ask targeted questions about what you want to capture
 3. Write atomic notes to the ledger (and optionally to your notes tree)
 
-Or try `./scripts/ledger briefing` for a daily status overview.
+Or try `ledger briefing` for a daily status overview.
 
 ## Plugging Into an Existing Notes Repository
 
@@ -122,9 +122,9 @@ ledger-obsidian doctor --vault /path/to/vault          # health check
 ### Build indices
 
 ```bash
-./scripts/sheep index                    # rebuild metadata index
-./scripts/sheep lint                     # validate frontmatter
-./scripts/sheep status                   # time since last consolidation
+ledger sleep index                    # rebuild metadata index
+ledger sleep lint                     # validate frontmatter
+ledger sleep status                   # time since last consolidation
 ```
 
 ### Query your notes
@@ -133,21 +133,20 @@ Three detail levels let agents control the cost/detail tradeoff:
 
 ```bash
 # Index view - compact scan (~20-30 tokens per result)
-./scripts/ledger query "calendar constraints" --scope all --limit 8 --view index
+ledger query "calendar constraints" --scope all --limit 8 --view index
 
 # Context view (default) - statements, snippets, tags (~80-120 tokens)
-./scripts/ledger query "calendar constraints" --scope all --limit 8
+ledger query "calendar constraints" --scope all --limit 8
 
 # Detail view - full bodies, score components (~200-1000 tokens)
-./scripts/ledger query "calendar constraints" --scope all --limit 8 --view detail
+ledger query "calendar constraints" --scope all --limit 8 --view detail
 
 # Bundle mode - context-window-friendly excerpts within a word budget
-./scripts/ledger query "calendar constraints" --bundle
+ledger query "calendar constraints" --bundle
 
 # Other
-./scripts/ledger loops                                    # list open loops
-./scripts/ledger loops --interactive                      # progressive disclosure
-./scripts/ledger context --format boot                    # session boot payload
+ledger loops                                    # list open loops
+ledger context --format boot                    # session boot payload
 ```
 
 ### Semantic search (recommended)
@@ -155,16 +154,16 @@ Three detail levels let agents control the cost/detail tradeoff:
 Build the embedding index to activate `semantic_hybrid` (the default retrieval mode). Without this, queries fall back to `precomputed_index`.
 
 ```bash
-./scripts/ledger embed build --target ledger --backend local --model TaylorAI/bge-micro-v2
-./scripts/ledger embed status --target ledger    # verify index exists
+ledger embed build --target ledger --backend local --model TaylorAI/bge-micro-v2
+ledger embed status --target ledger    # verify index exists
 ```
 
 ### Eval and A/B testing
 
 ```bash
-./scripts/ledger eval --cases "$(./scripts/ledger paths --field ledger_notes_dir)/08_indices/retrieval_eval_cases.yaml" --k 3
-./scripts/ledger_ab --baseline-ref main --candidate-ref HEAD --runs 5     # uses ledger_notes_dir from config.yaml
-./scripts/ledger_ab --corpus ~/Code/ledger-notes --baseline-ref main --candidate-ref HEAD --runs 5
+ledger eval --cases "$(ledger paths --field ledger_notes_dir)/08_indices/retrieval_eval_cases.yaml" --k 3
+ledger ab run --baseline-ref main --candidate-ref HEAD --runs 5     # uses ledger_notes_dir from config.yaml
+ledger ab run --corpus ~/Code/ledger-notes --baseline-ref main --candidate-ref HEAD --runs 5
 ```
 
 ### Retrieval Mode A/B Results
@@ -218,8 +217,8 @@ Each note has YAML frontmatter with `created`, `updated`, `tags`, `confidence`, 
 Identity notes in `notes/01_identity/` capture who the user is — mission, beliefs, mental models, decision strategies, and personal narratives. These are high-signal, small files (max 5) that provide rich context for interpreting requests. They receive a retrieval score boost and are loaded automatically at session start.
 
 ```bash
-./scripts/ledger context --format identity   # list identity notes
-./scripts/ledger notes --type identity       # browse identity notes
+ledger context --format identity   # list identity notes
+ledger notes --type identity       # browse identity notes
 ```
 
 ## Privacy Fences
@@ -239,11 +238,11 @@ Privacy stripping runs on all ingestion paths: retrieval candidate building, Obs
 The ledger captures feedback signals — retrieval hits/misses, corrections, affirmations, and ratings — to improve retrieval ranking over time. Signals are stored as append-only JSONL and summarized into per-note scores that feed back into retrieval.
 
 ```bash
-./scripts/ledger signal add --type retrieval_hit --query "deploy" --note notes/02_facts/fact__k8s.md
-./scripts/ledger signal add --type correction --note notes/03_preferences/pref__x.md --detail "outdated"
-./scripts/ledger signal add --type rating --rating 8
-./scripts/ledger signal summarize            # rebuild signal_summary.json
-./scripts/ledger signal stats                # counts, top notes, coverage gaps
+ledger signal add --type retrieval_hit --query "deploy" --note notes/02_facts/fact__k8s.md
+ledger signal add --type correction --note notes/03_preferences/pref__x.md --detail "outdated"
+ledger signal add --type rating --rating 8
+ledger signal summarize            # rebuild signal_summary.json
+ledger signal stats                # counts, top notes, coverage gaps
 ```
 
 Signal scoring is disabled by default (`score_weight_signal: 0.0`) until enough data accumulates. Enable via `config.yaml` once you have 20+ signals.
@@ -267,8 +266,8 @@ For Claude Code, configure hooks in `.claude/settings.json`. See `AGENTS.md` for
 Periodic maintenance keeps the ledger coherent as it grows:
 
 ```bash
-./scripts/sheep sync --check && ./scripts/sheep sync --apply
-./scripts/sheep sleep
+ledger sleep sync --check && ledger sleep sync --apply
+ledger sleep sleep
 ```
 
 Sleep merges duplicates, promotes patterns into stable notes, updates indices, and tightens open loops.
