@@ -1,6 +1,4 @@
 import contextlib
-import importlib.machinery
-import importlib.util
 import io
 import sys
 import tempfile
@@ -13,17 +11,13 @@ from ledger.init import init_ledger
 
 
 ROOT = Path(__file__).resolve().parents[1]
-LEDGER_PATH = ROOT / "scripts" / "ledger"
 
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 
 def load_ledger_module():
-    loader = importlib.machinery.SourceFileLoader("ledger_paths_module", str(LEDGER_PATH))
-    spec = importlib.util.spec_from_file_location("ledger_paths_module", str(LEDGER_PATH), loader=loader)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    import ledger.cli as module
     return module
 
 

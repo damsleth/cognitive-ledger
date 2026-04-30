@@ -13,8 +13,12 @@ from .retrieval_types import (
     TimingInfo,
 )
 
-__version__ = "0.2.0"
+__version__ = "0.2.2"
+
+from .cli import main  # noqa: E402
+
 __all__ = [
+    "main",
     "get_config",
     "reset_config",
     "LedgerConfig",

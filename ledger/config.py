@@ -49,6 +49,12 @@ def _default_source_notes_dir() -> Path:
     return Path.home() / "notes"
 
 
+def _xdg_config_path() -> Path:
+    """User-level config location, following the XDG Base Directory spec."""
+    base = os.getenv("XDG_CONFIG_HOME") or str(Path.home() / ".config")
+    return Path(base).expanduser() / "cognitive-ledger" / "config.yaml"
+
+
 def _raise_migration_error(items: list[str]) -> None:
     raise RuntimeError("\n".join(items))
 
@@ -583,10 +589,17 @@ class LedgerConfig:
 
     @classmethod
     def from_env(cls) -> "LedgerConfig":
-        """Load config from config.yaml (if present) with env var overrides."""
+        """Load config from config.yaml (if present) with env var overrides.
+
+        Lookup order (later sources override earlier ones):
+        1. ``$XDG_CONFIG_HOME/cognitive-ledger/config.yaml`` (user-level)
+        2. ``<ledger_root>/config.yaml`` (repo-level)
+        3. Environment variables (LEDGER_ROOT, LEDGER_NOTES_DIR, etc.)
+        """
         config = cls()
-        config_path = config.ledger_root / "config.yaml"
-        config = _apply_yaml_config(config, config_path)
+        repo_config_path = config.ledger_root / "config.yaml"
+        config = _apply_yaml_config(config, _xdg_config_path())
+        config = _apply_yaml_config(config, repo_config_path)
         return _apply_env_overrides(config)
 
     @classmethod

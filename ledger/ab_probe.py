@@ -64,10 +64,8 @@ def main() -> int:
             elif isinstance(current, bool):
                 setattr(cfg, key, str(value).lower() in ("true", "1", "yes"))
 
-    ledger_script = ab_lib.load_module_from_script(
-        worktree / "scripts" / "ledger",
-        "ledger_side_module",
-    )
+    import importlib
+    ledger_script = importlib.import_module("ledger.cli")
     retrieval_mode = payload["retrieval_mode"]
     embed_backend = payload["embed_backend"]
     embed_model = payload.get("embed_model") or None

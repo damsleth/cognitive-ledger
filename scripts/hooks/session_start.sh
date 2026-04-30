@@ -25,7 +25,7 @@ resolve_notes_dir() {
         printf '%s\n' "$LEDGER_NOTES_DIR"
         return
     fi
-    python3 "$ROOT_DIR/scripts/ledger" paths --field ledger_notes_dir 2>/dev/null || printf '%s\n' "$ROOT_DIR/notes"
+    ledger paths --field ledger_notes_dir 2>/dev/null || printf '%s\n' "$ROOT_DIR/notes"
 }
 
 NOTES_DIR="$(resolve_notes_dir)"
@@ -55,8 +55,8 @@ fi
 
 # Primary path: ledger context --format boot emits the full payload
 # (identity, facts, prefs, loops, maintenance status, signal stats)
-if [ -x "$ROOT_DIR/scripts/ledger" ]; then
-    python3 "$ROOT_DIR/scripts/ledger" context --format boot 2>/dev/null && exit 0
+if command -v ledger &>/dev/null; then
+    ledger context --format boot 2>/dev/null && exit 0
 fi
 
 # Fallback: manual boot payload (when ledger CLI is unavailable)
@@ -80,13 +80,13 @@ fi
 # Open loops (compact list)
 echo "## Open Loops"
 echo ""
-python3 "$ROOT_DIR/scripts/ledger" loops --limit 10 --width 120 2>/dev/null || echo "- (could not load loops)"
+ledger loops --limit 10 --width 120 2>/dev/null || echo "- (could not load loops)"
 echo ""
 
 # Sheep status
 echo "## Maintenance"
 echo ""
-bash "$ROOT_DIR/scripts/sheep" status 2>/dev/null || echo "- (could not check status)"
+ledger sleep status 2>/dev/null || echo "- (could not check status)"
 echo ""
 
 # Signal stats

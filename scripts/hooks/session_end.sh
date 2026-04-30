@@ -27,7 +27,7 @@ resolve_notes_dir() {
         printf '%s\n' "$LEDGER_NOTES_DIR"
         return
     fi
-    python3 "$ROOT_DIR/scripts/ledger" paths --field ledger_notes_dir 2>/dev/null || printf '%s\n' "$ROOT_DIR/notes"
+    ledger paths --field ledger_notes_dir 2>/dev/null || printf '%s\n' "$ROOT_DIR/notes"
 }
 
 NOTES_DIR="$(resolve_notes_dir)"
@@ -44,7 +44,7 @@ if [ -f "$SIGNALS_FILE" ]; then
     fi
 
     if [ "$signals_mtime" -gt "$summary_mtime" ] 2>/dev/null; then
-        python3 "$ROOT_DIR/scripts/ledger" signal summarize 2>/dev/null || true
+        ledger signal summarize 2>/dev/null || true
     fi
 fi
 
@@ -64,7 +64,7 @@ fi
 if [ "$modified" -gt 0 ]; then
     echo "Session summary: $modified note(s) modified."
     if [ "$modified" -gt 5 ]; then
-        echo "Consider running: ./scripts/sheep sleep"
+        echo "Consider running: ledger sleep sleep"
     fi
 fi
 
