@@ -25,7 +25,7 @@ resolve_notes_dir() {
         printf '%s\n' "$LEDGER_NOTES_DIR"
         return
     fi
-    python3 "$ROOT_DIR/scripts/ledger" paths --field ledger_notes_dir 2>/dev/null || printf '%s\n' "$ROOT_DIR/notes"
+    ledger paths --field ledger_notes_dir 2>/dev/null || printf '%s\n' "$ROOT_DIR/notes"
 }
 
 NOTES_DIR="$(resolve_notes_dir)"

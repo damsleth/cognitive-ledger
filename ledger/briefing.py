@@ -165,7 +165,7 @@ def daily_briefing() -> str:
     # Maintenance check
     lines.append("## Maintenance")
     lines.append("")
-    lines.append("Run `./scripts/sheep status` for maintenance status.")
+    lines.append("Run `ledger sleep status` for maintenance status.")
     lines.append("")
 
     # Suggested actions

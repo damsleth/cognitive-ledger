@@ -1,5 +1,3 @@
-import importlib.machinery
-import importlib.util
 import json
 from pathlib import Path
 import subprocess
@@ -10,7 +8,7 @@ import unittest
 from ledger import ab as ab_lib
 
 ROOT = Path(__file__).resolve().parents[1]
-LEDGER_AB_PATH = ROOT / "scripts" / "ledger_ab"
+LEDGER_AB_INVOKE: list[str] = [sys.executable, "-m", "ledger", "ab", "run"]
 
 # Ensure ledger package is importable
 if str(ROOT) not in sys.path:
@@ -18,12 +16,8 @@ if str(ROOT) not in sys.path:
 
 
 def load_ledger_ab_module():
-    """Load the extensionless scripts/ledger_ab as a module."""
-    loader = importlib.machinery.SourceFileLoader("ledger_ab_module", str(LEDGER_AB_PATH))
-    spec = importlib.util.spec_from_file_location("ledger_ab_module", str(LEDGER_AB_PATH), loader=loader)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    """Return the ledger.ab module (scripts/ledger_ab is now a shim)."""
+    return ab_lib
 
 
 def write_smoke_corpus(root: Path) -> None:
@@ -499,8 +493,7 @@ class LedgerABSmokeIntegrationTests(unittest.TestCase):
             write_smoke_corpus(corpus_dir)
             process = subprocess.run(
                 [
-                    sys.executable,
-                    str(LEDGER_AB_PATH),
+                    *LEDGER_AB_INVOKE,
                     "--baseline-ref",
                     "HEAD",
                     "--candidate-ref",
@@ -552,8 +545,7 @@ class LedgerABSmokeIntegrationTests(unittest.TestCase):
             write_smoke_corpus(corpus_dir)
             process = subprocess.run(
                 [
-                    sys.executable,
-                    str(LEDGER_AB_PATH),
+                    *LEDGER_AB_INVOKE,
                     "--baseline-ref",
                     "HEAD",
                     "--candidate-ref",
@@ -591,8 +583,7 @@ class LedgerABSmokeIntegrationTests(unittest.TestCase):
             write_smoke_corpus(corpus_dir)
             process = subprocess.run(
                 [
-                    sys.executable,
-                    str(LEDGER_AB_PATH),
+                    *LEDGER_AB_INVOKE,
                     "--baseline-ref",
                     "HEAD",
                     "--candidate-ref",

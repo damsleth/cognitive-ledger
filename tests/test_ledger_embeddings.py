@@ -14,17 +14,20 @@ except ImportError:  # pragma: no cover
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS_DIR = ROOT / "scripts"
 
-# Ensure ledger package and scripts dir are importable
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+# Keep scripts dir on path as fallback for legacy imports
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
 
 def load_embeddings_module():
-    """Load ledger_embeddings via normal import (no exec_module hack)."""
-    import ledger_embeddings
-    return ledger_embeddings
+    try:
+        from ledger import embeddings
+        return embeddings
+    except ImportError:
+        import ledger_embeddings
+        return ledger_embeddings
 
 
 @unittest.skipIf(np is None, "numpy is required for ledger_embeddings tests")

@@ -28,12 +28,11 @@ resolve_notes_dir() {
         printf '%s\n' "$LEDGER_NOTES_DIR"
         return
     fi
-    python3 "$ROOT_DIR/scripts/ledger" paths --field ledger_notes_dir 2>/dev/null || printf '%s\n' "$ROOT_DIR/notes"
+    ledger paths --field ledger_notes_dir 2>/dev/null || printf '%s\n' "$ROOT_DIR/notes"
 }
 
 NOTES_DIR="$(resolve_notes_dir)"
 
-SHEEP="$ROOT_DIR/scripts/sheep"
 REPORT_FILE="$NOTES_DIR/08_indices/last_auto_maintenance.md"
 
 echo "# Auto Maintenance Report" > "$REPORT_FILE"
@@ -44,7 +43,7 @@ echo "" >> "$REPORT_FILE"
 # Run index
 echo "## Index" >> "$REPORT_FILE"
 echo "" >> "$REPORT_FILE"
-if bash "$SHEEP" index >> "$REPORT_FILE" 2>&1; then
+if ledger sleep index >> "$REPORT_FILE" 2>&1; then
     echo "" >> "$REPORT_FILE"
     echo "Index: OK" >> "$REPORT_FILE"
 else
@@ -56,7 +55,7 @@ echo "" >> "$REPORT_FILE"
 # Run lint
 echo "## Lint" >> "$REPORT_FILE"
 echo "" >> "$REPORT_FILE"
-lint_output=$(bash "$SHEEP" lint 2>&1)
+lint_output=$(ledger sleep lint 2>&1)
 lint_exit=$?
 echo "$lint_output" >> "$REPORT_FILE"
 echo "" >> "$REPORT_FILE"
@@ -64,7 +63,7 @@ echo "" >> "$REPORT_FILE"
 # Check status
 echo "## Status" >> "$REPORT_FILE"
 echo "" >> "$REPORT_FILE"
-bash "$SHEEP" status >> "$REPORT_FILE" 2>&1
+ledger sleep status >> "$REPORT_FILE" 2>&1
 echo "" >> "$REPORT_FILE"
 
 # Surface problems
@@ -72,7 +71,7 @@ errors=$(echo "$lint_output" | grep -c "^ERROR:" 2>/dev/null || echo "0")
 if [ "$lint_exit" -ne 0 ] || [ "$errors" -gt 0 ]; then
     echo "## Action Required" >> "$REPORT_FILE"
     echo "" >> "$REPORT_FILE"
-    echo "Lint found $errors error(s). Run \`sheep lint\` and fix them." >> "$REPORT_FILE"
+    echo "Lint found $errors error(s). Run \`ledger sleep lint\` and fix them." >> "$REPORT_FILE"
     echo "" >> "$REPORT_FILE"
 fi
 
