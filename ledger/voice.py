@@ -101,7 +101,7 @@ profile to tone, sentence structure, and vocabulary.
 ## Links
 """
 
-    content = serialize_frontmatter(fm) + body.lstrip("\n")
+    content = serialize_frontmatter(fm) + "\n" + body.lstrip("\n")
     dest.parent.mkdir(parents=True, exist_ok=True)
     safe_write_text(dest, content)
 
