@@ -12,6 +12,7 @@ import io
 import json
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -504,6 +505,227 @@ class CLIHandlerCoverageTests(unittest.TestCase):
         # JSON output should be parseable (empty list is fine for empty corpus)
         parsed = json.loads(out)
         self.assertIsInstance(parsed, list)
+
+
+class CLILiveConfigPropagationTests(unittest.TestCase):
+    """Regression tests for plan 34 - the module-level _config cache.
+
+    These tests verify that set_config(...) mid-run actually changes
+    handler behavior. Before plan 34, cli._config was bound at module
+    import and these would all fail.
+    """
+
+    def test_module_level_constants_reflect_live_config(self):
+        """cli.SHORTLIST_MIN_CANDIDATES etc. must read live config every time."""
+        from ledger.config import LedgerConfig, get_config, reset_config, set_config
+        import ledger.cli as cli
+
+        with tempfile.TemporaryDirectory() as tmp1, tempfile.TemporaryDirectory() as tmp2:
+            try:
+                cfg_a = LedgerConfig(
+                    ledger_root=Path(tmp1),
+                    ledger_notes_dir=Path(tmp1) / "notes",
+                    source_notes_dir=Path(tmp1) / "src",
+                    shortlist_min_candidates=7,
+                    progressive_rationale_top=11,
+                )
+                set_config(cfg_a)
+                self.assertEqual(cli.SHORTLIST_MIN_CANDIDATES, 7)
+                self.assertEqual(cli.PROGRESSIVE_RATIONALE_TOP, 11)
+
+                cfg_b = LedgerConfig(
+                    ledger_root=Path(tmp2),
+                    ledger_notes_dir=Path(tmp2) / "notes",
+                    source_notes_dir=Path(tmp2) / "src",
+                    shortlist_min_candidates=99,
+                    progressive_rationale_top=42,
+                )
+                set_config(cfg_b)
+                # Same module-level name, different result - this proves
+                # the constant is not import-time frozen.
+                self.assertEqual(cli.SHORTLIST_MIN_CANDIDATES, 99)
+                self.assertEqual(cli.PROGRESSIVE_RATIONALE_TOP, 42)
+            finally:
+                reset_config()
+
+    def test_module_level_unknown_attribute_raises(self):
+        """__getattr__ should not silently return None for typos."""
+        import ledger.cli as cli
+        with self.assertRaises(AttributeError):
+            _ = cli.NOT_A_REAL_CONSTANT
+
+    def test_handle_query_command_uses_live_indices_dir(self):
+        """handle_query_command must read derived paths (aliases_path) from live config.
+
+        aliases_path is a @property derived from indices_dir, so we set
+        ledger_notes_dir to a tempdir and verify the derived path used by
+        rank_query matches.
+        """
+        from ledger.config import LedgerConfig, get_config, reset_config, set_config
+        import ledger.cli as cli
+        from unittest.mock import patch
+
+        captured = {}
+
+        def fake_rank_query(**kwargs):
+            captured.update(kwargs)
+            return {"results": [], "timing": None}
+
+        with tempfile.TemporaryDirectory() as tmp:
+            try:
+                cfg = LedgerConfig(
+                    ledger_root=Path(tmp),
+                    ledger_notes_dir=Path(tmp) / "notes",
+                    source_notes_dir=Path(tmp) / "src",
+                )
+                set_config(cfg)
+
+                args = SimpleNamespace(
+                    text="hello", scope="all", limit=8,
+                    retrieval_mode="legacy", embed_backend="local", embed_model=None,
+                    view="context", json=True, bundle=False,
+                )
+                with patch.object(cli, "rank_query", side_effect=fake_rank_query):
+                    with patch.object(cli, "query_lib") as mock_lib:
+                        mock_lib.query_result_to_json.return_value = {}
+                        mock_lib.format_query_results_human.return_value = ""
+                        _capture(cli.handle_query_command, args)
+
+                # The aliases_path passed to rank_query must be derived from
+                # the test config (resolves under tmp), not the user's real config.
+                resolved_tmp = str(Path(tmp).resolve())
+                self.assertTrue(
+                    str(captured["aliases_path"]).startswith(resolved_tmp),
+                    f"aliases_path should be under {resolved_tmp}, got {captured['aliases_path']}",
+                )
+                self.assertEqual(captured["aliases_path"], get_config().aliases_path)
+            finally:
+                reset_config()
+
+
+class CLIInboxCleanupHandlerTests(unittest.TestCase):
+    """Coverage for the `ledger inbox cleanup` subcommand (added in 09c6473)."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        tmp = Path(self._tmp.name)
+        notes_dir = tmp / "notes"
+        for folder in (
+            "00_inbox", "01_identity", "02_facts", "08_indices",
+        ):
+            (notes_dir / folder).mkdir(parents=True)
+        (notes_dir / "08_indices" / "timeline.md").write_text("# Timeline\n", encoding="utf-8")
+        config = LedgerConfig(
+            ledger_root=tmp,
+            ledger_notes_dir=notes_dir,
+            source_notes_dir=tmp / "source",
+        )
+        set_config(config)
+        self.cfg = config
+        self.cli = load_cli()
+
+    def tearDown(self):
+        reset_config()
+        self._tmp.cleanup()
+
+    def test_cleanup_dry_run_with_empty_inbox(self):
+        args = SimpleNamespace(inbox_command="cleanup", days=14, apply=False)
+        _, out, _ = _capture(self.cli.handle_inbox_command, args)
+        self.assertIn("Nothing to clean up", out)
+
+    def test_cleanup_dry_run_reports_orphaned_locks(self):
+        # Orphan lock - no .md sibling
+        (self.cfg.ledger_notes_dir / "00_inbox" / "orphan.md.lock").write_text("", encoding="utf-8")
+
+        args = SimpleNamespace(inbox_command="cleanup", days=14, apply=False)
+        _, out, _ = _capture(self.cli.handle_inbox_command, args)
+        self.assertIn("Would remove", out)
+        self.assertIn("orphan.md.lock", out)
+        self.assertIn("--apply", out)
+        # Dry run: file still there
+        self.assertTrue((self.cfg.ledger_notes_dir / "00_inbox" / "orphan.md.lock").exists())
+
+    def test_cleanup_apply_actually_deletes(self):
+        (self.cfg.ledger_notes_dir / "00_inbox" / "orphan.md.lock").write_text("", encoding="utf-8")
+
+        args = SimpleNamespace(inbox_command="cleanup", days=14, apply=True)
+        _, out, _ = _capture(self.cli.handle_inbox_command, args)
+        self.assertIn("Removed", out)
+        self.assertFalse((self.cfg.ledger_notes_dir / "00_inbox" / "orphan.md.lock").exists())
+
+    def test_cleanup_reports_stale_auto_items(self):
+        import os
+        path = self.cfg.ledger_notes_dir / "00_inbox" / "uncommitted_note_changes.md"
+        path.write_text("---\n---\n\n# x\n", encoding="utf-8")
+        # Backdate to 30 days ago
+        old = time.time() - (30 * 86400)
+        os.utime(path, (old, old))
+
+        args = SimpleNamespace(inbox_command="cleanup", days=14, apply=False)
+        _, out, _ = _capture(self.cli.handle_inbox_command, args)
+        self.assertIn("uncommitted_note_changes.md", out)
+        self.assertIn("stale", out)
+
+    def test_cleanup_invalid_subcommand_exits_1(self):
+        args = SimpleNamespace(inbox_command="bogus")
+        with self.assertRaises(SystemExit) as ctx:
+            _capture(self.cli.handle_inbox_command, args)
+        self.assertEqual(ctx.exception.code, 1)
+
+
+class CLIContextBootFormatTests(unittest.TestCase):
+    """handle_context_command's boot format - the big block at lines 340-418.
+
+    Now reachable thanks to the live-config refactor (plan 34); previously
+    the handler read from the stale module-level cache and tests against
+    a temp corpus would silently use the user's real ledger.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        tmp = Path(self._tmp.name)
+        notes_dir = tmp / "notes"
+        for folder in (
+            "00_inbox", "01_identity", "02_facts", "03_preferences",
+            "04_goals", "05_open_loops", "06_concepts", "08_indices",
+        ):
+            (notes_dir / folder).mkdir(parents=True)
+        (notes_dir / "08_indices" / "timeline.md").write_text("# Timeline\n", encoding="utf-8")
+        config = LedgerConfig(
+            ledger_root=tmp,
+            ledger_notes_dir=notes_dir,
+            source_notes_dir=tmp / "source",
+        )
+        set_config(config)
+        self.cfg = config
+        self.cli = load_cli()
+
+    def tearDown(self):
+        reset_config()
+        self._tmp.cleanup()
+
+    def test_boot_format_runs_with_empty_corpus(self):
+        args = SimpleNamespace(
+            context_command=None, format="boot",
+            ledger_notes_dir=None, output=None, output_dir=None,
+        )
+        _, out, _ = _capture(self.cli.handle_context_command, args)
+        # Boot output always contains a header from build_context
+        self.assertGreater(len(out), 0)
+
+    def test_boot_format_includes_signals_summary_when_present(self):
+        # Write a signals.jsonl file so the signals branch fires
+        signals_path = self.cfg.ledger_notes_dir / "08_indices" / "signals.jsonl"
+        signals_path.write_text(
+            '{"type": "retrieval_hit", "ts": "2026-04-30T00:00:00Z", "note": "fact__x"}\n',
+            encoding="utf-8",
+        )
+        args = SimpleNamespace(
+            context_command=None, format="boot",
+            ledger_notes_dir=None, output=None, output_dir=None,
+        )
+        _, out, _ = _capture(self.cli.handle_context_command, args)
+        self.assertIn("Signals", out)
 
 
 class CLIVersionConsistencyTests(unittest.TestCase):
