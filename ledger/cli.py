@@ -21,17 +21,22 @@ from ledger.retrieval import (
     resolve_embed_backend,
 )
 
-_config = get_config()
+# Module-level config attributes route through get_config() at access time
+# (PEP 562). Tests that mutate config via set_config() now affect these.
+_LIVE_ATTRS = {
+    "SHORTLIST_MIN_CANDIDATES": "shortlist_min_candidates",
+    "SHORTLIST_MAX_CANDIDATES": "shortlist_max_candidates",
+    "SHORTLIST_LIMIT_MULTIPLIER": "shortlist_limit_multiplier",
+    "PROGRESSIVE_RATIONALE_TOP": "progressive_rationale_top",
+    "RETRIEVAL_MODES": "retrieval_modes",
+}
 
-# Re-export config constants for test compatibility
-SHORTLIST_MIN_CANDIDATES = _config.shortlist_min_candidates
-SHORTLIST_MAX_CANDIDATES = _config.shortlist_max_candidates
-SHORTLIST_LIMIT_MULTIPLIER = _config.shortlist_limit_multiplier
-ATTENTION_SHORTLIST_MIN_CANDIDATES = _config.attention_shortlist_min
-ATTENTION_SHORTLIST_MAX_CANDIDATES = _config.attention_shortlist_max
-ATTENTION_SHORTLIST_LIMIT_MULTIPLIER = _config.attention_shortlist_limit_multiplier
-PROGRESSIVE_RATIONALE_TOP = _config.progressive_rationale_top
-RETRIEVAL_MODES = _config.retrieval_modes
+
+def __getattr__(name):
+    field = _LIVE_ATTRS.get(name)
+    if field is not None:
+        return getattr(get_config(), field)
+    raise AttributeError(f"module 'ledger.cli' has no attribute {name!r}")
 
 
 def load_embeddings_module():
@@ -165,7 +170,7 @@ def handle_query_command(args):
         query=validated_query,
         scope=validated_scope,
         limit=validated_limit,
-        aliases_path=_config.aliases_path,
+        aliases_path=get_config().aliases_path,
         retrieval_mode=args.retrieval_mode,
         embed_backend=args.embed_backend,
         embed_model=args.embed_model,
@@ -262,12 +267,13 @@ def handle_discover_source_command(args):
 
 def handle_eval_command(args):
     if args.write_baseline:
+        ledger_root = get_config().ledger_root
         baseline_path = Path(args.write_baseline).resolve()
         try:
-            baseline_path.relative_to(_config.ledger_root)
+            baseline_path.relative_to(ledger_root)
         except ValueError:
             print(
-                f"error: --write-baseline path must be within ledger root ({_config.ledger_root})",
+                f"error: --write-baseline path must be within ledger root ({ledger_root})",
                 file=sys.stderr,
             )
             print("hint: use a path like 'notes/08_indices/baseline.json'", file=sys.stderr)
@@ -356,7 +362,8 @@ def handle_context_command(args):
     from ledger.context import build_context
     from ledger.notes import get_notes
 
-    notes_dir = _config.ledger_notes_dir
+    cfg = get_config()
+    notes_dir = cfg.ledger_notes_dir
     fmt = getattr(args, "format", "boot")
 
     if fmt == "boot":
@@ -377,7 +384,7 @@ def handle_context_command(args):
             print(status_output)
             print()
 
-        signals_path = _config.signals_path
+        signals_path = cfg.signals_path
         if signals_path.is_file():
             try:
                 from ledger import signals as sig
@@ -693,6 +700,7 @@ def main(argv=None) -> int:
         from ledger import maintenance as maint
         return maint.main(raw[1:])
 
+    cfg = get_config()
     parser = argparse.ArgumentParser(description="Cognitive Ledger retrieval helpers")
     subparsers = parser.add_subparsers(dest="command")
 
@@ -700,14 +708,14 @@ def main(argv=None) -> int:
     loops_parser.add_argument("--limit", type=int, default=100)
     loops_parser.add_argument("--width", type=int, default=120)
     loops_parser.add_argument("--paths", action="store_true")
-    loops_parser.add_argument("--status", choices=list(_config.loop_statuses) + ["all"], default="open")
+    loops_parser.add_argument("--status", choices=list(cfg.loop_statuses) + ["all"], default="open")
     loops_parser.add_argument("--verbose", action="store_true")
 
     notes_parser = subparsers.add_parser("notes", help="List notes by type")
     notes_parser.add_argument(
         "--type",
         required=True,
-        choices=sorted(list(_config.note_types.keys()) + ["all"]),
+        choices=sorted(list(cfg.note_types.keys()) + ["all"]),
         help="Note type to list",
     )
     notes_parser.add_argument("--limit", type=int, default=100)
@@ -717,23 +725,23 @@ def main(argv=None) -> int:
 
     query_parser = subparsers.add_parser("query", help="Rank notes for a query")
     query_parser.add_argument("text", help="query text")
-    query_parser.add_argument("--scope", choices=_config.query_scopes, default="all")
+    query_parser.add_argument("--scope", choices=cfg.query_scopes, default="all")
     query_parser.add_argument("--limit", type=int, default=8)
     query_parser.add_argument(
         "--retrieval-mode",
-        choices=_config.retrieval_modes,
+        choices=cfg.retrieval_modes,
         default=resolve_retrieval_mode(None),
         help="Retrieval strategy (default from config; override with LEDGER_RETRIEVAL_MODE)",
     )
     query_parser.add_argument(
         "--embed-backend",
-        choices=_config.embed_backends,
+        choices=cfg.embed_backends,
         default=resolve_embed_backend(None),
         help="Embedding backend for semantic_hybrid mode (default: local)",
     )
     query_parser.add_argument(
         "--embed-model",
-        default=_config.embed_model,
+        default=cfg.embed_model,
         help="Optional embedding model override for semantic_hybrid mode",
     )
     query_parser.add_argument(
@@ -752,13 +760,13 @@ def main(argv=None) -> int:
     discover_parser.add_argument(
         "--source-notes-dir",
         dest="source_notes_dir",
-        default=str(_config.source_notes_dir),
+        default=str(cfg.source_notes_dir),
         help="Source notes directory for discovery",
     )
     discover_parser.add_argument("--limit", type=int, default=20)
     discover_parser.add_argument(
         "--embed-backend",
-        choices=_config.embed_backends,
+        choices=cfg.embed_backends,
         default=resolve_embed_backend(None),
         help="Embedding backend for source discovery (default: local)",
     )
@@ -779,18 +787,18 @@ def main(argv=None) -> int:
 
     embed_build_parser = embed_subparsers.add_parser("build", help="Build semantic indices")
     embed_build_parser.add_argument("--target", choices=("ledger", "source", "both"), required=True)
-    embed_build_parser.add_argument("--backend", choices=_config.embed_backends, required=True)
+    embed_build_parser.add_argument("--backend", choices=cfg.embed_backends, required=True)
     embed_build_parser.add_argument("--model", default=None)
     embed_build_parser.add_argument(
         "--source-notes-dir",
         dest="source_notes_dir",
-        default=str(_config.source_notes_dir),
+        default=str(cfg.source_notes_dir),
         help="Source notes directory (used for target=source|both)",
     )
     embed_build_parser.add_argument(
         "--text-template",
         dest="text_template",
-        choices=_config.embed_text_templates,
+        choices=cfg.embed_text_templates,
         default=None,
         help="Passage/query text template applied at index time. Use 'e5_prefix' for intfloat/e5-* models.",
     )
@@ -809,19 +817,19 @@ def main(argv=None) -> int:
     eval_parser.add_argument("--k", type=int, default=3)
     eval_parser.add_argument(
         "--retrieval-mode",
-        choices=_config.retrieval_modes,
+        choices=cfg.retrieval_modes,
         default=resolve_retrieval_mode(None),
         help="Retrieval strategy used during eval (default from config; override with LEDGER_RETRIEVAL_MODE)",
     )
     eval_parser.add_argument(
         "--embed-backend",
-        choices=_config.embed_backends,
+        choices=cfg.embed_backends,
         default=resolve_embed_backend(None),
         help="Embedding backend for semantic_hybrid mode (default: local)",
     )
     eval_parser.add_argument(
         "--embed-model",
-        default=_config.embed_model,
+        default=cfg.embed_model,
         help="Optional embedding model override for semantic_hybrid mode",
     )
     eval_parser.add_argument("--strict-cases", action="store_true", help="Fail when eval cases violate strict schema/path rules")
