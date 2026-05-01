@@ -482,6 +482,29 @@ class CLIHandlerCoverageTests(unittest.TestCase):
         _, out, _ = _capture(self.cli.handle_ingest_command, args)
         self.assertIn("No source files found", out)
 
+    # ---- handle_context_command (boot/identity/json) ----------------------
+    # These were dropped in 0266184/a8d33b9 because the cached _config in
+    # cli.py module-load shadowed the test config. Plan 34 dropped that
+    # cache, so these handlers now read live config and these tests pass.
+
+    def test_context_format_identity_with_no_notes(self):
+        args = SimpleNamespace(
+            context_command=None, format="identity",
+            ledger_notes_dir=None, output=None, output_dir=None,
+        )
+        _, out, _ = _capture(self.cli.handle_context_command, args)
+        self.assertIn("No identity notes found", out)
+
+    def test_context_format_json_runs(self):
+        args = SimpleNamespace(
+            context_command=None, format="json",
+            ledger_notes_dir=None, output=None, output_dir=None,
+        )
+        _, out, _ = _capture(self.cli.handle_context_command, args)
+        # JSON output should be parseable (empty list is fine for empty corpus)
+        parsed = json.loads(out)
+        self.assertIsInstance(parsed, list)
+
 
 class CLIVersionConsistencyTests(unittest.TestCase):
     """The package __version__ must match the pyproject distribution version."""
