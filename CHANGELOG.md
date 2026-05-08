@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-05-08
+
+### Changed
+- **Tag pattern now allows Norwegian letters `æ`, `ø`, `å`.** `TAG_PATTERN` (`ledger/maintenance.py`) and `frontmatter.rules.tags.item_pattern` in `schema.yaml` updated from `^[a-z][a-z0-9_-]*$` to `^[a-zæøå][a-zæøå0-9_-]*$`. Allows tags like `røde-kors` and `østfold` without ASCII-mangling. Slug pattern unchanged (filenames stay ASCII to keep filesystem/URL portability).
+- Version bumped to `0.2.3`.
+
 ## 2026-04-30
 
 ### Changed
