@@ -96,7 +96,7 @@ frontmatter:
         ">=0.7": "fact - high certainty"
     tags:
       type: list
-      item_pattern: "^[a-z][a-z0-9_-]*$"
+      item_pattern: "^[a-zæøå][a-zæøå0-9_-]*$"
       max_items: 10
     created:
       type: string
