@@ -1,6 +1,14 @@
 # Changelog
 
-## 2026-05-12
+## 2026-05-12 (0.2.5)
+
+### Fixed
+- **`_version()` in `ledger/conventions.py`** now reads `ledger.__version__` first and only falls back to `importlib.metadata.version("cognitive-ledger")`. The metadata path returns whatever wheel pip installed, which can drift behind the in-tree source (e.g. an editable install whose wheel metadata is stale), causing `--doctor` envelopes to mis-report the running version. Source-of-truth is now the code that's actually executing.
+
+### Changed
+- Version bumped to `0.2.5`.
+
+## 2026-05-12 (0.2.4)
 
 ### Added
 - **`ledger --doctor` + `sheep --doctor` + `ledger-obsidian --doctor`** for the mnem suite parity contract. Each binary emits the suite-standard health-check JSON envelope (`tool`, `version`, `ok`, `checks`, `installed`).
