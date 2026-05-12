@@ -111,6 +111,9 @@ def stop_daemon(config: ObsidianLedgerConfig) -> str:
     subprocess.run(["launchctl", "bootout", domain, str(path)], check=False, capture_output=True, text=True)
     if path.exists():
         path.unlink(missing_ok=True)
+    # Clean up the sibling .lock file left by safe_write_text/FileLock.
+    lock_path = path.with_suffix(path.suffix + ".lock")
+    lock_path.unlink(missing_ok=True)
 
     return f"stopped: {_service_target(config)}"
 
