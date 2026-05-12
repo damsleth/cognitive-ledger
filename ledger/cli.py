@@ -117,6 +117,27 @@ def run_eval(
 
 def list_items(args, note_type, loop_status=None):
     items = sorted_items(note_type, loop_status=loop_status)
+    as_json = bool(getattr(args, "json", False))
+
+    if as_json:
+        # Data class: raw document on stdout, no top-level `ok`.
+        items_out = []
+        for item in items[: args.limit]:
+            items_out.append({
+                "type": getattr(item, "type", None) or item.get("type") if isinstance(item, dict) else None,
+                "title": getattr(item, "title", None) or (item.get("title") if isinstance(item, dict) else None),
+                "path": getattr(item, "path", None) or (item.get("path") if isinstance(item, dict) else None),
+                "status": getattr(item, "status", None) or (item.get("status") if isinstance(item, dict) else None),
+            })
+        out = {
+            "note_type": note_type,
+            "loop_status": loop_status,
+            "count": len(items),
+            "items": items_out,
+        }
+        print(json.dumps(out, ensure_ascii=False, default=str))
+        return
+
     if not items:
         print("No notes found.")
         return
@@ -919,6 +940,7 @@ def main(argv=None) -> int:
     loops_parser.add_argument("--paths", action="store_true")
     loops_parser.add_argument("--status", choices=list(cfg.loop_statuses) + ["all"], default="open")
     loops_parser.add_argument("--verbose", action="store_true")
+    loops_parser.add_argument("--json", action="store_true", dest="json")
 
     notes_parser = subparsers.add_parser("notes", help="List notes by type")
     notes_parser.add_argument(
@@ -931,6 +953,7 @@ def main(argv=None) -> int:
     notes_parser.add_argument("--width", type=int, default=120)
     notes_parser.add_argument("--paths", action="store_true")
     notes_parser.add_argument("--verbose", action="store_true")
+    notes_parser.add_argument("--json", action="store_true", dest="json")
 
     query_parser = subparsers.add_parser("query", help="Rank notes for a query")
     query_parser.add_argument("text", help="query text")
