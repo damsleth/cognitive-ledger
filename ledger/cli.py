@@ -192,39 +192,114 @@ def handle_query_command(args):
 
 
 def handle_embed_build_command(args):
-    payload = semantic_lib.build_semantic_index(
-        target=args.target,
-        backend=args.backend,
-        model=args.model,
-        source_root=args.source_notes_dir,
-        text_template=getattr(args, "text_template", None),
-        load_embeddings_module_fn=lambda: load_embeddings_module(),
-        resolve_embed_model_fn=semantic_lib.resolve_embed_model,
-    )
+    import time as _time
+    t0 = _time.monotonic()
+    try:
+        payload = semantic_lib.build_semantic_index(
+            target=args.target,
+            backend=args.backend,
+            model=args.model,
+            source_root=args.source_notes_dir,
+            text_template=getattr(args, "text_template", None),
+            load_embeddings_module_fn=lambda: load_embeddings_module(),
+            resolve_embed_model_fn=semantic_lib.resolve_embed_model,
+        )
+    except Exception as exc:
+        if args.json:
+            from ledger.conventions import (
+                EXIT_USER_ERROR, action_envelope, emit_action,
+            )
+            emit_action(action_envelope(
+                command="embed build", ok=False,
+                error={"code": "embed_build_failed", "message": str(exc)},
+                duration_ms=(_time.monotonic() - t0) * 1000.0,
+            ))
+            raise SystemExit(EXIT_USER_ERROR)
+        raise
     if args.json:
-        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        from ledger.conventions import action_envelope, emit_action
+        emit_action(action_envelope(
+            command="embed build", ok=True,
+            stats=dict(payload),
+            duration_ms=(_time.monotonic() - t0) * 1000.0,
+        ))
         return
     print(semantic_lib.format_embed_build_human(payload))
 
 
 def handle_embed_status_command(args):
-    payload = semantic_lib.semantic_index_status(
-        target=args.target,
-        load_embeddings_module_fn=lambda: load_embeddings_module(),
-    )
+    try:
+        payload = semantic_lib.semantic_index_status(
+            target=args.target,
+            load_embeddings_module_fn=lambda: load_embeddings_module(),
+        )
+    except Exception as exc:
+        if args.json:
+            from ledger.conventions import (
+                EXIT_USER_ERROR, data_error, emit_data_error,
+            )
+            emit_data_error(data_error(
+                command="embed status", code="status_failed", message=str(exc),
+            ))
+            raise SystemExit(EXIT_USER_ERROR)
+        raise
     if args.json:
+        # Data class: raw document on stdout. The current payload has
+        # no top-level `ok`; the conventions test pins the contract.
         print(json.dumps(payload, indent=2, ensure_ascii=False))
         return
     print(semantic_lib.format_embed_status_human(payload))
 
 
 def handle_embed_clean_command(args):
-    payload = semantic_lib.clean_semantic_indices(
-        target=args.target,
-        load_embeddings_module_fn=lambda: load_embeddings_module(),
-    )
+    import sys as _sys
+    import time as _time
+
+    # Destructive: deletes semantic indices. Require --yes when not on
+    # a TTY so an accidental machine invocation can't wipe state.
+    yes = bool(getattr(args, "yes", False))
+    if not yes and not _sys.stdin.isatty():
+        if args.json:
+            from ledger.conventions import (
+                EXIT_USER_ERROR, action_envelope, emit_action,
+            )
+            emit_action(action_envelope(
+                command="embed clean", ok=False,
+                error={
+                    "code": "confirmation_required",
+                    "message": "embed clean is destructive; pass --yes to confirm",
+                    "hint": "ledger embed clean --yes --json",
+                },
+            ))
+            raise SystemExit(EXIT_USER_ERROR)
+        print("embed clean requires --yes when not on a TTY.", file=_sys.stderr)
+        raise SystemExit(1)
+
+    t0 = _time.monotonic()
+    try:
+        payload = semantic_lib.clean_semantic_indices(
+            target=args.target,
+            load_embeddings_module_fn=lambda: load_embeddings_module(),
+        )
+    except Exception as exc:
+        if args.json:
+            from ledger.conventions import (
+                EXIT_USER_ERROR, action_envelope, emit_action,
+            )
+            emit_action(action_envelope(
+                command="embed clean", ok=False,
+                error={"code": "clean_failed", "message": str(exc)},
+                duration_ms=(_time.monotonic() - t0) * 1000.0,
+            ))
+            raise SystemExit(EXIT_USER_ERROR)
+        raise
     if args.json:
-        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        from ledger.conventions import action_envelope, emit_action
+        emit_action(action_envelope(
+            command="embed clean", ok=True,
+            stats=dict(payload),
+            duration_ms=(_time.monotonic() - t0) * 1000.0,
+        ))
         return
     print(semantic_lib.format_embed_clean_human(payload))
 
@@ -343,20 +418,65 @@ def handle_eval_command(args):
 
 
 def handle_context_command(args):
+    import time as _time
+
     context_command = getattr(args, "context_command", None)
+    as_json = bool(getattr(args, "json", False))
 
     if context_command == "build":
         from ledger.context import write_context
         notes_dir = Path(args.ledger_notes_dir)
         output = Path(args.output)
-        write_context(output, notes_dir)
+        t0 = _time.monotonic()
+        try:
+            write_context(output, notes_dir)
+        except Exception as exc:
+            if as_json:
+                from ledger.conventions import (
+                    EXIT_USER_ERROR, action_envelope, emit_action,
+                )
+                emit_action(action_envelope(
+                    command="context build", ok=False,
+                    error={"code": "build_failed", "message": str(exc)},
+                    duration_ms=(_time.monotonic() - t0) * 1000.0,
+                ))
+                raise SystemExit(EXIT_USER_ERROR)
+            raise
+        if as_json:
+            from ledger.conventions import action_envelope, emit_action
+            emit_action(action_envelope(
+                command="context build", ok=True,
+                stats={"output": str(output), "notes_dir": str(notes_dir)},
+                duration_ms=(_time.monotonic() - t0) * 1000.0,
+            ))
         return
 
     if context_command == "profiles":
         from ledger.context import write_context_profiles
         notes_dir = Path(args.ledger_notes_dir)
         output_dir = Path(args.output_dir)
-        write_context_profiles(output_dir, notes_dir)
+        t0 = _time.monotonic()
+        try:
+            write_context_profiles(output_dir, notes_dir)
+        except Exception as exc:
+            if as_json:
+                from ledger.conventions import (
+                    EXIT_USER_ERROR, action_envelope, emit_action,
+                )
+                emit_action(action_envelope(
+                    command="context profiles", ok=False,
+                    error={"code": "profiles_failed", "message": str(exc)},
+                    duration_ms=(_time.monotonic() - t0) * 1000.0,
+                ))
+                raise SystemExit(EXIT_USER_ERROR)
+            raise
+        if as_json:
+            from ledger.conventions import action_envelope, emit_action
+            emit_action(action_envelope(
+                command="context profiles", ok=True,
+                stats={"output_dir": str(output_dir), "notes_dir": str(notes_dir)},
+                duration_ms=(_time.monotonic() - t0) * 1000.0,
+            ))
         return
 
     from ledger.context import build_context
@@ -558,12 +678,17 @@ def handle_init_command(args):
 
 
 def handle_ingest_command(args):
+    import time as _time
     from ledger.ingest import scan_sources, diff_manifest, load_manifest, record_ingest
 
     sub = getattr(args, "ingest_command", None)
+    as_json = bool(getattr(args, "json", False))
 
     if sub == "scan":
         sources = scan_sources(args.source_notes_dir)
+        if as_json:
+            print(json.dumps({"sources": list(sources)}, ensure_ascii=False, default=str))
+            return
         if not sources:
             print("No source files found.")
             return
@@ -575,6 +700,14 @@ def handle_ingest_command(args):
         manifest = load_manifest()
         scan = scan_sources(args.source_notes_dir)
         d = diff_manifest(manifest, scan)
+        if as_json:
+            # Reserved-key contract: data success has no top-level `ok`.
+            print(json.dumps({
+                "new": list(d["new"]),
+                "modified": list(d["modified"]),
+                "deleted": list(d["deleted"]),
+            }, ensure_ascii=False, default=str))
+            return
         print(f"New: {len(d['new'])}, Modified: {len(d['modified'])}, Deleted: {len(d['deleted'])}")
         for s in d["new"][:10]:
             print(f"  + {s['path']}")
@@ -584,11 +717,40 @@ def handle_ingest_command(args):
             print(f"  - {s['path']}")
 
     elif sub == "record":
-        record_ingest(args.source, args.notes, source_root=args.source_notes_dir)
+        t0 = _time.monotonic()
+        try:
+            record_ingest(args.source, args.notes, source_root=args.source_notes_dir)
+        except Exception as exc:
+            if as_json:
+                from ledger.conventions import (
+                    EXIT_USER_ERROR, action_envelope, emit_action,
+                )
+                emit_action(action_envelope(
+                    command="ingest record", ok=False,
+                    error={"code": "record_failed", "message": str(exc)},
+                    duration_ms=(_time.monotonic() - t0) * 1000.0,
+                ))
+                raise SystemExit(EXIT_USER_ERROR)
+            raise
+        if as_json:
+            from ledger.conventions import action_envelope, emit_action
+            emit_action(action_envelope(
+                command="ingest record", ok=True,
+                stats={"source": args.source, "notes": list(args.notes), "note_count": len(args.notes)},
+                duration_ms=(_time.monotonic() - t0) * 1000.0,
+            ))
+            return
         print(f"Recorded ingest: {args.source} -> {len(args.notes)} note(s)")
 
     else:
-        print("Usage: ledger ingest {scan|diff|record}")
+        if as_json:
+            from ledger.conventions import data_error, emit_data_error
+            emit_data_error(data_error(
+                command="ingest", code="usage",
+                message="Usage: ledger ingest {scan|diff|record}",
+            ))
+        else:
+            print("Usage: ledger ingest {scan|diff|record}")
         raise SystemExit(1)
 
 
@@ -858,6 +1020,12 @@ def main(argv=None) -> int:
     embed_clean_parser = embed_subparsers.add_parser("clean", help="Clean semantic index artifacts")
     embed_clean_parser.add_argument("--target", choices=("ledger", "source", "both"), required=True)
     embed_clean_parser.add_argument("--json", action="store_true", dest="json")
+    embed_clean_parser.add_argument(
+        "--yes",
+        action="store_true",
+        dest="yes",
+        help="Skip confirmation. Required when stdin is not a TTY (destructive).",
+    )
 
     eval_parser = subparsers.add_parser("eval", help="Evaluate retrieval quality against benchmark cases")
     eval_parser.add_argument("--cases", required=True, help="Path to retrieval_eval_cases.yaml")
@@ -903,10 +1071,12 @@ def main(argv=None) -> int:
     context_build_parser = context_subparsers.add_parser("build", help="Write context.md index file")
     context_build_parser.add_argument("--ledger-notes-dir", dest="ledger_notes_dir", required=True)
     context_build_parser.add_argument("--output", required=True, help="Path to output markdown file")
+    context_build_parser.add_argument("--json", action="store_true", dest="json")
 
     context_profiles_parser = context_subparsers.add_parser("profiles", help="Write scoped context profile files")
     context_profiles_parser.add_argument("--ledger-notes-dir", dest="ledger_notes_dir", required=True)
     context_profiles_parser.add_argument("--output-dir", dest="output_dir", required=True)
+    context_profiles_parser.add_argument("--json", action="store_true", dest="json")
 
     paths_parser = subparsers.add_parser("paths", help="Show resolved ledger/source paths")
     paths_parser.add_argument(
@@ -927,12 +1097,15 @@ def main(argv=None) -> int:
     ingest_subparsers = ingest_parser.add_subparsers(dest="ingest_command")
     ingest_scan_parser = ingest_subparsers.add_parser("scan", help="Show new/changed sources")
     ingest_scan_parser.add_argument("--source-notes-dir", dest="source_notes_dir", default=None)
+    ingest_scan_parser.add_argument("--json", action="store_true", dest="json")
     ingest_diff_parser = ingest_subparsers.add_parser("diff", help="Detailed diff against manifest")
     ingest_diff_parser.add_argument("--source-notes-dir", dest="source_notes_dir", default=None)
+    ingest_diff_parser.add_argument("--json", action="store_true", dest="json")
     ingest_record_parser = ingest_subparsers.add_parser("record", help="Record ingest provenance")
     ingest_record_parser.add_argument("source", help="Source file relative path")
     ingest_record_parser.add_argument("notes", nargs="+", help="Derived note paths")
     ingest_record_parser.add_argument("--source-notes-dir", dest="source_notes_dir", default=None)
+    ingest_record_parser.add_argument("--json", action="store_true", dest="json")
 
     links_parser = subparsers.add_parser("links", help="Show link graph")
     links_parser.add_argument("note_path", nargs="?", help="Show links for a specific note")
