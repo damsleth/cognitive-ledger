@@ -489,14 +489,53 @@ def handle_signal_command(args):
 
 
 def handle_init_command(args):
+    import time as _time
     from ledger.init import init_ledger
 
-    report = init_ledger(
-        root=args.root,
-        voice_dna_path=args.voice_dna,
-        source_notes_dir=args.source_notes_dir,
-        ledger_notes_dir=args.ledger_notes_dir,
-    )
+    as_json = bool(getattr(args, "json", False))
+    t0 = _time.monotonic()
+
+    try:
+        report = init_ledger(
+            root=args.root,
+            voice_dna_path=args.voice_dna,
+            source_notes_dir=args.source_notes_dir,
+            ledger_notes_dir=args.ledger_notes_dir,
+        )
+    except Exception as exc:
+        if as_json:
+            from ledger.conventions import (
+                EXIT_USER_ERROR, action_envelope, emit_action,
+            )
+            emit_action(action_envelope(
+                command="init", ok=False,
+                error={"code": "init_failed", "message": str(exc)},
+                duration_ms=(_time.monotonic() - t0) * 1000.0,
+            ))
+            raise SystemExit(EXIT_USER_ERROR)
+        raise
+
+    if as_json:
+        from ledger.conventions import action_envelope, emit_action
+        ok = not report.get("errors")
+        envelope = action_envelope(
+            command="init",
+            ok=ok,
+            stats={
+                "created": list(report.get("created") or []),
+                "skipped": list(report.get("skipped") or []),
+                "errors": list(report.get("errors") or []),
+            },
+            error=None if ok else {
+                "code": "partial_init",
+                "message": f"init completed with {len(report['errors'])} error(s)",
+            },
+            duration_ms=(_time.monotonic() - t0) * 1000.0,
+        )
+        emit_action(envelope)
+        if not ok:
+            raise SystemExit(1)
+        return
 
     if report["created"]:
         print("Created:")
@@ -691,6 +730,14 @@ def handle_ab_command(args, ab_parser):
 def main(argv=None) -> int:
     raw = list(sys.argv[1:] if argv is None else argv)
 
+    # --doctor is a top-level flag per mnem CONVENTIONS.md. Handle it
+    # before argparse so it composes with --json without polluting the
+    # subparser surface.
+    if "--doctor" in raw:
+        from ledger.doctor import emit_doctor
+        as_json = "--json" in raw
+        return emit_doctor(None, as_json)
+
     # argparse.REMAINDER misroutes when nested under subparsers (bpo-9334),
     # so dispatch these passthrough commands before argparse sees them.
     if raw[:2] == ["ab", "run"]:
@@ -874,6 +921,7 @@ def main(argv=None) -> int:
     init_parser.add_argument("--voice-dna", default=None, help="Path to voice-dna JSON file")
     init_parser.add_argument("--source-notes-dir", dest="source_notes_dir", default=None)
     init_parser.add_argument("--ledger-notes-dir", dest="ledger_notes_dir", default=None)
+    init_parser.add_argument("--json", action="store_true", dest="json", help="Emit action envelope on stdout.")
 
     ingest_parser = subparsers.add_parser("ingest", help="Source ingest pipeline")
     ingest_subparsers = ingest_parser.add_subparsers(dest="ingest_command")
