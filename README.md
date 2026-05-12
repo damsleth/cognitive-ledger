@@ -3,6 +3,17 @@ Deepening your agent's cognitive lightcone with a persistent, hybrid markdown+em
 
 ![Cognitive Lightcone](cognitive_lightcone.png)
 
+## Suite
+
+cognitive-ledger is Tier 2 in the **[mnem](https://github.com/damsleth/mnem)**
+memory suite, alongside YAAMS (Tier 1 raw), owa-piggy (M365 auth),
+and owa-tools (M365 read/write). The suite gives you one install
+(`brew install damsleth/tap/mnem`), one verb surface, and one CLI
+contract (output classes, exit codes, action envelopes - see
+[mnem/CONVENTIONS.md](https://github.com/damsleth/mnem/blob/main/CONVENTIONS.md)).
+The `ledger`, `ledger-obsidian`, and `sheep` binaries continue to
+work standalone.
+
 ## What
 A structured, file-based memory system for AI agents. Small atomic notes (facts, preferences, goals, open loops, concepts, identity) stored as markdown with YAML frontmatter. Searchable, versionable, and designed to fit inside context windows. Includes a feedback loop that captures retrieval signals to improve ranking over time.
 
