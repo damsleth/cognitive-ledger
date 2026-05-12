@@ -260,55 +260,94 @@ def _write_sync_state() -> dict[str, Any]:
     return payload
 
 
-def cmd_status() -> int:
+def _status_payload() -> dict:
+    """Build the structured status report shared by human and --json paths."""
     _notes_dir, _indices_dir, timeline = _config_paths()
-
-    print("=== Sleep Status ===")
+    payload = {
+        "timeline_path": str(timeline),
+        "timeline_exists": timeline.is_file(),
+        "last_sleep": None,
+        "entries_total": 0,
+        "changes_since": 0,
+        "days_since": 0,
+        "sync_drift": "unknown",
+        "sleep_recommended": False,
+    }
     if not timeline.is_file():
-        print(f"Timeline not found at {_relative(timeline)}")
-        print("-> Run 'sheep index' first")
-        return 0
-
+        payload["sleep_recommended"] = True
+        payload["sleep_recommendation_reason"] = "timeline_missing"
+        return payload
     entries = _timeline_entries(timeline)
+    payload["entries_total"] = len(entries)
     if not entries:
-        print("Last sleep: never")
-        print("Total timeline entries: 0")
-        print("-> Sleep recommended (first run)")
-        return 0
-
+        payload["sleep_recommended"] = True
+        payload["sleep_recommendation_reason"] = "first_run"
+        return payload
     sleep_positions = [idx for idx, entry in enumerate(entries) if entry[2] == "sleep"]
     if not sleep_positions:
-        print("Last sleep: never")
-        print(f"Total timeline entries: {len(entries)}")
-        print("-> Sleep recommended (first run)")
-        return 0
-
+        payload["sleep_recommended"] = True
+        payload["sleep_recommendation_reason"] = "first_run"
+        return payload
     sleep_idx = sleep_positions[-1]
     last_sleep = entries[sleep_idx]
     last_sleep_ts = last_sleep[1]
-    changes_since = max(0, len(entries) - sleep_idx - 1)
-
+    payload["last_sleep"] = last_sleep_ts
+    payload["changes_since"] = max(0, len(entries) - sleep_idx - 1)
     last_dt = parse_timestamp(last_sleep_ts)
     now_dt = datetime.now(timezone.utc)
     days_since = 0
     if last_dt is not None:
         days_since = max(0, (now_dt.date() - last_dt.date()).days)
-
-    print(f"Last sleep: {last_sleep_ts}")
-    print(f"Changes since: {changes_since}")
-    print(f"Days since: {days_since}")
+    payload["days_since"] = days_since
     sync_report = _compute_sync_report()
     if sync_report["state_invalid"]:
-        print("Sync drift: state invalid (run `sheep sync --apply`)")
+        payload["sync_drift"] = "state_invalid"
     elif not sync_report["state_exists"]:
-        print("Sync drift: unknown (run `sheep sync --apply`)")
+        payload["sync_drift"] = "unknown"
     elif sync_report["timeline_rewound"]:
-        print("Sync drift: timeline rewound (run `sheep sync --check`)")
+        payload["sync_drift"] = "timeline_rewound"
     elif sync_report["unlogged_paths"]:
-        print(f"Sync drift: {len(sync_report['unlogged_paths'])} unlogged note change(s)")
+        payload["sync_drift"] = "unlogged_changes"
+        payload["unlogged_change_count"] = len(sync_report["unlogged_paths"])
+    else:
+        payload["sync_drift"] = "clean"
+    payload["sleep_recommended"] = (days_since >= 7 or payload["changes_since"] >= 25)
+    return payload
+
+
+def cmd_status(as_json: bool = False) -> int:
+    payload = _status_payload()
+    if as_json:
+        import json as _json
+        # Data class: raw doc, no top-level `ok`.
+        print(_json.dumps(payload, ensure_ascii=False))
+        return 0
+
+    print("=== Sleep Status ===")
+    if not payload["timeline_exists"]:
+        print(f"Timeline not found at {_relative(Path(payload['timeline_path']))}")
+        print("-> Run 'sheep index' first")
+        return 0
+    if payload["entries_total"] == 0 or payload["last_sleep"] is None:
+        print("Last sleep: never")
+        print(f"Total timeline entries: {payload['entries_total']}")
+        print("-> Sleep recommended (first run)")
+        return 0
+    print(f"Last sleep: {payload['last_sleep']}")
+    print(f"Changes since: {payload['changes_since']}")
+    print(f"Days since: {payload['days_since']}")
+    drift = payload["sync_drift"]
+    if drift == "state_invalid":
+        print("Sync drift: state invalid (run `sheep sync --apply`)")
+    elif drift == "unknown":
+        print("Sync drift: unknown (run `sheep sync --apply`)")
+    elif drift == "timeline_rewound":
+        print("Sync drift: timeline rewound (run `sheep sync --check`)")
+    elif drift == "unlogged_changes":
+        print(f"Sync drift: {payload['unlogged_change_count']} unlogged note change(s)")
     else:
         print("Sync drift: clean")
-    if days_since >= 7 or changes_since >= 25:
+    if payload["sleep_recommended"]:
         print("-> Sleep recommended")
     else:
         print("-> No sleep needed")
@@ -1007,7 +1046,43 @@ def _generate_semantic_index() -> None:
             print(line)
 
 
-def cmd_index() -> int:
+def cmd_index(as_json: bool = False) -> int:
+    import io as _io
+    import time as _t
+    from contextlib import redirect_stdout
+
+    t0 = _t.monotonic()
+    if as_json:
+        # Capture human output so the envelope is the only thing on
+        # stdout. Sub-helpers print verbosely; we don't want to weave
+        # --json plumbing through every one.
+        buf = _io.StringIO()
+        try:
+            with redirect_stdout(buf):
+                rc = _cmd_index_impl()
+        except Exception as exc:
+            from ledger.conventions import (
+                EXIT_USER_ERROR, action_envelope, emit_action,
+            )
+            emit_action(action_envelope(
+                command="sheep index", ok=False,
+                tool="sheep",
+                error={"code": "index_failed", "message": str(exc)},
+                duration_ms=(_t.monotonic() - t0) * 1000.0,
+            ))
+            return EXIT_USER_ERROR
+        from ledger.conventions import action_envelope, emit_action
+        emit_action(action_envelope(
+            command="sheep index", ok=(rc == 0),
+            tool="sheep",
+            stats={"indices_dir": str(_config_paths()[1])},
+            duration_ms=(_t.monotonic() - t0) * 1000.0,
+        ))
+        return rc
+    return _cmd_index_impl()
+
+
+def _cmd_index_impl() -> int:
     _notes_dir, indices_dir, timeline_md = _config_paths()
     indices_dir.mkdir(parents=True, exist_ok=True)
 
@@ -1125,6 +1200,12 @@ def cmd_sleep() -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Electric Sheep maintenance helper")
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        dest="json",
+        help="Emit JSON / action envelope on stdout (machine mode).",
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     subparsers.add_parser("status", help="Show sleep and sync status")
@@ -1155,20 +1236,108 @@ def main(argv: list[str] | None = None) -> int:
 
     parser = build_parser()
     args = parser.parse_args(argv)
+    as_json = bool(getattr(args, "json", False))
 
     if args.command == "status":
-        return cmd_status()
+        return cmd_status(as_json=as_json)
     if args.command == "lint":
-        return cmd_lint()
+        return _wrap_data_cmd("sheep lint", cmd_lint, as_json)
     if args.command == "index":
-        return cmd_index()
+        return cmd_index(as_json=as_json)
     if args.command == "sleep":
-        return cmd_sleep()
+        return _wrap_data_cmd("sheep sleep", cmd_sleep, as_json)
     if args.command == "sync":
-        return cmd_sync(apply=bool(args.apply))
+        return _wrap_sync(apply=bool(args.apply), as_json=as_json)
 
     parser.print_help()
     return 1
+
+
+def _wrap_data_cmd(command: str, fn, as_json: bool) -> int:
+    """Run a print-heavy data command, optionally capturing stdout into a
+    structured envelope so --json consumers see a stable shape.
+
+    The captured human text becomes ``stats.human_lines`` (a list of
+    rstrip'd lines). The command's return code becomes the exit code.
+    Reserved-key contract: success documents have no top-level `ok`.
+    """
+    if not as_json:
+        return fn()
+    import io as _io
+    import json as _json
+    import sys as _sys
+    from contextlib import redirect_stdout
+    buf = _io.StringIO()
+    try:
+        with redirect_stdout(buf):
+            rc = fn()
+    except Exception as exc:
+        _sys.stdout.write(_json.dumps({
+            "tool": "sheep",
+            "command": command,
+            "ok": False,
+            "error": {"code": "command_failed", "message": str(exc)},
+        }, ensure_ascii=False) + "\n")
+        _sys.stdout.flush()
+        return 1
+    payload = {
+        "tool": "sheep",
+        "command": command,
+        "exit_code": int(rc or 0),
+        "human_lines": [line.rstrip() for line in buf.getvalue().splitlines() if line.strip()],
+    }
+    _sys.stdout.write(_json.dumps(payload, ensure_ascii=False) + "\n")
+    _sys.stdout.flush()
+    return int(rc or 0)
+
+
+def _wrap_sync(apply: bool, as_json: bool) -> int:
+    """cmd_sync is action when --apply, data when --check."""
+    if not as_json:
+        return cmd_sync(apply=apply)
+    import io as _io
+    import time as _t
+    from contextlib import redirect_stdout
+    t0 = _t.monotonic()
+    buf = _io.StringIO()
+    try:
+        with redirect_stdout(buf):
+            rc = cmd_sync(apply=apply)
+    except Exception as exc:
+        from ledger.conventions import (
+            EXIT_USER_ERROR, action_envelope, emit_action,
+        )
+        emit_action(action_envelope(
+            command="sheep sync", ok=False,
+            tool="sheep",
+            error={"code": "sync_failed", "message": str(exc)},
+            duration_ms=(_t.monotonic() - t0) * 1000.0,
+        ))
+        return EXIT_USER_ERROR
+    if apply:
+        from ledger.conventions import action_envelope, emit_action
+        emit_action(action_envelope(
+            command="sheep sync", ok=(rc == 0),
+            tool="sheep",
+            stats={"applied": True, "human_lines": [
+                line.rstrip() for line in buf.getvalue().splitlines() if line.strip()
+            ]},
+            duration_ms=(_t.monotonic() - t0) * 1000.0,
+        ))
+        return int(rc or 0)
+    # Data class -> raw doc, no top-level `ok`.
+    import json as _json
+    import sys as _sys
+    payload = {
+        "tool": "sheep",
+        "command": "sheep sync",
+        "applied": False,
+        "exit_code": int(rc or 0),
+        "human_lines": [line.rstrip() for line in buf.getvalue().splitlines() if line.strip()],
+    }
+    _sys.stdout.write(_json.dumps(payload, ensure_ascii=False) + "\n")
+    _sys.stdout.flush()
+    return int(rc or 0)
 
 
 def _emit_sheep_doctor(as_json: bool) -> int:
