@@ -27,8 +27,8 @@ class TestFileLock(unittest.TestCase):
             with FileLock(path):
                 lock_path = path.with_suffix(".md.lock")
                 self.assertTrue(lock_path.exists())
-            # Lock file is intentionally kept for debugging (advisory lock handles contention)
-            self.assertTrue(lock_path.exists())
+            # Lock file is cleaned up on release to avoid orphaned .lock files.
+            self.assertFalse(lock_path.exists())
         finally:
             path.unlink(missing_ok=True)
             path.with_suffix(".md.lock").unlink(missing_ok=True)

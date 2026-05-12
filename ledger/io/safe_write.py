@@ -85,8 +85,14 @@ class FileLock:
             fcntl.flock(self._fd, fcntl.LOCK_UN)
             os.close(self._fd)
             self._fd = None
-            # Note: we intentionally keep the lock file for debugging.
-            # Advisory locking handles contention; the file is just a handle.
+            # Best-effort cleanup of the lock file. fcntl.flock is per-fd,
+            # not per-path, so unlinking after LOCK_UN is safe — any other
+            # waiter holds its own fd and is unaffected. We swallow errors
+            # because a missing/already-removed lock file is fine.
+            try:
+                self.lock_path.unlink()
+            except OSError:
+                pass
 
 
 @contextmanager
