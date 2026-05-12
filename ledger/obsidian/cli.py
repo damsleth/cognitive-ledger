@@ -257,7 +257,53 @@ def cmd_related(args: argparse.Namespace) -> int:
     return 0
 
 
+def _emit_obsidian_doctor(as_json: bool) -> int:
+    """Top-level --doctor flag per mnem CONVENTIONS.md.
+
+    Reuses ledger.doctor.run_doctor() for the standard schema (config,
+    redaction sentinel, etc.) and overrides tool to 'ledger-obsidian'.
+    The existing `ledger-obsidian doctor` subcommand stays as-is for
+    back-compat and still runs the obsidian-vault-specific checks.
+    """
+    import json as _json
+    import sys as _sys
+
+    from ledger.doctor import run_doctor as _ledger_run_doctor
+
+    payload = _ledger_run_doctor()
+    data = payload.to_dict()
+    data["tool"] = "ledger-obsidian"
+    if as_json:
+        _sys.stdout.write(_json.dumps(data, ensure_ascii=False) + "\n")
+        _sys.stdout.flush()
+    else:
+        print(f"ledger-obsidian doctor (v{data['version']})")
+        if payload.config_path:
+            print(f"  config: {payload.config_path}")
+        if payload.data_path:
+            print(f"  root:   {payload.data_path}")
+        if not payload.findings:
+            print("  status: ok")
+        else:
+            print(f"  findings: {len(payload.findings)}")
+            for f in payload.findings:
+                marker = {"error": "x", "warning": "!", "info": "."}.get(f.severity, ".")
+                print(f"    {marker} [{f.severity}] {f.id}: {f.message}")
+                if f.hint:
+                    print(f"        hint: {f.hint}")
+    return payload.exit_code()
+
+
 def main(argv: list[str] | None = None) -> int:
+    import sys as _sys
+
+    raw = list(_sys.argv[1:] if argv is None else argv)
+    # Top-level --doctor per mnem CONVENTIONS.md (alongside the
+    # existing `doctor` subcommand, which stays for back-compat).
+    if "--doctor" in raw:
+        as_json = "--json" in raw
+        return _emit_obsidian_doctor(as_json)
+
     parser = build_parser()
     args = parser.parse_args(argv)
 
