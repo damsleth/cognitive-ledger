@@ -62,6 +62,15 @@ TOOL_NAME = "ledger"
 
 
 def _version() -> str:
+  # Prefer the in-tree __version__: it tracks the code that's running,
+  # not whatever wheel metadata pip happened to install (which can drift
+  # behind editable-install source - the doctor output then lies about
+  # which version is actually executing).
+  try:
+    from ledger import __version__ as _v
+    return _v
+  except Exception:
+    pass
   try:
     import importlib.metadata as _md
     return _md.version("cognitive-ledger")
