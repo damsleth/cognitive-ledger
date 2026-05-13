@@ -8,7 +8,6 @@ version = "0.2.5"
 description = "File-based memory system for AI agents"
 requires-python = ">=3.11"
 dependencies = [
-    "textual>=8.0.0",
     "pyyaml>=6.0",
     "numpy",
     "scikit-learn",
