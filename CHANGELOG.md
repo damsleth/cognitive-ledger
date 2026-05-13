@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased (0.3.0-dev)
+
+### Added
+- **Web UI (Phase 1).** New `ledger web` subcommand launches a local FastAPI server (default `http://127.0.0.1:8765`) for read-only browsing of the ledger. Phase 1 covers: sidebar by note type with counts, recent-activity index, per-type listings (`/browse/{type}`), loop status filtering, and single-note detail pages (`/note/{stem}`) with rendered markdown, frontmatter meta, and clickable wikilinks. Broken `[[...]]` targets are surfaced inline (dashed underline) and in a side panel. Server-rendered Jinja templates, no JS framework, dark-mode via `prefers-color-scheme`. Search, backlinks, and graph view land in later phases (see `.plans/41-web-interface-v1.md`).
+- **`[project.optional-dependencies].web` extra** in `pyproject.toml` for `fastapi`, `uvicorn[standard]`, `jinja2`, `markdown-it-py`. The web UI prints an install hint if the extras are missing.
+
+### Removed
+- **TUI deleted.** The Textual-based `tui/` package (~1,900 lines) is gone, along with `tests/tui/` and `tests/tui_tests/` and the `textual` runtime dependency. The TUI duplicated retrieval logic from `ledger/` without adding value; the new web UI replaces it without introducing parallel parsing or store code.
+
 ## 2026-05-12 (0.2.5)
 
 ### Fixed
