@@ -20,9 +20,15 @@ ledger = "ledger.cli:main"
 ledger-obsidian = "ledger.obsidian.cli:main"
 
 [project.optional-dependencies]
-dev = ["pyinstaller", "pytest>=8.0"]
+dev = ["pyinstaller", "pytest>=8.0", "httpx>=0.27"]
 embeddings = [
     "sentence-transformers>=5.0",
+]
+web = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "jinja2>=3.1",
+    "markdown-it-py>=3.0",
 ]
 
 [tool.hatch.build.targets.wheel]
