@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}{{ active_label or "Cognitive Ledger" }} - cogled{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  {% block head_extra %}{% endblock %}
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/browse">cogled</a>
+    <nav class="crumbs">{% block crumbs %}{% endblock %}</nav>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <h2 class="sidebar-heading">Notes</h2>
+      <ul class="type-list">
+        <li>
+          <a href="/browse"
+             class="type-link{% if active_type is none %} active{% endif %}">
+            <span class="type-label">recent</span>
+          </a>
+        </li>
+        <li>
+          <a href="/browse/all"
+             class="type-link{% if active_type == 'all' %} active{% endif %}">
+            <span class="type-label">all</span>
+          </a>
+        </li>
+        {% for type in types %}
+        <li>
+          <a href="/browse/{{ type.key }}"
+             class="type-link{% if active_type == type.key %} active{% endif %}">
+            <span class="type-label">{{ type.label }}</span>
+            <span class="type-count">{{ type.count }}</span>
+          </a>
+        </li>
+        {% endfor %}
+      </ul>
+    </aside>
+
+    <main class="content">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+
+  <footer class="statusbar">
+    <span class="status-cell">cognitive-ledger v1 web (phase 1)</span>
+  </footer>
+</body>
+</html>

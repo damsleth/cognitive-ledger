@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block crumbs %}
+  <a href="/browse">browse</a>
+  <span class="crumb-sep">/</span>
+  <a href="/browse/{{ item.type }}">{{ item.type }}</a>
+  <span class="crumb-sep">/</span>
+  <span>{{ stem }}</span>
+{% endblock %}
+
+{% block content %}
+<article class="note">
+  <header class="note-header">
+    <h1>{{ item.title or stem }}</h1>
+    <dl class="note-meta">
+      <dt>type</dt><dd>{{ item.type }}</dd>
+      <dt>updated</dt><dd>{{ item.frontmatter.get("updated", "unknown") }}</dd>
+      {% if item.frontmatter.get("scope") %}<dt>scope</dt><dd>{{ item.frontmatter.get("scope") }}</dd>{% endif %}
+      {% if item.frontmatter.get("confidence") %}<dt>confidence</dt><dd>{{ item.frontmatter.get("confidence") }}</dd>{% endif %}
+      {% if item.frontmatter.get("source") %}<dt>source</dt><dd>{{ item.frontmatter.get("source") }}</dd>{% endif %}
+      {% if item.frontmatter.get("status") %}<dt>status</dt><dd>{{ item.frontmatter.get("status") }}</dd>{% endif %}
+      {% set tags = item.frontmatter.get("tags") or [] %}
+      {% if tags %}
+      <dt>tags</dt><dd>
+        {% for tag in tags %}<span class="tag">{{ tag }}</span>{% endfor %}
+      </dd>
+      {% endif %}
+    </dl>
+  </header>
+
+  <section class="note-body markdown-body">
+    {{ body_html | safe }}
+  </section>
+
+  {% if broken_links %}
+  <aside class="broken-links-panel">
+    <h3>Broken links</h3>
+    <p class="hint">Wikilink targets that don't resolve to a known note:</p>
+    <ul>
+      {% for stem in broken_links %}<li><code>{{ stem }}</code></li>{% endfor %}
+    </ul>
+  </aside>
+  {% endif %}
+</article>
+{% endblock %}

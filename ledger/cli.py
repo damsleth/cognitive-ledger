@@ -894,6 +894,24 @@ def handle_sleep_command(args):
     raise SystemExit(maint.main(subargs))
 
 
+def handle_web_command(args):
+    try:
+        from ledger import web as web_pkg
+    except RuntimeError as exc:
+        print(f"error: {exc}")
+        raise SystemExit(2)
+    try:
+        web_pkg.run(
+            host=args.host,
+            port=args.port,
+            reload=args.reload,
+            log_level=args.log_level,
+        )
+    except RuntimeError as exc:
+        print(f"error: {exc}")
+        raise SystemExit(2)
+
+
 def handle_ab_command(args, ab_parser):
     ab_command = getattr(args, "ab_command", None)
 
@@ -1181,6 +1199,17 @@ def main(argv=None) -> int:
 
     ab_subparsers.add_parser("charts", help="Render A/B performance charts from performance_series.json")
 
+    web_parser = subparsers.add_parser("web", help="Launch the local read-only web UI")
+    web_parser.add_argument("--host", default="127.0.0.1", help="Bind host (default: 127.0.0.1)")
+    web_parser.add_argument("--port", type=int, default=8765, help="Bind port (default: 8765)")
+    web_parser.add_argument("--reload", action="store_true", help="Auto-reload on code change (dev)")
+    web_parser.add_argument(
+        "--log-level",
+        default="info",
+        choices=("critical", "error", "warning", "info", "debug", "trace"),
+        help="uvicorn log level (default: info)",
+    )
+
     args = parser.parse_args(argv)
 
     def handle_listing_command(command_args):
@@ -1258,6 +1287,10 @@ def main(argv=None) -> int:
 
         if args.command == "ab":
             handle_ab_command(args, ab_parser)
+            return 0
+
+        if args.command == "web":
+            handle_web_command(args)
             return 0
 
         handler = command_handlers.get(args.command)

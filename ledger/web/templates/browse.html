@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block crumbs %}
+  <a href="/browse">browse</a>
+  {% if active_type %}<span class="crumb-sep">/</span><span>{{ active_type }}</span>{% endif %}
+{% endblock %}
+
+{% block content %}
+<header class="page-header">
+  <h1>{{ active_label }}</h1>
+  <p class="meta">{{ total }} note{{ "s" if total != 1 else "" }}</p>
+</header>
+
+{% if active_type == "loops" %}
+<nav class="filter-bar">
+  <a href="/browse/loops" class="chip{% if not loop_status_filter %} active{% endif %}">open + closed</a>
+  <a href="/browse/loops?status=open" class="chip{% if loop_status_filter == 'open' %} active{% endif %}">open</a>
+  <a href="/browse/loops?status=closed" class="chip{% if loop_status_filter == 'closed' %} active{% endif %}">closed</a>
+</nav>
+{% endif %}
+
+{% if not items %}
+<p class="empty">No notes here yet.</p>
+{% else %}
+<ul class="note-list">
+  {% for item in items %}
+  {% set stem = item.path.rsplit("/", 1)[-1].removesuffix(".md") %}
+  <li class="note-row">
+    <a class="note-link" href="/note/{{ stem }}">
+      <span class="note-type-pill type-{{ item.type }}">{{ item.type }}</span>
+      <span class="note-title">{{ item.title or stem }}</span>
+      <span class="note-summary">
+        {% if item.type == "loops" %}
+          {{ item.frontmatter.get("status", "?") }} - {{ item.question or "" }}
+        {% else %}
+          {{ item.statement or "" }}
+        {% endif %}
+      </span>
+      <span class="note-updated">{{ item.frontmatter.get("updated", "")[:10] }}</span>
+    </a>
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% endblock %}

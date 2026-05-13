@@ -283,6 +283,25 @@ ledger sleep sleep
 
 Sleep merges duplicates, promotes patterns into stable notes, updates indices, and tightens open loops.
 
+## Web UI
+
+A local read-only web interface for browsing the corpus (Phase 1: browse + read; search, backlinks, and graph land in later phases - see `.plans/41-web-interface-v1.md`).
+
+```bash
+pip install 'cognitive-ledger[web]'        # installs FastAPI + uvicorn + jinja2 + markdown-it-py
+ledger web                                 # binds http://127.0.0.1:8765
+ledger web --port 9000 --reload            # custom port + autoreload (dev)
+```
+
+Routes:
+
+- `/` and `/browse` - recent activity across all types
+- `/browse/{type}` - listing per note type (e.g. `/browse/facts`, `/browse/loops?status=open`)
+- `/browse/all` - aggregated listing
+- `/note/{stem}` - rendered note with frontmatter, body, and broken-link panel
+
+The server is local-only by default (`127.0.0.1`); binding to a non-loopback host prints a warning since the ledger has no auth.
+
 ## Agent Integration
 
 Agents should read `AGENTS.md` for the full protocol — golden rules, note conventions, write triggers, and the operating loop. The short version:
