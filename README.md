@@ -283,18 +283,6 @@ ledger sleep sleep
 
 Sleep merges duplicates, promotes patterns into stable notes, updates indices, and tightens open loops.
 
-## TUI
-
-A terminal interface for browsing and editing notes:
-
-```bash
-./.venv/bin/python -m tui              # run from venv
-# or
-./tui/build-tui.sh && ./tui/dist/ledger-tui   # standalone binary
-```
-
-Key bindings: `j/k` navigate, `Enter` select, `1-5` filter by type, `/` search, `e` edit, `g` graph, `q` quit.
-
 ## Agent Integration
 
 Agents should read `AGENTS.md` for the full protocol — golden rules, note conventions, write triggers, and the operating loop. The short version:
