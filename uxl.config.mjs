@@ -1,7 +1,7 @@
 import { defineUxlConfig } from "@damsleth/ux-loop"
 
 /**
- * UX loop config for the cognitive-ledger web UI (Phase 1: read-only browser).
+ * UX loop config for the cognitive-ledger web UI (Phase 1 + Phase 2 search).
  *
  * The dev server is the Python `ledger web` command, exposed via the
  * `dev` npm script so playwright can spin it up. We pin known stems
@@ -25,6 +25,10 @@ export default defineUxlConfig({
       { id: "note-fact", label: "Note - simple fact", path: "/note/fact__norconsult_account", required: true },
       { id: "note-loop", label: "Note - open loop", path: "/note/loop__forutsigbar_dagsplanlegging", required: true },
       { id: "note-preference", label: "Note - preference", path: "/note/pref__efficiency_over_sycophancy", required: false },
+      { id: "search-empty", label: "Search - empty state", path: "/search", required: true },
+      { id: "search-results", label: "Search - results page", path: "/search?q=nocos", required: true },
+      { id: "search-semantic", label: "Search - semantic mode", path: "/search?q=hjelpekorps&mode=semantic", required: false },
+      { id: "search-no-results", label: "Search - no matches", path: "/search?q=qqqq+xxxx+vvvv", required: true },
     ],
 
     flowMapping: {
@@ -37,6 +41,10 @@ export default defineUxlConfig({
       "note-fact": ["note-fact"],
       "note-loop": ["note-loop"],
       "note-preference": ["note-preference"],
+      "search-empty": ["search-empty"],
+      "search-results": ["search-results"],
+      "search-semantic": ["search-semantic"],
+      "search-no-results": ["search-no-results"],
     },
 
     playwright: {
@@ -116,6 +124,38 @@ export default defineUxlConfig({
           name: "note-preference",
           path: "/note/pref__efficiency_over_sycophancy",
           waitFor: "article.note",
+          settleMs: 200,
+          screenshot: { fullPage: true },
+        },
+        {
+          label: "Search - empty state",
+          name: "search-empty",
+          path: "/search",
+          waitFor: "#search-results-area",
+          settleMs: 200,
+          screenshot: { fullPage: true },
+        },
+        {
+          label: "Search - results page",
+          name: "search-results",
+          path: "/search?q=nocos",
+          waitFor: ".search-results, .empty",
+          settleMs: 400,
+          screenshot: { fullPage: true },
+        },
+        {
+          label: "Search - semantic mode",
+          name: "search-semantic",
+          path: "/search?q=hjelpekorps&mode=semantic",
+          waitFor: ".search-results, .empty, .search-summary",
+          settleMs: 800,
+          screenshot: { fullPage: true },
+        },
+        {
+          label: "Search - no matches",
+          name: "search-no-results",
+          path: "/search?q=qqqq+xxxx+vvvv",
+          waitFor: ".empty, .search-summary",
           settleMs: 200,
           screenshot: { fullPage: true },
         },
