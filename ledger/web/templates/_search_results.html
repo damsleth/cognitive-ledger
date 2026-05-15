@@ -1,0 +1,33 @@
+{% if not results.query %}
+  <p class="empty">Type a query above to search.</p>
+{% elif results.empty %}
+  <p class="empty">
+    No matches for <strong>{{ results.query }}</strong>
+    {% if results.scope != 'all' %} in scope <code>{{ results.scope }}</code>{% endif %}.
+  </p>
+{% else %}
+  <p class="meta search-summary">
+    {{ results.hits | length }} result{{ "s" if results.hits | length != 1 else "" }}
+    for <strong>{{ results.query }}</strong>
+    in {{ results.mode }} mode
+    {% if results.scope != 'all' %}({{ results.scope }} scope){% endif %}
+    <span class="search-timing">{{ "%.0f"|format(results.elapsed_ms) }} ms</span>
+  </p>
+  <ul class="note-list search-results">
+    {% for hit in results.hits %}
+    <li class="note-row">
+      <a class="note-link" href="/note/{{ hit.stem }}">
+        <span class="note-type-pill type-{{ hit.type }}">{{ hit.type }}</span>
+        <span class="note-title">{{ hit.title }}</span>
+        <span class="note-summary">
+          {{ hit.snippet or hit.stem }}
+        </span>
+        <span class="note-updated">
+          <span class="search-score" title="rank score">{{ "%.2f"|format(hit.score) }}</span>
+          {{ hit.updated }}
+        </span>
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+{% endif %}

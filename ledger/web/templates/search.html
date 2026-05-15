@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block crumbs %}
+  <a href="/browse">browse</a>
+  <span class="crumb-sep">/</span>
+  <span>search</span>
+{% endblock %}
+
+{% block content %}
+<header class="page-header">
+  <h1>Search</h1>
+  <p class="meta">
+    Lexical (BM25) is fast. Semantic uses your local embedding index when available.
+  </p>
+</header>
+
+<form
+  class="search-form"
+  action="/search"
+  method="get"
+  hx-get="/search"
+  hx-target="#search-results-area"
+  hx-trigger="input changed delay:300ms from:input[name='q'], change from:select, submit"
+  hx-push-url="true"
+  hx-include="this">
+  <div class="search-row">
+    <input
+      class="search-q"
+      type="search"
+      name="q"
+      value="{{ q or '' }}"
+      placeholder="Search facts, prefs, loops, concepts..."
+      autocomplete="off"
+      spellcheck="false"
+      autofocus />
+    <label class="select-wrap">
+      mode
+      <select name="mode">
+        {% for m in modes %}
+        <option value="{{ m }}" {% if m == mode %}selected{% endif %}>{{ m }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="select-wrap">
+      scope
+      <select name="scope">
+        {% for s in scopes %}
+        <option value="{{ s }}" {% if s == scope %}selected{% endif %}>{{ s }}</option>
+        {% endfor %}
+      </select>
+    </label>
+  </div>
+</form>
+
+<section id="search-results-area">
+  {% include "_search_results.html" %}
+</section>
+{% endblock %}
