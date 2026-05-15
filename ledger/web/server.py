@@ -86,9 +86,11 @@ def create_app(
     # Local imports keep FastAPI optional at module import time.
     from ledger.web.routes import browse as browse_routes
     from ledger.web.routes import note as note_routes
+    from ledger.web.routes import search as search_routes
 
     app.include_router(browse_routes.router)
     app.include_router(note_routes.router)
+    app.include_router(search_routes.router)
 
     return app
 

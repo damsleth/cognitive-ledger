@@ -5,12 +5,23 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{% block title %}{{ active_label or "Cognitive Ledger" }} - cogled{% endblock %}</title>
   <link rel="stylesheet" href="/static/style.css" />
+  <script src="/static/htmx.min.js" defer></script>
   {% block head_extra %}{% endblock %}
 </head>
 <body>
   <header class="topbar">
     <a class="brand" href="/browse">cogled</a>
     <nav class="crumbs">{% block crumbs %}{% endblock %}</nav>
+    <form class="topbar-search" action="/search" method="get" role="search">
+      <input
+        type="search"
+        name="q"
+        value="{{ q or '' }}"
+        placeholder="Search the ledger..."
+        aria-label="Search the ledger"
+        autocomplete="off"
+        spellcheck="false" />
+    </form>
   </header>
 
   <div class="layout">
@@ -27,6 +38,12 @@
           <a href="/browse/all"
              class="type-link{% if active_type == 'all' %} active{% endif %}">
             <span class="type-label">all</span>
+          </a>
+        </li>
+        <li>
+          <a href="/search"
+             class="type-link{% if active_type == 'search' %} active{% endif %}">
+            <span class="type-label">search</span>
           </a>
         </li>
         {% for type in types %}
@@ -47,7 +64,7 @@
   </div>
 
   <footer class="statusbar">
-    <span class="status-cell">cognitive-ledger v1 web (phase 1)</span>
+    <span class="status-cell">cognitive-ledger 0.3.0 web (phase 2)</span>
   </footer>
 </body>
 </html>
