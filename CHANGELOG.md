@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased (0.3.0-dev)
+## Unreleased
+
+## 2026-05-15 (0.3.0)
 
 ### Added
 - **Web UI (Phase 1).** New `ledger web` subcommand launches a local FastAPI server (default `http://127.0.0.1:8765`) for read-only browsing of the ledger. Phase 1 covers: sidebar by note type with counts, recent-activity index, per-type listings (`/browse/{type}`), loop status filtering, and single-note detail pages (`/note/{stem}`) with rendered markdown, frontmatter meta, and clickable wikilinks. Broken `[[...]]` targets are surfaced inline (dashed underline) and in a side panel. Server-rendered Jinja templates, no JS framework, dark-mode via `prefers-color-scheme`. Search, backlinks, and graph view land in later phases (see `.plans/41-web-interface-v1.md`).
