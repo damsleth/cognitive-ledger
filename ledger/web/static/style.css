@@ -57,10 +57,66 @@ code { background: var(--code-bg); padding: 1px 4px; border-radius: 3px; overflo
 pre code { background: none; padding: 0; }
 
 .topbar {
-  display: flex; align-items: baseline; gap: 1rem;
-  padding: 0.7rem 1.2rem;
+  display: flex; align-items: center; gap: 1rem;
+  padding: 0.55rem 1.2rem;
   background: var(--bg-sidebar);
   border-bottom: 1px solid var(--border);
+}
+.topbar-search { margin-left: auto; }
+.topbar-search input {
+  width: 18rem; max-width: 40vw;
+  padding: 0.32rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-card);
+  color: var(--fg);
+  font-family: var(--mono); font-size: 0.85rem;
+}
+.topbar-search input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--active-chip-bg);
+}
+
+.search-form { margin: 0 0 1rem; }
+.search-row { display: flex; gap: 0.6rem; align-items: stretch; flex-wrap: wrap; }
+.search-q {
+  flex: 1 1 18rem;
+  padding: 0.5rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-card);
+  color: var(--fg);
+  font-family: var(--mono); font-size: 0.95rem;
+}
+.search-q:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--active-chip-bg);
+}
+.select-wrap {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  font-family: var(--mono); font-size: 0.78rem; color: var(--fg-muted);
+}
+.select-wrap select {
+  font-family: var(--mono); font-size: 0.85rem;
+  padding: 0.3rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-card);
+  color: var(--fg);
+}
+.search-summary {
+  display: flex; align-items: baseline; gap: 0.7rem; flex-wrap: wrap;
+}
+.search-timing {
+  font-family: var(--mono); font-size: 0.75rem; color: var(--fg-faint);
+}
+.search-score {
+  display: inline-block;
+  font-family: var(--mono); font-size: 0.72rem;
+  color: var(--accent);
+  margin-right: 0.4rem;
 }
 .brand { font-family: var(--mono); font-weight: 600; font-size: 1.1rem; color: var(--accent); }
 .crumbs {
