@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 2026-05-17 (0.3.1)
+
+### Added
+- **Web UI (Phase 3) - backlinks.** Note detail pages now render two new panels: "Linked from" (incoming wikilinks, with target titles) and "Links out" (outgoing wikilinks). Empty incoming state renders a hint. Broken links panel preserved.
+- **`Corpus` link maps.** New `outgoing_stems()`, `incoming_stems()`, `broken_outgoing()`, and `link_titles()` methods. Built in a single pass over note bodies using the shared `extract_links` parser; rebuilt on `reload()`.
+- **`GET /healthz`** - JSON status probe (`ok`, `notes_loaded`, `embeddings_enabled`, `index_built_at`). Cheap; does not import the embeddings module.
+- **`POST /admin/reload`** - rescans the corpus from disk and invalidates the search cache. Use after `ledger sleep index` to pick up new notes without restarting the server.
+- **`type_label` Jinja filter** - normalizes plural type keys (`facts`, `loops`) to singular labels (`fact`, `loop`) for the note-type pills in search results, browse, and note detail.
+- **Vendored static asset README** (`ledger/web/static/README.md`) documenting htmx version + provenance.
+
 ## 2026-05-15 (0.3.0)
 
 ### Added
