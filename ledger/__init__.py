@@ -13,7 +13,7 @@ from .retrieval_types import (
     TimingInfo,
 )
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 
 from .cli import main  # noqa: E402
 
