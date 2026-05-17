@@ -25,6 +25,8 @@ async def note_detail(request: Request, stem: str) -> HTMLResponse:
 
     rendered = render_body(item.body, corpus)
     types = corpus.note_types()
+    incoming = corpus.link_titles(corpus.incoming_stems(stem))
+    outgoing = corpus.link_titles(corpus.outgoing_stems(stem))
 
     return templates.TemplateResponse(
         request,
@@ -37,5 +39,7 @@ async def note_detail(request: Request, stem: str) -> HTMLResponse:
             "stem": stem,
             "body_html": rendered.html,
             "broken_links": rendered.broken_links,
+            "incoming_links": incoming,
+            "outgoing_links": outgoing,
         },
     )

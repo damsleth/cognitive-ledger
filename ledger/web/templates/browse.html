@@ -27,7 +27,7 @@
   {% set stem = item.path.rsplit("/", 1)[-1].removesuffix(".md") %}
   <li class="note-row">
     <a class="note-link" href="/note/{{ stem }}">
-      <span class="note-type-pill type-{{ item.type }}">{{ item.type }}</span>
+      <span class="note-type-pill type-{{ item.type }}">{{ item.type | type_label }}</span>
       <span class="note-title">{{ item.title or stem }}</span>
       <span class="note-summary">
         {% if item.type == "loops" %}

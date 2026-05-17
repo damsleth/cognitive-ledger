@@ -80,14 +80,26 @@ def create_app(
     app.state.corpus = corpus or Corpus(cfg)
     app.state.templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
 
+    # Singular type labels for the .note-type-pill chips: "facts" -> "fact",
+    # "loops" -> "loop". Search hits already carry the singular label, but
+    # BrowseItem.type holds the plural key, so we normalize in one place.
+    type_labels = {key: meta.get("label", key) for key, meta in cfg.note_types.items()}
+
+    def _type_label(value: str) -> str:
+        return type_labels.get(value, value)
+
+    app.state.templates.env.filters["type_label"] = _type_label
+
     if _STATIC_DIR.is_dir():
         app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 
     # Local imports keep FastAPI optional at module import time.
+    from ledger.web.routes import admin as admin_routes
     from ledger.web.routes import browse as browse_routes
     from ledger.web.routes import note as note_routes
     from ledger.web.routes import search as search_routes
 
+    app.include_router(admin_routes.router)
     app.include_router(browse_routes.router)
     app.include_router(note_routes.router)
     app.include_router(search_routes.router)
