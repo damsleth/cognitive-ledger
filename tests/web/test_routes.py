@@ -94,6 +94,15 @@ class TestNoteDetail:
         # Resolved wikilink -> /note/{stem}
         assert 'href="/note/fact__other_one"' in resp.text
 
+    def test_wikilink_display_is_target_title(self, client: TestClient) -> None:
+        """Bare [[stem]] renders with the target note's title, not the stem."""
+        resp = client.get("/note/fact__sample")
+        assert resp.status_code == 200
+        # fact__other_one.md has "# Other Fact" as its H1
+        assert '>Other Fact</a>' in resp.text
+        # Raw stem must NOT appear as the link text
+        assert '>fact__other_one</a>' not in resp.text
+
     def test_leading_h1_stripped_from_body(self, client: TestClient) -> None:
         """The template already renders the title; the body's leading H1 is dropped."""
         resp = client.get("/note/fact__sample")
