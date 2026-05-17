@@ -52,29 +52,37 @@ def _resolve_stem(target: str) -> str:
 def rewrite_wikilinks(body: str, corpus: Corpus) -> tuple[str, list[str]]:
     """Replace ``[[stem]]`` and ``[[stem|alias]]`` with markdown links.
 
+    Bare ``[[stem]]`` links render with the target note's title as the
+    display text (e.g. ``[[id__family]]`` -> "Identitet - Familie").
+    Explicit ``[[stem|alias]]`` links keep the author-supplied alias.
+
     Returns the rewritten body plus a list of broken stems (in document
     order, deduplicated).
     """
     broken: list[str] = []
     seen_broken: set[str] = set()
+    title_cache: dict[str, str] = {}
+
+    def _display_for(stem: str, raw_target: str, alias: str | None) -> str:
+        if alias is not None and alias.strip():
+            return alias.strip()
+        if stem not in title_cache:
+            item = corpus.get_by_stem(stem)
+            title_cache[stem] = (item.title.strip() if item and item.title else "")
+        return title_cache[stem] or raw_target.strip()
 
     def _sub(match: re.Match[str]) -> str:
         raw_target = match.group(1)
         alias = match.group(2)
         stem = _resolve_stem(raw_target)
-        display = (alias or raw_target).strip()
         if corpus.stem_exists(stem):
+            display = _display_for(stem, raw_target, alias)
             return f"[{display}](/note/{stem})"
+        # Broken link: fall back to the explicit alias or the raw target.
         if stem not in seen_broken:
             seen_broken.add(stem)
             broken.append(stem)
-        # Render as inline span via raw HTML... but we disabled html
-        # passthrough, so emit a markdown placeholder that the template
-        # styles via the ``broken-link`` class through a post-processing
-        # step. The simplest path is a fenced inline-code marker the
-        # template can swap; instead, we use a stable HTML comment plus
-        # the display text wrapped in italics to keep CommonMark output
-        # valid, then post-process the rendered HTML below.
+        display = (alias.strip() if alias else raw_target.strip())
         return f"§§BROKEN§§{display}§§/BROKEN§§"
 
     return _WIKILINK_RE.sub(_sub, body), broken
