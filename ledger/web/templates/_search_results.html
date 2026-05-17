@@ -17,7 +17,7 @@
     {% for hit in results.hits %}
     <li class="note-row">
       <a class="note-link" href="/note/{{ hit.stem }}">
-        <span class="note-type-pill type-{{ hit.type }}">{{ hit.type }}</span>
+        <span class="note-type-pill type-{{ hit.type }}">{{ hit.type | type_label }}</span>
         <span class="note-title">{{ hit.title }}</span>
         <span class="note-summary">
           {{ hit.snippet or hit.stem }}

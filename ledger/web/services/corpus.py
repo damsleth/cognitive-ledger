@@ -15,6 +15,8 @@ from typing import Any
 
 from ledger import browse as browse_lib
 from ledger.config import LedgerConfig, get_config
+from ledger.parsing import parse_frontmatter_text
+from ledger.parsing.links import extract_links
 
 
 @dataclass(frozen=True)
@@ -47,7 +49,11 @@ class Corpus:
     def __init__(self, config: LedgerConfig | None = None) -> None:
         self._config = config or get_config()
         self._stem_index: dict[str, Path] = {}
+        self._outgoing: dict[str, list[str]] = {}
+        self._incoming: dict[str, list[str]] = {}
+        self._broken_outgoing: dict[str, list[str]] = {}
         self._refresh_stem_index()
+        self._rebuild_link_maps()
 
     @property
     def config(self) -> LedgerConfig:
@@ -60,8 +66,14 @@ class Corpus:
         return Path(notes_dir)
 
     def reload(self) -> None:
-        """Re-scan the stem index. Cheap (one directory listing per type)."""
+        """Re-scan the stem index and rebuild the link maps.
+
+        Cheap: one directory listing per type plus a single read of each
+        note body. Called after the user runs ``ledger sleep index`` and
+        hits ``/admin/reload`` to pick up new notes without restarting.
+        """
         self._refresh_stem_index()
+        self._rebuild_link_maps()
 
     # ------------------------------------------------------------------
     # Note types
@@ -145,8 +157,105 @@ class Corpus:
         return stem in self._stem_index
 
     # ------------------------------------------------------------------
+    # Backlinks
+    # ------------------------------------------------------------------
+
+    def outgoing_stems(self, stem: str) -> list[str]:
+        """Resolved wikilink targets in this note's body, deduplicated."""
+        return list(self._outgoing.get(stem, ()))
+
+    def incoming_stems(self, stem: str) -> list[str]:
+        """Other notes that reference this stem via a wikilink."""
+        return list(self._incoming.get(stem, ()))
+
+    def broken_outgoing(self, stem: str) -> list[str]:
+        """Wikilink targets in this note that don't resolve to a known stem."""
+        return list(self._broken_outgoing.get(stem, ()))
+
+    def link_titles(self, stems: list[str]) -> list[tuple[str, str]]:
+        """Map a list of stems to ``(stem, title)`` pairs preserving order."""
+        out: list[tuple[str, str]] = []
+        for s in stems:
+            item = self.get_by_stem(s)
+            out.append((s, (item.title.strip() if item and item.title else s)))
+        return out
+
+    # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
+
+    def _rebuild_link_maps(self) -> None:
+        """Walk every note body once to derive outgoing + reverse link maps.
+
+        Uses :func:`ledger.parsing.links.extract_links` so we share the
+        wikilink parser with the rest of the codebase. Unresolved
+        targets land in ``_broken_outgoing`` so the note detail view can
+        warn about them without re-parsing.
+        """
+        outgoing: dict[str, list[str]] = {}
+        incoming: dict[str, list[str]] = {}
+        broken: dict[str, list[str]] = {}
+
+        for stem, path in self._stem_index.items():
+            try:
+                text = path.read_text(encoding="utf-8")
+            except OSError:
+                continue
+            _frontmatter, body = parse_frontmatter_text(text)
+
+            out_resolved: list[str] = []
+            out_broken: list[str] = []
+            seen_out: set[str] = set()
+            seen_broken: set[str] = set()
+
+            for link in extract_links(body):
+                if not link.is_wiki_link:
+                    continue
+                target = self._normalize_link_target(link.target)
+                if not target or target == stem:
+                    continue
+                if target in self._stem_index:
+                    if target in seen_out:
+                        continue
+                    seen_out.add(target)
+                    out_resolved.append(target)
+                else:
+                    if target in seen_broken:
+                        continue
+                    seen_broken.add(target)
+                    out_broken.append(target)
+
+            if out_resolved:
+                outgoing[stem] = out_resolved
+            if out_broken:
+                broken[stem] = out_broken
+
+            for target in out_resolved:
+                incoming.setdefault(target, []).append(stem)
+
+        # Stable, deduplicated ordering for the incoming list.
+        for target, sources in incoming.items():
+            seen: set[str] = set()
+            ordered: list[str] = []
+            for s in sources:
+                if s in seen:
+                    continue
+                seen.add(s)
+                ordered.append(s)
+            incoming[target] = sorted(ordered)
+
+        self._outgoing = outgoing
+        self._incoming = incoming
+        self._broken_outgoing = broken
+
+    @staticmethod
+    def _normalize_link_target(target: str) -> str:
+        target = target.strip()
+        if "/" in target:
+            target = target.rsplit("/", 1)[-1]
+        if target.endswith(".md"):
+            target = target[:-3]
+        return target
 
     def _refresh_stem_index(self) -> None:
         index: dict[str, Path] = {}
