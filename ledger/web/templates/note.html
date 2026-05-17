@@ -13,7 +13,7 @@
   <header class="note-header">
     <h1>{{ item.title or stem }}</h1>
     <dl class="note-meta">
-      <dt>type</dt><dd>{{ item.type }}</dd>
+      <dt>type</dt><dd>{{ item.type | type_label }}</dd>
       <dt>updated</dt><dd>{{ item.frontmatter.get("updated", "unknown") }}</dd>
       {% if item.frontmatter.get("scope") %}<dt>scope</dt><dd>{{ item.frontmatter.get("scope") }}</dd>{% endif %}
       {% if item.frontmatter.get("confidence") %}<dt>confidence</dt><dd>{{ item.frontmatter.get("confidence") }}</dd>{% endif %}
@@ -32,14 +32,40 @@
     {{ body_html | safe }}
   </section>
 
-  {% if broken_links %}
-  <aside class="broken-links-panel">
-    <h3>Broken links</h3>
-    <p class="hint">Wikilink targets that don't resolve to a known note:</p>
-    <ul>
-      {% for stem in broken_links %}<li><code>{{ stem }}</code></li>{% endfor %}
-    </ul>
+  <aside class="link-panels">
+    <section class="link-panel link-panel-incoming">
+      <h3>Linked from</h3>
+      {% if incoming_links %}
+      <ul>
+        {% for stem, title in incoming_links %}
+        <li><a href="/note/{{ stem }}">{{ title }}</a></li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="hint">No other notes link here yet.</p>
+      {% endif %}
+    </section>
+
+    {% if outgoing_links %}
+    <section class="link-panel link-panel-outgoing">
+      <h3>Links out</h3>
+      <ul>
+        {% for stem, title in outgoing_links %}
+        <li><a href="/note/{{ stem }}">{{ title }}</a></li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+
+    {% if broken_links %}
+    <section class="link-panel link-panel-broken">
+      <h3>Broken links</h3>
+      <p class="hint">Wikilink targets that don't resolve to a known note:</p>
+      <ul>
+        {% for stem in broken_links %}<li><code>{{ stem }}</code></li>{% endfor %}
+      </ul>
+    </section>
+    {% endif %}
   </aside>
-  {% endif %}
 </article>
 {% endblock %}
