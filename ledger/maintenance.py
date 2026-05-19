@@ -1022,9 +1022,8 @@ def _write_context_metrics(indices_dir: Path) -> dict[str, Any]:
 
 
 def _generate_semantic_index() -> None:
-    root = get_config().ledger_root
     cmd = [
-        str(root / "scripts" / "ledger"),
+        "ledger",
         "embed",
         "build",
         "--target",

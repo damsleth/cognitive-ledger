@@ -78,24 +78,23 @@ class LedgerEmbeddingsTests(unittest.TestCase):
             norms[norms == 0] = 1.0
             return vectors / norms
 
-        self._patches = {
-            "LEDGER_ROOT": self.repo_root,
-            "LEDGER_NOTES_DIR": self.notes_root,
-            "SEMANTIC_ROOT": self.repo_root / ".smart-env" / "semantic",
-            "LEDGER_TIMELINE_PATH": self.notes_root / "08_indices" / "timeline.md",
-            "SEMANTIC_MANIFEST_PATH": self.notes_root / "08_indices" / "semantic_manifest.json",
-            "DEFAULT_SOURCE_NOTES_DIR": self.source_root,
-            "embed_texts": fake_embed_texts,
-        }
-        self._originals = {}
-        for key, value in self._patches.items():
-            self._originals[key] = getattr(self.embeddings, key)
-            setattr(self.embeddings, key, value)
+        from ledger.config import LedgerConfig, reset_config, set_config
+
+        test_config = LedgerConfig(
+            ledger_root=self.repo_root,
+            ledger_notes_dir=self.notes_root,
+            source_notes_dir=self.source_root,
+        )
+        set_config(test_config)
+
+        self._embed_texts_original = self.embeddings.embed_texts
+        self.embeddings.embed_texts = fake_embed_texts
+        self._reset_config = reset_config
 
     def tearDown(self):
         self.embeddings.clear_runtime_caches()
-        for key, value in self._originals.items():
-            setattr(self.embeddings, key, value)
+        self.embeddings.embed_texts = self._embed_texts_original
+        self._reset_config()
         self.temp_dir.cleanup()
 
     def _write_note(self, path: Path, title: str, body: str, updated: str = "2026-02-13T10:00:00Z"):

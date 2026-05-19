@@ -18,13 +18,18 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-ROOT_DIR = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT_DIR))
-
-from ledger.config import get_config
-from ledger.layout import inbox_dir, indices_dir
-from ledger.io.safe_write import safe_write_text, append_timeline_entry
-from ledger.parsing.frontmatter import serialize_frontmatter
+try:
+    from ledger.config import get_config
+    from ledger.layout import inbox_dir, indices_dir
+    from ledger.io.safe_write import safe_write_text, append_timeline_entry
+    from ledger.parsing.frontmatter import serialize_frontmatter
+except ImportError:
+    # Fallback for running directly from a clone without `pip install -e .`
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+    from ledger.config import get_config
+    from ledger.layout import inbox_dir, indices_dir
+    from ledger.io.safe_write import safe_write_text, append_timeline_entry
+    from ledger.parsing.frontmatter import serialize_frontmatter
 
 
 def _baseline_path() -> Path:
@@ -69,7 +74,7 @@ def _run_git(*args: str) -> str:
     result = subprocess.run(
         ["git"] + list(args),
         capture_output=True, text=True, timeout=10,
-        cwd=str(ROOT_DIR),
+        cwd=str(get_config().ledger_root),
     )
     return result.stdout.strip()
 
