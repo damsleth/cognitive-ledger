@@ -16,7 +16,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
-from ledger.retrieval import load_note_index
+from ledger.retrieval import clear_candidate_cache, load_note_index
 from ledger.web.services.corpus import Corpus
 from ledger.web.services.search import Searcher
 
@@ -66,13 +66,23 @@ async def healthz(request: Request) -> JSONResponse:
     )
 
 
+_LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost", "testclient"})
+
+
 @router.post("/admin/reload")
 async def admin_reload(request: Request) -> JSONResponse:
+    client_host = request.client.host if request.client else ""
+    if client_host not in _LOOPBACK_HOSTS:
+        return JSONResponse(
+            {"ok": False, "error": "admin endpoints restricted to loopback"},
+            status_code=403,
+        )
     corpus = _corpus(request)
     corpus.reload()
     searcher = _searcher(request)
     if searcher is not None:
         searcher.invalidate()
+    clear_candidate_cache()
     types = corpus.note_types()
     return JSONResponse(
         {
