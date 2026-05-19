@@ -25,16 +25,6 @@ from ledger.layout import logical_path, note_type_dir
 from ledger.io import append_timeline_entry as append_timeline_entry_safe
 from ledger.parsing import extract_title, parse_frontmatter_text
 
-_cfg = get_config()
-
-LEDGER_ROOT = _cfg.ledger_root
-SEMANTIC_ROOT = _cfg.semantic_root
-LEDGER_NOTES_DIR = _cfg.ledger_notes_dir
-LEDGER_TIMELINE_PATH = _cfg.timeline_path
-SEMANTIC_MANIFEST_PATH = _cfg.semantic_manifest_path
-
-DEFAULT_SOURCE_NOTES_DIR = _cfg.source_notes_dir
-
 SUPPORTED_BACKENDS = ("local", "openai")
 SUPPORTED_TARGETS = ("ledger", "source", "both")
 
@@ -123,14 +113,15 @@ def ensure_openai_api_key() -> str:
 
 def corpus_root_for_target(target: str, source_root: Path | None = None) -> Path:
     if target == "ledger":
-        return LEDGER_NOTES_DIR
+        return get_config().ledger_notes_dir
     if target == "source":
-        return Path(source_root or DEFAULT_SOURCE_NOTES_DIR).expanduser().resolve()
+        default = get_config().source_notes_dir
+        return Path(source_root or default).expanduser().resolve()
     raise ValueError(f"Unsupported corpus target: {target}")
 
 
 def semantic_dir(target: str, backend: str, model: str) -> Path:
-    return SEMANTIC_ROOT / target / f"{backend}__{sanitize_model_key(model)}"
+    return get_config().semantic_root / target / f"{backend}__{sanitize_model_key(model)}"
 
 
 def semantic_index_path(target: str, backend: str, model: str) -> Path:
@@ -179,13 +170,14 @@ def ensure_parent(path: Path) -> None:
 
 
 def append_timeline_entry(action: str, rel_path: str, description: str) -> None:
+    cfg = get_config()
     append_timeline_entry_safe(
-        timeline_path=LEDGER_TIMELINE_PATH,
+        timeline_path=cfg.timeline_path,
         action=action,
         note_path=rel_path,
         description=description,
-        root_dir=LEDGER_ROOT,
-        ledger_notes_dir=LEDGER_NOTES_DIR,
+        root_dir=cfg.ledger_root,
+        ledger_notes_dir=cfg.ledger_notes_dir,
     )
 
 
@@ -195,9 +187,10 @@ def iso_from_mtime(path: Path) -> str:
 
 
 def collect_ledger_notes() -> list[Path]:
+    ledger_notes_dir = get_config().ledger_notes_dir
     files: list[Path] = []
     for note_type in LEDGER_EMBED_LAYOUT_NAMES:
-        note_dir = note_type_dir(LEDGER_NOTES_DIR, note_type)
+        note_dir = note_type_dir(ledger_notes_dir, note_type)
         if not note_dir.is_dir():
             continue
         files.extend(sorted(note_dir.glob("*.md")))
@@ -216,14 +209,16 @@ def build_item_record(path: Path, target: str, source_root: Path | None = None) 
     frontmatter, body = parse_frontmatter_text(text)
 
     if target == "ledger":
+        cfg = get_config()
         rel_path = logical_path(
             abs_path,
-            ledger_root=LEDGER_ROOT,
-            ledger_notes_dir=LEDGER_NOTES_DIR,
+            ledger_root=cfg.ledger_root,
+            ledger_notes_dir=cfg.ledger_notes_dir,
         ).as_posix()
         note_type = infer_ledger_note_type(rel_path)
     else:
-        root = Path(source_root or DEFAULT_SOURCE_NOTES_DIR).expanduser().resolve()
+        default = get_config().source_notes_dir
+        root = Path(source_root or default).expanduser().resolve()
         rel_path = abs_path.relative_to(root).as_posix()
         note_type = "source"
 
@@ -253,7 +248,8 @@ def collect_target_items(target: str, source_root: Path | None = None) -> list[d
     if target == "ledger":
         files = collect_ledger_notes()
     elif target == "source":
-        files = collect_source_notes(Path(source_root or DEFAULT_SOURCE_NOTES_DIR))
+        default = get_config().source_notes_dir
+        files = collect_source_notes(Path(source_root or default))
     else:
         raise ValueError(f"Unsupported target: {target}")
 
@@ -565,10 +561,11 @@ def _rebuild_target_index(
 
 
 def load_semantic_manifest() -> dict[str, Any]:
-    if not SEMANTIC_MANIFEST_PATH.is_file():
+    manifest_path = get_config().semantic_manifest_path
+    if not manifest_path.is_file():
         return {"version": 1, "updated": "", "targets": {}}
     try:
-        payload = json.loads(SEMANTIC_MANIFEST_PATH.read_text(encoding="utf-8"))
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
         return {"version": 1, "updated": "", "targets": {}}
 
@@ -579,8 +576,9 @@ def load_semantic_manifest() -> dict[str, Any]:
 
 
 def write_semantic_manifest(manifest: dict[str, Any]) -> None:
-    ensure_parent(SEMANTIC_MANIFEST_PATH)
-    SEMANTIC_MANIFEST_PATH.write_text(
+    manifest_path = get_config().semantic_manifest_path
+    ensure_parent(manifest_path)
+    manifest_path.write_text(
         json.dumps(manifest, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
     )
@@ -605,10 +603,11 @@ def build_indices(
     if target not in SUPPORTED_TARGETS:
         raise ValueError(f"Unsupported target: {target}")
 
+    cfg = get_config()
     resolved_model = str(model or default_model_for_backend(backend)).strip()
-    resolved_source_root = Path(source_root or DEFAULT_SOURCE_NOTES_DIR).expanduser().resolve()
+    resolved_source_root = Path(source_root or cfg.source_notes_dir).expanduser().resolve()
     resolved_template = normalize_text_template(
-        text_template if text_template is not None else getattr(_cfg, "embed_text_template", "none")
+        text_template if text_template is not None else getattr(cfg, "embed_text_template", "none")
     )
 
     targets = ["ledger", "source"] if target == "both" else [target]
@@ -679,7 +678,7 @@ def index_status(target: str) -> dict[str, Any]:
     output: dict[str, Any] = {"target": target, "targets": {}}
 
     for current_target in targets:
-        target_root = SEMANTIC_ROOT / current_target
+        target_root = get_config().semantic_root / current_target
         entries = []
         if target_root.is_dir():
             for model_dir in sorted(path for path in target_root.iterdir() if path.is_dir()):
@@ -726,7 +725,7 @@ def clean_indices(target: str) -> dict[str, Any]:
     removed: list[str] = []
 
     for current_target in targets:
-        path = SEMANTIC_ROOT / current_target
+        path = get_config().semantic_root / current_target
         if path.exists():
             shutil.rmtree(path)
             removed.append(path.as_posix())
