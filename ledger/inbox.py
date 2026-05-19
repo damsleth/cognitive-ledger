@@ -132,7 +132,7 @@ def cleanup_inbox(
     orphaned_locks: list[str] = []
     stale_items: list[str] = []
 
-    _AUTO_PREFIXES = ("session__", "uncommitted_note_changes")
+    _AUTO_PREFIXES = ("session__", "session_notes__", "uncommitted_note_changes")
 
     for lock_file in sorted(inbox.glob("*.lock")):
         md_file = lock_file.with_suffix("")
