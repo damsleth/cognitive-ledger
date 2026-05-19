@@ -40,10 +40,12 @@ TIMELINE_LINE_PATTERN = re.compile(
     r"^([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z) \| (created|updated|archived|deleted|closed|sleep) \| (.+?) \| (.*)$"
 )
 
-SOURCE_VALUES = {"user", "tool", "assistant", "inferred"}
-SCOPE_VALUES = {"home", "work", "dev", "personal", "meta", "life"}
-LANG_VALUES = {"en", "no", "mixed"}
-STATUS_VALUES = {"open", "closed", "blocked", "snoozed"}
+from ledger.schema_values import (
+    LANG_VALUES,
+    SCOPE_VALUES,
+    SOURCE_VALUES,
+    STATUS_VALUES,
+)
 
 LARGE_FILE_WORD_THRESHOLD = 400
 SYNC_STATE_VERSION = 1

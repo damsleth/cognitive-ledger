@@ -15,11 +15,13 @@ from ledger.errors import (
     ScopeValidationError,
     PathValidationError,
 )
+from ledger.schema_values import QUERY_SCOPE_VALUES, SCOPE_VALUES
 
 
-# Valid scopes as defined by schema
-VALID_SCOPES = frozenset({"home", "work", "dev", "personal", "life", "meta"})
-VALID_SCOPES_WITH_ALL = VALID_SCOPES | {"all"}
+# Re-exported under the legacy names for backwards-compat with callers
+# that import from this module rather than schema_values directly.
+VALID_SCOPES = SCOPE_VALUES
+VALID_SCOPES_WITH_ALL = QUERY_SCOPE_VALUES
 
 
 def validate_query(query: str, max_length: int = 2000) -> str:
