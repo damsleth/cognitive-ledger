@@ -11,7 +11,7 @@ first_run: true
 # ledger_notes_dir: ~/Code/ledger-notes
 # source_notes_dir: ~/Code/notes
 
-# A/B uses ledger_notes_dir by default. Override with: scripts/ledger_ab --corpus <path>
+# A/B uses ledger_notes_dir by default. Override with: ledger ab run --corpus <path>
 
 # Retrieval tuning
 # retrieval_mode: semantic_hybrid

@@ -1272,7 +1272,7 @@ def rank_lexical(
     return result
 
 
-# Backward-compat alias used by scripts/ledger and tests.
+# Backward-compat alias used by tests.
 _rank_query_lexical = rank_lexical
 
 

@@ -37,11 +37,37 @@ REMOVED_ENV_VARS = {
 PATH_FIELDS = frozenset({"ledger_root", "ledger_notes_dir", "source_notes_dir"})
 
 
+_INSTALL_LOCATION_MARKERS = (
+    "site-packages",
+    "dist-packages",
+    "Cellar/",
+    "/libexec/",
+    "pipx/venvs/",
+    ".venv/",
+)
+
+
+def _looks_like_install_location(path: Path) -> bool:
+    s = path.as_posix()
+    return any(marker in s for marker in _INSTALL_LOCATION_MARKERS)
+
+
 def _default_ledger_root() -> Path:
     """Determine the ledger root directory."""
     if env_root := os.getenv("LEDGER_ROOT"):
         return Path(env_root).expanduser().resolve()
-    return Path(__file__).resolve().parents[1]
+    fallback = Path(__file__).resolve().parents[1]
+    if _looks_like_install_location(fallback):
+        import warnings
+
+        warnings.warn(
+            f"LEDGER_ROOT is not set and the package appears to be installed "
+            f"(resolved fallback: {fallback}). This is almost certainly wrong - "
+            f"set LEDGER_ROOT to your cognitive-ledger source clone.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+    return fallback
 
 
 def _default_source_notes_dir() -> Path:

@@ -1061,12 +1061,39 @@ def build_cli_argument_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _resolve_repo_root() -> Path:
+    """Resolve the git repo root for A/B worktree operations.
+
+    Prefers `LEDGER_ROOT` (via config); falls back to `git rev-parse --show-toplevel`
+    from cwd. Never trust `Path(__file__).parent.parent` - that points into
+    site-packages when the package is installed.
+    """
+    from ledger.config import get_config as _get_config
+
+    candidate = _get_config().ledger_root
+    if (candidate / ".git").exists():
+        return candidate
+    try:
+        toplevel = subprocess.check_output(
+            ["git", "rev-parse", "--show-toplevel"],
+            cwd=str(Path.cwd()),
+            stderr=subprocess.DEVNULL,
+            text=True,
+        ).strip()
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        raise InvalidSetupError(
+            f"A/B harness requires a git repo. Set LEDGER_ROOT to the cognitive-ledger "
+            f"source clone, or run from inside it. Tried: {candidate}"
+        )
+    return Path(toplevel).resolve()
+
+
 def run_cli_harness(args: argparse.Namespace) -> int:
     from ledger.config import get_config as _get_config
 
     _ensure_git_available()
 
-    repo_root = Path(__file__).resolve().parent.parent
+    repo_root = _resolve_repo_root()
 
     eval_runs = args.eval_runs
     query_runs = args.query_runs

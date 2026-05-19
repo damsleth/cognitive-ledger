@@ -158,7 +158,7 @@ notes/09_archive/      superseded notes (do not delete)
 
 **Automated maintenance** (cron or Claude Code `/schedule`):
 ```
-0 6 * * * cd ~/Code/cognitive-ledger && ./scripts/sheep-auto.sh
+0 6 * * * /path/to/cognitive-ledger/scripts/sheep-auto.sh
 ```
 
 **Troubleshooting:**
