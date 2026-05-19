@@ -14,6 +14,7 @@ from dataclasses import dataclass
 
 from markdown_it import MarkdownIt
 
+from ledger.parsing import strip_private_tags
 from ledger.web.services.corpus import Corpus
 
 
@@ -99,10 +100,14 @@ def _strip_leading_h1(body: str) -> str:
 
 def render_body(body: str, corpus: Corpus) -> RenderedNote:
     """Render a note body to HTML, rewriting wikilinks."""
+    body = strip_private_tags(body)
     rewritten, broken = rewrite_wikilinks(_strip_leading_h1(body), corpus)
-    html = _md().render(rewritten)
-    html = _BROKEN_HTML_RE.sub(
+    rendered_html = _md().render(rewritten)
+    # m.group(1) was already escaped by markdown-it during render (html: False
+    # forces angle brackets, quotes, and ampersands into entities), so the
+    # span text-position is safe without further escaping.
+    rendered = _BROKEN_HTML_RE.sub(
         lambda m: f'<span class="broken-link" title="unresolved wikilink">{m.group(1)}</span>',
-        html,
+        rendered_html,
     )
-    return RenderedNote(html=html, broken_links=tuple(broken))
+    return RenderedNote(html=rendered, broken_links=tuple(broken))
