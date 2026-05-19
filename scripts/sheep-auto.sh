@@ -6,7 +6,7 @@
 # Full sleep requires agent judgment and should be done manually.
 #
 # Usage: ./scripts/sheep-auto.sh
-# Cron: 0 6 * * * cd ~/Code/cognitive-ledger && ./scripts/sheep-auto.sh
+# Cron: 0 6 * * * /path/to/cognitive-ledger/scripts/sheep-auto.sh
 
 set -uo pipefail
 
