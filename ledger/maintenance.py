@@ -1226,7 +1226,7 @@ def main(argv: list[str] | None = None) -> int:
     import sys as _sys
 
     raw = list(_sys.argv[1:] if argv is None else argv)
-    # Top-level --doctor per mnem CONVENTIONS.md. Handle before
+    # Top-level --doctor per hugr CONVENTIONS.md. Handle before
     # argparse because the maintenance parser requires a subcommand.
     if "--doctor" in raw:
         from ledger.doctor import emit_doctor
