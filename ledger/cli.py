@@ -931,7 +931,7 @@ def handle_ab_command(args, ab_parser):
 def main(argv=None) -> int:
     raw = list(sys.argv[1:] if argv is None else argv)
 
-    # --doctor is a top-level flag per mnem CONVENTIONS.md. Handle it
+    # --doctor is a top-level flag per hugr CONVENTIONS.md. Handle it
     # before argparse so it composes with --json without polluting the
     # subparser surface.
     if "--doctor" in raw:

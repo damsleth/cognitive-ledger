@@ -1,4 +1,4 @@
-"""``ledger --doctor`` - data-class health check per mnem CONVENTIONS.md.
+"""``ledger --doctor`` - data-class health check per hugr CONVENTIONS.md.
 
 Schema matches the doctor JSON contract: tool, version, config_path,
 data_path, models, findings[]. Exit codes follow the standard table

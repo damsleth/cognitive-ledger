@@ -1,7 +1,7 @@
-"""Tests for the mnem CLI contract helpers in ledger/conventions.py.
+"""Tests for the hugr CLI contract helpers in ledger/conventions.py.
 
 Mirrors the YAAMS test_conventions.py - they'll fold into a shared
-mnem-conventions package later.
+hugr-conventions package later.
 """
 from __future__ import annotations
 

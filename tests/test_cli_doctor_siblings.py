@@ -1,7 +1,7 @@
-"""`sheep --doctor` and `ledger-obsidian --doctor` mnem contract checks.
+"""`sheep --doctor` and `ledger-obsidian --doctor` hugr contract checks.
 
 Both sibling binaries must expose the same data-class doctor schema
-as `ledger --doctor` so that `mnem doctor` can fan out over a stable
+as `ledger --doctor` so that `hugr doctor` can fan out over a stable
 shape (tool, version, config_path?, data_path?, findings[]).
 """
 from __future__ import annotations
