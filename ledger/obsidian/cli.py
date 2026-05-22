@@ -258,7 +258,7 @@ def cmd_related(args: argparse.Namespace) -> int:
 
 
 def _emit_obsidian_doctor(as_json: bool) -> int:
-    """Top-level --doctor flag per mnem CONVENTIONS.md.
+    """Top-level --doctor flag per hugr CONVENTIONS.md.
 
     Reuses ledger.doctor.run_doctor() for the standard schema (config,
     redaction sentinel, etc.) and overrides tool to 'ledger-obsidian'.
@@ -298,7 +298,7 @@ def main(argv: list[str] | None = None) -> int:
     import sys as _sys
 
     raw = list(_sys.argv[1:] if argv is None else argv)
-    # Top-level --doctor per mnem CONVENTIONS.md (alongside the
+    # Top-level --doctor per hugr CONVENTIONS.md (alongside the
     # existing `doctor` subcommand, which stays for back-compat).
     if "--doctor" in raw:
         as_json = "--json" in raw

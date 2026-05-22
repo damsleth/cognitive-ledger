@@ -1,11 +1,11 @@
 """Reserved-key contract regression for ledger data commands.
 
-Per mnem CONVENTIONS.md, data-class success documents MUST NOT
+Per hugr CONVENTIONS.md, data-class success documents MUST NOT
 contain a top-level `ok` key. The key is reserved as the error-vs-
 success discriminator for JSON-aware callers.
 
-This file pins that contract for the JSON shapes consumed by mnem
-query, mnem ledger paths, etc.
+This file pins that contract for the JSON shapes consumed by hugr
+query, hugr ledger paths, etc.
 """
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ def test_query_result_to_json_has_no_top_level_ok():
   assert "ok" not in out, (
     "ledger query JSON success output has a top-level `ok` key, "
     "which is reserved as the data-class error discriminator per "
-    "mnem CONVENTIONS.md. Move it under a non-reserved key."
+    "hugr CONVENTIONS.md. Move it under a non-reserved key."
   )
 
 

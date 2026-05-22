@@ -5,12 +5,12 @@ Deepening your agent's cognitive lightcone with a persistent, hybrid markdown+em
 
 ## Suite
 
-cognitive-ledger is Tier 2 in the **[mnem](https://github.com/damsleth/mnem)**
+cognitive-ledger is Tier 2 in the **[hugr](https://github.com/damsleth/hugr)**
 memory suite, alongside YAAMS (Tier 1 raw), owa-piggy (M365 auth),
 and owa-tools (M365 read/write). The suite gives you one install
-(`brew install damsleth/tap/mnem`), one verb surface, and one CLI
+(`brew install damsleth/tap/hugr`), one verb surface, and one CLI
 contract (output classes, exit codes, action envelopes - see
-[mnem/CONVENTIONS.md](https://github.com/damsleth/mnem/blob/main/CONVENTIONS.md)).
+[hugr/CONVENTIONS.md](https://github.com/damsleth/hugr/blob/main/CONVENTIONS.md)).
 The `ledger`, `ledger-obsidian`, and `sheep` binaries continue to
 work standalone.
 

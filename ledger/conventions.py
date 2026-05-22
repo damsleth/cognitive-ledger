@@ -1,8 +1,8 @@
-"""cognitive-ledger implementation of the mnem suite CLI contract.
+"""cognitive-ledger implementation of the hugr suite CLI contract.
 
 Mirrors yaams/conventions.py - they will collapse into a shared
-mnem-conventions package later. See
-https://github.com/damsleth/mnem/blob/main/CONVENTIONS.md for the
+hugr-conventions package later. See
+https://github.com/damsleth/hugr/blob/main/CONVENTIONS.md for the
 binding spec.
 
 Public surface:
