@@ -245,9 +245,12 @@ def format_embed_status_human(payload: dict[str, Any]) -> str:
 def format_embed_clean_human(payload: dict[str, Any]) -> str:
     lines = [f"target: {payload.get('target')}"]
     removed = payload.get("removed", [])
-    if not removed:
+    pruned = payload.get("manifest_pruned", [])
+    if not removed and not pruned:
         lines.append("removed: none")
         return "\n".join(lines)
     for path in removed:
         lines.append(f"- removed {path}")
+    if pruned:
+        lines.append(f"- pruned manifest entries: {', '.join(pruned)}")
     return "\n".join(lines)

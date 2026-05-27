@@ -716,7 +716,12 @@ def index_status(target: str) -> dict[str, Any]:
     return output
 
 
-def clean_indices(target: str) -> dict[str, Any]:
+def clean_indices(
+    target: str,
+    *,
+    write_manifest: bool = True,
+    append_timeline: bool = True,
+) -> dict[str, Any]:
     target = str(target or "").strip().lower()
     if target not in SUPPORTED_TARGETS:
         raise ValueError(f"Unsupported target: {target}")
@@ -730,7 +735,28 @@ def clean_indices(target: str) -> dict[str, Any]:
             shutil.rmtree(path)
             removed.append(path.as_posix())
 
-    return {"target": target, "removed": removed}
+    # Removing the on-disk vectors leaves the manifest pointing at directories
+    # that no longer exist. Prune the cleaned targets so `embed status` and the
+    # manifest stay consistent with what's actually on disk.
+    manifest_pruned: list[str] = []
+    if write_manifest:
+        manifest = load_semantic_manifest()
+        targets_payload = manifest.get("targets", {})
+        for current_target in targets:
+            if targets_payload.pop(current_target, None) is not None:
+                manifest_pruned.append(current_target)
+        if manifest_pruned:
+            manifest["version"] = 1
+            manifest["updated"] = now_iso()
+            write_semantic_manifest(manifest)
+            if append_timeline:
+                append_timeline_entry(
+                    action="updated",
+                    rel_path="notes/08_indices/semantic_manifest.json",
+                    description=f"cleaned semantic embedding indices ({', '.join(manifest_pruned)})",
+                )
+
+    return {"target": target, "removed": removed, "manifest_pruned": manifest_pruned}
 
 
 def _normalize_rows(vectors: np.ndarray) -> np.ndarray:
