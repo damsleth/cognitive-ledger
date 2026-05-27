@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Fixed
+- **`ledger embed clean` now prunes the manifest.** Previously it only `rmtree`'d the on-disk vectors under `.smart-env/semantic/<target>/`, leaving the `semantic_manifest.json` target entry pointing at directories that no longer existed (so `embed status` kept reporting stale models). Clean now removes the cleaned target's entry from the manifest, bumps `updated`, and appends a timeline entry — keeping the manifest consistent with what's actually on disk. Human output reports pruned entries.
+
 ## 2026-05-17 (0.3.1)
 
 ### Added

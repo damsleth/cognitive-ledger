@@ -148,6 +148,36 @@ class LedgerEmbeddingsTests(unittest.TestCase):
         }
         self.assertEqual(first_hashes, second_hashes)
 
+    def test_clean_prunes_manifest_entries(self):
+        self.embeddings.build_indices(
+            target="ledger",
+            backend="local",
+            model="fake-local-model",
+            source_root=self.source_root,
+            write_manifest=True,
+            append_timeline=False,
+        )
+
+        manifest = self.embeddings.load_semantic_manifest()
+        self.assertIn("ledger", manifest["targets"])
+        target_dir = self.embeddings.get_config().semantic_root / "ledger"
+        self.assertTrue(target_dir.exists())
+
+        result = self.embeddings.clean_indices("ledger", append_timeline=False)
+
+        # On-disk vectors removed *and* the manifest no longer points at them.
+        self.assertFalse(target_dir.exists())
+        self.assertEqual(result["manifest_pruned"], ["ledger"])
+        pruned_manifest = self.embeddings.load_semantic_manifest()
+        self.assertNotIn("ledger", pruned_manifest["targets"])
+
+    def test_clean_missing_target_is_noop(self):
+        # Cleaning a target that was never built should not error or fabricate
+        # a manifest entry.
+        result = self.embeddings.clean_indices("ledger", append_timeline=False)
+        self.assertEqual(result["removed"], [])
+        self.assertEqual(result["manifest_pruned"], [])
+
     def test_incremental_rebuild_only_embeds_changed_items(self):
         first = self.embeddings.build_indices(
             target="ledger",
