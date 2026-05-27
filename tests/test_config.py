@@ -19,6 +19,7 @@ class TestLedgerConfig(unittest.TestCase):
 
     def setUp(self):
         reset_config()
+        self._orig_xdg = os.environ.get("XDG_CONFIG_HOME")
 
     def tearDown(self):
         reset_config()
@@ -26,6 +27,19 @@ class TestLedgerConfig(unittest.TestCase):
         for key in list(os.environ.keys()):
             if key.startswith("LEDGER_"):
                 del os.environ[key]
+        # Restore XDG_CONFIG_HOME (tests point it at temp dirs)
+        if self._orig_xdg is None:
+            os.environ.pop("XDG_CONFIG_HOME", None)
+        else:
+            os.environ["XDG_CONFIG_HOME"] = self._orig_xdg
+
+    def _write_user_config(self, base_dir: Path, content: str) -> Path:
+        """Write a user config to the canonical XDG location under base_dir."""
+        os.environ["XDG_CONFIG_HOME"] = str(base_dir)
+        config_path = Path(base_dir) / "ledger" / "config.yaml"
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text(content, encoding="utf-8")
+        return config_path
 
     def test_default_values(self):
         """Test default configuration values."""
@@ -144,9 +158,8 @@ class TestLedgerConfig(unittest.TestCase):
     def test_yaml_with_canonical_path_keys_loads(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir) / "ledger"
-            root.mkdir()
-            config_path = root / "config.yaml"
-            config_path.write_text(
+            self._write_user_config(
+                Path(tmpdir) / "xdg",
                 "\n".join(
                     [
                         f"ledger_root: {root}",
@@ -155,9 +168,7 @@ class TestLedgerConfig(unittest.TestCase):
                     ]
                 )
                 + "\n",
-                encoding="utf-8",
             )
-            os.environ["LEDGER_ROOT"] = str(root)
 
             config = LedgerConfig.from_env()
 
@@ -168,9 +179,8 @@ class TestLedgerConfig(unittest.TestCase):
     def test_yaml_retrieval_defaults_load(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir) / "ledger"
-            root.mkdir()
-            config_path = root / "config.yaml"
-            config_path.write_text(
+            self._write_user_config(
+                Path(tmpdir) / "xdg",
                 "\n".join(
                     [
                         f"ledger_root: {root}",
@@ -180,9 +190,7 @@ class TestLedgerConfig(unittest.TestCase):
                     ]
                 )
                 + "\n",
-                encoding="utf-8",
             )
-            os.environ["LEDGER_ROOT"] = str(root)
 
             config = LedgerConfig.from_env()
 
@@ -193,13 +201,10 @@ class TestLedgerConfig(unittest.TestCase):
     def test_retrieval_mode_env_overrides_yaml(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir) / "ledger"
-            root.mkdir()
-            config_path = root / "config.yaml"
-            config_path.write_text(
+            self._write_user_config(
+                Path(tmpdir) / "xdg",
                 f"ledger_root: {root}\nretrieval_mode: precomputed_index\n",
-                encoding="utf-8",
             )
-            os.environ["LEDGER_ROOT"] = str(root)
             os.environ["LEDGER_RETRIEVAL_MODE"] = "two_stage"
 
             config = LedgerConfig.from_env()
@@ -208,11 +213,7 @@ class TestLedgerConfig(unittest.TestCase):
 
     def test_removed_yaml_key_fails_with_migration_error(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            root = Path(tmpdir) / "ledger"
-            root.mkdir()
-            config_path = root / "config.yaml"
-            config_path.write_text("root_dir: ~/legacy-ledger\n", encoding="utf-8")
-            os.environ["LEDGER_ROOT"] = str(root)
+            self._write_user_config(Path(tmpdir) / "xdg", "root_dir: ~/legacy-ledger\n")
 
             with self.assertRaises(RuntimeError) as ctx:
                 LedgerConfig.from_env()
@@ -221,11 +222,7 @@ class TestLedgerConfig(unittest.TestCase):
 
     def test_missing_yaml_support_fails_loudly(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            root = Path(tmpdir) / "ledger"
-            root.mkdir()
-            config_path = root / "config.yaml"
-            config_path.write_text("ledger_root: ~/ledger\n", encoding="utf-8")
-            os.environ["LEDGER_ROOT"] = str(root)
+            self._write_user_config(Path(tmpdir) / "xdg", "ledger_root: ~/ledger\n")
 
             real_import = __import__
 
@@ -239,6 +236,39 @@ class TestLedgerConfig(unittest.TestCase):
                     LedgerConfig.from_env()
 
             self.assertIn("PyYAML", str(ctx.exception))
+
+    def test_repo_root_config_is_not_read(self):
+        # Config must live with the installation, not the codebase: a
+        # config.yaml inside ledger_root is intentionally ignored.
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir) / "repo"
+            root.mkdir()
+            (root / "config.yaml").write_text(
+                "retrieval_mode: precomputed_index\n", encoding="utf-8"
+            )
+            os.environ["LEDGER_ROOT"] = str(root)
+            # Point XDG at an empty dir so nothing else is picked up.
+            os.environ["XDG_CONFIG_HOME"] = str(Path(tmpdir) / "empty-xdg")
+
+            config = LedgerConfig.from_env()
+
+            # The repo config's retrieval_mode is ignored; default stands.
+            self.assertEqual(config.retrieval_mode, "semantic_hybrid")
+
+    def test_canonical_xdg_overrides_legacy_xdg(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base = Path(tmpdir) / "xdg"
+            os.environ["XDG_CONFIG_HOME"] = str(base)
+            legacy = base / "cognitive-ledger" / "config.yaml"
+            legacy.parent.mkdir(parents=True, exist_ok=True)
+            legacy.write_text("retrieval_mode: legacy\n", encoding="utf-8")
+            canonical = base / "ledger" / "config.yaml"
+            canonical.parent.mkdir(parents=True, exist_ok=True)
+            canonical.write_text("retrieval_mode: two_stage\n", encoding="utf-8")
+
+            config = LedgerConfig.from_env()
+
+            self.assertEqual(config.retrieval_mode, "two_stage")
 
 
 class TestConfigSingleton(unittest.TestCase):
