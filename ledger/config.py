@@ -76,7 +76,22 @@ def _default_source_notes_dir() -> Path:
 
 
 def _xdg_config_path() -> Path:
-    """User-level config location, following the XDG Base Directory spec."""
+    """Canonical user-level config location (XDG Base Directory spec).
+
+    Config lives with the *installation* (`$XDG_CONFIG_HOME/ledger/config.yaml`),
+    not inside the source checkout — the package, the config, and the ledger
+    folder are independent.
+    """
+    base = os.getenv("XDG_CONFIG_HOME") or str(Path.home() / ".config")
+    return Path(base).expanduser() / "ledger" / "config.yaml"
+
+
+def _legacy_xdg_config_path() -> Path:
+    """Deprecated pre-rename config location (``ledger`` was ``cognitive-ledger``).
+
+    Read as a low-priority fallback so existing installs keep working; the
+    canonical :func:`_xdg_config_path` overrides it.
+    """
     base = os.getenv("XDG_CONFIG_HOME") or str(Path.home() / ".config")
     return Path(base).expanduser() / "cognitive-ledger" / "config.yaml"
 
@@ -615,17 +630,19 @@ class LedgerConfig:
 
     @classmethod
     def from_env(cls) -> "LedgerConfig":
-        """Load config from config.yaml (if present) with env var overrides.
+        """Load the user config file (if present) with env var overrides.
 
         Lookup order (later sources override earlier ones):
-        1. ``$XDG_CONFIG_HOME/cognitive-ledger/config.yaml`` (user-level)
-        2. ``<ledger_root>/config.yaml`` (repo-level)
+        1. ``$XDG_CONFIG_HOME/cognitive-ledger/config.yaml`` (deprecated; pre-rename)
+        2. ``$XDG_CONFIG_HOME/ledger/config.yaml`` (canonical user config)
         3. Environment variables (LEDGER_ROOT, LEDGER_NOTES_DIR, etc.)
+
+        A ``config.yaml`` inside the source checkout is intentionally NOT read:
+        config belongs to the installation, not the codebase.
         """
         config = cls()
-        repo_config_path = config.ledger_root / "config.yaml"
+        config = _apply_yaml_config(config, _legacy_xdg_config_path())
         config = _apply_yaml_config(config, _xdg_config_path())
-        config = _apply_yaml_config(config, repo_config_path)
         return _apply_env_overrides(config)
 
     @classmethod
