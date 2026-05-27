@@ -100,6 +100,34 @@ ledger signal stats          # show signal counts, top notes, gaps
 Signal types: `retrieval_hit`, `retrieval_miss`, `correction`, `affirmation`,
 `stale_flag`, `preference_applied`, `rating`.
 
+**Scan-and-judge review (TUI):** `ledger review` walks a *prioritized* queue —
+the notes most worth judging surface first (corrections pending →
+high-traffic-but-never-affirmed → never reviewed → stale-by-age → low
+confidence / inferred). One keystroke per note:
+
+```
+k keep (affirmation)   w wrong (correction, asks reason)   s stale (stale_flag)
+1-9 rate               space/enter skip                    u undo   q quit & save
+```
+
+Signals are buffered and flushed (with a summary rebuild) on exit.
+
+```bash
+ledger review                       # full queue, interactive TUI
+ledger review --type facts --stale-days 90 --unjudged-only
+ledger review --queue               # print the prioritized list, no TUI
+ledger review --stats               # signal dashboard: coverage, score dist, gaps
+```
+
+**Use-time capture (opt-in):** set `signals_auto_capture: true` in
+`~/.config/ledger/config.yaml` (or `LEDGER_SIGNALS_AUTO_CAPTURE=1`) and queries
+auto-log `retrieval_miss` when nothing scores above `signals_miss_score_floor`
+(both CLI `ledger query` and the web `/search`). `ledger query "<topic>" --pick`
+prompts for the result that helped and logs a `retrieval_hit`; opening a note
+from a web search result does the same. Off by default to avoid noise; even when
+on, signal feedback stays inert for ranking until `signal_min_entries` (20)
+accrue and `score_weight_signal` is raised above 0.
+
 `<mode>`: `legacy`, `two_stage`, `scope_type_prefilter`, `precomputed_index`, `progressive_disclosure`, `semantic_hybrid`.
 
 ### A/B Testing

@@ -46,6 +46,13 @@ async def search(
         mode = DEFAULT_MODE
 
     results = searcher.search(q, mode=mode, scope=scope, limit=limit)
+
+    # Use-time signal: a non-empty query that finds nothing is a coverage gap.
+    if request.app.state.config.signals_auto_capture and results.query and results.empty:
+        from ledger import signals
+
+        signals.append_signal("retrieval_miss", query=results.query)
+
     types = corpus.note_types()
     scopes = list(request.app.state.config.query_scopes)
 
