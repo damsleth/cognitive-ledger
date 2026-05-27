@@ -148,6 +148,31 @@ class LedgerEmbeddingsTests(unittest.TestCase):
         }
         self.assertEqual(first_hashes, second_hashes)
 
+    def test_configured_model_for_backend_resolution(self):
+        from ledger.config import LedgerConfig, set_config
+
+        cfb = self.embeddings.configured_model_for_backend
+        default_local = self.embeddings.default_model_for_backend("local")
+
+        # Explicit model always wins.
+        set_config(LedgerConfig(
+            ledger_root=self.repo_root, embed_backend="local", embed_model="BAAI/bge-m3",
+        ))
+        self.assertEqual(cfb("local", "intfloat/e5"), "intfloat/e5")
+
+        # config.embed_model used when the backend matches config.embed_backend.
+        self.assertEqual(cfb("local"), "BAAI/bge-m3")
+
+        # Backend mismatch falls back to the static default (configured model is
+        # backend-specific, so don't hand a local model name to openai).
+        self.assertEqual(cfb("openai"), self.embeddings.default_model_for_backend("openai"))
+
+        # No configured model -> static default.
+        set_config(LedgerConfig(
+            ledger_root=self.repo_root, embed_backend="local", embed_model=None,
+        ))
+        self.assertEqual(cfb("local"), default_local)
+
     def test_clean_prunes_manifest_entries(self):
         self.embeddings.build_indices(
             target="ledger",
