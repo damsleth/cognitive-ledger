@@ -10,8 +10,10 @@ from unittest.mock import patch
 import pytest
 
 from ledger.browse import BrowseItem
+from ledger.config import LedgerConfig
 from ledger.review import (
     ReviewItem,
+    activation_status,
     build_review_queue,
     dashboard_data,
     flush_session,
@@ -117,6 +119,31 @@ class TestScoreItem:
         fm = {"confidence": 0.9, "source": "inferred"}
         priority, reasons = score_item({"hit_count": 0}, fm, stale_days=180, min_confidence=0.8)
         assert any("inferred" in r for r in reasons)
+
+
+# ---------------------------------------------------------------------------
+# activation_status — is signal feedback influencing ranking?
+# ---------------------------------------------------------------------------
+
+
+class TestActivationStatus:
+    def test_accruing_below_threshold(self):
+        cfg = LedgerConfig(score_weight_signal=0.0, signal_min_entries=20)
+        status = activation_status(5, cfg)
+        assert status["state"] == "accruing"
+        assert "5/20" in status["message"]
+
+    def test_ready_when_enough_but_weight_zero(self):
+        cfg = LedgerConfig(score_weight_signal=0.0, signal_min_entries=20)
+        status = activation_status(25, cfg)
+        assert status["state"] == "ready"
+        assert "ab run" in status["message"]
+
+    def test_active_when_weight_positive(self):
+        cfg = LedgerConfig(score_weight_signal=0.1, signal_min_entries=20)
+        status = activation_status(25, cfg)
+        assert status["state"] == "active"
+        assert "0.1" in status["message"]
 
 
 # ---------------------------------------------------------------------------
@@ -242,3 +269,4 @@ class TestDashboardData:
         assert data["coverage"] == pytest.approx(0.5)
         assert set(data["score_dist"]) == {"positive", "neutral", "negative"}
         assert data["corrections_pending"] == 1
+        assert data["activation"]["state"] in {"accruing", "ready", "active"}

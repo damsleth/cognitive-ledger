@@ -676,8 +676,12 @@ def handle_signal_command(args):
         print(f"Signal summary written to {path}")
 
     elif sub == "stats":
+        from ledger import review
+
         stats = sig.signal_stats()
         print(f"Total signals: {stats['total']}")
+        activation = review.activation_status(stats["total"])
+        print(f"Activation: [{activation['state']}] {activation['message']}")
         print(f"By type: {json.dumps(stats['by_type'], indent=2)}")
         if stats["top_notes"]:
             print("\nTop notes by hit count:")
