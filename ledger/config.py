@@ -219,6 +219,7 @@ def _apply_env_overrides(config: "LedgerConfig") -> "LedgerConfig":
         "LEDGER_WEIGHT_SCOPE": "score_weight_scope",
         "LEDGER_WEIGHT_RECENCY": "score_weight_recency",
         "LEDGER_WEIGHT_CONFIDENCE": "score_weight_confidence",
+        "LEDGER_WEIGHT_SIGNAL": "score_weight_signal",
     }
     for env_var, attr in float_mappings.items():
         if (value := os.getenv(env_var)) is None:
