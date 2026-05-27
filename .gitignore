@@ -24,6 +24,8 @@ dist/
 # Repo-local notes-folder, should not be committed.
 notes/*
 config.yaml
+# Local dev convenience symlink to the installed CLI (machine-specific, do not track)
+/scripts/ledger
 .coverage
 # uxl artifacts (screenshots, reports, logs)
 .uxl/
