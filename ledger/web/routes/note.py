@@ -23,6 +23,26 @@ async def note_detail(request: Request, stem: str) -> HTMLResponse:
     if item is None:
         raise HTTPException(status_code=404, detail=f"No note with stem {stem!r}")
 
+    # Use-time signal: opening a note from a search result is a hit on that
+    # result for the originating query. Gated on signals_auto_capture.
+    config = request.app.state.config
+    if config.signals_auto_capture and request.query_params.get("from") == "search":
+        from ledger.layout import logical_path
+        from ledger import signals
+
+        rel_path = str(
+            logical_path(
+                item.path,
+                ledger_root=config.ledger_root,
+                ledger_notes_dir=config.ledger_notes_dir,
+            )
+        )
+        signals.append_signal(
+            "retrieval_hit",
+            query=request.query_params.get("q", ""),
+            note=rel_path,
+        )
+
     rendered = render_body(item.body, corpus)
     types = corpus.note_types()
     incoming = corpus.link_titles(corpus.incoming_stems(stem))
