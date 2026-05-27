@@ -121,14 +121,26 @@ def list_items(args, note_type, loop_status=None):
 
     if as_json:
         # Data class: raw document on stdout, no top-level `ok`.
+        # `status` lives in frontmatter (BrowseItem has no status attribute),
+        # so fall back to it for loops.
         items_out = []
         for item in items[: args.limit]:
-            items_out.append({
-                "type": getattr(item, "type", None) or item.get("type") if isinstance(item, dict) else None,
-                "title": getattr(item, "title", None) or (item.get("title") if isinstance(item, dict) else None),
-                "path": getattr(item, "path", None) or (item.get("path") if isinstance(item, dict) else None),
-                "status": getattr(item, "status", None) or (item.get("status") if isinstance(item, dict) else None),
-            })
+            if isinstance(item, dict):
+                fm = item.get("frontmatter") or {}
+                items_out.append({
+                    "type": item.get("type"),
+                    "title": item.get("title"),
+                    "path": item.get("path"),
+                    "status": item.get("status") or fm.get("status"),
+                })
+            else:
+                fm = getattr(item, "frontmatter", None) or {}
+                items_out.append({
+                    "type": getattr(item, "type", None),
+                    "title": getattr(item, "title", None),
+                    "path": getattr(item, "path", None),
+                    "status": getattr(item, "status", None) or fm.get("status"),
+                })
         out = {
             "note_type": note_type,
             "loop_status": loop_status,
@@ -637,12 +649,25 @@ def handle_init_command(args):
     t0 = _time.monotonic()
 
     try:
-        report = init_ledger(
-            root=args.root,
-            voice_dna_path=args.voice_dna,
-            source_notes_dir=args.source_notes_dir,
-            ledger_notes_dir=args.ledger_notes_dir,
-        )
+        # init_ledger runs `sheep index`, which prints progress to stdout.
+        # In --json mode that would corrupt the envelope, so capture it.
+        if as_json:
+            import io as _io
+            from contextlib import redirect_stdout
+            with redirect_stdout(_io.StringIO()):
+                report = init_ledger(
+                    root=args.root,
+                    voice_dna_path=args.voice_dna,
+                    source_notes_dir=args.source_notes_dir,
+                    ledger_notes_dir=args.ledger_notes_dir,
+                )
+        else:
+            report = init_ledger(
+                root=args.root,
+                voice_dna_path=args.voice_dna,
+                source_notes_dir=args.source_notes_dir,
+                ledger_notes_dir=args.ledger_notes_dir,
+            )
     except Exception as exc:
         if as_json:
             from ledger.conventions import (
