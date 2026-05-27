@@ -55,10 +55,9 @@ def resolve_embed_model(
     *,
     load_embeddings_module_fn: Callable[..., Any] = load_embeddings_module,
 ) -> str:
-    if embed_model:
-        return str(embed_model).strip()
     embeddings = load_embeddings_module_fn()
-    return str(embeddings.default_model_for_backend(backend))
+    # config.yaml is authoritative when no explicit model is supplied.
+    return str(embeddings.configured_model_for_backend(backend, embed_model))
 
 
 def semantic_search_source(
@@ -245,9 +244,12 @@ def format_embed_status_human(payload: dict[str, Any]) -> str:
 def format_embed_clean_human(payload: dict[str, Any]) -> str:
     lines = [f"target: {payload.get('target')}"]
     removed = payload.get("removed", [])
-    if not removed:
+    pruned = payload.get("manifest_pruned", [])
+    if not removed and not pruned:
         lines.append("removed: none")
         return "\n".join(lines)
     for path in removed:
         lines.append(f"- removed {path}")
+    if pruned:
+        lines.append(f"- pruned manifest entries: {', '.join(pruned)}")
     return "\n".join(lines)

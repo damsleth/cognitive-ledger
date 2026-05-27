@@ -30,20 +30,13 @@ ledger init --root "$HOME/.config/cognitive-ledger" \
   --source-notes-dir ~/Code/notes
 ```
 
-`ledger init` scaffolds the notes tree (`01_identity/` … `09_archive/`), writes `config.yaml`, and emits templates + schema into `--root`. `config.yaml` is created with `first_run: true` so the session-start hook can inject setup guidance on the first agent session.
+`ledger init` scaffolds the notes tree (`01_identity/` … `09_archive/`) and emits templates + schema into `--root`, and writes your config to `$XDG_CONFIG_HOME/ledger/config.yaml` (i.e. `~/.config/ledger/config.yaml`). The config is created with `first_run: true` so the session-start hook can inject setup guidance on the first agent session. The package, the config, and the ledger folder are independent — the source checkout is not needed at runtime.
 
 Optional flags:
 
 ```bash
 ledger init --voice-dna ~/voice-profile.json   # import your writing voice
 ledger paths                                    # verify resolved locations
-```
-
-Persist `LEDGER_ROOT` in your shell rc so the brew-installed CLIs find your config (otherwise they default to a read-only Cellar path):
-
-```bash
-echo 'export LEDGER_ROOT="$HOME/.config/cognitive-ledger"' >> ~/.zshrc
-source ~/.zshrc
 ```
 
 ## Agent Skill
@@ -64,10 +57,11 @@ The skill's first run will brew-install this package automatically if it's missi
 
 ### Configure (optional)
 
-Edit `config.yaml` in the repo root:
+Edit your user config at `~/.config/ledger/config.yaml` (override the directory
+with `$XDG_CONFIG_HOME`). See `config.sample.yaml` in this repo for all keys:
 
 ```yaml
-# config.yaml
+# ~/.config/ledger/config.yaml
 ledger_notes_dir: ~/Code/ledger-notes
 source_notes_dir: ~/Code/notes
 # auto_file_synthesis: false  # set true to auto-file query syntheses

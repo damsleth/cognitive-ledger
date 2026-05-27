@@ -96,12 +96,39 @@ def sanitize_model_key(model: str) -> str:
 
 
 def default_model_for_backend(backend: str) -> str:
+    """Static, hardcoded fallback model for a backend.
+
+    This is the last resort. Prefer ``configured_model_for_backend`` so that
+    ``config.embed_model`` stays authoritative.
+    """
     backend = str(backend or "").strip().lower()
     if backend == "local":
         return DEFAULT_LOCAL_MODEL
     if backend == "openai":
         return DEFAULT_OPENAI_MODEL
     raise ValueError(f"Unsupported embedding backend: {backend}")
+
+
+def configured_model_for_backend(backend: str, explicit_model: str | None = None) -> str:
+    """Resolve the embedding model, treating config.yaml as authoritative.
+
+    Resolution order:
+    1. ``explicit_model`` (an explicit CLI ``--model`` / argument), if given
+    2. ``config.embed_model`` — but only when the requested ``backend`` matches
+       ``config.embed_backend`` (the configured model name is backend-specific)
+    3. the static :func:`default_model_for_backend` fallback
+
+    Nothing should hardcode a model name; route every resolution through here.
+    """
+    backend = str(backend or "").strip().lower()
+    if explicit_model:
+        return str(explicit_model).strip()
+    config = get_config()
+    configured = str(getattr(config, "embed_model", None) or "").strip()
+    config_backend = str(getattr(config, "embed_backend", "local") or "local").strip().lower()
+    if configured and config_backend == backend:
+        return configured
+    return default_model_for_backend(backend)
 
 
 def ensure_openai_api_key() -> str:
@@ -604,7 +631,7 @@ def build_indices(
         raise ValueError(f"Unsupported target: {target}")
 
     cfg = get_config()
-    resolved_model = str(model or default_model_for_backend(backend)).strip()
+    resolved_model = configured_model_for_backend(backend, model)
     resolved_source_root = Path(source_root or cfg.source_notes_dir).expanduser().resolve()
     resolved_template = normalize_text_template(
         text_template if text_template is not None else getattr(cfg, "embed_text_template", "none")
@@ -716,7 +743,12 @@ def index_status(target: str) -> dict[str, Any]:
     return output
 
 
-def clean_indices(target: str) -> dict[str, Any]:
+def clean_indices(
+    target: str,
+    *,
+    write_manifest: bool = True,
+    append_timeline: bool = True,
+) -> dict[str, Any]:
     target = str(target or "").strip().lower()
     if target not in SUPPORTED_TARGETS:
         raise ValueError(f"Unsupported target: {target}")
@@ -730,7 +762,28 @@ def clean_indices(target: str) -> dict[str, Any]:
             shutil.rmtree(path)
             removed.append(path.as_posix())
 
-    return {"target": target, "removed": removed}
+    # Removing the on-disk vectors leaves the manifest pointing at directories
+    # that no longer exist. Prune the cleaned targets so `embed status` and the
+    # manifest stay consistent with what's actually on disk.
+    manifest_pruned: list[str] = []
+    if write_manifest:
+        manifest = load_semantic_manifest()
+        targets_payload = manifest.get("targets", {})
+        for current_target in targets:
+            if targets_payload.pop(current_target, None) is not None:
+                manifest_pruned.append(current_target)
+        if manifest_pruned:
+            manifest["version"] = 1
+            manifest["updated"] = now_iso()
+            write_semantic_manifest(manifest)
+            if append_timeline:
+                append_timeline_entry(
+                    action="updated",
+                    rel_path="notes/08_indices/semantic_manifest.json",
+                    description=f"cleaned semantic embedding indices ({', '.join(manifest_pruned)})",
+                )
+
+    return {"target": target, "removed": removed, "manifest_pruned": manifest_pruned}
 
 
 def _normalize_rows(vectors: np.ndarray) -> np.ndarray:
@@ -790,7 +843,7 @@ def semantic_score_map(
     target, backend = _validate_semantic_search_inputs(target, backend, allow_api_on_source)
     if backend == "openai":
         ensure_openai_api_key()
-    resolved_model = str(model or default_model_for_backend(backend)).strip()
+    resolved_model = configured_model_for_backend(backend, model)
 
     index_data, vectors = load_semantic_index(target, backend, resolved_model)
     if index_data is None or vectors is None:
