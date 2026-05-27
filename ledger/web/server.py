@@ -98,11 +98,13 @@ def create_app(
     from ledger.web.routes import browse as browse_routes
     from ledger.web.routes import note as note_routes
     from ledger.web.routes import search as search_routes
+    from ledger.web.routes import signals as signals_routes
 
     app.include_router(admin_routes.router)
     app.include_router(browse_routes.router)
     app.include_router(note_routes.router)
     app.include_router(search_routes.router)
+    app.include_router(signals_routes.router)
 
     return app
 
