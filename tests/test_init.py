@@ -1,5 +1,6 @@
 import contextlib
 import io
+import os
 import sys
 import tempfile
 import unittest
@@ -22,8 +23,15 @@ def load_ledger_module():
 
 
 class InitTests(unittest.TestCase):
+    def setUp(self):
+        self._orig_xdg = os.environ.get("XDG_CONFIG_HOME")
+
     def tearDown(self):
         reset_config()
+        if self._orig_xdg is None:
+            os.environ.pop("XDG_CONFIG_HOME", None)
+        else:
+            os.environ["XDG_CONFIG_HOME"] = self._orig_xdg
 
     def test_init_persists_external_paths_to_config(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -32,6 +40,8 @@ class InitTests(unittest.TestCase):
             ledger_notes_dir = tmp / "ledger-notes"
             source_notes_dir = tmp / "notes"
             repo_root.mkdir()
+            # Config is written to the canonical XDG location, not into --root.
+            os.environ["XDG_CONFIG_HOME"] = str(tmp / "xdg")
 
             report = init_ledger(
                 root=repo_root,
@@ -39,8 +49,10 @@ class InitTests(unittest.TestCase):
                 source_notes_dir=source_notes_dir,
             )
 
-            config_path = repo_root / "config.yaml"
+            config_path = tmp / "xdg" / "ledger" / "config.yaml"
             self.assertTrue(config_path.is_file())
+            # Config does NOT land inside the repo/--root.
+            self.assertFalse((repo_root / "config.yaml").exists())
             config_text = config_path.read_text(encoding="utf-8")
             self.assertIn("first_run: true", config_text)
             self.assertIn(f"ledger_notes_dir: {ledger_notes_dir.resolve()}", config_text)
@@ -56,7 +68,7 @@ class InitTests(unittest.TestCase):
             self.assertIn("*.lock", gitignore)
             self.assertIn("08_indices/note_index.json", gitignore)
             self.assertIn("08_indices/.session_baseline", gitignore)
-            self.assertIn("config.yaml", report["created"])
+            self.assertIn(str(config_path), report["created"])
 
     def test_paths_command_uses_resolved_config(self):
         with tempfile.TemporaryDirectory() as temp_dir:
