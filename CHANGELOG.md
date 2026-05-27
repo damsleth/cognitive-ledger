@@ -2,9 +2,14 @@
 
 ## Unreleased
 
+## 2026-05-27 (0.4.0)
+
 ### Changed
 - **Config now lives with the installation, not the codebase.** The canonical user config moved to `$XDG_CONFIG_HOME/ledger/config.yaml` (i.e. `~/.config/ledger/config.yaml`). A `config.yaml` inside the source checkout (`<ledger_root>/config.yaml`) is **no longer read** — this keeps the line clean between the package, the config, and the ledger folder, so the source tree isn't needed at runtime. The pre-rename `$XDG_CONFIG_HOME/cognitive-ledger/config.yaml` is still read as a deprecated low-priority fallback. Resolution order is now: legacy XDG → canonical XDG → environment variables. `ledger init` writes to the XDG location (creating it, never clobbering), and the session-start hook reads the first-run flag from there.
 - **`config.embed_model` is authoritative for the embedding model.** A new `configured_model_for_backend()` resolver (explicit arg → `config.embed_model` when the backend matches `config.embed_backend` → static default) is used by `embed build`, the query/semantic path, A/B builds, and `sheep index`. Previously these fell back to a hardcoded `TaylorAI/bge-micro-v2` whenever `--model` was omitted, ignoring config.
+
+### Removed
+- **`notes/` is untracked and gitignored.** The repo-local `notes/` folder was scratch space tooling could write into (e.g. a misfiring `sheep` run indexing the wrong corpus). It's removed from version control and `notes/*` is ignored so accidental writes never get committed.
 
 ### Fixed
 - **`sheep index` no longer resurrects the default embedding model.** `_generate_semantic_index` hardcoded `TaylorAI/bge-micro-v2`, so every index run rebuilt and re-registered it — undoing `embed clean` and ignoring `config.embed_model`. It now builds the configured model.
