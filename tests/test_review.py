@@ -63,6 +63,11 @@ class TestVerdictSignal:
         assert verdict_signal(_item(), " ") is None
         assert verdict_signal(_item(), "x") is None
 
+    def test_empty_key_returns_none(self):
+        # A non-ASCII key (e.g. KEY_RESIZE mapped to "") must not be mistaken
+        # for a rating: "" is a substring of "123456789".
+        assert verdict_signal(_item(), "") is None
+
     def test_session_passed_through(self):
         kw = verdict_signal(_item(), "k", session="sess1")
         assert kw["session"] == "sess1"
