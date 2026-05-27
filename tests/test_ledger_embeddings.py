@@ -148,6 +148,61 @@ class LedgerEmbeddingsTests(unittest.TestCase):
         }
         self.assertEqual(first_hashes, second_hashes)
 
+    def test_configured_model_for_backend_resolution(self):
+        from ledger.config import LedgerConfig, set_config
+
+        cfb = self.embeddings.configured_model_for_backend
+        default_local = self.embeddings.default_model_for_backend("local")
+
+        # Explicit model always wins.
+        set_config(LedgerConfig(
+            ledger_root=self.repo_root, embed_backend="local", embed_model="BAAI/bge-m3",
+        ))
+        self.assertEqual(cfb("local", "intfloat/e5"), "intfloat/e5")
+
+        # config.embed_model used when the backend matches config.embed_backend.
+        self.assertEqual(cfb("local"), "BAAI/bge-m3")
+
+        # Backend mismatch falls back to the static default (configured model is
+        # backend-specific, so don't hand a local model name to openai).
+        self.assertEqual(cfb("openai"), self.embeddings.default_model_for_backend("openai"))
+
+        # No configured model -> static default.
+        set_config(LedgerConfig(
+            ledger_root=self.repo_root, embed_backend="local", embed_model=None,
+        ))
+        self.assertEqual(cfb("local"), default_local)
+
+    def test_clean_prunes_manifest_entries(self):
+        self.embeddings.build_indices(
+            target="ledger",
+            backend="local",
+            model="fake-local-model",
+            source_root=self.source_root,
+            write_manifest=True,
+            append_timeline=False,
+        )
+
+        manifest = self.embeddings.load_semantic_manifest()
+        self.assertIn("ledger", manifest["targets"])
+        target_dir = self.embeddings.get_config().semantic_root / "ledger"
+        self.assertTrue(target_dir.exists())
+
+        result = self.embeddings.clean_indices("ledger", append_timeline=False)
+
+        # On-disk vectors removed *and* the manifest no longer points at them.
+        self.assertFalse(target_dir.exists())
+        self.assertEqual(result["manifest_pruned"], ["ledger"])
+        pruned_manifest = self.embeddings.load_semantic_manifest()
+        self.assertNotIn("ledger", pruned_manifest["targets"])
+
+    def test_clean_missing_target_is_noop(self):
+        # Cleaning a target that was never built should not error or fabricate
+        # a manifest entry.
+        result = self.embeddings.clean_indices("ledger", append_timeline=False)
+        self.assertEqual(result["removed"], [])
+        self.assertEqual(result["manifest_pruned"], [])
+
     def test_incremental_rebuild_only_embeds_changed_items(self):
         first = self.embeddings.build_indices(
             target="ledger",
