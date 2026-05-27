@@ -1,5 +1,7 @@
 import json
+import os
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 import unittest
@@ -87,14 +89,16 @@ class ContextProfileTests(unittest.TestCase):
             notes_dir = _build_profile_fixture_tree(notes_root)
             out_dir = Path(tmp) / "indices"
             cmd = [
-                "python3",
+                sys.executable,  # use the venv interpreter (has PyYAML + the package)
                 str(SCRIPT),
                 "--ledger-notes-dir",
                 str(notes_dir),
                 "--output-dir",
                 str(out_dir),
             ]
-            subprocess.check_call(cmd, cwd=str(ROOT))
+            # Isolate from the developer's real ~/.config/ledger/config.yaml.
+            env = {**os.environ, "XDG_CONFIG_HOME": str(Path(tmp) / "xdg")}
+            subprocess.check_call(cmd, cwd=str(ROOT), env=env)
 
             for scope in ("personal", "work", "dev"):
                 md = out_dir / f"context_profile_{scope}.md"
