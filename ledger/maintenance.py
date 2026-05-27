@@ -1024,6 +1024,14 @@ def _write_context_metrics(indices_dir: Path) -> dict[str, Any]:
 
 
 def _generate_semantic_index() -> None:
+    # Honor the configured embedding backend/model. Hardcoding a model here
+    # meant `sheep index` rebuilt (and re-registered) the default model on every
+    # run, resurrecting it after `embed clean` and ignoring config.embed_model.
+    from ledger.embeddings import default_model_for_backend, sanitize_model_key
+
+    config = get_config()
+    backend = str(config.embed_backend or "local").strip() or "local"
+    model = str(config.embed_model or "").strip() or default_model_for_backend(backend)
     cmd = [
         "ledger",
         "embed",
@@ -1031,13 +1039,14 @@ def _generate_semantic_index() -> None:
         "--target",
         "ledger",
         "--backend",
-        "local",
+        backend,
         "--model",
-        "TaylorAI/bge-micro-v2",
+        model,
     ]
     code, output = _run_subprocess(cmd, required=False)
     if code == 0:
-        print("  -> .smart-env/semantic/ledger/local__TaylorAI__bge-micro-v2/{index.json,vectors.npy}")
+        model_key = f"{backend}__{sanitize_model_key(model)}"
+        print(f"  -> .smart-env/semantic/ledger/{model_key}/{{index.json,vectors.npy}}")
         print("  -> notes/08_indices/semantic_manifest.json")
         return
 
