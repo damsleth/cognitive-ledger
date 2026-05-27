@@ -224,7 +224,7 @@ def verdict_signal(
         if key == "w" and detail:
             kwargs["detail"] = detail
         return kwargs
-    if key in "123456789":
+    if len(key) == 1 and key in "123456789":
         kwargs["signal_type"] = "rating"
         kwargs["rating"] = int(key)
         return kwargs
@@ -375,6 +375,9 @@ def _review_loop(stdscr, queue, entries, session_id):  # pragma: no cover - curs
         flash = ""
         ch = stdscr.getch()
 
+        if ch == curses.KEY_RESIZE:
+            # Terminal resized / pane split — just redraw at the new size.
+            continue
         if ch in (ord("q"),):
             break
         if ch in (ord("?"),):
