@@ -249,6 +249,42 @@ def flush_session(entries: list[dict[str, Any]]) -> Path | None:
 # ---------------------------------------------------------------------------
 
 
+def activation_status(total_signals: int, config=None) -> dict[str, Any]:
+    """Describe whether signal feedback is influencing retrieval ranking.
+
+    Three states:
+      - ``active``: ``score_weight_signal > 0`` — signals affect ranking.
+      - ``ready``: enough signals accrued but the weight is still 0, so they
+        are ignored — nudge the user to validate and turn it on.
+      - ``accruing``: below ``signal_min_entries`` — review more notes first.
+    """
+    config = config or get_config()
+    weight = config.score_weight_signal
+    threshold = config.signal_min_entries
+
+    if weight > 0:
+        return {
+            "state": "active",
+            "message": f"Signal-aware ranking is ON (score_weight_signal={weight:g}).",
+        }
+    if total_signals >= threshold:
+        return {
+            "state": "ready",
+            "message": (
+                f"{total_signals} signals (≥ {threshold}) but score_weight_signal "
+                "is 0.0, so ranking ignores them. Validate with `ledger ab run` "
+                "then raise the weight in config.yaml to activate."
+            ),
+        }
+    return {
+        "state": "accruing",
+        "message": (
+            f"{total_signals}/{threshold} signals — review more notes "
+            "(`ledger review`) to reach the activation threshold."
+        ),
+    }
+
+
 def dashboard_data() -> dict[str, Any]:
     """Aggregate signal stats into a coverage + insight snapshot."""
     summary = signals.summarize_signals()
@@ -280,6 +316,7 @@ def dashboard_data() -> dict[str, Any]:
         },
         "corrections_pending": stats["corrections_pending"],
         "retrieval_misses": stats["retrieval_misses"],
+        "activation": activation_status(stats["total"]),
     }
 
 
@@ -294,6 +331,9 @@ def render_dashboard(data: dict[str, Any]) -> str:
         f"Coverage      : {data['judged_notes']}/{data['total_notes']} "
         f"notes judged ({coverage_pct:.0f}%)"
     )
+    activation = data.get("activation")
+    if activation:
+        lines.append(f"Activation    : [{activation['state']}] {activation['message']}")
 
     by_type = data.get("by_type", {})
     if by_type:

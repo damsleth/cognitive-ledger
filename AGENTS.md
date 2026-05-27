@@ -128,6 +128,23 @@ from a web search result does the same. Off by default to avoid noise; even when
 on, signal feedback stays inert for ranking until `signal_min_entries` (20)
 accrue and `score_weight_signal` is raised above 0.
 
+**Activating signal-aware ranking (validate, don't guess):** the `--stats`
+dashboard (and `ledger signal stats`, and the web `/signals` page) reports an
+**activation** line — `accruing` (below threshold), `ready` (enough signals but
+weight still 0, so ignored), or `active` (weight > 0). When it reads `ready`,
+prove the weight helps before flipping it, using the A/B harness with
+`LEDGER_WEIGHT_SIGNAL` (wired into the env overrides):
+
+```bash
+# baseline = current behavior (weight 0); candidate = signal scoring on
+ledger ab run --baseline-ref HEAD --candidate-ref HEAD \
+  --candidate-env LEDGER_WEIGHT_SIGNAL=0.1 \
+  --cases "$(ledger paths --field ledger_notes_dir)/08_indices/retrieval_eval_cases.yaml" --k 3
+```
+
+Only raise `score_weight_signal` in `config.yaml` if recall@k improves without a
+latency regression.
+
 `<mode>`: `legacy`, `two_stage`, `scope_type_prefilter`, `precomputed_index`, `progressive_disclosure`, `semantic_hybrid`.
 
 ### A/B Testing

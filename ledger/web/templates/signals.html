@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block crumbs %}
+  <a href="/browse">browse</a>
+  <span class="crumb-sep">/</span>
+  <span>signals</span>
+{% endblock %}
+
+{% block content %}
+<header class="page-header">
+  <h1>Signal feedback</h1>
+  <p class="meta">{{ data.total_signals }} signal{{ "s" if data.total_signals != 1 else "" }} recorded</p>
+</header>
+
+<div class="signal-activation activation-{{ data.activation.state }}">
+  <strong>{{ data.activation.state }}</strong> — {{ data.activation.message }}
+</div>
+
+<section class="signal-cards">
+  <div class="signal-card">
+    <span class="signal-card-label">Coverage</span>
+    <span class="signal-card-value">{{ data.judged_notes }}/{{ data.total_notes }}</span>
+    <span class="signal-card-sub">{{ "%.0f"|format(data.coverage * 100) }}% of notes judged</span>
+  </div>
+  <div class="signal-card">
+    <span class="signal-card-label">Score distribution</span>
+    <span class="signal-card-value">
+      +{{ data.score_dist.positive }}
+      <span class="dim">·{{ data.score_dist.neutral }}</span>
+      -{{ data.score_dist.negative }}
+    </span>
+    <span class="signal-card-sub">positive · neutral · negative</span>
+  </div>
+  <div class="signal-card">
+    <span class="signal-card-label">Corrections pending</span>
+    <span class="signal-card-value">{{ data.corrections_pending }}</span>
+    <span class="signal-card-sub">notes flagged wrong, awaiting a fix</span>
+  </div>
+</section>
+
+<section class="signal-panel">
+  <h2>By type</h2>
+  {% if data.by_type %}
+  <ul class="signal-bars">
+    {% for sig_type, count in data.by_type | dictsort(by="value", reverse=True) %}
+    <li><span class="signal-bar-label">{{ sig_type }}</span><span class="signal-bar-count">{{ count }}</span></li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="empty">No signals yet. Run <code>ledger review</code> to start judging notes.</p>
+  {% endif %}
+</section>
+
+<section class="signal-panel">
+  <h2>Top gaps</h2>
+  <p class="meta">Retrieval misses — queries that found nothing. What to write next.</p>
+  {% if data.retrieval_misses %}
+  <ul class="signal-bars">
+    {% for query, count in data.retrieval_misses.items() %}
+    <li><span class="signal-bar-label">{{ query }}</span><span class="signal-bar-count">{{ count }}×</span></li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="empty">No gaps recorded. (Enable <code>signals_auto_capture</code> to log query misses.)</p>
+  {% endif %}
+</section>
+{% endblock %}

@@ -46,6 +46,12 @@
             <span class="type-label">search</span>
           </a>
         </li>
+        <li>
+          <a href="/signals"
+             class="type-link{% if active_type == 'signals' %} active{% endif %}">
+            <span class="type-label">signals</span>
+          </a>
+        </li>
         {% for type in types %}
         <li>
           <a href="/browse/{{ type.key }}"
