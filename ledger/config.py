@@ -228,6 +228,15 @@ def _apply_env_overrides(config: "LedgerConfig") -> "LedgerConfig":
         except ValueError:
             pass
 
+    # Boolean overrides ("1", "true", "yes", "on" -> True; else False)
+    bool_mappings = {
+        "LEDGER_SIGNALS_AUTO_CAPTURE": "signals_auto_capture",
+    }
+    for env_var, attr in bool_mappings.items():
+        if (value := os.getenv(env_var)) is None:
+            continue
+        setattr(config, attr, value.strip().lower() in ("1", "true", "yes", "on"))
+
     string_mappings = {
         "LEDGER_RETRIEVAL_MODE": "retrieval_mode",
         "LEDGER_EMBED_BACKEND": "embed_backend",
@@ -421,6 +430,24 @@ class LedgerConfig:
 
     Rationale: With too few signals, the signal score is noisy
     and can distort retrieval. This gate prevents premature activation.
+    """
+
+    signals_auto_capture: bool = False
+    """Whether queries auto-emit use-time signals (retrieval_miss/hit).
+
+    Off by default to honor the no-noise principle: signals are only
+    written when you opt in via config.yaml or LEDGER_SIGNALS_AUTO_CAPTURE.
+    Even when on, signal feedback stays inert for ranking until
+    ``signal_min_entries`` (20) accrue and ``score_weight_signal`` is
+    raised above 0 — so turning this on is safe and reversible.
+    """
+
+    signals_miss_score_floor: float = 0.15
+    """Top-result score below which a query counts as a retrieval_miss.
+
+    A query that returns nothing, or whose best hit scores under this
+    floor, is treated as a coverage gap when ``signals_auto_capture`` is
+    on. Tuned conservatively: only genuinely weak matches log a miss.
     """
 
     # =========================================================================

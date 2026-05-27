@@ -16,7 +16,7 @@
   <ul class="note-list search-results">
     {% for hit in results.hits %}
     <li class="note-row">
-      <a class="note-link" href="/note/{{ hit.stem }}">
+      <a class="note-link" href="/note/{{ hit.stem }}?from=search&amp;q={{ results.query | urlencode }}">
         <span class="note-type-pill type-{{ hit.type }}">{{ hit.type | type_label }}</span>
         <span class="note-title">{{ hit.title }}</span>
         <span class="note-summary">
