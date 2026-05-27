@@ -118,6 +118,10 @@ class AbChartsTests(unittest.TestCase):
                 main(root=Path(tmp))
 
     def test_main_renders_when_series_present(self):
+        try:
+            import matplotlib  # noqa: F401
+        except ImportError:
+            self.skipTest("matplotlib not installed (optional charts extra)")
         from ledger import ab_charts
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
