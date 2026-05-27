@@ -693,7 +693,7 @@ def handle_init_command(args):
 
     print("\nNext steps:")
     print("  1. Run: ledger paths")
-    print("  2. Edit config.yaml if needed")
+    print("  2. Edit ~/.config/ledger/config.yaml if needed")
     print("  3. Run: ./skills/install-skill.sh")
     print("  4. Create your first note with /notes")
 
