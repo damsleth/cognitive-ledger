@@ -41,8 +41,9 @@ mkdir -p "$(dirname "$BASELINE_FILE")"
     echo "}"
 } > "$BASELINE_FILE" 2>/dev/null || true
 
-# First-run setup: inject FIRSTRUN.md if first_run: true in config.yaml
-CONFIG_FILE="$ROOT_DIR/config.yaml"
+# First-run setup: inject FIRSTRUN.md if first_run: true in config.yaml.
+# Config lives at the canonical XDG location, not in the repo.
+CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/ledger/config.yaml"
 FIRSTRUN_FILE="$ROOT_DIR/FIRSTRUN.md"
 if [ -f "$CONFIG_FILE" ] && grep -q "^first_run: true" "$CONFIG_FILE" 2>/dev/null; then
     if [ -f "$FIRSTRUN_FILE" ]; then

@@ -1,4 +1,5 @@
-# Cognitive Ledger configuration - copy this file to config.yaml and edit values as needed
+# Cognitive Ledger configuration - copy this file to $XDG_CONFIG_HOME/ledger/config.yaml
+# (i.e. ~/.config/ledger/config.yaml) and edit values as needed.
 # Values here are overridden by environment variables (LEDGER_ROOT, etc.)
 
 # Set to true on first install. The session_start hook will inject setup instructions
