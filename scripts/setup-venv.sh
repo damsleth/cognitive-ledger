@@ -6,18 +6,21 @@ VENV_DIR="$ROOT_DIR/.venv"
 PYTHON_BIN="python3"
 INSTALL_DEV=true
 INSTALL_EMBEDDINGS=true
+INSTALL_TEST=false
 RECREATE=false
 
 usage() {
   cat <<USAGE
-Usage: ./scripts/setup-venv.sh [--minimal] [--dev] [--embeddings] [--full] [--python <python-bin>] [--recreate]
+Usage: ./scripts/setup-venv.sh [--minimal] [--dev] [--embeddings] [--test] [--full] [--python <python-bin>] [--recreate]
 
 Options:
   --minimal           Install only base dependencies from pyproject.toml
   --dev               Install development dependencies (pyinstaller, pytest)
   --embeddings        Install local-embedding dependencies
                       (pinned sentence-transformers/torch stack)
-  --full              Install both --dev and --embeddings (default behavior)
+  --test              Install deps to run the full test suite without skips
+                      (web UI + matplotlib)
+  --full              Install --dev, --embeddings, and --test
   --python <bin>      Python interpreter to use for creating the venv (default: python3)
   --recreate          Delete and recreate .venv before installing
 USAGE
@@ -28,6 +31,7 @@ while [[ $# -gt 0 ]]; do
     --minimal)
       INSTALL_DEV=false
       INSTALL_EMBEDDINGS=false
+      INSTALL_TEST=false
       shift
       ;;
     --dev)
@@ -38,9 +42,14 @@ while [[ $# -gt 0 ]]; do
       INSTALL_EMBEDDINGS=true
       shift
       ;;
+    --test)
+      INSTALL_TEST=true
+      shift
+      ;;
     --full)
       INSTALL_DEV=true
       INSTALL_EMBEDDINGS=true
+      INSTALL_TEST=true
       shift
       ;;
     --python)
@@ -89,6 +98,9 @@ if [[ "$INSTALL_DEV" == "true" ]]; then
 fi
 if [[ "$INSTALL_EMBEDDINGS" == "true" ]]; then
   EXTRAS="${EXTRAS}embeddings,"
+fi
+if [[ "$INSTALL_TEST" == "true" ]]; then
+  EXTRAS="${EXTRAS}test,"
 fi
 EXTRAS="${EXTRAS%,}"  # trim trailing comma
 
