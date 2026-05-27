@@ -120,6 +120,52 @@ Commute calendar planning details.
         reset_config()
 
 
+def test_generate_semantic_index_honors_configured_model(tmp_path, monkeypatch):
+    config = LedgerConfig(
+        ledger_root=tmp_path, embed_backend="local", embed_model="BAAI/bge-m3"
+    )
+    set_config(config)
+    captured: dict[str, list[str]] = {}
+
+    def fake_run(command, required=True):
+        captured["cmd"] = command
+        return 0, ""
+
+    monkeypatch.setattr(maintenance, "_run_subprocess", fake_run)
+    try:
+        maintenance._generate_semantic_index()
+    finally:
+        reset_config()
+
+    cmd = captured["cmd"]
+    # Configured model is passed through; the hardcoded default is not used.
+    assert "BAAI/bge-m3" in cmd
+    assert "TaylorAI/bge-micro-v2" not in cmd
+    assert cmd[cmd.index("--backend") + 1] == "local"
+
+
+def test_generate_semantic_index_falls_back_to_backend_default(tmp_path, monkeypatch):
+    # No configured model -> the backend default is used (not an error).
+    config = LedgerConfig(ledger_root=tmp_path, embed_backend="local", embed_model=None)
+    set_config(config)
+    captured: dict[str, list[str]] = {}
+
+    def fake_run(command, required=True):
+        captured["cmd"] = command
+        return 0, ""
+
+    monkeypatch.setattr(maintenance, "_run_subprocess", fake_run)
+    try:
+        maintenance._generate_semantic_index()
+    finally:
+        reset_config()
+
+    from ledger.embeddings import default_model_for_backend
+
+    cmd = captured["cmd"]
+    assert cmd[cmd.index("--model") + 1] == default_model_for_backend("local")
+
+
 def test_sync_reports_missing_state(tmp_path, capsys):
     _make_temp_config(tmp_path)
     try:
