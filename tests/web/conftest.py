@@ -11,6 +11,11 @@ from pathlib import Path
 from typing import Generator
 
 import pytest
+
+# The web UI deps are an optional extra; skip the whole tests/web package
+# cleanly when they're absent (the default dev setup doesn't install them).
+pytest.importorskip("fastapi")
+
 from fastapi.testclient import TestClient
 
 from ledger.config import LedgerConfig, reset_config, set_config
