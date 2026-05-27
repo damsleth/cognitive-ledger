@@ -500,3 +500,35 @@ or other user-facing features):
 Do **not** update these files for routine note operations (creating,
 updating, or archiving individual notes). Only infrastructure and tooling
 changes warrant doc updates.
+
+## Releasing
+
+When the user says something like **"cut a major/minor/patch version and
+publish"**, it always means this full sequence (semver: major = X, minor =
+Y, patch = Z in `vX.Y.Z`):
+
+1. **Bump the version** in BOTH `pyproject.toml` (`version = "..."`) and
+   `ledger/__init__.py` (`__version__ = "..."`). Move the `## Unreleased`
+   CHANGELOG entries under a new dated heading `## <YYYY-MM-DD> (X.Y.Z)`.
+2. **Commit and push** to `main` (`release: bump to X.Y.Z`), then create and
+   push an annotated tag: `git tag -a vX.Y.Z -m vX.Y.Z && git push origin main vX.Y.Z`.
+   The Homebrew formula sources the GitHub tag tarball, so the tag must exist
+   before computing its hash.
+3. **Update the homebrew-tap formula** at `~/code/homebrew-tap/Formula/cognitive-ledger.rb`:
+   point `url` at `.../archive/refs/tags/vX.Y.Z.tar.gz` and set `sha256` to
+   `curl -sL <url> | shasum -a 256`. Commit and push the tap repo
+   (`git@github.com:damsleth/homebrew-tap`).
+4. **Publish to PyPI** with uv:
+   ```bash
+   export UV_PUBLISH_TOKEN="$(grep -E '^UV_PUBLISH_TOKEN=' ~/code/owa-piggy/.env | cut -d= -f2- | tr -d '"')"
+   rm -rf dist/ && uv build && uv publish
+   ```
+   (`uv build` fails on tracked absolute/external symlinks — keep dev-only
+   symlinks like `scripts/ledger` untracked + gitignored.)
+
+**Brew guard — do NOT run `brew install` / `brew upgrade` / `brew reinstall`**
+if `where ledger` resolves to anything other than the Homebrew bin (e.g. the
+dev symlink at `~/.local/bin/ledger`). The user runs the CLI from a local
+editable install; reinstalling via brew would shadow it and reintroduce
+version skew. Validating the formula end-to-end is only safe on a machine
+that doesn't use the dev install.
