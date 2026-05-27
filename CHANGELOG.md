@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2026-05-27 (0.4.1)
+
 ### Fixed
 - **`ledger init --json` now emits valid JSON.** `init_ledger()` runs `sheep index`, which prints progress to stdout; in `--json` mode that corrupted the envelope. The index output is now captured so only the JSON envelope reaches stdout.
 - **`ledger notes --json` / `ledger loops --json` no longer drop fields.** An operator-precedence bug made `type` always `null` for the `BrowseItem` dataclass, and `status` was read as an attribute even though it lives in frontmatter (so loop `status` was always `null`). Both are now resolved correctly.
