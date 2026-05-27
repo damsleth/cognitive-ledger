@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 2026-05-27 (0.4.2)
+
+### Added
+- **`ledger review` — scan-and-judge signal interface.** A keyboard-driven curses TUI that walks a *prioritized* review queue and lets you cast a one-keystroke verdict per note (`k` keep → affirmation, `w` wrong → correction, `s` stale → stale_flag, `1`–`9` rate, space/enter skip, `u` undo, `q` quit & save). The queue ordering is the insight: corrections-pending → high-traffic-but-never-affirmed → never-reviewed → stale-by-age → low-confidence/inferred surface first. Verdicts buffer and flush (rebuilding `signal_summary.json`) on exit. `--queue` prints the prioritized list and `--stats` prints a dashboard (coverage, score distribution, correction backlog, top retrieval-miss gaps) without launching the TUI. Closes the feedback loop that was previously open — nothing produced signals, so `signal stats` always read 0.
+- **Use-time signal capture (opt-in).** With `signals_auto_capture: true` (config.yaml or `LEDGER_SIGNALS_AUTO_CAPTURE=1`), queries auto-log `retrieval_miss` when no result scores above `signals_miss_score_floor` (both CLI `ledger query` and the web `/search`). `ledger query "<topic>" --pick` prompts for the result that helped and logs a `retrieval_hit`; opening a note from a web search result does the same. Off by default to avoid noise; signal feedback stays inert for ranking until `signal_min_entries` accrue and `score_weight_signal` is raised above 0.
+
+### Fixed
+- **`ledger review` no longer crashes on terminal resize.** Resizing or splitting the pane makes curses `getch()` return `KEY_RESIZE`; that mapped to an empty key that was mistaken for a rating (`"" in "123456789"` is `True`), raising `ValueError` on `int("")`. Resize events are now handled explicitly (silent redraw) and the rating branch is guarded with `len(key) == 1`.
+
 ## 2026-05-27 (0.4.1)
 
 ### Fixed
