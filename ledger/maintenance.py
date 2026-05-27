@@ -1027,11 +1027,11 @@ def _generate_semantic_index() -> None:
     # Honor the configured embedding backend/model. Hardcoding a model here
     # meant `sheep index` rebuilt (and re-registered) the default model on every
     # run, resurrecting it after `embed clean` and ignoring config.embed_model.
-    from ledger.embeddings import default_model_for_backend, sanitize_model_key
+    from ledger.embeddings import configured_model_for_backend, sanitize_model_key
 
     config = get_config()
     backend = str(config.embed_backend or "local").strip() or "local"
-    model = str(config.embed_model or "").strip() or default_model_for_backend(backend)
+    model = configured_model_for_backend(backend)
     cmd = [
         "ledger",
         "embed",
