@@ -364,6 +364,10 @@ class LedgerABSemanticIndexBuildTests(unittest.TestCase):
                 return "TaylorAI/bge-micro-v2"
 
             @staticmethod
+            def configured_model_for_backend(backend, explicit_model=None):
+                return explicit_model or "TaylorAI/bge-micro-v2"
+
+            @staticmethod
             def build_indices(
                 target,
                 backend,

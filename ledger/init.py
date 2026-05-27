@@ -232,18 +232,22 @@ def init_ledger(
     else:
         report["skipped"].append("templates/open_loop_template.md")
 
-    # 3. Generate initial config.yaml if not present
-    config_path = root_path / "config.yaml"
+    # 3. Generate the user config at the canonical XDG location if not present.
+    #    Config lives with the installation, not inside --root or the codebase.
+    from ledger.config import _xdg_config_path
+
+    config_path = _xdg_config_path()
     if not config_path.is_file():
         config_content = _build_config_content(
             root_path=root_path,
             ledger_notes_dir=Path(ledger_notes_dir).expanduser().resolve() if ledger_notes_dir else None,
             source_notes_dir=source_notes_dir,
         )
+        config_path.parent.mkdir(parents=True, exist_ok=True)
         safe_write_text(config_path, config_content)
-        report["created"].append("config.yaml")
+        report["created"].append(str(config_path))
     else:
-        report["skipped"].append("config.yaml")
+        report["skipped"].append(f"config.yaml (exists at {config_path})")
 
     # 4. Import voice DNA if provided
     if voice_dna_path:
