@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 2026-05-27 (0.4.3)
+
+### Added
+- **Signal-loop activation scaffolding.** The feedback loop shipped in 0.4.2 produced signals but left them inert for ranking (`score_weight_signal = 0.0`). This adds the means to validate and turn it on:
+  - **Activation status** — `signal stats`, `review --stats`, and the web dashboard now report whether signal feedback influences ranking: `accruing` (below `signal_min_entries`), `ready` (enough signals but weight still 0, so ignored), or `active` (weight > 0). The `ready` state nudges you to validate and raise the weight.
+  - **Web `/signals` dashboard** — a read-only page (sidebar link + colour-coded activation banner) showing coverage, score distribution, correction backlog, and top retrieval-miss gaps. Mirrors `ledger review --stats`.
+  - **`LEDGER_WEIGHT_SIGNAL` env override** — wired into the config env mappings so `ledger ab run --candidate-env LEDGER_WEIGHT_SIGNAL=0.1` can A/B the signal weight against eval cases before you commit to raising `score_weight_signal` in `config.yaml`. Recipe documented in AGENTS.md.
+
 ## 2026-05-27 (0.4.2)
 
 ### Added
