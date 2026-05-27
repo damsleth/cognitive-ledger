@@ -741,5 +741,55 @@ class CLIVersionConsistencyTests(unittest.TestCase):
         self.assertEqual(ledger.__version__, m.group(1))
 
 
+class CLIRetrievalCaptureTests(unittest.TestCase):
+    """Use-time signal capture in the query path, gated on signals_auto_capture."""
+
+    def setUp(self):
+        self.cli = load_cli()
+        self._tmp = tempfile.TemporaryDirectory()
+        tmp = Path(self._tmp.name)
+        (tmp / "notes" / "08_indices").mkdir(parents=True)
+        self._tmp_path = tmp
+
+    def tearDown(self):
+        reset_config()
+        self._tmp.cleanup()
+
+    def _use_config(self, *, auto_capture: bool):
+        config = LedgerConfig(ledger_root=self._tmp_path)
+        config.signals_auto_capture = auto_capture
+        set_config(config)
+        return config
+
+    def _read_signals(self):
+        from ledger import signals
+        return signals.read_signals()
+
+    def test_miss_logged_on_empty_results_when_enabled(self):
+        self._use_config(auto_capture=True)
+        self.cli._capture_retrieval_miss("nonexistent topic", [])
+        sigs = self._read_signals()
+        self.assertEqual(len(sigs), 1)
+        self.assertEqual(sigs[0]["type"], "retrieval_miss")
+        self.assertEqual(sigs[0]["query"], "nonexistent topic")
+
+    def test_miss_not_logged_when_disabled(self):
+        self._use_config(auto_capture=False)
+        self.cli._capture_retrieval_miss("nonexistent topic", [])
+        self.assertEqual(self._read_signals(), [])
+
+    def test_miss_logged_when_top_score_below_floor(self):
+        config = self._use_config(auto_capture=True)
+        results = [{"score": config.signals_miss_score_floor - 0.01, "rel_path": "notes/02_facts/fact__x.md"}]
+        self.cli._capture_retrieval_miss("weak match", results)
+        self.assertEqual(len(self._read_signals()), 1)
+
+    def test_no_miss_when_strong_result(self):
+        config = self._use_config(auto_capture=True)
+        results = [{"score": config.signals_miss_score_floor + 0.5, "rel_path": "notes/02_facts/fact__x.md"}]
+        self.cli._capture_retrieval_miss("good match", results)
+        self.assertEqual(self._read_signals(), [])
+
+
 if __name__ == "__main__":
     unittest.main()

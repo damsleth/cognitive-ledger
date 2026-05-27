@@ -33,7 +33,8 @@ class TestSearchResults:
     def test_results_link_to_note_detail(self, client: TestClient) -> None:
         resp = client.get("/search?q=other")
         assert resp.status_code == 200
-        assert 'href="/note/fact__other_one"' in resp.text
+        # Links carry ?from=search&q=... so opening a result can log a hit.
+        assert 'href="/note/fact__other_one?from=search' in resp.text
 
     def test_scope_filter_is_respected_in_summary(self, client: TestClient) -> None:
         resp = client.get("/search?q=sample&scope=dev")

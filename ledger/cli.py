@@ -210,6 +210,8 @@ def handle_query_command(args):
     )
 
     view = getattr(args, "view", "context")
+    results = query_lib.payload_results(payload)
+    _capture_retrieval_miss(validated_query, results)
 
     if args.json:
         print(
@@ -222,6 +224,59 @@ def handle_query_command(args):
         return
 
     print(query_lib.format_query_results_human(payload, include_bundle=args.bundle, view=view))
+
+    if getattr(args, "pick", False):
+        _capture_retrieval_hit_pick(validated_query, results)
+
+
+def _capture_retrieval_miss(query, results):
+    """Auto-log a retrieval_miss when a query finds nothing useful.
+
+    Gated on ``signals_auto_capture`` to honor the no-noise principle: a
+    query that returns no results, or whose best hit scores below the
+    configured floor, is recorded as a coverage gap.
+    """
+    config = get_config()
+    if not config.signals_auto_capture:
+        return
+    top = max(
+        (float(query_lib.result_get(r, "score", 0.0) or 0.0) for r in results),
+        default=0.0,
+    )
+    if not results or top < config.signals_miss_score_floor:
+        from ledger import signals
+
+        signals.append_signal("retrieval_miss", query=query)
+
+
+def _capture_retrieval_hit_pick(query, results):
+    """Interactively log a retrieval_hit for the result the user picks.
+
+    This is an explicit user action (like ``signal add``), so it logs
+    regardless of ``signals_auto_capture``.
+    """
+    if not results:
+        return
+    try:
+        raw = input(f"which result helped? [1-{len(results)}, enter=none]: ").strip()
+    except EOFError:
+        return
+    if not raw.isdigit():
+        return
+    n = int(raw)
+    if not (1 <= n <= len(results)):
+        return
+    chosen = results[n - 1]
+    rel = str(
+        query_lib.result_get(chosen, "rel_path", "")
+        or query_lib.result_get(chosen, "path", "")
+    )
+    if not rel:
+        return
+    from ledger import signals
+
+    signals.append_signal("retrieval_hit", query=query, note=rel)
+    print(f"logged retrieval_hit for {rel}")
 
 
 def handle_embed_build_command(args):
@@ -641,6 +696,36 @@ def handle_signal_command(args):
         raise SystemExit(1)
 
 
+def handle_review_command(args):
+    from ledger import review
+
+    if getattr(args, "stats", False):
+        print(review.render_dashboard(review.dashboard_data()))
+        return
+
+    queue = review.build_review_queue(
+        type_filter=getattr(args, "review_type", None),
+        scope=getattr(args, "scope", None),
+        stale_days=getattr(args, "stale_days", 180),
+        limit=getattr(args, "limit", None),
+        unjudged_only=getattr(args, "unjudged_only", False),
+    )
+
+    if getattr(args, "queue", False):
+        if not queue:
+            print("Review queue is empty.")
+            return
+        for i, item in enumerate(queue, 1):
+            print(f"{i:3d}. [{item.note_type}] {item.stem}  —  {item.reason}")
+        return
+
+    summary = review.run_review_tui(queue)
+    if summary["judged"]:
+        print(f"Logged {summary['judged']} signal(s) to {summary['signals_path']}")
+        print()
+    print(review.render_dashboard(review.dashboard_data()))
+
+
 def handle_init_command(args):
     import time as _time
     from ledger.init import init_ledger
@@ -1027,6 +1112,11 @@ def main(argv=None) -> int:
     )
     query_parser.add_argument("--json", action="store_true", dest="json")
     query_parser.add_argument("--bundle", action="store_true")
+    query_parser.add_argument(
+        "--pick",
+        action="store_true",
+        help="After results, ask which one helped and log a retrieval_hit signal",
+    )
 
     discover_parser = subparsers.add_parser(
         "discover-source", help="Semantic discovery on source notes (source_only output)"
@@ -1211,6 +1301,44 @@ def main(argv=None) -> int:
     signal_subparsers.add_parser("summarize", help="Rebuild signal_summary.json")
     signal_subparsers.add_parser("stats", help="Print signal statistics")
 
+    review_parser = subparsers.add_parser(
+        "review",
+        help="Scan-and-judge notes to emit feedback signals (TUI)",
+    )
+    review_parser.add_argument(
+        "--type",
+        dest="review_type",
+        default=None,
+        help="Restrict to one note type (e.g. facts, preferences); default all",
+    )
+    review_parser.add_argument(
+        "--scope", default=None, help="Restrict to notes matching this scope"
+    )
+    review_parser.add_argument(
+        "--stale-days",
+        type=int,
+        default=180,
+        help="Flag notes older than this many days as stale candidates (default 180)",
+    )
+    review_parser.add_argument(
+        "--limit", type=int, default=None, help="Cap the review queue length"
+    )
+    review_parser.add_argument(
+        "--unjudged-only",
+        action="store_true",
+        help="Only queue notes that have never received a signal",
+    )
+    review_parser.add_argument(
+        "--stats",
+        action="store_true",
+        help="Print the signal dashboard and exit (no TUI)",
+    )
+    review_parser.add_argument(
+        "--queue",
+        action="store_true",
+        help="Print the prioritized queue as text and exit (no TUI)",
+    )
+
     # sleep subcommand - delegates to ledger.maintenance
     sleep_parser = subparsers.add_parser("sleep", help="Electric Sheep maintenance (sleep, lint, index, status, sync)")
     sleep_parser.add_argument("subargs", nargs=argparse.REMAINDER, help=argparse.SUPPRESS)
@@ -1280,6 +1408,10 @@ def main(argv=None) -> int:
 
         if args.command == "signal":
             handle_signal_command(args)
+            return 0
+
+        if args.command == "review":
+            handle_review_command(args)
             return 0
 
         if args.command == "init":
