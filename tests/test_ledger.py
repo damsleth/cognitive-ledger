@@ -180,6 +180,10 @@ class LedgerUnitTests(unittest.TestCase):
                 return "fake-model"
 
             @staticmethod
+            def configured_model_for_backend(backend, explicit_model=None):
+                return explicit_model or "fake-model"
+
+            @staticmethod
             def semantic_score_map(**_kwargs):
                 return {
                     "available": False,
@@ -234,6 +238,10 @@ class LedgerUnitTests(unittest.TestCase):
                 return "text-embedding-3-small"
 
             @staticmethod
+            def configured_model_for_backend(backend, explicit_model=None):
+                return explicit_model or "text-embedding-3-small"
+
+            @staticmethod
             def ensure_openai_api_key():
                 raise RuntimeError("OPENAI_API_KEY is required for OpenAI embedding backend")
 
@@ -272,6 +280,10 @@ class LedgerUnitTests(unittest.TestCase):
             @staticmethod
             def default_model_for_backend(_backend):
                 return "fake-model"
+
+            @staticmethod
+            def configured_model_for_backend(backend, explicit_model=None):
+                return explicit_model or "fake-model"
 
             @staticmethod
             def semantic_score_map(**kwargs):

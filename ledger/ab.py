@@ -459,7 +459,7 @@ def maybe_build_semantic_index(
             f"{side_label}: failed to load embeddings module for semantic_hybrid: {exc}"
         ) from exc
 
-    resolved_model = str(embed_model).strip() if embed_model else embeddings.default_model_for_backend(backend)
+    resolved_model = embeddings.configured_model_for_backend(backend, embed_model)
     try:
         payload = embeddings.build_indices(
             target="ledger",

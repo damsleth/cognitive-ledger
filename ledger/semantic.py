@@ -55,10 +55,9 @@ def resolve_embed_model(
     *,
     load_embeddings_module_fn: Callable[..., Any] = load_embeddings_module,
 ) -> str:
-    if embed_model:
-        return str(embed_model).strip()
     embeddings = load_embeddings_module_fn()
-    return str(embeddings.default_model_for_backend(backend))
+    # config.yaml is authoritative when no explicit model is supplied.
+    return str(embeddings.configured_model_for_backend(backend, embed_model))
 
 
 def semantic_search_source(
