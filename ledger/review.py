@@ -402,6 +402,17 @@ def _review_loop(stdscr, queue, entries, session_id):  # pragma: no cover - curs
 
     curses.curs_set(0)
     stdscr.keypad(True)
+    # Inherit the terminal's fg/bg colors so the TUI doesn't paint its own
+    # black background on light themes. `use_default_colors` rebinds color
+    # pair 0 to (default_fg, default_bg); `stdscr.bkgd` makes that the
+    # window's clear character so `erase()` paints transparently. Guarded
+    # against terminals that can't do color (e.g. TERM=dumb).
+    try:
+        curses.start_color()
+        curses.use_default_colors()
+        stdscr.bkgd(" ", curses.color_pair(0))
+    except curses.error:
+        pass
     idx = 0
     scroll = 0
     show_help = False
