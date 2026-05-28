@@ -980,6 +980,54 @@ def handle_inbox_command(args):
         raise SystemExit(1)
 
 
+def handle_notes_add_command(args):
+    """Create a new note from the supplied body text."""
+    import json
+    from ledger.config import get_config
+    from ledger.notes.add import AddNoteError, add_note
+
+    cfg = get_config()
+    try:
+        result = add_note(
+            body=args.body,
+            note_type=args.type,
+            inbox=getattr(args, "inbox", True),
+            slug=args.slug,
+            title=args.title,
+            tags=args.tags,
+            links=args.links,
+            source=args.source,
+            scope=args.scope,
+            lang=args.lang,
+            confidence=args.confidence,
+            config=cfg,
+        )
+    except AddNoteError as exc:
+        if getattr(args, "json", False):
+            payload = {
+                "tool": "ledger",
+                "command": "notes add",
+                "ok": False,
+                "error": {"code": "invalid_input", "message": str(exc)},
+            }
+            print(json.dumps(payload, ensure_ascii=False))
+        else:
+            print(f"ledger notes add: {exc}", file=sys.stderr)
+        raise SystemExit(1)
+
+    if getattr(args, "json", False):
+        payload = {
+            "tool": "ledger",
+            "command": "notes add",
+            "ok": True,
+            **result.to_dict(ledger_notes_dir=cfg.ledger_notes_dir),
+        }
+        print(json.dumps(payload, ensure_ascii=False))
+    else:
+        location = "00_inbox" if result.inbox else result.note_type
+        print(f"created {result.path} ({location})")
+
+
 def handle_voice_dna_command(args):
     from ledger.voice import import_voice_dna, export_voice_dna
 
@@ -1074,18 +1122,64 @@ def main(argv=None) -> int:
     loops_parser.add_argument("--verbose", action="store_true")
     loops_parser.add_argument("--json", action="store_true", dest="json")
 
-    notes_parser = subparsers.add_parser("notes", help="List notes by type")
+    notes_parser = subparsers.add_parser(
+        "notes",
+        help="List notes by type, or `notes add ...` to create one",
+    )
     notes_parser.add_argument(
         "--type",
-        required=True,
         choices=sorted(list(cfg.note_types.keys()) + ["all"]),
-        help="Note type to list",
+        help="Note type to list (required when not using a subcommand)",
     )
     notes_parser.add_argument("--limit", type=int, default=100)
     notes_parser.add_argument("--width", type=int, default=120)
     notes_parser.add_argument("--paths", action="store_true")
     notes_parser.add_argument("--verbose", action="store_true")
     notes_parser.add_argument("--json", action="store_true", dest="json")
+
+    notes_subparsers = notes_parser.add_subparsers(dest="notes_subcommand")
+    notes_add_parser = notes_subparsers.add_parser(
+        "add",
+        help="Create a new note (defaults to 00_inbox; --no-inbox writes to typed folder)",
+    )
+    # Accept singular + plural; canonical mapping happens inside add_note().
+    _add_type_choices = sorted({
+        *cfg.note_types.keys(),
+        "fact", "pref", "preference", "prefs",
+        "goal", "loop", "concept", "id",
+    })
+    notes_add_parser.add_argument(
+        "--type",
+        required=True,
+        choices=_add_type_choices,
+        help="Note type (accepts singular or plural form)",
+    )
+    notes_add_parser.add_argument(
+        "--no-inbox",
+        dest="inbox",
+        action="store_false",
+        default=True,
+        help="Write straight to the typed folder, skipping 00_inbox/",
+    )
+    notes_add_parser.add_argument("--slug", default=None, help="Filename slug override")
+    notes_add_parser.add_argument("--title", default=None, help="H1 heading override")
+    notes_add_parser.add_argument(
+        "--tag", dest="tags", action="append", default=[], help="Frontmatter tag (repeatable)"
+    )
+    notes_add_parser.add_argument(
+        "--link", dest="links", action="append", default=[], help="Links section entry (repeatable)"
+    )
+    notes_add_parser.add_argument("--source", default="assistant")
+    notes_add_parser.add_argument("--scope", default="work")
+    notes_add_parser.add_argument("--lang", default="en")
+    notes_add_parser.add_argument("--confidence", type=float, default=0.7)
+    notes_add_parser.add_argument(
+        "--yes",
+        action="store_true",
+        help="Accepted for API compatibility; writes are non-destructive so confirmation is implicit",
+    )
+    notes_add_parser.add_argument("--json", action="store_true", dest="json")
+    notes_add_parser.add_argument("body", help="The note body text (use quotes for multi-word)")
 
     query_parser = subparsers.add_parser("query", help="Rank notes for a query")
     query_parser.add_argument("text", help="query text")
@@ -1378,6 +1472,10 @@ def main(argv=None) -> int:
             return
 
         if command_args.command == "notes":
+            if getattr(command_args, "notes_subcommand", None) == "add":
+                return handle_notes_add_command(command_args)
+            if command_args.type is None:
+                notes_parser.error("the following arguments are required: --type")
             if command_args.verbose:
                 verbose_items(command_args, command_args.type)
             else:
