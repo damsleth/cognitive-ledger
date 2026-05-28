@@ -1,36 +1,29 @@
-"""cognitive-ledger binding to the shared hugr CLI contract.
+"""cognitive-ledger implementation of the hugr suite CLI contract.
 
 The wire contract (action/error envelopes, NDJSON streaming, the
-doctor payload shape, the 0-5 exit-code taxonomy, redact()) lives in
-the ``hugr-conventions`` package - the executable form of
-CONVENTIONS.md in the hugr repo. This module binds it to the ledger
-tool name and version. ``ledger``, ``ledger-obsidian``, and ``sheep``
-all import from here; the ``tool=`` override on the envelope helpers
-lets ``sheep`` stamp its own name onto otherwise-shared plumbing.
+doctor payload shape, the 0-5 exit-code taxonomy, redact()) is
+specified by CONVENTIONS.md in the hugr repo. cognitive-ledger keeps
+a self-contained hand-copy of it here rather than depending on a
+separate package, so ledger installs cleanly with no third-party
+runtime dependency and stays independently shippable - the suite's
+loose-coupling axiom. Mirrors the equivalent files in yaams,
+owa-piggy, and owa-tools.
+
+``ledger``, ``ledger-obsidian``, and ``sheep`` all import from here;
+the ``tool=`` override on the envelope helpers lets ``sheep`` stamp
+its own name onto otherwise-shared plumbing.
 
 See https://github.com/damsleth/hugr/blob/main/CONVENTIONS.md.
 """
 
 from __future__ import annotations
 
-from typing import Any, Iterable, Mapping
-
-import hugr_conventions as _hc
-from hugr_conventions import (  # re-export: identical wire shapes
-  EXIT_AUTH,
-  EXIT_NOT_FOUND,
-  EXIT_OK,
-  EXIT_PARTIAL,
-  EXIT_TRANSIENT,
-  EXIT_USER_ERROR,
-  DoctorFinding,
-  emit_action,
-  emit_data_error,
-  redact,
-  stream_progress,
-  stream_result,
-  stream_warning,
-)
+import json
+import re
+import sys
+import time
+from dataclasses import dataclass, field
+from typing import Any, Callable, Iterable, Mapping, TextIO
 
 __all__ = [
   "EXIT_OK",
@@ -41,6 +34,7 @@ __all__ = [
   "EXIT_PARTIAL",
   "TOOL_NAME",
   "redact",
+  "now_iso",
   "action_envelope",
   "emit_action",
   "data_error",
@@ -54,6 +48,46 @@ __all__ = [
 
 TOOL_NAME = "ledger"
 
+
+# --- Exit codes ------------------------------------------------------------
+
+EXIT_OK = 0
+EXIT_USER_ERROR = 1
+EXIT_TRANSIENT = 2
+EXIT_AUTH = 3
+EXIT_NOT_FOUND = 4
+EXIT_PARTIAL = 5
+
+
+# --- Redaction -------------------------------------------------------------
+
+_JWT_RE = re.compile(r"eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}")
+_BEARER_RE = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._\-+/=]+")
+_TOKEN_FIELD_RE = re.compile(
+  r'(?i)"(access_token|refresh_token|id_token|client_secret|api_key|secret)"\s*:\s*"[^"]*"'
+)
+_BODY_FIELD_RE = re.compile(
+  r'(?i)"(body|content|text|html_body|plain_body)"\s*:\s*"[^"]*"'
+)
+
+
+def redact(text: Any) -> str:
+  if text is None:
+    return ""
+  if not isinstance(text, str):
+    text = str(text)
+  text = _JWT_RE.sub("<redacted-jwt>", text)
+  text = _BEARER_RE.sub("Bearer <redacted>", text)
+  text = _TOKEN_FIELD_RE.sub(lambda m: f'"{m.group(1)}":"<redacted>"', text)
+  text = _BODY_FIELD_RE.sub(lambda m: f'"{m.group(1)}":"<redacted>"', text)
+  return text
+
+
+def now_iso() -> str:
+  return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
+# --- internals -------------------------------------------------------------
 
 def _version() -> str:
   # Prefer the in-tree __version__: it tracks the code that's running,
@@ -72,6 +106,14 @@ def _version() -> str:
     return "0.0.0"
 
 
+def _writeln(obj: Mapping[str, Any], stream: TextIO | None) -> None:
+  stream = stream if stream is not None else sys.stdout
+  stream.write(json.dumps(obj, ensure_ascii=False) + "\n")
+  stream.flush()
+
+
+# --- Action envelope -------------------------------------------------------
+
 def action_envelope(
   *,
   command: str,
@@ -82,17 +124,23 @@ def action_envelope(
   duration_ms: float | None = None,
   tool: str | None = None,
 ) -> dict[str, Any]:
-  return _hc.action_envelope(
-    tool=tool or TOOL_NAME,
-    version=_version,
-    command=command,
-    ok=ok,
-    stats=stats,
-    warnings=warnings,
-    error=error,
-    duration_ms=duration_ms,
-  )
+  return {
+    "tool": tool or TOOL_NAME,
+    "version": _version(),
+    "command": command,
+    "ok": bool(ok),
+    "duration_ms": float(duration_ms) if duration_ms is not None else 0.0,
+    "stats": dict(stats or {}),
+    "warnings": list(warnings or []),
+    "error": dict(error) if error else None,
+  }
 
+
+def emit_action(envelope: Mapping[str, Any], stream: TextIO | None = None) -> None:
+  _writeln(envelope, stream)
+
+
+# --- Data-class failure envelope -------------------------------------------
 
 def data_error(
   *,
@@ -102,22 +150,103 @@ def data_error(
   hint: str | None = None,
   tool: str | None = None,
 ) -> dict[str, Any]:
-  return _hc.data_error(
-    tool=tool or TOOL_NAME,
-    version=_version,
-    command=command,
-    code=code,
-    message=message,
-    hint=hint,
-  )
+  err: dict[str, Any] = {"code": code, "message": message}
+  if hint:
+    err["hint"] = hint
+  return {
+    "tool": tool or TOOL_NAME,
+    "version": _version(),
+    "command": command,
+    "ok": False,
+    "error": err,
+  }
 
 
-def DoctorPayload(**kwargs: Any) -> _hc.DoctorPayload:  # noqa: N802 - preserves call site
-  """ledger-bound :class:`hugr_conventions.DoctorPayload`.
+def emit_data_error(envelope: Mapping[str, Any], stream: TextIO | None = None) -> None:
+  _writeln(envelope, stream)
 
-  Defaults ``tool`` to ``"ledger"`` and ``version`` to the live
-  in-tree version so existing call sites construct it unchanged.
-  """
-  kwargs.setdefault("tool", TOOL_NAME)
-  kwargs.setdefault("version", _version)
-  return _hc.DoctorPayload(**kwargs)
+
+# --- NDJSON streaming ------------------------------------------------------
+
+def stream_progress(
+  *,
+  source: str | None = None,
+  stage: str | None = None,
+  done: int | None = None,
+  total: int | None = None,
+  stream: TextIO | None = None,
+) -> None:
+  payload: dict[str, Any] = {"type": "progress", "ts": now_iso()}
+  if source is not None:
+    payload["source"] = source
+  if stage is not None:
+    payload["stage"] = stage
+  if done is not None:
+    payload["done"] = done
+  if total is not None:
+    payload["total"] = total
+  _writeln(payload, stream)
+
+
+def stream_warning(
+  message: str, *, source: str | None = None, stream: TextIO | None = None
+) -> None:
+  payload: dict[str, Any] = {"type": "warning", "message": redact(message), "ts": now_iso()}
+  if source is not None:
+    payload["source"] = source
+  _writeln(payload, stream)
+
+
+def stream_result(envelope: Mapping[str, Any], stream: TextIO | None = None) -> None:
+  _writeln({"type": "result", **dict(envelope)}, stream)
+
+
+# --- Doctor payload --------------------------------------------------------
+
+@dataclass
+class DoctorFinding:
+  id: str
+  severity: str
+  message: str
+  hint: str | None = None
+
+  def to_dict(self) -> dict[str, Any]:
+    out: dict[str, Any] = {
+      "id": self.id,
+      "severity": self.severity,
+      "message": self.message,
+    }
+    if self.hint:
+      out["hint"] = self.hint
+    return out
+
+
+@dataclass
+class DoctorPayload:
+  tool: str = TOOL_NAME
+  version: "str | Callable[[], str]" = field(default_factory=lambda: _version)
+  config_path: str | None = None
+  data_path: str | None = None
+  auth: dict[str, Any] | None = None
+  models: dict[str, Any] | None = None
+  findings: list[DoctorFinding] = field(default_factory=list)
+
+  def to_dict(self) -> dict[str, Any]:
+    v = self.version() if callable(self.version) else self.version
+    out: dict[str, Any] = {"tool": self.tool, "version": str(v)}
+    if self.config_path is not None:
+      out["config_path"] = self.config_path
+    if self.data_path is not None:
+      out["data_path"] = self.data_path
+    if self.auth is not None:
+      out["auth"] = self.auth
+    if self.models is not None:
+      out["models"] = self.models
+    out["findings"] = [f.to_dict() for f in self.findings]
+    return out
+
+  def exit_code(self) -> int:
+    severities = {f.severity for f in self.findings}
+    if "error" in severities:
+      return EXIT_USER_ERROR
+    return EXIT_OK
