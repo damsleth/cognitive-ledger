@@ -13,7 +13,6 @@ dependencies = [
     "scikit-learn",
     "rank-bm25",
     "watchdog>=6.0.0",
-    "hugr-conventions>=0.1",
 ]
 
 [project.scripts]
