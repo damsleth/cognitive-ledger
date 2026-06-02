@@ -119,6 +119,8 @@ def build_semantic_index(
     model: str | None = None,
     source_root: str | Path | None = None,
     text_template: str | None = None,
+    device: str | None = None,
+    batch_size: int | None = None,
     load_embeddings_module_fn: Callable[..., Any] = load_embeddings_module,
     resolve_embed_model_fn: Callable[..., str] = resolve_embed_model,
 ) -> dict[str, Any]:
@@ -135,6 +137,8 @@ def build_semantic_index(
         model=resolved_model,
         source_root=resolved_source_root,
         text_template=text_template,
+        device=device,
+        batch_size=batch_size,
     )
 
 

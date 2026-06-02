@@ -18,3 +18,13 @@ Top-level plan files under `.plans/` were reviewed and enriched. The `done/` fol
 - Strip private fenced content from every index, prompt, JSON output, and web/search snippet.
 - Update README/CHANGELOG only for shipped user-facing behavior, not for plan edits.
 - Preserve existing uncommitted work unless the active task explicitly owns it.
+- [ ] Add tests for ledger.query rank modes: two_stage, scope_type_prefilter, progressive_disclosure (tests/test_query.py is thin vs query.py 682 LoC)
+- [ ] Add --json output to ledger briefing (cli.py ~925); briefing currently text-only, blocks programmatic use
+- [ ] Move _note_index_path / _candidates_path helpers into ledger/layout.py and replace duplicate path construction in maintenance.py and retrieval.py
+- [ ] Extract _lint_note frontmatter heuristics from maintenance.py (~422-558) into ledger/validation.py so web /admin can reuse without circular imports
+- [ ] Remove test-compat re-exports at top of ledger/cli.py (lines ~54-81); update tests to import from source modules directly
+- [ ] Add module docstring to ledger/layout.py diagramming the index/artifact path layout (single source of truth referenced by maintenance, retrieval, web, obsidian)
+- [ ] Add parametrized tests for ledger.inbox.triage_suggestions() type-inference heuristics (covers all 5 note types + fallback)
+- [ ] Log full traceback in CLI top-level except handlers when LEDGER_DEBUG=1; today emit_action swallows the underlying exception
+- [ ] Document LEDGER_EMBEDDINGS_OFFLINE env var in AGENTS.md (added today in ledger/embeddings.py to silence HF Hub metadata round-trip)
+- [ ] make sheep status/lint/sleep emit structured fields under --json (index/sync already do) — migrated from hugr/.plans
