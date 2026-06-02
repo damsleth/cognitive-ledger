@@ -66,7 +66,7 @@ class LedgerEmbeddingsTests(unittest.TestCase):
 
         self.call_log = []
 
-        def fake_embed_texts(texts, backend, model):
+        def fake_embed_texts(texts, backend, model, device=None, batch_size=None):
             self.call_log.append((backend, model, len(texts)))
             vectors = np.zeros((len(texts), 3), dtype=np.float32)
             for idx, text in enumerate(texts):
@@ -317,10 +317,11 @@ class LedgerEmbeddingsTests(unittest.TestCase):
         test_case = self
 
         class FakeSentenceTransformer:
-            def __init__(self, model):
+            def __init__(self, model, **kwargs):
+                # Tolerate local_files_only / device kwargs the real call passes.
                 created_models.append(model)
 
-            def encode(self, texts, convert_to_numpy=True, normalize_embeddings=True, show_progress_bar=False):
+            def encode(self, texts, convert_to_numpy=True, normalize_embeddings=True, show_progress_bar=False, batch_size=None):
                 test_case.assertTrue(convert_to_numpy)
                 test_case.assertTrue(normalize_embeddings)
                 test_case.assertFalse(show_progress_bar)

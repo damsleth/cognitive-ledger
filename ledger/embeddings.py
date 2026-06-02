@@ -290,8 +290,24 @@ def clear_runtime_caches() -> None:
     _QUERY_VECTOR_CACHE.clear()
 
 
-def _get_local_encoder(model: str) -> Any:
-    encoder = _LOCAL_ENCODER_CACHE.get(model)
+def _resolve_device(device: str | None) -> str | None:
+    """Map a device label to what sentence-transformers expects.
+
+    ``None``/``"auto"`` returns ``None`` so sentence-transformers keeps its
+    own auto-selection (cuda → mps → cpu). An explicit value (``cpu``,
+    ``mps``, ``cuda``) is passed straight through. Forcing ``cpu`` is the
+    escape hatch for the spurious MPS allocator OOM on Apple Silicon.
+    """
+    label = (device or "").strip().lower()
+    if not label or label == "auto":
+        return None
+    return label
+
+
+def _get_local_encoder(model: str, device: str | None = None) -> Any:
+    resolved_device = _resolve_device(device)
+    cache_key = (model, resolved_device or "auto")
+    encoder = _LOCAL_ENCODER_CACHE.get(cache_key)
     if encoder is not None:
         return encoder
 
@@ -303,19 +319,38 @@ def _get_local_encoder(model: str) -> Any:
             "Install with: ./scripts/setup-venv.sh --embeddings"
         ) from exc
 
-    encoder = SentenceTransformer(model)
-    _LOCAL_ENCODER_CACHE[model] = encoder
+    offline = os.getenv("LEDGER_EMBEDDINGS_OFFLINE", "").strip().lower() in {"1", "true", "yes", "on"}
+    kwargs: dict[str, Any] = {"local_files_only": offline}
+    if resolved_device is not None:
+        kwargs["device"] = resolved_device
+    encoder = SentenceTransformer(model, **kwargs)
+    _LOCAL_ENCODER_CACHE[cache_key] = encoder
     return encoder
 
 
-def _local_embed_texts(texts: list[str], model: str) -> np.ndarray:
-    encoder = _get_local_encoder(model)
-    vectors = encoder.encode(
-        texts,
-        convert_to_numpy=True,
-        normalize_embeddings=True,
-        show_progress_bar=False,
-    )
+def _local_embed_texts(
+    texts: list[str],
+    model: str,
+    device: str | None = None,
+    batch_size: int | None = None,
+) -> np.ndarray:
+    # Fall back to config so both the build path and the query path honor
+    # `embed_device` / `embed_batch_size` without each call site repeating it.
+    cfg = get_config()
+    if device is None:
+        device = getattr(cfg, "embed_device", "auto")
+    if batch_size is None:
+        batch_size = getattr(cfg, "embed_batch_size", 32)
+
+    encoder = _get_local_encoder(model, device=device)
+    encode_kwargs: dict[str, Any] = {
+        "convert_to_numpy": True,
+        "normalize_embeddings": True,
+        "show_progress_bar": False,
+    }
+    if batch_size and int(batch_size) > 0:
+        encode_kwargs["batch_size"] = int(batch_size)
+    vectors = encoder.encode(texts, **encode_kwargs)
     array = np.asarray(vectors, dtype=np.float32)
     if array.ndim == 1:
         array = array.reshape(1, -1)
@@ -358,12 +393,18 @@ def _openai_embed_texts(texts: list[str], model: str) -> np.ndarray:
     return vectors
 
 
-def embed_texts(texts: list[str], backend: str, model: str) -> np.ndarray:
+def embed_texts(
+    texts: list[str],
+    backend: str,
+    model: str,
+    device: str | None = None,
+    batch_size: int | None = None,
+) -> np.ndarray:
     backend = str(backend or "").strip().lower()
     if not texts:
         return np.zeros((0, 0), dtype=np.float32)
     if backend == "local":
-        return _local_embed_texts(texts, model)
+        return _local_embed_texts(texts, model, device=device, batch_size=batch_size)
     if backend == "openai":
         return _openai_embed_texts(texts, model)
     raise ValueError(f"Unsupported embedding backend: {backend}")
@@ -495,6 +536,8 @@ def _rebuild_target_index(
     model: str,
     source_root: Path,
     text_template: str = "none",
+    device: str | None = None,
+    batch_size: int | None = None,
 ) -> dict[str, Any]:
     template = normalize_text_template(text_template)
     items = collect_target_items(target=target, source_root=source_root)
@@ -529,7 +572,9 @@ def _rebuild_target_index(
         embed_batch.append(apply_passage_template(item["embedding_text"], template))
 
     if embed_batch:
-        embedded = embed_texts(embed_batch, backend=backend, model=model)
+        embedded = embed_texts(
+            embed_batch, backend=backend, model=model, device=device, batch_size=batch_size
+        )
         if embedded.ndim != 2:
             raise RuntimeError("Embedding backend returned invalid vector shape")
 
@@ -619,6 +664,8 @@ def build_indices(
     write_manifest: bool = True,
     append_timeline: bool = True,
     text_template: str | None = None,
+    device: str | None = None,
+    batch_size: int | None = None,
 ) -> dict[str, Any]:
     backend = str(backend or "").strip().lower()
     if backend not in SUPPORTED_BACKENDS:
@@ -648,6 +695,8 @@ def build_indices(
             model=resolved_model,
             source_root=current_root,
             text_template=resolved_template,
+            device=device,
+            batch_size=batch_size,
         )
         results.append(result)
 
