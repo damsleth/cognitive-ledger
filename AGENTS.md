@@ -558,7 +558,11 @@ Y, patch = Z in `vX.Y.Z`):
 2. **Commit and push** to `main` (`release: bump to X.Y.Z`), then create and
    push an annotated tag: `git tag -a vX.Y.Z -m vX.Y.Z && git push origin main vX.Y.Z`.
    The Homebrew formula sources the GitHub tag tarball, so the tag must exist
-   before computing its hash.
+   before computing its hash. The tag push also triggers
+   `.github/workflows/release.yml`, which runs the tests, rebuilds the wheel +
+   sdist with `uv build`, and creates the GitHub Release with both artifacts
+   attached. That workflow does **not** publish to PyPI - step 4 does that
+   locally.
 3. **Update the homebrew-tap formula** at `~/code/homebrew-tap/Formula/cognitive-ledger.rb`:
    point `url` at `.../archive/refs/tags/vX.Y.Z.tar.gz` and set `sha256` to
    `curl -sL <url> | shasum -a 256`. Commit and push the tap repo
