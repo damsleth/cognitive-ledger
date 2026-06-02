@@ -1028,6 +1028,50 @@ def handle_notes_add_command(args):
         print(f"created {result.path} ({location})")
 
 
+def handle_import_claude_memory_command(args):
+    """Import Claude Code memory files into the ledger (dry run by default)."""
+    import json
+    from ledger import claude_memory as cm
+    from ledger.config import get_config
+
+    cfg = get_config()
+    memory_root = (
+        Path(args.memory_root).expanduser() if args.memory_root else cm.DEFAULT_MEMORY_ROOT
+    )
+    mode = "direct" if getattr(args, "direct", False) else "inbox"
+    dry_run = not getattr(args, "apply", False)
+
+    result, plan = cm.run_import(
+        memory_root=memory_root, mode=mode, dry_run=dry_run, cfg=cfg
+    )
+
+    if getattr(args, "json", False):
+        payload = {
+            "tool": "ledger",
+            "command": "import-claude-memory",
+            "ok": True,
+            "dry_run": result.dry_run,
+            "mode": result.mode,
+            "files_seen": result.files_seen,
+            "folders_scanned": result.folders_scanned,
+            "written": result.written,
+            "skipped": result.skipped,
+            "paths": result.written_paths,
+        }
+        print(json.dumps(payload, ensure_ascii=False))
+        return
+
+    if dry_run:
+        print(cm.render_report(plan, mode=mode, preview=args.preview))
+    else:
+        print(
+            f"imported {result.written} note(s) into {mode} "
+            f"(skipped {result.skipped} unchanged)"
+        )
+        for rel in result.written_paths:
+            print(f"  {rel}")
+
+
 def handle_voice_dna_command(args):
     from ledger.voice import import_voice_dna, export_voice_dna
 
@@ -1375,6 +1419,34 @@ def main(argv=None) -> int:
     cleanup_parser.add_argument("--days", type=int, default=14, help="Age threshold for stale items (default: 14)")
     cleanup_parser.add_argument("--apply", action="store_true", help="Actually delete (default is dry-run)")
 
+    import_cm_parser = subparsers.add_parser(
+        "import-claude-memory",
+        help="Import Claude Code memory files into the ledger (dry run by default)",
+    )
+    import_cm_parser.add_argument(
+        "--memory-root",
+        dest="memory_root",
+        default=None,
+        help="Root of Claude memory folders (default: ~/.claude/projects)",
+    )
+    import_cm_parser.add_argument(
+        "--direct",
+        action="store_true",
+        help="Write straight to typed folders instead of 00_inbox/",
+    )
+    import_cm_parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Actually write notes (default: dry run that writes nothing)",
+    )
+    import_cm_parser.add_argument(
+        "--preview",
+        type=int,
+        default=4,
+        help="Number of full note previews to render in the dry-run report",
+    )
+    import_cm_parser.add_argument("--json", action="store_true", dest="json")
+
     voice_parser = subparsers.add_parser("voice-dna", help="Import or show voice DNA profile")
     voice_subparsers = voice_parser.add_subparsers(dest="voice_command")
     voice_import_parser = voice_subparsers.add_parser("import", help="Import voice DNA from JSON")
@@ -1534,6 +1606,10 @@ def main(argv=None) -> int:
 
         if args.command == "inbox":
             handle_inbox_command(args)
+            return 0
+
+        if args.command == "import-claude-memory":
+            handle_import_claude_memory_command(args)
             return 0
 
         if args.command == "voice-dna":
