@@ -54,6 +54,18 @@ frontmatter:
       when: "type == identity"
       required: true
 
+  # Optional provenance fields (the "provenance triad"). Written by the
+  # external importers (ledger-obsidian, import-claude-memory, YAAMS
+  # promote). Kept distinct from `source`: `source` is the epistemic
+  # origin (who the fact came from); these describe the ingest channel
+  # and the upstream artifact. Tolerated by lint; documented here so they
+  # are first-class rather than incidental.
+  optional:
+    via:         # ingest channel: claude-memory | obsidian | yaams | manual
+    origin:      # locator for the upstream artifact (file path / URI)
+    external_id: # stable upstream key, e.g. "<project>/<name>" — enables
+                 # idempotent re-import (match-and-update, not duplicate)
+
   # Enum definitions
   enums:
     source:
@@ -171,3 +183,16 @@ recommended_tags:
   - synthesized    # note created from multi-source synthesis
   - ingested       # note created from source ingest pipeline
   - auto-capture   # note created by passive session-end capture
+  - imported       # note created by an external import (obsidian, claude-memory)
+  - claude-memory  # imported from a Claude Code per-project memory store
+
+# External taxonomy → ledger type mapping. Single documented source of
+# truth so every importer agrees instead of hard-coding its own table.
+# project/reference are heterogeneous and refined by title/body markers
+# (concept-in-title > open-work > concept-in-body > default).
+external_type_map:
+  claude_memory:        # ledger import-claude-memory (metadata.type)
+    feedback:  preferences   # source: user
+    user:      facts         # source: user
+    reference: facts         # or concepts when definition/framework-like
+    project:   facts         # or loops (open-work) / concepts (architecture)

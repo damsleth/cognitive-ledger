@@ -45,6 +45,7 @@ from ledger.schema_values import (
     SCOPE_VALUES,
     SOURCE_VALUES,
     STATUS_VALUES,
+    VIA_VALUES,
 )
 
 LARGE_FILE_WORD_THRESHOLD = 400
@@ -495,6 +496,13 @@ def _lint_note(path: Path, counters: LintCounters) -> None:
     status = (fm_raw_value("status") or str(frontmatter.get("status", ""))).strip().lower()
     if is_loop and status and status not in STATUS_VALUES:
         _lint_error(path, f"invalid status: {status}")
+        counters.errors += 1
+
+    # Optional provenance channel (see schema_values.VIA_VALUES). Validated
+    # only when present, like source/scope; absence is fine.
+    via = (fm_raw_value("via") or str(frontmatter.get("via", ""))).strip().lower()
+    if via and via not in VIA_VALUES:
+        _lint_error(path, f"invalid via: {via}")
         counters.errors += 1
 
     tags = normalize_tags(frontmatter.get("tags"))
