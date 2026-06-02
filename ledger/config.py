@@ -202,6 +202,7 @@ def _apply_env_overrides(config: "LedgerConfig") -> "LedgerConfig":
         "LEDGER_ATTENTION_MIN": "attention_shortlist_min",
         "LEDGER_ATTENTION_MAX": "attention_shortlist_max",
         "LEDGER_REASONS_LIMIT": "detailed_reasons_limit",
+        "LEDGER_EMBED_BATCH_SIZE": "embed_batch_size",
     }
     for env_var, attr in int_mappings.items():
         if (value := os.getenv(env_var)) is None:
@@ -242,6 +243,7 @@ def _apply_env_overrides(config: "LedgerConfig") -> "LedgerConfig":
         "LEDGER_RETRIEVAL_MODE": "retrieval_mode",
         "LEDGER_EMBED_BACKEND": "embed_backend",
         "LEDGER_EMBED_MODEL": "embed_model",
+        "LEDGER_EMBED_DEVICE": "embed_device",
     }
     for env_var, attr in string_mappings.items():
         if (value := os.getenv(env_var)) is None:
@@ -514,6 +516,27 @@ class LedgerConfig:
 
     embed_model: str | None = None
     """Optional default embedding model override for semantic_hybrid mode."""
+
+    embed_devices: tuple[str, ...] = ("auto", "cpu", "mps", "cuda")
+    """Valid values for embed_device / `embed build --device`."""
+
+    embed_device: str = "auto"
+    """Device for the local embedder (sentence-transformers).
+
+    "auto" keeps sentence-transformers' own selection (cuda → mps → cpu).
+    Set "cpu" to dodge the spurious MPS allocator OOM on Apple Silicon
+    (the MPS guard misfires on a phantom working-set figure even when RAM
+    is free); "mps"/"cuda" force the GPU. Override per-build with
+    `embed build --device`, or globally via LEDGER_EMBED_DEVICE.
+    """
+
+    embed_batch_size: int = 32
+    """Encode batch size for the local embedder.
+
+    Lower it (e.g. 8) to bound peak GPU memory so large models like bge-m3
+    don't trip the MPS allocator guard on long-document corpora. Override
+    per-build with `embed build --batch-size`, or via LEDGER_EMBED_BATCH_SIZE.
+    """
 
     embed_text_template: str = "none"
     """Text template applied to passages at index time and queries at search time.

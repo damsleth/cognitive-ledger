@@ -289,6 +289,8 @@ def handle_embed_build_command(args):
             model=args.model,
             source_root=args.source_notes_dir,
             text_template=getattr(args, "text_template", None),
+            device=getattr(args, "device", None),
+            batch_size=getattr(args, "batch_size", None),
             load_embeddings_module_fn=lambda: load_embeddings_module(),
             resolve_embed_model_fn=semantic_lib.resolve_embed_model,
         )
@@ -1308,6 +1310,21 @@ def main(argv=None) -> int:
         choices=cfg.embed_text_templates,
         default=None,
         help="Passage/query text template applied at index time. Use 'e5_prefix' for intfloat/e5-* models.",
+    )
+    embed_build_parser.add_argument(
+        "--device",
+        choices=cfg.embed_devices,
+        default=None,
+        help="Embedder device: auto|cpu|mps|cuda (default from config embed_device). "
+        "'cpu' dodges the spurious MPS allocator OOM on Apple Silicon.",
+    )
+    embed_build_parser.add_argument(
+        "--batch-size",
+        dest="batch_size",
+        type=int,
+        default=None,
+        help="Encode batch size (default from config embed_batch_size). "
+        "Lower (e.g. 8) to bound peak GPU memory for large models like bge-m3.",
     )
     embed_build_parser.add_argument("--json", action="store_true", dest="json")
 
