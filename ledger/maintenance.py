@@ -1173,7 +1173,7 @@ def _cmd_index_impl() -> int:
 
 
 def cmd_sleep() -> int:
-    _notes_dir, _indices_dir, timeline = _config_paths()
+    _notes_dir, _indices_dir, _timeline = _config_paths()
 
     print("=== Electric Sheep - Sleep Checklist ===")
     print("")
@@ -1200,7 +1200,13 @@ def cmd_sleep() -> int:
     print("   -> Fix any errors")
     print("")
     print("6. Mark sleep complete")
-    print(f"   echo \"$(date -u +%Y-%m-%dT%H:%M:%SZ) | sleep | - | consolidation complete\" >> {_relative(timeline)}")
+    print("   # timeline.jsonl is the source of truth; appending to timeline.md is")
+    print("   # silently wiped on the next `sheep index`. Use the canonical helper:")
+    print(
+        f"   {sys.executable} -c "
+        "\"from ledger.embeddings import append_timeline_entry; "
+        "append_timeline_entry('sleep', '-', 'consolidation complete')\""
+    )
     print("")
     print("7. Commit")
     print('   git add -A && git commit -m "sleep: weekly consolidation"')
