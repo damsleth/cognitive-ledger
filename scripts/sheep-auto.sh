@@ -68,12 +68,21 @@ echo "" >> "$REPORT_FILE"
 
 # Run contradiction scan (--check only) when contradiction_enabled=true.
 # This is a read-only probe; --apply requires agent judgment and must be run manually.
-contradiction_enabled=$(ledger paths 2>/dev/null | grep -i "contradiction_enabled" | grep -i "true" || true)
-if ledger sleep contradictions --check >> "$REPORT_FILE" 2>&1; then
-    # Ran successfully (enabled=true or disabled — both exit 0)
-    :
+# Read the effective value from LedgerConfig (respects env overrides and the
+# config.yaml key) using a minimal Python one-liner so we never misparse YAML.
+contradiction_enabled=$(python3 -c "
+from ledger.config import get_config
+cfg = get_config()
+print('true' if getattr(cfg, 'contradiction_enabled', False) else 'false')
+" 2>/dev/null || echo "false")
+if [ "${contradiction_enabled}" = "true" ]; then
+    echo "## Contradiction scan (dry run)" >> "$REPORT_FILE"
+    echo "" >> "$REPORT_FILE"
+    if ledger sleep contradictions --check >> "$REPORT_FILE" 2>&1; then
+        :
+    fi
+    echo "" >> "$REPORT_FILE"
 fi
-echo "" >> "$REPORT_FILE"
 
 # Surface problems
 errors=$(echo "$lint_output" | grep -c "^ERROR:" 2>/dev/null || echo "0")
