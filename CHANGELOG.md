@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Added
+- **Bitemporal (valid-time) axis on notes.** Four optional frontmatter fields track when a fact was true in the world, independent of transaction time (`created`/`updated`): `valid_from`, `valid_to`, `superseded_by`, and `supersedes`. Applicable to fact-like note types (`01_identity`, `02_facts`, `03_preferences`, `04_goals`, `06_concepts`); `00_inbox` is exempt. All fields are optional — legacy notes without them lint clean and retrieve byte-identically.
+- **`ledger query --as-of DATE`** temporal filter. Accepts `YYYY-MM-DD` or `YYYY-MM-DDTHH:MM:SSZ`. Widens the candidate pool to include `09_archive` notes and returns only notes whose valid-time interval contains the given instant. Without `--as-of`, expired notes (non-null `valid_to` in the past) are hidden from default retrieval; notes with no validity fields are passed through unchanged.
+- **`ledger migrate bitemporal --check / --apply`** back-fill command. `--check` (default) reports which notes are candidates for back-fill without modifying anything; `--apply` writes `valid_from` (derived from `created`) and, for archive notes, `valid_to` (derived from `updated`), then appends a timeline entry. Idempotent — already-set fields are not overwritten.
+- **Bitemporal lint rules** in `ledger sleep lint`. Validates timestamp format, `valid_from <= valid_to` ordering, `superseded_by` requires a non-null `valid_to`, and dangling `superseded_by` references. Emits a `warn_bitemporal_null_valid_from` warning (not an error) on eligible notes that carry other validity fields but lack `valid_from`, suggesting `ledger migrate bitemporal --apply`.
+- **`supersede()` primitive** in `ledger/bitemporal.py`. Sets `valid_to` on the old note, writes `superseded_by` pointing to the replacement, copies `supersedes` onto the new note, and moves the old file to `09_archive/`. Returns a `SupersessionResult` dataclass. Idempotent when called twice on the same pair.
+- **Bitemporal fields on `RetrievalCandidate`** (`valid_from`, `valid_to`, `superseded_by`). Persisted in the note index only when set, keeping the index lean for legacy notes.
+- **Schema entries** for all four bitemporal frontmatter fields in `schema.yaml` (optional, with type, pattern, and constraint notes).
+
 ## 2026-05-27 (0.4.3)
 
 ### Added
