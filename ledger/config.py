@@ -203,6 +203,7 @@ def _apply_env_overrides(config: "LedgerConfig") -> "LedgerConfig":
         "LEDGER_ATTENTION_MAX": "attention_shortlist_max",
         "LEDGER_REASONS_LIMIT": "detailed_reasons_limit",
         "LEDGER_EMBED_BATCH_SIZE": "embed_batch_size",
+        "LEDGER_JUDGE_SEED_TOP_K": "judge_seed_top_k",
     }
     for env_var, attr in int_mappings.items():
         if (value := os.getenv(env_var)) is None:
@@ -229,6 +230,7 @@ def _apply_env_overrides(config: "LedgerConfig") -> "LedgerConfig":
         "LEDGER_PRF_ALPHA": "prf_alpha",
         "LEDGER_PRF_BETA": "prf_beta",
         "LEDGER_PRF_GAMMA": "prf_gamma",
+        "LEDGER_SYNTHETIC_WEIGHT": "synthetic_weight",
     }
     for env_var, attr in float_mappings.items():
         if (value := os.getenv(env_var)) is None:
@@ -255,6 +257,8 @@ def _apply_env_overrides(config: "LedgerConfig") -> "LedgerConfig":
         "LEDGER_EMBED_MODEL": "embed_model",
         "LEDGER_EMBED_DEVICE": "embed_device",
         "LEDGER_FUSION": "fusion",
+        "LEDGER_JUDGE_BACKEND": "judge_backend",
+        "LEDGER_JUDGE_COMMAND": "judge_subprocess_command",
     }
     for env_var, attr in string_mappings.items():
         if (value := os.getenv(env_var)) is None:
@@ -517,6 +521,49 @@ class LedgerConfig:
     A query that returns nothing, or whose best hit scores under this
     floor, is treated as a coverage gap when ``signals_auto_capture`` is
     on. Tuned conservatively: only genuinely weak matches log a miss.
+    """
+
+    synthetic_weight: float = 0.5
+    """Down-weight factor applied to synthetic (LLM-seeded) signal events.
+
+    Synthetic events (``synthetic: true``) count as this fraction of a real
+    signal when computing ``signal_score`` and per-note stats.  Default 0.5
+    means a seeded retrieval_hit contributes half as much as a real user hit.
+
+    Set to 0.0 to ignore synthetic events entirely; 1.0 to treat them as
+    equal to real signals (not recommended until judge quality is validated).
+    """
+
+    judge_backend: str = "dummy"
+    """Backend used by ``ledger signal seed`` to judge (query, note) pairs.
+
+    ``"dummy"`` — deterministic lexical-overlap heuristic (no network, no
+    LLM call; stable for tests and offline use).
+
+    ``"subprocess"`` — shells out to ``judge_subprocess_command``.  The
+    command receives a JSON object on stdin and must return a JSON verdict.
+    Example: ``claude -p`` or an Ollama call.
+    """
+
+    judge_subprocess_command: str = ""
+    """Shell command template for the subprocess judge backend.
+
+    Used only when ``judge_backend = "subprocess"``.
+    The command receives the prompt payload as JSON on stdin and must
+    write a JSON verdict to stdout with keys ``relevant`` (bool),
+    ``rating`` (int 1–10, optional), ``reason`` (str, optional).
+
+    Example values:
+      ``"claude -p"``
+      ``"/usr/local/bin/ollama run llama3 --format json"``
+    """
+
+    judge_seed_top_k: int = 5
+    """Number of notes retrieved per query during ``ledger signal seed``.
+
+    Higher values produce more seeded events but increase judge calls.
+    Keep low (3–5) for the dummy backend; can raise to 10+ with a fast
+    subprocess backend once quality is validated.
     """
 
     # =========================================================================
