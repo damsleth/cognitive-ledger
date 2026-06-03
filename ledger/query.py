@@ -298,6 +298,7 @@ def rank_query_semantic_hybrid(
     embed_model: str | None = None,
     load_embeddings_module: Callable[[], Any],
     resolve_embed_model: Callable[[str, str | None], str],
+    as_of=None,
 ) -> dict[str, Any]:
     started = time.perf_counter()
     config = get_config()
@@ -308,7 +309,14 @@ def rank_query_semantic_hybrid(
     include_reasons = limit <= _detailed_reasons_limit()
 
     candidates_started = time.perf_counter()
-    candidates = retrieval_lib.build_candidates(use_cache=True)
+    if as_of is not None:
+        candidates = retrieval_lib.build_candidates_with_archive()
+    else:
+        candidates = retrieval_lib.build_candidates(use_cache=True)
+    # Apply temporal filter after candidate generation.
+    candidates = retrieval_lib.apply_temporal_filter(
+        list(candidates), as_of=as_of, now_dt=now_dt
+    )
     candidates_ms = (time.perf_counter() - candidates_started) * 1000.0
     backend = resolve_embed_backend(embed_backend)
     model = resolve_embed_model(backend, embed_model)
@@ -333,6 +341,7 @@ def rank_query_semantic_hybrid(
                 aliases_path=_aliases_path(aliases_path),
                 now_dt=now_dt,
                 retrieval_mode="precomputed_index",
+                as_of=as_of,
             )
             fallback.retrieval_mode = "semantic_hybrid"
             fallback.effective_retrieval_mode = "precomputed_index"
@@ -448,6 +457,7 @@ def rank_query_semantic_rerank(
     embed_model: str | None = None,
     load_embeddings_module: Callable[[], Any],
     resolve_embed_model: Callable[[str, str | None], str],
+    as_of=None,
 ) -> RetrievalResult:
     """Run semantic_hybrid then re-order the top-N with a cross-encoder."""
     from ledger import rerank as rerank_lib
@@ -469,6 +479,7 @@ def rank_query_semantic_rerank(
         embed_model=embed_model,
         load_embeddings_module=load_embeddings_module,
         resolve_embed_model=resolve_embed_model,
+        as_of=as_of,
     )
     base_results = list(getattr(base, "results", []))
 
@@ -542,6 +553,7 @@ def rank_query(
     embed_model: str | None = None,
     load_embeddings_module: Callable[[], Any],
     resolve_embed_model: Callable[[str, str | None], str],
+    as_of=None,
 ) -> RetrievalResult:
     mode = resolve_retrieval_mode(retrieval_mode)
     if mode == "semantic_hybrid":
@@ -555,6 +567,7 @@ def rank_query(
             embed_model=embed_model,
             load_embeddings_module=load_embeddings_module,
             resolve_embed_model=resolve_embed_model,
+            as_of=as_of,
         )
 
     if mode == "semantic_rerank":
@@ -568,6 +581,7 @@ def rank_query(
             embed_model=embed_model,
             load_embeddings_module=load_embeddings_module,
             resolve_embed_model=resolve_embed_model,
+            as_of=as_of,
         )
 
     return rank_query_lexical(
@@ -577,6 +591,7 @@ def rank_query(
         aliases_path=_aliases_path(aliases_path),
         now_dt=now_dt,
         retrieval_mode=mode,
+        as_of=as_of,
     )
 
 
