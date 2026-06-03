@@ -741,7 +741,8 @@ def apply_temporal_filter(
         vf_raw = c.valid_from
         vt_raw = c.valid_to
 
-        has_any_validity_fields = bool(vf_raw or vt_raw)
+        superseded_by_raw = c.superseded_by
+        has_any_validity_fields = bool(vf_raw or vt_raw or superseded_by_raw)
 
         if as_of is None:
             # Default path: pass-through notes with no validity fields.
@@ -1332,7 +1333,7 @@ def rank_lexical(
 
     if scope_prefilter_active:
         prefiltered_candidates = prefilter_candidates_by_scope_and_type(
-            candidates,
+            prefiltered_candidates,
             expanded_tokens,
             scope,
             history_mode,

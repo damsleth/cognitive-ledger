@@ -16,11 +16,14 @@ from pathlib import Path
 import pytest
 
 from ledger.bitemporal import (
+    MigrationResult,
     SupersessionResult,
     is_valid_at,
+    migrate_bitemporal,
     parse_validity,
     supersede,
 )
+from ledger.errors import NoteError
 from ledger.config import LedgerConfig, set_config, reset_config
 from ledger.parsing.frontmatter import parse_frontmatter_text
 
@@ -206,7 +209,12 @@ class TestSupersede:
         new_abs = tmp_config.ledger_notes_dir / "02_facts" / "fact__new.md"
         fm, _ = parse_frontmatter_text(new_abs.read_text(encoding="utf-8"))
         supersedes = fm.get("supersedes", [])
-        assert old_ref in supersedes
+        # The supersedes list must reference the post-move archive path so that
+        # backreferences resolve correctly after the old note is moved.
+        archive_ref = "notes/09_archive/fact__old.md"
+        assert archive_ref in supersedes, (
+            f"supersedes must contain the archive path {archive_ref!r}; got {supersedes}"
+        )
 
     def test_valid_to_uses_as_of_arg(self, tmp_config):
         old_ref, new_ref = self._make_pair(tmp_config)
@@ -379,5 +387,124 @@ def test_supersedes_list_accumulates(tmp_config):
     new_abs = facts / "fact__acc_new.md"
     fm, _ = parse_frontmatter_text(new_abs.read_text(encoding="utf-8"))
     supersedes = fm.get("supersedes", [])
-    assert "notes/09_archive/fact__acc_a.md" in supersedes or "notes/02_facts/fact__acc_a.md" in supersedes
-    assert "notes/09_archive/fact__acc_b.md" in supersedes or "notes/02_facts/fact__acc_b.md" in supersedes
+    # Both entries must use the archive path so backreferences resolve post-move.
+    assert "notes/09_archive/fact__acc_a.md" in supersedes, \
+        f"expected archive path for acc_a in {supersedes}"
+    assert "notes/09_archive/fact__acc_b.md" in supersedes, \
+        f"expected archive path for acc_b in {supersedes}"
+
+
+# ---------------------------------------------------------------------------
+# supersede() — provenance chain protection (double-archive guard)
+# ---------------------------------------------------------------------------
+
+
+class TestSupersededDoubleArchiveGuard:
+    def test_already_archived_with_different_new_ref_raises(self, tmp_config):
+        """Calling supersede with a different new_ref on an already-archived note raises NoteError."""
+        facts = tmp_config.ledger_notes_dir / "02_facts"
+        archive = tmp_config.ledger_notes_dir / "09_archive"
+        archive.mkdir(parents=True, exist_ok=True)
+        old = facts / "fact__prov_old.md"
+        new_c = facts / "fact__prov_c.md"
+        new_d = facts / "fact__prov_d.md"
+        _write(old, _note_content("valid_from: 2025-01-01T00:00:00Z\n"))
+        _write(new_c, _note_content("valid_from: 2026-01-01T00:00:00Z\n"))
+        _write(new_d, _note_content("valid_from: 2026-06-01T00:00:00Z\n"))
+
+        # First supersession: old → C, note moves to 09_archive.
+        supersede("notes/02_facts/fact__prov_old.md", "notes/02_facts/fact__prov_c.md")
+        archive_ref = "notes/09_archive/fact__prov_old.md"
+        assert (archive / "fact__prov_old.md").exists()
+
+        # Attempt to re-supersede the archived note with a *different* new ref (D).
+        with pytest.raises(NoteError, match="already archived and superseded_by"):
+            supersede(archive_ref, "notes/02_facts/fact__prov_d.md")
+
+    def test_already_archived_same_new_ref_is_idempotent(self, tmp_config):
+        """Calling supersede again with the SAME new_ref on an archived note is a no-op."""
+        facts = tmp_config.ledger_notes_dir / "02_facts"
+        archive = tmp_config.ledger_notes_dir / "09_archive"
+        archive.mkdir(parents=True, exist_ok=True)
+        old = facts / "fact__idem2_old.md"
+        new = facts / "fact__idem2_new.md"
+        _write(old, _note_content("valid_from: 2025-01-01T00:00:00Z\n"))
+        _write(new, _note_content("valid_from: 2026-01-01T00:00:00Z\n"))
+
+        supersede("notes/02_facts/fact__idem2_old.md", "notes/02_facts/fact__idem2_new.md")
+        archive_ref = "notes/09_archive/fact__idem2_old.md"
+        result = supersede(archive_ref, "notes/02_facts/fact__idem2_new.md")
+        assert result.idempotent is True
+
+
+# ---------------------------------------------------------------------------
+# supersede() — partial-write recovery (atomicity guard)
+# ---------------------------------------------------------------------------
+
+
+class TestSupersededPartialWriteRecovery:
+    def test_partial_write_recovery_skips_double_write(self, tmp_config):
+        """If old note already has superseded_by set (partial write) but hasn't been
+        moved yet, re-running supersede completes the archive move without
+        re-writing the notes."""
+        facts = tmp_config.ledger_notes_dir / "02_facts"
+        archive = tmp_config.ledger_notes_dir / "09_archive"
+        archive.mkdir(parents=True, exist_ok=True)
+        old = facts / "fact__partial_old.md"
+        new = facts / "fact__partial_new.md"
+        _write(old, _note_content("valid_from: 2025-01-01T00:00:00Z\n"))
+        _write(new, _note_content("valid_from: 2026-01-01T00:00:00Z\n"))
+
+        # Simulate partial write: step 5 completed (superseded_by set on old note)
+        # but step 7 (move) did not happen.  We inject the partial state manually.
+        from ledger.parsing.frontmatter import parse_frontmatter_text, serialize_frontmatter
+        old_text = old.read_text(encoding="utf-8")
+        old_fm, old_body = parse_frontmatter_text(old_text)
+        old_fm["superseded_by"] = "notes/02_facts/fact__partial_new.md"
+        old_fm["valid_to"] = "2026-01-01T00:00:00Z"
+        old.write_text(serialize_frontmatter(old_fm) + "\n" + old_body.lstrip("\n"))
+        # old is still in facts (not moved) — partial state.
+
+        # Re-running supersede should complete the archive move cleanly.
+        result = supersede(
+            "notes/02_facts/fact__partial_old.md",
+            "notes/02_facts/fact__partial_new.md",
+        )
+        assert (archive / "fact__partial_old.md").exists(), \
+            "archive move must complete on recovery run"
+        assert not old.exists(), "old note must not remain at original path"
+        assert result.idempotent is False  # it did real work (the move)
+
+
+# ---------------------------------------------------------------------------
+# MigrationResult — property correctness
+# ---------------------------------------------------------------------------
+
+
+class TestMigrationResultProperties:
+    def test_total_skipped_counts_only_skipped(self):
+        """total_skipped must return only the skipped count, not touched+skipped."""
+        r = MigrationResult(
+            touched={"facts": 3, "archive": 2},
+            skipped={"facts": 10, "archive": 5},
+            total_eligible=20,
+            applied=True,
+        )
+        assert r.total_touched == 5
+        assert r.total_skipped == 15, (
+            f"total_skipped should be 15 (skipped only), got {r.total_skipped}"
+        )
+
+    def test_total_skipped_empty(self):
+        """total_skipped is 0 when skipped dict is empty."""
+        r = MigrationResult(touched={"facts": 3}, skipped={})
+        assert r.total_skipped == 0
+
+    def test_total_skipped_not_double_counting_touched(self):
+        """total_skipped must never include touched notes."""
+        r = MigrationResult(
+            touched={"facts": 100},
+            skipped={"facts": 1},
+        )
+        assert r.total_skipped == 1
+        assert r.total_skipped != r.total_touched + 1
