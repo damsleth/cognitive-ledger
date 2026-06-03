@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Added
+- **Prior score (cold-start ranking, Mechanism 1).** An additive prior term blends note confidence (importance), half-life recency decay, and query-lexical relevance into the final score before any signal feedback has accrued. On by default (`prior_enabled: true`). Controlled by `prior_weight` (0.10), `prior_w_importance` (0.30), `prior_w_recency` (0.30), `prior_w_relevance` (0.40), and `prior_recency_half_life_days` (180). Set `prior_enabled: false` to reproduce pre-prior scores exactly (useful as A/B baseline). Env overrides: `LEDGER_PRIOR_ENABLED`, `LEDGER_PRIOR_WEIGHT`, `LEDGER_PRIOR_W_IMPORTANCE`, `LEDGER_PRIOR_W_RECENCY`, `LEDGER_PRIOR_W_RELEVANCE`, `LEDGER_PRIOR_HALF_LIFE`.
+- **Pseudo-Relevance Feedback / PRF (Mechanism 2, dense path).** Rocchio-style query-vector expansion using top-m pseudo-positive and bottom-n pseudo-negative results. Off by default (`prf_enabled: false`). Config keys: `prf_top_m` (3), `prf_bottom_n` (5), `prf_alpha` (1.0), `prf_beta` (0.75), `prf_gamma` (0.15). Per-query override: `ledger query --prf`. Env overrides: `LEDGER_PRF_ENABLED`, `LEDGER_PRF_ALPHA/BETA/GAMMA`. Enable only after `ledger ab run` confirms improvement.
+- **RRF fusion mode (Mechanism 3, `semantic_hybrid`).** `fusion: rrf` generates independent lexical and semantic rank lists then merges them with Reciprocal Rank Fusion (smoothing constant `rrf_k`, default 60). Default is `fusion: weighted_sum` (byte-identical to previous behaviour). Env override: `LEDGER_FUSION`. Enable only after A/B eval.
+- **`ledger signal seed` — LLM-judged synthetic signal bootstrapping.** Reads queries from `query_log.jsonl` (`--from-history`) or a plain-text file (`--queries-file`), retrieves top-k notes per query via the configured retrieval stack, and has an LLM judge score each (query, note) pair. Writes synthetic `llm_judged` signal events tagged `synthetic: true`. Judge backends: `dummy` (deterministic lexical heuristic, no network) and `subprocess` (configurable shell command, e.g. `claude -p`). Config: `judge_backend`, `judge_subprocess_command`, `judge_seed_top_k` (5). Env: `LEDGER_JUDGE_BACKEND`, `LEDGER_JUDGE_COMMAND`, `LEDGER_JUDGE_SEED_TOP_K`.
+- **`ledger signal purge --synthetic` — rollback seeded signals.** Rewrites `signals.jsonl` in place, removing all entries where `synthetic: true`. Run `ledger signal summarize` afterwards to refresh `signal_summary.json`.
+- **Synthetic signal down-weighting.** Synthetic events count as `synthetic_weight` (default 0.5) of a real signal in `summarize_signals`. The 20-signal gate (`signal_min_entries`) counts only real (non-synthetic) events so seeded signals cannot artificially activate scoring. Config: `synthetic_weight`. Env: `LEDGER_SYNTHETIC_WEIGHT`. New `real_signals` counter in `_meta` and `real_total` in `signal stats` output.
+- **`llm_judged` signal type** added to `SIGNAL_TYPES`.
+
 ## 2026-05-27 (0.4.3)
 
 ### Added
