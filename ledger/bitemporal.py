@@ -256,9 +256,19 @@ def supersede(
     archive_dir = ledger_notes_dir / "09_archive"
     archive_path = archive_dir / old_abs.name
 
-    # --- 3b. Idempotency check ---
+    # --- 3b. Idempotency / conflict checks ---
     already_in_archive = "/09_archive/" in str(old_abs)
     already_superseded = existing_superseded_by == new_logical
+
+    # Guard: already archived but superseded_by points to a *different* note.
+    # This would corrupt the provenance chain — raise an explicit error.
+    if already_in_archive and existing_superseded_by and not already_superseded:
+        raise NoteError(
+            f"supersede: {old_logical!r} is already archived and superseded_by "
+            f"{existing_superseded_by!r}; cannot re-supersede with a different "
+            f"note {new_logical!r}. Provenance chain must not be overwritten."
+        )
+
     if already_in_archive and already_superseded:
         return SupersessionResult(
             old_ref=old_logical,
@@ -267,6 +277,16 @@ def supersede(
             valid_to_set=str(old_fm.get("valid_to", "")),
             idempotent=True,
         )
+
+    # Guard: partial-write recovery — old note already has superseded_by set to
+    # new_logical but has NOT yet been moved to 09_archive (process died between
+    # steps 5/6 and step 7 on a previous run).  Skip the redundant writes for
+    # steps 5 and 6 and proceed directly to the archive move.
+    partial_write_recovery = (
+        not already_in_archive
+        and already_superseded
+        and existing_superseded_by == new_logical
+    )
 
     # --- 4. Determine valid_to ---
     if as_of is not None:
@@ -297,33 +317,48 @@ def supersede(
 
     valid_to_iso = _to_iso(valid_to_dt)
 
-    # --- 5. Write old note: set valid_to, superseded_by, updated ---
-    old_fm["valid_to"] = valid_to_iso
-    old_fm["superseded_by"] = new_logical
-    old_fm["updated"] = _to_iso(_now_utc())
-    old_content = serialize_frontmatter(old_fm) + "\n" + old_body.lstrip("\n")
-    safe_write_text(old_abs, old_content)
+    # The canonical path of the old note after archiving — used in the
+    # supersedes list so that backreferences resolve correctly post-move.
+    old_archive_logical = _logical_ref(archive_dir / old_abs.name, ledger_notes_dir)
 
-    # --- 6. Write new note: prepend old to supersedes list ---
-    new_text = new_abs.read_text(encoding="utf-8")
-    new_fm, new_body = parse_frontmatter_text(new_text)
+    if not partial_write_recovery:
+        # --- 5. Write old note: set valid_to, superseded_by, updated ---
+        old_fm["valid_to"] = valid_to_iso
+        old_fm["superseded_by"] = new_logical
+        old_fm["updated"] = _to_iso(_now_utc())
+        old_content = serialize_frontmatter(old_fm) + "\n" + old_body.lstrip("\n")
+        safe_write_text(old_abs, old_content)
 
-    existing_supersedes = new_fm.get("supersedes", [])
-    if isinstance(existing_supersedes, str):
-        existing_supersedes = [s.strip() for s in existing_supersedes.split(",") if s.strip()]
-    elif not isinstance(existing_supersedes, list):
-        existing_supersedes = []
-    # Remove empty/null sentinels
-    existing_supersedes = [
-        s for s in existing_supersedes
-        if s and s not in ("null", "~", "None")
-    ]
-    if old_logical not in existing_supersedes:
-        existing_supersedes.insert(0, old_logical)
-    new_fm["supersedes"] = existing_supersedes
-    new_fm["updated"] = _to_iso(_now_utc())
-    new_content = serialize_frontmatter(new_fm) + "\n" + new_body.lstrip("\n")
-    safe_write_text(new_abs, new_content)
+        # --- 6. Write new note: prepend OLD ARCHIVE PATH to supersedes list ---
+        # We write the post-move archive path (notes/09_archive/...) so that the
+        # backreference in new_note.supersedes points to where the file will live
+        # after step 7, keeping the provenance chain resolvable.
+        new_text = new_abs.read_text(encoding="utf-8")
+        new_fm, new_body = parse_frontmatter_text(new_text)
+
+        existing_supersedes = new_fm.get("supersedes", [])
+        if isinstance(existing_supersedes, str):
+            existing_supersedes = [s.strip() for s in existing_supersedes.split(",") if s.strip()]
+        elif not isinstance(existing_supersedes, list):
+            existing_supersedes = []
+        # Remove empty/null sentinels
+        existing_supersedes = [
+            s for s in existing_supersedes
+            if s and s not in ("null", "~", "None")
+        ]
+        # Guard against both the pre-move and post-move path to ensure idempotency
+        # when re-running after a partial failure.
+        if old_archive_logical not in existing_supersedes and old_logical not in existing_supersedes:
+            existing_supersedes.insert(0, old_archive_logical)
+        # Normalise any legacy pre-move path entry to the archive path.
+        existing_supersedes = [
+            old_archive_logical if s == old_logical else s
+            for s in existing_supersedes
+        ]
+        new_fm["supersedes"] = existing_supersedes
+        new_fm["updated"] = _to_iso(_now_utc())
+        new_content = serialize_frontmatter(new_fm) + "\n" + new_body.lstrip("\n")
+        safe_write_text(new_abs, new_content)
 
     # --- 7. Move old note to 09_archive ---
     archive_dir.mkdir(parents=True, exist_ok=True)
@@ -419,7 +454,8 @@ class MigrationResult:
 
     @property
     def total_skipped(self) -> int:
-        return sum(self.touched.values()) + sum(self.skipped.values())
+        """Number of notes that were already up to date (no write needed)."""
+        return sum(self.skipped.values())
 
 
 def _extract_date_portion(iso_ts: str) -> str:
