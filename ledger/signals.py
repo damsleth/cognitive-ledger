@@ -23,6 +23,7 @@ SIGNAL_TYPES = (
     "stale_flag",
     "preference_applied",
     "rating",
+    "supersession",
 )
 
 
