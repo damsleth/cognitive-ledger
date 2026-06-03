@@ -149,6 +149,9 @@ ledger query "calendar constraints" --scope all --limit 8 --view detail
 # Bundle mode - context-window-friendly excerpts within a word budget
 ledger query "calendar constraints" --bundle
 
+# Temporal query - notes valid on a given date (widens to include 09_archive)
+ledger query "deployment policy" --as-of 2025-06-01
+
 # Other
 ledger loops                                    # list open loops
 ledger context --format boot                    # session boot payload
