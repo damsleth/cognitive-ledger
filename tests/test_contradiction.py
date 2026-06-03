@@ -152,6 +152,7 @@ def _make_neighbor_fn(neighbor_items: list[dict[str, Any]]):
         candidate_type: str | None,
         k: int,
         ledger_notes_dir: Path,
+        candidate_scope: str | None = None,
     ) -> list[dict[str, Any]]:
         return neighbor_items[:k]
     return _fn
@@ -941,3 +942,384 @@ class TestMaintenanceCLIIntegration:
         cmd_sleep()
         captured = capsys.readouterr()
         assert "contradictions" in captured.out
+
+
+# ---------------------------------------------------------------------------
+# Missing embed index path
+# ---------------------------------------------------------------------------
+
+class TestMissingEmbedIndex:
+    """--check reports that embed build is needed and exits cleanly (no crash)."""
+
+    def test_missing_embed_index_exits_cleanly(self, tmp_path: Path):
+        """When the semantic index is absent, scan exits 0 with missing_embed_index=True."""
+        config = _make_config(tmp_path)
+        notes_dir = config.ledger_notes_dir
+        try:
+            note = notes_dir / "02_facts" / "fact__probe.md"
+            _write(note, _note_content(created=_TS_NEW, valid_from=_TS_NEW, body="Test."))
+
+            # Simulate missing embed index by providing a neighbor_fn that raises,
+            # then checking the index-probe path via a mock semantic_score_map.
+            # The easiest approach: rely on the real probe logic with a patched module.
+            import unittest.mock as mock
+            from ledger import contradiction as c_mod
+
+            # Patch semantic_score_map to report index unavailable
+            unavailable_result = {"available": False, "results": []}
+            with mock.patch("ledger.contradiction.semantic_score_map", return_value=unavailable_result, create=True):
+                # Also patch the import inside the function
+                with mock.patch.dict("sys.modules", {}):
+                    # Force the index probe to return unavailable
+                    original_fn = c_mod._neighbor_fn if hasattr(c_mod, "_neighbor_fn") else None
+                    result = run_contradiction_scan(
+                        apply=False,
+                        # _neighbor_fn=None so the real index probe runs
+                    )
+
+            # The result must report missing index cleanly — no exception raised
+            assert result.missing_embed_index is True
+            assert result.candidates_scanned >= 1
+            assert result.pairs_evaluated == 0  # no pairs evaluated when index absent
+
+        finally:
+            reset_config()
+
+    def test_missing_embed_index_cmd_exits_0(self, tmp_path: Path, capsys):
+        """cmd_sleep_contradictions exits 0 and prints helpful message when index is absent."""
+        config = _make_config(tmp_path)
+        notes_dir = config.ledger_notes_dir
+        try:
+            note = notes_dir / "02_facts" / "fact__probe2.md"
+            _write(note, _note_content(created=_TS_NEW, valid_from=_TS_NEW, body="Test."))
+
+            import unittest.mock as mock
+
+            unavailable_result = {"available": False, "results": []}
+            with mock.patch("ledger.contradiction.semantic_score_map", return_value=unavailable_result, create=True):
+                rc = cmd_sleep_contradictions(apply=False)
+
+            assert rc == 0
+            captured = capsys.readouterr()
+            # Should mention embed build requirement
+            assert "embed" in captured.out.lower() or "index" in captured.out.lower()
+
+        finally:
+            reset_config()
+
+
+# ---------------------------------------------------------------------------
+# --check mode does not corrupt state
+# ---------------------------------------------------------------------------
+
+class TestCheckModeStateIsolation:
+    """--check run must NOT persist state; subsequent --apply must act on full set."""
+
+    def test_check_does_not_write_state_file(self, tmp_path: Path):
+        """After a --check run, no contradiction state file should exist."""
+        config = _make_config(tmp_path)
+        notes_dir = config.ledger_notes_dir
+        try:
+            old_note = notes_dir / "02_facts" / "fact__state_old.md"
+            _write(old_note, _note_content(
+                created=_TS_OLD, valid_from=_TS_OLD, body="Old state claim."
+            ))
+            new_note = notes_dir / "02_facts" / "fact__state_new.md"
+            _write(new_note, _note_content(
+                created=_TS_NEW, valid_from=_TS_NEW, body="New state claim."
+            ))
+
+            neighbor_items = [{"rel_path": "notes/02_facts/fact__state_old.md", "type": "fact"}]
+
+            # --check run
+            result_check = run_contradiction_scan(
+                apply=False,
+                _pipeline_fn=_fake_pipeline(contradiction=0.92),
+                _neighbor_fn=_make_neighbor_fn(neighbor_items),
+            )
+            assert result_check.dry_run is True
+            assert result_check.supersessions >= 1
+
+            # State file must NOT exist after --check
+            state_file = notes_dir / "08_indices" / "contradiction_state.json"
+            assert not state_file.exists(), (
+                "--check must not write a state file; a subsequent --apply would become a no-op"
+            )
+
+        finally:
+            reset_config()
+
+    def test_check_then_apply_still_acts(self, tmp_path: Path):
+        """Running --check then --apply must execute the supersession, not skip it."""
+        config = _make_config(tmp_path)
+        notes_dir = config.ledger_notes_dir
+        try:
+            old_note = notes_dir / "02_facts" / "fact__ca_old.md"
+            _write(old_note, _note_content(
+                created=_TS_OLD, valid_from=_TS_OLD, body="Old CA claim."
+            ))
+            new_note = notes_dir / "02_facts" / "fact__ca_new.md"
+            _write(new_note, _note_content(
+                created=_TS_NEW, valid_from=_TS_NEW, body="New CA claim."
+            ))
+
+            neighbor_items = [{"rel_path": "notes/02_facts/fact__ca_old.md", "type": "fact"}]
+
+            # --check run — must not poison state
+            run_contradiction_scan(
+                apply=False,
+                _pipeline_fn=_fake_pipeline(contradiction=0.92),
+                _neighbor_fn=_make_neighbor_fn(neighbor_items),
+            )
+
+            # --apply run — must still supersede the pair
+            result_apply = run_contradiction_scan(
+                apply=True,
+                _pipeline_fn=_fake_pipeline(contradiction=0.92),
+                _neighbor_fn=_make_neighbor_fn(neighbor_items),
+            )
+
+            assert result_apply.supersessions >= 1, (
+                "--apply after --check must still perform the supersession"
+            )
+            archive = notes_dir / "09_archive" / "fact__ca_old.md"
+            assert archive.exists(), "old note must be archived after --apply"
+
+        finally:
+            reset_config()
+
+
+# ---------------------------------------------------------------------------
+# supersede_failed degrades to review
+# ---------------------------------------------------------------------------
+
+class TestSupersedeFailedDegradestoReview:
+    """When bitemporal.supersede() throws, a conflict note must be written."""
+
+    def test_supersede_failed_writes_conflict_note(self, tmp_path: Path):
+        import unittest.mock as mock
+
+        config = _make_config(tmp_path)
+        notes_dir = config.ledger_notes_dir
+        try:
+            old_note = notes_dir / "02_facts" / "fact__sf_old.md"
+            _write(old_note, _note_content(
+                created=_TS_OLD, valid_from=_TS_OLD, body="Old SF claim."
+            ))
+            new_note = notes_dir / "02_facts" / "fact__sf_new.md"
+            _write(new_note, _note_content(
+                created=_TS_NEW, valid_from=_TS_NEW, body="New SF claim."
+            ))
+
+            neighbor_items = [{"rel_path": "notes/02_facts/fact__sf_old.md", "type": "fact"}]
+
+            # Make bitemporal.supersede() always fail
+            with mock.patch("ledger.bitemporal.supersede", side_effect=RuntimeError("disk full")):
+                result = run_contradiction_scan(
+                    apply=True,
+                    _pipeline_fn=_fake_pipeline(contradiction=0.92),
+                    _neighbor_fn=_make_neighbor_fn(neighbor_items),
+                )
+
+            # supersession must report the failure
+            failed = [pr for pr in result.pair_results if pr.action_taken == "supersede_failed"]
+            assert failed, "expected a supersede_failed pair result"
+
+            # A conflict note must have been written to 00_inbox
+            inbox_notes = list((notes_dir / "00_inbox").glob("conflict__*.md"))
+            assert inbox_notes, (
+                "supersede_failed must degrade to a conflict note in 00_inbox"
+            )
+
+            # Old note must NOT have been archived (supersession did not complete)
+            archive = notes_dir / "09_archive" / "fact__sf_old.md"
+            assert not archive.exists()
+
+        finally:
+            reset_config()
+
+    def test_supersede_failed_pair_not_in_resolved(self, tmp_path: Path):
+        """A supersede_failed pair must NOT be added to resolved_pairs (allow retry)."""
+        import unittest.mock as mock
+
+        config = _make_config(tmp_path)
+        notes_dir = config.ledger_notes_dir
+        try:
+            old_note = notes_dir / "02_facts" / "fact__sfr_old.md"
+            _write(old_note, _note_content(
+                created=_TS_OLD, valid_from=_TS_OLD, body="SFR old."
+            ))
+            new_note = notes_dir / "02_facts" / "fact__sfr_new.md"
+            _write(new_note, _note_content(
+                created=_TS_NEW, valid_from=_TS_NEW, body="SFR new."
+            ))
+
+            neighbor_items = [{"rel_path": "notes/02_facts/fact__sfr_old.md", "type": "fact"}]
+
+            with mock.patch("ledger.bitemporal.supersede", side_effect=RuntimeError("err")):
+                run_contradiction_scan(
+                    apply=True,
+                    _pipeline_fn=_fake_pipeline(contradiction=0.92),
+                    _neighbor_fn=_make_neighbor_fn(neighbor_items),
+                )
+
+            # State file should exist but the failed pair must NOT be in resolved_pairs
+            state_file = notes_dir / "08_indices" / "contradiction_state.json"
+            if state_file.exists():
+                state_data = json.loads(state_file.read_text(encoding="utf-8"))
+                resolved = state_data.get("resolved_pairs", {})
+                from ledger.contradiction import _pair_key
+                pk = _pair_key(
+                    "notes/02_facts/fact__sfr_new.md",
+                    "notes/02_facts/fact__sfr_old.md",
+                )
+                assert pk not in resolved, (
+                    "supersede_failed pair must not be marked resolved — it should be retried"
+                )
+
+        finally:
+            reset_config()
+
+
+# ---------------------------------------------------------------------------
+# as_of=cand_anchor is passed to supersede()
+# ---------------------------------------------------------------------------
+
+class TestSupersedeAsOf:
+    """supersede() is called with as_of=cand_anchor to preserve bitemporal boundary."""
+
+    def test_supersede_called_with_as_of(self, tmp_path: Path):
+        import unittest.mock as mock
+
+        config = _make_config(tmp_path)
+        notes_dir = config.ledger_notes_dir
+        try:
+            old_note = notes_dir / "02_facts" / "fact__asof_old.md"
+            _write(old_note, _note_content(
+                created=_TS_OLD, valid_from=_TS_OLD, body="Old asof."
+            ))
+            new_note = notes_dir / "02_facts" / "fact__asof_new.md"
+            _write(new_note, _note_content(
+                created=_TS_NEW, valid_from=_TS_NEW, body="New asof."
+            ))
+
+            neighbor_items = [{"rel_path": "notes/02_facts/fact__asof_old.md", "type": "fact"}]
+
+            calls: list[dict[str, Any]] = []
+
+            def _capture_supersede(old_ref, new_ref, **kwargs):
+                calls.append({"old": old_ref, "new": new_ref, "kwargs": kwargs})
+                # Execute real supersede so the test corpus stays consistent
+                from ledger.bitemporal import supersede as real_supersede
+                return real_supersede(old_ref, new_ref, **kwargs)
+
+            with mock.patch("ledger.bitemporal.supersede", side_effect=_capture_supersede):
+                run_contradiction_scan(
+                    apply=True,
+                    _pipeline_fn=_fake_pipeline(contradiction=0.92),
+                    _neighbor_fn=_make_neighbor_fn(neighbor_items),
+                )
+
+            assert calls, "expected supersede() to be called"
+            call_kwargs = calls[0]["kwargs"]
+            # as_of must be provided and must equal the candidate's valid_from datetime
+            assert "as_of" in call_kwargs, "supersede() must receive as_of kwarg"
+            import datetime as dt
+            expected_ts = dt.datetime(2026, 1, 1, tzinfo=dt.timezone.utc)
+            assert call_kwargs["as_of"] == expected_ts, (
+                f"as_of must be the candidate's valid_from, got {call_kwargs['as_of']!r}"
+            )
+
+        finally:
+            reset_config()
+
+
+# ---------------------------------------------------------------------------
+# Scope filtering in _get_semantic_neighbors
+# ---------------------------------------------------------------------------
+
+class TestScopeFiltering:
+    """_get_semantic_neighbors must only return notes with a matching scope."""
+
+    def test_scope_filter_excludes_different_scope(self):
+        """A neighbor with a different scope must be filtered out."""
+        from ledger.contradiction import _get_semantic_neighbors
+
+        # semantic_score_map is a deferred import inside _get_semantic_neighbors;
+        # patch it at the source module (ledger.embeddings).
+        import unittest.mock as mock
+
+        items = [
+            {"rel_path": "notes/02_facts/fact__work.md", "type": "fact", "scope": "work"},
+            {"rel_path": "notes/02_facts/fact__home.md", "type": "fact", "scope": "home"},
+            {"rel_path": "notes/02_facts/fact__all.md", "type": "fact", "scope": "all"},
+        ]
+        available_result = {"available": True, "results": items}
+
+        with mock.patch("ledger.embeddings.semantic_score_map", return_value=available_result):
+            neighbors = _get_semantic_neighbors(
+                candidate_text="test",
+                candidate_rel_path="notes/02_facts/fact__candidate.md",
+                candidate_type="facts",
+                k=10,
+                ledger_notes_dir=Path("/tmp/fake"),
+                candidate_scope="work",
+            )
+
+        rel_paths = [n["rel_path"] for n in neighbors]
+        # work scope and all scope should be included; home should be excluded
+        assert "notes/02_facts/fact__work.md" in rel_paths
+        assert "notes/02_facts/fact__all.md" in rel_paths
+        assert "notes/02_facts/fact__home.md" not in rel_paths
+
+    def test_scope_filter_none_includes_all(self):
+        """When candidate_scope is None, no scope filtering is applied."""
+        from ledger.contradiction import _get_semantic_neighbors
+
+        import unittest.mock as mock
+
+        items = [
+            {"rel_path": "notes/02_facts/fact__work.md", "type": "fact", "scope": "work"},
+            {"rel_path": "notes/02_facts/fact__home.md", "type": "fact", "scope": "home"},
+        ]
+        available_result = {"available": True, "results": items}
+
+        with mock.patch("ledger.embeddings.semantic_score_map", return_value=available_result):
+            neighbors = _get_semantic_neighbors(
+                candidate_text="test",
+                candidate_rel_path="notes/02_facts/fact__candidate.md",
+                candidate_type="facts",
+                k=10,
+                ledger_notes_dir=Path("/tmp/fake"),
+                candidate_scope=None,
+            )
+
+        rel_paths = [n["rel_path"] for n in neighbors]
+        assert "notes/02_facts/fact__work.md" in rel_paths
+        assert "notes/02_facts/fact__home.md" in rel_paths
+
+    def test_scope_filter_all_candidate_includes_all(self):
+        """When candidate scope is 'all', no filtering is applied."""
+        from ledger.contradiction import _get_semantic_neighbors
+
+        import unittest.mock as mock
+
+        items = [
+            {"rel_path": "notes/02_facts/fact__work.md", "type": "fact", "scope": "work"},
+            {"rel_path": "notes/02_facts/fact__home.md", "type": "fact", "scope": "home"},
+        ]
+        available_result = {"available": True, "results": items}
+
+        with mock.patch("ledger.embeddings.semantic_score_map", return_value=available_result):
+            neighbors = _get_semantic_neighbors(
+                candidate_text="test",
+                candidate_rel_path="notes/02_facts/fact__candidate.md",
+                candidate_type="facts",
+                k=10,
+                ledger_notes_dir=Path("/tmp/fake"),
+                candidate_scope="all",
+            )
+
+        rel_paths = [n["rel_path"] for n in neighbors]
+        assert "notes/02_facts/fact__work.md" in rel_paths
+        assert "notes/02_facts/fact__home.md" in rel_paths
