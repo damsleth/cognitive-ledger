@@ -10,6 +10,7 @@ from ledger.config import get_config
 from ledger import retrieval as retrieval_lib
 from ledger.parsing import shorten
 from ledger.retrieval import (
+    compute_prior_score,
     compute_recency_component,
     expand_query_tokens,
     load_aliases,
@@ -407,6 +408,15 @@ def rank_query_semantic_hybrid(
     # Resolve PRF flag: explicit arg > config
     _use_prf = config.prf_enabled if prf_enabled is None else bool(prf_enabled)
 
+    # Load signal summary once if signal scoring is enabled (same gate as lexical path)
+    _signal_summary: dict[str, Any] | None = None
+    if config.score_weight_signal > 0:
+        from ledger.signals import load_signal_summary
+        _sig_summary_raw = load_signal_summary()
+        _real_signals = _sig_summary_raw.get("_meta", {}).get("real_signals", 0)
+        if _real_signals >= config.signal_min_entries:
+            _signal_summary = _sig_summary_raw
+
     candidates_started = time.perf_counter()
     candidates = retrieval_lib.build_candidates(use_cache=True)
     candidates_ms = (time.perf_counter() - candidates_started) * 1000.0
@@ -542,6 +552,22 @@ def rank_query_semantic_hybrid(
         )
         recency_component = compute_recency_component(result_get(candidate, "updated_ts"), now_dt)
 
+        # Prior score — uses cosine similarity as the relevance proxy in semantic mode.
+        # Always-on once prior_enabled=True, signal-independent.
+        prior = 0.0
+        if config.prior_enabled:
+            prior = compute_prior_score(
+                candidate,
+                now_dt=now_dt,
+                query_lexical_relevance=semantic_component,
+            )
+
+        # Signal feedback score (requires real_signals gate to be met)
+        sig_score = 0.0
+        if config.score_weight_signal > 0 and _signal_summary is not None and rel_path:
+            from ledger.signals import get_signal_score
+            sig_score = get_signal_score(rel_path, summary=_signal_summary)
+
         if fusion_mode == "rrf":
             # Use normalised RRF score as the combined relevance signal; still
             # blend with scope and recency for diversity.
@@ -554,17 +580,21 @@ def rank_query_semantic_hybrid(
                 (config.semantic_weight_vector + config.semantic_weight_lexical) * rrf_normalised
                 + config.semantic_weight_scope * scope_component
                 + config.semantic_weight_recency * recency_component
+                + config.prior_weight * prior
+                + config.score_weight_signal * sig_score
             )
             final_score = max(0.0, min(1.0, final_score))
             if rrf_score == 0.0:
                 continue
         else:
-            # Default: existing weighted_sum formula — byte-identical to previous
+            # Default: weighted_sum formula with full fusion (prior + signal added)
             final_score = (
                 (config.semantic_weight_vector * semantic_component)
                 + (config.semantic_weight_lexical * lexical_score)
                 + (config.semantic_weight_scope * scope_component)
                 + (config.semantic_weight_recency * recency_component)
+                + config.prior_weight * prior
+                + config.score_weight_signal * sig_score
             )
             final_score = max(0.0, min(1.0, final_score))
             if semantic_component == 0.0 and lexical_score == 0.0:
@@ -586,6 +616,10 @@ def rank_query_semantic_hybrid(
             if scope != "all":
                 reasons.append("scope_match" if scope_component >= 1.0 else "scope_miss")
             reasons.append(f"recency={recency_component:.2f}")
+            if prior > 0:
+                reasons.append(f"prior={prior:.3f}")
+            if sig_score != 0:
+                reasons.append(f"signal={sig_score:.3f}")
             if expansion_events:
                 alias_summary = ", ".join(
                     sorted({f"{event['alias']}->{event['phrase']}" for event in expansion_events})
