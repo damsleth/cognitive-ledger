@@ -226,6 +226,9 @@ def _apply_env_overrides(config: "LedgerConfig") -> "LedgerConfig":
         "LEDGER_PRIOR_W_RECENCY": "prior_w_recency",
         "LEDGER_PRIOR_W_RELEVANCE": "prior_w_relevance",
         "LEDGER_PRIOR_HALF_LIFE": "prior_recency_half_life_days",
+        "LEDGER_PRF_ALPHA": "prf_alpha",
+        "LEDGER_PRF_BETA": "prf_beta",
+        "LEDGER_PRF_GAMMA": "prf_gamma",
     }
     for env_var, attr in float_mappings.items():
         if (value := os.getenv(env_var)) is None:
@@ -239,6 +242,7 @@ def _apply_env_overrides(config: "LedgerConfig") -> "LedgerConfig":
     bool_mappings = {
         "LEDGER_SIGNALS_AUTO_CAPTURE": "signals_auto_capture",
         "LEDGER_PRIOR_ENABLED": "prior_enabled",
+        "LEDGER_PRF_ENABLED": "prf_enabled",
     }
     for env_var, attr in bool_mappings.items():
         if (value := os.getenv(env_var)) is None:
@@ -250,6 +254,7 @@ def _apply_env_overrides(config: "LedgerConfig") -> "LedgerConfig":
         "LEDGER_EMBED_BACKEND": "embed_backend",
         "LEDGER_EMBED_MODEL": "embed_model",
         "LEDGER_EMBED_DEVICE": "embed_device",
+        "LEDGER_FUSION": "fusion",
     }
     for env_var, attr in string_mappings.items():
         if (value := os.getenv(env_var)) is None:
@@ -648,6 +653,67 @@ class LedgerConfig:
     Long documents are truncated by the tokenizer; we also pre-truncate text
     by characters before tokenization to bound memory.
     """
+
+    # =========================================================================
+    # Fusion Mode (semantic_hybrid)
+    # =========================================================================
+
+    fusion: str = "weighted_sum"
+    """Fusion strategy for combining lexical and semantic candidate lists.
+
+    Allowed values:
+      - "weighted_sum": existing behaviour — single pass weighted-sum formula
+        using semantic_weight_* constants. Default; byte-identical to previous
+        behaviour when selected.
+      - "rrf": Reciprocal Rank Fusion — generates a lexical ranking and a
+        semantic ranking independently, then merges with RRF(k=rrf_k).
+        Opt-in pending A/B eval; does not affect weighted_sum path.
+
+    Override via LEDGER_FUSION env var.
+    """
+
+    rrf_k: int = 60
+    """RRF smoothing constant (k in 1/(k+rank)).
+
+    Higher k reduces the score difference between adjacent ranks.
+    Standard value used in literature is 60.
+    """
+
+    # =========================================================================
+    # Pseudo-Relevance Feedback (PRF — Mechanism 2, dense-vector only)
+    # =========================================================================
+
+    prf_enabled: bool = False
+    """Whether to apply pseudo-relevance feedback to expand the query vector.
+
+    Default off. Only active on the semantic_hybrid / semantic_rerank dense
+    path. Has no effect on lexical modes.
+
+    When on, the top ``prf_top_m`` results are used as pseudo-positives and
+    the bottom ``prf_bottom_n`` of an expanded pool as pseudo-negatives.
+    The query vector is then updated via the Rocchio formula:
+      q2 = alpha*q + beta*mean(pos) - gamma*mean(neg)
+    and re-ranking is performed with q2.
+
+    Set to true only after A/B validation shows improvement. Toggle via
+    config.yaml: ``prf_enabled: true`` or CLI flag ``--prf``.
+    Override via LEDGER_PRF_ENABLED env var.
+    """
+
+    prf_top_m: int = 3
+    """Number of top results used as pseudo-positive vectors in PRF."""
+
+    prf_bottom_n: int = 5
+    """Number of bottom results used as pseudo-negative vectors in PRF."""
+
+    prf_alpha: float = 1.0
+    """Rocchio alpha: weight of original query vector."""
+
+    prf_beta: float = 0.75
+    """Rocchio beta: weight of pseudo-positive centroid."""
+
+    prf_gamma: float = 0.15
+    """Rocchio gamma: weight of pseudo-negative centroid."""
 
     # =========================================================================
     # Text Processing
