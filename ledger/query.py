@@ -287,6 +287,99 @@ def lexical_score_component(candidate: ScoredResult | dict[str, Any], query_toke
     return lexical_score, lexical_overlap_count, tag_overlap_count
 
 
+def reciprocal_rank_fusion(
+    ranked_lists: list[list[str]],
+    k: int = 60,
+) -> dict[str, float]:
+    """Compute Reciprocal Rank Fusion scores for items appearing in multiple rank lists.
+
+    Each element of ``ranked_lists`` is an ordered list of item keys (e.g.
+    ``rel_path`` strings) from highest to lowest rank.  Items that appear in
+    multiple lists accumulate scores; items absent from a list contribute 0.
+
+    Formula: RRF(d) = sum_over_lists(1 / (k + rank(d)))
+    where rank is 1-based and ``k`` is the smoothing constant (default 60).
+
+    Returns a dict mapping item key -> RRF score (higher is better).
+    The absolute score values are not meaningful on their own — use them
+    only for relative ordering.
+    """
+    scores: dict[str, float] = {}
+    for ranked in ranked_lists:
+        for rank_idx, item_key in enumerate(ranked):
+            scores[item_key] = scores.get(item_key, 0.0) + 1.0 / (k + rank_idx + 1)
+    return scores
+
+
+def prf_expand_query_vector(
+    query_vec: "np.ndarray",
+    candidate_vectors: dict[str, "np.ndarray"],
+    top_rel_paths: list[str],
+    bottom_rel_paths: list[str],
+    alpha: float = 1.0,
+    beta: float = 0.75,
+    gamma: float = 0.15,
+) -> "np.ndarray":
+    """Expand a query vector via Rocchio Pseudo-Relevance Feedback (PRF).
+
+    Implements the Rocchio formula:
+      q2 = alpha * q + beta * mean(pseudo_positives) - gamma * mean(pseudo_negatives)
+
+    The result is L2-normalised to unit length so it can be used directly with
+    cosine-similarity scoring.  If no pseudo-positive or pseudo-negative vectors
+    are available (e.g. too few candidates), the original query vector is returned
+    unchanged.
+
+    Parameters
+    ----------
+    query_vec:
+        Original query embedding, shape (1, dims) or (dims,), float32, L2-normalised.
+    candidate_vectors:
+        Mapping from rel_path -> embedding vector (shape (dims,) or (1, dims)).
+    top_rel_paths:
+        Paths of pseudo-positive candidates (top-m ranked results).
+    bottom_rel_paths:
+        Paths of pseudo-negative candidates (bottom-n from a wider pool).
+    alpha, beta, gamma:
+        Rocchio weighting coefficients.
+
+    Returns
+    -------
+    np.ndarray of shape (1, dims), float32, L2-normalised expanded query vector.
+    """
+    import numpy as np
+
+    q = np.asarray(query_vec, dtype=np.float32).reshape(-1)
+
+    pos_vecs = [
+        np.asarray(candidate_vectors[p], dtype=np.float32).reshape(-1)
+        for p in top_rel_paths
+        if p in candidate_vectors
+    ]
+    neg_vecs = [
+        np.asarray(candidate_vectors[p], dtype=np.float32).reshape(-1)
+        for p in bottom_rel_paths
+        if p in candidate_vectors
+    ]
+
+    q2 = alpha * q
+
+    if pos_vecs:
+        pos_centroid = np.mean(np.stack(pos_vecs, axis=0), axis=0)
+        q2 = q2 + beta * pos_centroid
+
+    if neg_vecs:
+        neg_centroid = np.mean(np.stack(neg_vecs, axis=0), axis=0)
+        q2 = q2 - gamma * neg_centroid
+
+    # L2 normalise
+    norm = float(np.linalg.norm(q2))
+    if norm > 1e-9:
+        q2 = q2 / norm
+
+    return q2.reshape(1, -1).astype(np.float32)
+
+
 def rank_query_semantic_hybrid(
     query: str,
     *,
@@ -296,6 +389,7 @@ def rank_query_semantic_hybrid(
     now_dt=None,
     embed_backend: str = "local",
     embed_model: str | None = None,
+    prf_enabled: bool | None = None,
     load_embeddings_module: Callable[[], Any],
     resolve_embed_model: Callable[[str, str | None], str],
 ) -> dict[str, Any]:
@@ -306,6 +400,12 @@ def rank_query_semantic_hybrid(
     query_tokens = tokenize(query)
     expanded_tokens, expansion_events = expand_query_tokens(query_tokens, aliases)
     include_reasons = limit <= _detailed_reasons_limit()
+
+    # Resolve fusion mode: explicit arg > config
+    fusion_mode = str(config.fusion or "weighted_sum").strip().lower()
+
+    # Resolve PRF flag: explicit arg > config
+    _use_prf = config.prf_enabled if prf_enabled is None else bool(prf_enabled)
 
     candidates_started = time.perf_counter()
     candidates = retrieval_lib.build_candidates(use_cache=True)
@@ -345,10 +445,96 @@ def rank_query_semantic_hybrid(
             return fallback
         raise RuntimeError(f"semantic_hybrid retrieval failed: {semantic.get('reason', 'unknown_error')}")
 
-    score_by_rel_path = semantic.get("score_by_rel_path", {})
+    score_by_rel_path: dict[str, float] = semantic.get("score_by_rel_path", {})
+
+    # -------------------------------------------------------------------------
+    # PRF: expand the query vector before scoring (dense path only, default off)
+    # -------------------------------------------------------------------------
+    if _use_prf and score_by_rel_path:
+        # Run a fast initial ranking (top prf_top_m + prf_bottom_n pool) to
+        # identify pseudo-positive and pseudo-negative candidates.
+        prf_pool_size = max(config.prf_top_m + config.prf_bottom_n + 5, 20)
+        _prf_by_score = sorted(score_by_rel_path.items(), key=lambda kv: kv[1], reverse=True)
+        _prf_top_paths = [p for p, _ in _prf_by_score[: config.prf_top_m]]
+        _prf_all_paths = [p for p, _ in _prf_by_score[:prf_pool_size]]
+        _prf_bottom_paths = [p for p, _ in _prf_by_score[max(0, len(_prf_all_paths) - config.prf_bottom_n) :]]
+
+        # Retrieve the actual embedding vectors for the pseudo-relevant docs.
+        # embeddings module exposes embed_query_text; we use score_by_rel_path's
+        # stored vectors if available, otherwise fall back to re-embedding the
+        # candidate body text.  The simplest safe path: re-use semantic.get
+        # "item_vectors" when the embeddings module provides it; otherwise skip.
+        _item_vectors: dict[str, Any] = semantic.get("item_vectors") or {}
+        if _item_vectors:
+            try:
+                _q_vec = embeddings.embed_query_text(
+                    query, backend=backend, model=model, text_template="none"
+                )
+                _expanded_q_vec = prf_expand_query_vector(
+                    _q_vec,
+                    _item_vectors,
+                    top_rel_paths=_prf_top_paths,
+                    bottom_rel_paths=_prf_bottom_paths,
+                    alpha=config.prf_alpha,
+                    beta=config.prf_beta,
+                    gamma=config.prf_gamma,
+                )
+                # Re-compute cosine scores with expanded vector
+                import numpy as np
+                _vecs_matrix = None
+                _item_list = semantic.get("items") or []
+                if _item_list:
+                    _rows = [
+                        np.asarray(_item_vectors.get(item.get("rel_path", ""), np.zeros(1)), dtype=np.float32).reshape(-1)
+                        for item in _item_list
+                    ]
+                    if _rows:
+                        _vecs_matrix = np.stack(_rows, axis=0)  # (N, dims)
+                if _vecs_matrix is not None and _vecs_matrix.shape[0] > 0:
+                    _q_flat = _expanded_q_vec.reshape(-1)
+                    _dot = _vecs_matrix @ _q_flat  # (N,)
+                    score_by_rel_path = {
+                        item.get("rel_path", ""): float(_dot[i])
+                        for i, item in enumerate(_item_list)
+                        if item.get("rel_path")
+                    }
+            except Exception:
+                # PRF is best-effort; fall through to original scores on any error
+                pass
+
+    # -------------------------------------------------------------------------
+    # RRF fusion: generate a lexical rank list and a semantic rank list, then
+    # merge with Reciprocal Rank Fusion.  Only active when fusion="rrf".
+    # Default ("weighted_sum") runs the existing single-pass formula below.
+    # -------------------------------------------------------------------------
+    rrf_scores: dict[str, float] = {}
+    if fusion_mode == "rrf":
+        # Semantic rank list (by descending cosine score)
+        semantic_ranked_paths = [
+            p for p, _ in sorted(score_by_rel_path.items(), key=lambda kv: kv[1], reverse=True)
+        ]
+        # Lexical rank list (by descending lexical_score_component)
+        _lex_scored: list[tuple[float, str]] = []
+        for _c in candidates:
+            _rp = str(result_get(_c, "rel_path", ""))
+            _ls, _, _ = lexical_score_component(_c, expanded_tokens)
+            if _ls > 0:
+                _lex_scored.append((_ls, _rp))
+        _lex_scored.sort(reverse=True)
+        lexical_ranked_paths = [p for _, p in _lex_scored]
+
+        rrf_scores = reciprocal_rank_fusion(
+            [semantic_ranked_paths, lexical_ranked_paths],
+            k=int(config.rrf_k),
+        )
+
+    # -------------------------------------------------------------------------
+    # Score every candidate (weighted_sum or rrf) and build result list
+    # -------------------------------------------------------------------------
     ranked: list[ScoredResult] = []
     for candidate in candidates:
-        cosine = float(score_by_rel_path.get(result_get(candidate, "rel_path", ""), 0.0))
+        rel_path = str(result_get(candidate, "rel_path", "") or "")
+        cosine = float(score_by_rel_path.get(rel_path, 0.0))
         semantic_component = max(0.0, min(1.0, cosine))
         lexical_score, lexical_overlap_count, tag_overlap_count = lexical_score_component(candidate, expanded_tokens)
         scope_component = 1.0 if scope == "all" else (
@@ -356,20 +542,43 @@ def rank_query_semantic_hybrid(
         )
         recency_component = compute_recency_component(result_get(candidate, "updated_ts"), now_dt)
 
-        final_score = (
-            (config.semantic_weight_vector * semantic_component)
-            + (config.semantic_weight_lexical * lexical_score)
-            + (config.semantic_weight_scope * scope_component)
-            + (config.semantic_weight_recency * recency_component)
-        )
-        final_score = max(0.0, min(1.0, final_score))
-
-        if semantic_component == 0.0 and lexical_score == 0.0:
-            continue
+        if fusion_mode == "rrf":
+            # Use normalised RRF score as the combined relevance signal; still
+            # blend with scope and recency for diversity.
+            rrf_score = rrf_scores.get(rel_path, 0.0)
+            # Normalise RRF score to [0, 1] by dividing by the theoretical max
+            # (1/(k+1) when the item is rank-1 in both lists).
+            max_rrf = 2.0 / (int(config.rrf_k) + 1)
+            rrf_normalised = rrf_score / max_rrf if max_rrf > 0 else 0.0
+            final_score = (
+                (config.semantic_weight_vector + config.semantic_weight_lexical) * rrf_normalised
+                + config.semantic_weight_scope * scope_component
+                + config.semantic_weight_recency * recency_component
+            )
+            final_score = max(0.0, min(1.0, final_score))
+            if rrf_score == 0.0:
+                continue
+        else:
+            # Default: existing weighted_sum formula — byte-identical to previous
+            final_score = (
+                (config.semantic_weight_vector * semantic_component)
+                + (config.semantic_weight_lexical * lexical_score)
+                + (config.semantic_weight_scope * scope_component)
+                + (config.semantic_weight_recency * recency_component)
+            )
+            final_score = max(0.0, min(1.0, final_score))
+            if semantic_component == 0.0 and lexical_score == 0.0:
+                continue
 
         reasons: list[str] = []
         if include_reasons:
-            reasons.append(f"semantic={semantic_component:.3f}")
+            if fusion_mode == "rrf":
+                reasons.append(f"rrf={rrf_scores.get(rel_path, 0.0):.4f}")
+                reasons.append(f"semantic={semantic_component:.3f}")
+            else:
+                reasons.append(f"semantic={semantic_component:.3f}")
+            if _use_prf:
+                reasons.append("prf")
             if lexical_overlap_count > 0:
                 reasons.append(f"lexical_overlap={lexical_overlap_count}")
             if tag_overlap_count > 0:
@@ -410,11 +619,17 @@ def rank_query_semantic_hybrid(
     score_ms = (time.perf_counter() - score_started) * 1000.0
     total_ms = (time.perf_counter() - started) * 1000.0
 
+    effective_mode = "semantic_hybrid"
+    if fusion_mode == "rrf":
+        effective_mode = "semantic_hybrid_rrf"
+    elif _use_prf:
+        effective_mode = "semantic_hybrid_prf"
+
     return RetrievalResult(
         query=query,
         scope=scope,
         retrieval_mode="semantic_hybrid",
-        effective_retrieval_mode="semantic_hybrid",
+        effective_retrieval_mode=effective_mode,
         progressive_top_n=0,
         expanded_tokens=sorted(expanded_tokens),
         expansion_events=expansion_events,
@@ -427,6 +642,8 @@ def rank_query_semantic_hybrid(
             "backend": backend,
             "model": model,
             "index_item_count": semantic.get("index_item_count"),
+            "fusion": fusion_mode,
+            "prf": _use_prf,
         },
         results=ranked[:limit],
         timing=TimingInfo(
@@ -446,6 +663,7 @@ def rank_query_semantic_rerank(
     now_dt=None,
     embed_backend: str = "local",
     embed_model: str | None = None,
+    prf_enabled: bool | None = None,
     load_embeddings_module: Callable[[], Any],
     resolve_embed_model: Callable[[str, str | None], str],
 ) -> RetrievalResult:
@@ -467,6 +685,7 @@ def rank_query_semantic_rerank(
         now_dt=now_dt,
         embed_backend=embed_backend,
         embed_model=embed_model,
+        prf_enabled=prf_enabled,
         load_embeddings_module=load_embeddings_module,
         resolve_embed_model=resolve_embed_model,
     )
@@ -540,6 +759,7 @@ def rank_query(
     retrieval_mode: str = "legacy",
     embed_backend: str = "local",
     embed_model: str | None = None,
+    prf_enabled: bool | None = None,
     load_embeddings_module: Callable[[], Any],
     resolve_embed_model: Callable[[str, str | None], str],
 ) -> RetrievalResult:
@@ -553,6 +773,7 @@ def rank_query(
             now_dt=now_dt,
             embed_backend=embed_backend,
             embed_model=embed_model,
+            prf_enabled=prf_enabled,
             load_embeddings_module=load_embeddings_module,
             resolve_embed_model=resolve_embed_model,
         )
@@ -566,6 +787,7 @@ def rank_query(
             now_dt=now_dt,
             embed_backend=embed_backend,
             embed_model=embed_model,
+            prf_enabled=prf_enabled,
             load_embeddings_module=load_embeddings_module,
             resolve_embed_model=resolve_embed_model,
         )
