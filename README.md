@@ -163,6 +163,14 @@ ledger embed build --target ledger --backend local --model TaylorAI/bge-micro-v2
 ledger embed status --target ledger    # verify index exists
 ```
 
+Optional ranking mechanisms (all off by default; enable after A/B validation):
+
+| Mechanism | Config key | CLI | Notes |
+|---|---|---|---|
+| Prior score (cold-start) | `prior_enabled: true` (default on) | — | Adds confidence + recency + relevance nudge before signals accrue |
+| PRF query expansion | `prf_enabled: true` | `--prf` | Rocchio expansion on dense path; keep off until `ledger ab run` proves improvement |
+| RRF fusion | `fusion: rrf` | — | Merges lexical + semantic rank lists; keep `weighted_sum` until A/B validation |
+
 ### Eval and A/B testing
 
 ```bash
