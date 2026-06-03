@@ -207,6 +207,7 @@ def handle_query_command(args):
         retrieval_mode=args.retrieval_mode,
         embed_backend=args.embed_backend,
         embed_model=args.embed_model,
+        prf_enabled=True if getattr(args, "prf", False) else None,
     )
 
     view = getattr(args, "view", "context")
@@ -1260,6 +1261,18 @@ def main(argv=None) -> int:
         "--pick",
         action="store_true",
         help="After results, ask which one helped and log a retrieval_hit signal",
+    )
+    query_parser.add_argument(
+        "--prf",
+        action="store_true",
+        default=False,
+        dest="prf",
+        help=(
+            "Enable Pseudo-Relevance Feedback for this query (semantic_hybrid / "
+            "semantic_rerank modes only). Expands the query vector via Rocchio "
+            "using the top pseudo-positive and bottom pseudo-negative results. "
+            "Default off; enable persistently via prf_enabled: true in config.yaml."
+        ),
     )
 
     discover_parser = subparsers.add_parser(
