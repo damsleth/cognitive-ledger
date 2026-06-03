@@ -156,10 +156,10 @@ def daily_briefing() -> str:
         lines.append("")
 
     # Things3 integration (optional)
-    if shutil.which("things-cli"):
+    if shutil.which("things"):
         lines.append("## Things3")
         lines.append("")
-        lines.append("Run `things-cli today` for today's tasks.")
+        lines.append("Run `things today` for today's tasks.")
         lines.append("")
 
     # Maintenance check
