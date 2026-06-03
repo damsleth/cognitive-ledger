@@ -222,6 +222,58 @@ def compute_recency_component(updated_ts: dt.datetime | None, now_dt: dt.datetim
     return max(0.0, 1.0 - (age_days / 90.0))
 
 
+def compute_prior_score(
+    candidate: "CandidateLike",
+    now_dt: dt.datetime,
+    query_lexical_relevance: float = 0.0,
+) -> float:
+    """Compute the prior score for a candidate (0.0-1.0).
+
+    The prior is a query-independent quality signal combining:
+    - importance: note confidence (curated quality proxy)
+    - recency: half-life decay from creation date (falls back to updated_ts)
+    - relevance: caller-supplied query-relevance value (lexical or cosine)
+
+    The prior is designed to be additive — it nudges ranking non-flat
+    before signal feedback has accrued, without displacing the primary
+    lexical/semantic relevance score.
+
+    Age is derived from ``created_ts`` when available, otherwise falls
+    back to ``updated_ts``.  Notes without any timestamp get 0 recency.
+
+    Config weights: ``prior_w_importance``, ``prior_w_recency``,
+    ``prior_w_relevance``, ``prior_recency_half_life_days``.
+    """
+    import math
+
+    config = _cfg()
+
+    confidence = float(_candidate_value(candidate, "confidence", 0.0) or 0.0)
+    confidence = max(0.0, min(1.0, confidence))
+
+    # Prefer created_ts for age; fall back to updated_ts if absent.
+    age_ts: dt.datetime | None = (
+        _candidate_value(candidate, "created_ts")
+        or _candidate_value(candidate, "updated_ts")
+    )
+    if age_ts is not None:
+        age_days = max(0.0, (now_dt - age_ts).total_seconds() / 86400.0)
+        half_life = max(1.0, config.prior_recency_half_life_days)
+        lam = math.log(2.0) / half_life
+        prior_recency = math.exp(-lam * age_days)
+    else:
+        prior_recency = 0.0
+
+    relevance = max(0.0, min(1.0, query_lexical_relevance))
+
+    prior = (
+        config.prior_w_importance * confidence
+        + config.prior_w_recency * prior_recency
+        + config.prior_w_relevance * relevance
+    )
+    return max(0.0, min(1.0, prior))
+
+
 def load_aliases(path: Path) -> dict[str, list[str]]:
     """Load query aliases from JSON file."""
     try:
@@ -342,6 +394,8 @@ def _candidate_from_parts(
     scope = canonical_scope(frontmatter.get("scope", ""))
     updated_str = str(frontmatter.get("updated", "")).strip()
     updated_ts = parse_ts(updated_str)
+    created_str = str(frontmatter.get("created", "")).strip()
+    created_ts = parse_ts(created_str) if created_str else None
     confidence = confidence_value(frontmatter)
     source = str(frontmatter.get("source", "")).strip().lower()
 
@@ -396,6 +450,7 @@ def _candidate_from_parts(
         snippet=snippet_source,
         has_next_action_checkbox=bool(next_action),
         word_count=len(body.split()),
+        created_ts=created_ts,
     )
 
 
@@ -412,7 +467,7 @@ def _candidate_to_json(candidate: RetrievalCandidate) -> dict[str, Any]:
         ledger_root=_cfg().ledger_root,
         ledger_notes_dir=_cfg().ledger_notes_dir,
     ).as_posix()
-    return {
+    payload: dict[str, Any] = {
         "path": persisted_path,
         "rel_path": candidate.rel_path,
         "type": candidate.type,
@@ -432,11 +487,17 @@ def _candidate_to_json(candidate: RetrievalCandidate) -> dict[str, Any]:
         "has_next_action_checkbox": candidate.has_next_action_checkbox,
         "word_count": candidate.word_count,
     }
+    # Persist created ISO string when available (created_ts is derived from it,
+    # mirroring the pattern used for updated / updated_ts).
+    if candidate.created_ts is not None:
+        payload["created"] = candidate.created_ts.strftime("%Y-%m-%dT%H:%M:%SZ")
+    return payload
 
 
 def _candidate_from_json(candidate_json: dict[str, Any]) -> RetrievalCandidate:
     """Deserialize candidate from JSON-friendly payload."""
     updated = str(candidate_json.get("updated", ""))
+    created = str(candidate_json.get("created", ""))
     raw_path = str(candidate_json.get("path", "") or "")
     rel_path = str(candidate_json.get("rel_path", "") or "")
     resolved_candidate_path = raw_path
@@ -480,6 +541,9 @@ def _candidate_from_json(candidate_json: dict[str, Any]) -> RetrievalCandidate:
         snippet=str(candidate_json.get("snippet", "")),
         has_next_action_checkbox=bool(candidate_json.get("has_next_action_checkbox", False)),
         word_count=int(candidate_json.get("word_count", 0) or 0),
+        # created_ts is recomputed from the persisted "created" ISO string,
+        # mirroring the updated / updated_ts pattern.
+        created_ts=parse_ts(created) if created else None,
     )
 
 
@@ -920,7 +984,17 @@ def score_candidate(
     bm25_score: float = 0.0,
     signal_summary: dict[str, Any] | None = None,
 ) -> tuple[float, list[str], ScoreComponents]:
-    """Final score for candidate in lexical retrieval modes."""
+    """Final score for candidate in lexical retrieval modes.
+
+    When ``config.prior_enabled`` is True an additional prior score is
+    computed via ``compute_prior_score`` and blended in with weight
+    ``config.prior_weight``.  The prior encodes note quality (confidence),
+    half-life recency, and query relevance into a single coherent term that
+    makes ranking non-flat before signal feedback has accrued.
+
+    The identity-type boost remains a separate additive term so that
+    the two mechanisms are independently measurable.
+    """
     note_tokens = set(_candidate_value(candidate, "note_tokens", set()) or set())
     tag_tokens = set(_candidate_value(candidate, "tag_tokens", set()) or set())
     candidate_type = str(_candidate_value(candidate, "type", "") or "")
@@ -951,7 +1025,20 @@ def score_candidate(
         + (config.score_weight_confidence * confidence)
     )
 
-    # Identity note boost
+    # Prior score — additive quality signal active before signal feedback accrues.
+    # Uses lexical_match as the relevance proxy in lexical retrieval mode.
+    # Independent of the identity boost; both are additive on the same base score.
+    prior = 0.0
+    if config.prior_enabled:
+        prior = compute_prior_score(
+            candidate,
+            now_dt=now_dt,
+            query_lexical_relevance=lexical_match,
+        )
+        score += config.prior_weight * prior
+
+    # Identity note boost — kept as a separate additive term so it is
+    # independently measurable from the prior.
     if candidate_type == "id":
         score += config.identity_score_boost
         if include_reasons:
@@ -1021,6 +1108,8 @@ def score_candidate(
         reasons.append(f"recency={recency:.2f}")
     if include_reasons:
         reasons.append(f"confidence={confidence:.2f}")
+    if include_reasons and prior > 0:
+        reasons.append(f"prior={prior:.3f}")
 
     score = max(0.0, min(1.0, score))
     return score, reasons, ScoreComponents(
@@ -1030,6 +1119,7 @@ def score_candidate(
         scope_match=scope_match,
         recency=recency,
         confidence=confidence,
+        prior_score=prior,
     )
 
 
@@ -1306,6 +1396,7 @@ __all__ = [
     "has_token_overlap",
     "compute_bm25_scores",
     "prefilter_candidates_by_scope_and_type",
+    "compute_prior_score",
     "score_candidate",
     "apply_progressive_disclosure",
     "rank_lexical",
