@@ -470,3 +470,186 @@ class TestScoreCandidatePrior:
             include_reasons=True, bm25_score=0.3,
         )
         assert not any("prior=" in r for r in reasons)
+
+
+# ---------------------------------------------------------------------------
+# Semantic hybrid path: prior and signal scoring (acceptance criteria)
+# ---------------------------------------------------------------------------
+
+
+class TestSemanticHybridPriorAndSignal:
+    """Acceptance tests: prior and signal terms applied in rank_query_semantic_hybrid.
+
+    These tests use a fake embeddings module so no real index is needed.
+    """
+
+    def _make_note(self, path, confidence: float = 0.9, updated: str = "2026-01-01T00:00:00Z") -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            f"---\ncreated: 2025-06-01T00:00:00Z\nupdated: {updated}\n"
+            f"tags: [test]\nconfidence: {confidence}\nsource: user\nscope: dev\nlang: en\n---\n\n# Note\n\nBody.\n",
+            encoding="utf-8",
+        )
+
+    def _fake_embed_fn(self, scores: dict[str, float]):
+        """Return a lambda that produces a fake semantic_score_map."""
+        class FakeEmbeddings:
+            @staticmethod
+            def semantic_score_map(*, query, target, backend, model):
+                return {
+                    "available": True,
+                    "index_item_count": len(scores),
+                    "score_by_rel_path": scores,
+                }
+        return lambda: FakeEmbeddings()
+
+    def test_prior_applied_in_semantic_hybrid(self, tmp_path):
+        """Higher-confidence note should outscore equal-cosine lower-confidence note
+        when prior is enabled (using cosine as the relevance proxy)."""
+        from ledger import query as q
+        from ledger.retrieval import clear_candidate_cache
+
+        config_on = LedgerConfig(ledger_root=tmp_path)
+        config_on.prior_enabled = True
+        config_on.prior_weight = 0.15
+        config_on.prior_w_importance = 1.0
+        config_on.prior_w_recency = 0.0
+        config_on.prior_w_relevance = 0.0
+
+        note_high = config_on.ledger_notes_dir / "02_facts" / "fact__high.md"
+        note_low = config_on.ledger_notes_dir / "02_facts" / "fact__low.md"
+        self._make_note(note_high, confidence=0.9)
+        self._make_note(note_low, confidence=0.1)
+
+        set_config(config_on)
+        clear_candidate_cache()
+        try:
+            result = q.rank_query_semantic_hybrid(
+                "test query",
+                scope="all",
+                limit=10,
+                now_dt=NOW,
+                load_embeddings_module=self._fake_embed_fn({
+                    "notes/02_facts/fact__high.md": 0.80,
+                    "notes/02_facts/fact__low.md": 0.80,
+                }),
+                resolve_embed_model=lambda b, m: "fake",
+            )
+            scores = {r.rel_path: r.score for r in result.results}
+            assert "notes/02_facts/fact__high.md" in scores
+            assert "notes/02_facts/fact__low.md" in scores
+            assert scores["notes/02_facts/fact__high.md"] > scores["notes/02_facts/fact__low.md"], (
+                "High-confidence note should rank above low-confidence when prior is enabled "
+                f"high={scores['notes/02_facts/fact__high.md']:.4f} "
+                f"low={scores['notes/02_facts/fact__low.md']:.4f}"
+            )
+            # Reasons should mention prior for at least one result
+            all_reasons = [r for result_item in result.results for r in result_item.reasons]
+            assert any("prior=" in r for r in all_reasons), f"Prior missing from reasons: {all_reasons}"
+        finally:
+            clear_candidate_cache()
+            reset_config()
+
+    def test_prior_disabled_no_prior_reason_in_semantic_hybrid(self, tmp_path):
+        """When prior_enabled=False, 'prior=' must not appear in reasons."""
+        from ledger import query as q
+        from ledger.retrieval import clear_candidate_cache
+
+        config = LedgerConfig(ledger_root=tmp_path)
+        config.prior_enabled = False
+
+        note = config.ledger_notes_dir / "02_facts" / "fact__x.md"
+        self._make_note(note)
+
+        set_config(config)
+        clear_candidate_cache()
+        try:
+            result = q.rank_query_semantic_hybrid(
+                "test",
+                scope="all",
+                limit=5,
+                now_dt=NOW,
+                load_embeddings_module=self._fake_embed_fn({"notes/02_facts/fact__x.md": 0.85}),
+                resolve_embed_model=lambda b, m: "fake",
+            )
+            all_reasons = [r for ri in result.results for r in ri.reasons]
+            assert not any("prior=" in r for r in all_reasons), (
+                f"Unexpected prior in reasons when prior_enabled=False: {all_reasons}"
+            )
+        finally:
+            clear_candidate_cache()
+            reset_config()
+
+    def test_signal_applied_in_semantic_hybrid(self, tmp_path):
+        """When a signal_summary with sufficient real signals is provided and
+        score_weight_signal > 0, the note with a positive signal_score should
+        rank above an equal-cosine note without signals."""
+        import json
+        from ledger import query as q
+        from ledger.retrieval import clear_candidate_cache
+
+        config = LedgerConfig(ledger_root=tmp_path)
+        config.score_weight_signal = 0.20
+        config.signal_min_entries = 0  # allow gate to open with 0 real signals
+        config.prior_enabled = False
+
+        note_sig = config.ledger_notes_dir / "02_facts" / "fact__sig.md"
+        note_plain = config.ledger_notes_dir / "02_facts" / "fact__plain.md"
+        self._make_note(note_sig)
+        self._make_note(note_plain)
+
+        # Write a signal_summary that gives fact__sig.md a positive score
+        signal_summary = {
+            "_meta": {"total_signals": 5, "real_signals": 5, "summarized_at": "2026-01-01T00:00:00Z"},
+            "notes": {
+                "notes/02_facts/fact__sig.md": {
+                    "hit_count": 5.0,
+                    "affirmations": 3.0,
+                    "corrections": 0,
+                    "stale_flags": 0,
+                    "preference_applied": 0,
+                    "rating_count": 0,
+                    "rating_sum": 0,
+                    "rating_min": None,
+                    "rating_max": None,
+                    "last_hit": "2026-01-01T00:00:00Z",
+                    "synthetic_hits": 0,
+                    "synthetic_corrections": 0,
+                    "synthetic_affirmations": 0,
+                    "signal_score": 0.75,
+                }
+            },
+            "retrieval_misses": {},
+        }
+        config.signal_summary_path.parent.mkdir(parents=True, exist_ok=True)
+        config.signal_summary_path.write_text(json.dumps(signal_summary), encoding="utf-8")
+
+        set_config(config)
+        clear_candidate_cache()
+        try:
+            result = q.rank_query_semantic_hybrid(
+                "test",
+                scope="all",
+                limit=10,
+                now_dt=NOW,
+                load_embeddings_module=self._fake_embed_fn({
+                    "notes/02_facts/fact__sig.md": 0.80,
+                    "notes/02_facts/fact__plain.md": 0.80,
+                }),
+                resolve_embed_model=lambda b, m: "fake",
+            )
+            scores = {r.rel_path: r.score for r in result.results}
+            assert "notes/02_facts/fact__sig.md" in scores
+            assert "notes/02_facts/fact__plain.md" in scores
+            assert scores["notes/02_facts/fact__sig.md"] > scores["notes/02_facts/fact__plain.md"], (
+                "Signal-boosted note should outscore equal-cosine note without signals: "
+                f"sig={scores['notes/02_facts/fact__sig.md']:.4f} "
+                f"plain={scores['notes/02_facts/fact__plain.md']:.4f}"
+            )
+            all_reasons = [r for ri in result.results for r in ri.reasons]
+            assert any("signal=" in r for r in all_reasons), (
+                f"signal= missing from reasons: {all_reasons}"
+            )
+        finally:
+            clear_candidate_cache()
+            reset_config()

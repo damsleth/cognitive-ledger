@@ -287,10 +287,15 @@ def seed_from_queries(
                 "ts": ts,
                 "type": sig_type,
                 "query": query,
-                "note": rel_path,
                 "synthetic": True,
                 "source": "llm_judge",
             }
+            # retrieval_hit is note-keyed; retrieval_miss is query-level only.
+            # Adding a "note" field to a miss event would create a ghost entry in
+            # per-note signal stats (the type is not handled in summarize_signals
+            # per-note branches) and corrupt retrieval_miss query coverage stats.
+            if verdict.relevant:
+                event["note"] = rel_path
             if verdict.rating is not None:
                 event["rating_hint"] = verdict.rating
             if verdict.reason:
