@@ -328,12 +328,17 @@ def _get_semantic_neighbors(
     candidate_type: str | None,
     k: int,
     ledger_notes_dir: Path,
+    candidate_scope: str | None = None,
 ) -> list[dict[str, Any]]:
     """Return up to k semantic neighbors of the candidate note.
 
     Uses the existing semantic index (embeddings.semantic_score_map).
     Returns a list of item dicts with at least rel_path, abs_path, scope,
     type, cosine_similarity.
+
+    Only notes from the SAME scope as the candidate are returned (or notes
+    with scope "all", which is the cross-scope sentinel).  When
+    candidate_scope is None or "all", no scope filtering is applied.
 
     Returns [] when the semantic index is unavailable (callers handle this).
     """
@@ -357,6 +362,9 @@ def _get_semantic_neighbors(
     items = result.get("results", [])
     neighbors: list[dict[str, Any]] = []
 
+    # Normalise candidate scope for comparison.
+    cand_scope_norm = (candidate_scope or "").strip().lower() or None
+
     for item in items:
         rel_path = str(item.get("rel_path", ""))
         if not rel_path:
@@ -371,6 +379,14 @@ def _get_semantic_neighbors(
         item_name = _label_to_name(item_type)
         if not _type_compatible(candidate_type, item_name):
             continue
+
+        # Scope filter: only match notes in the same scope.
+        # Scope "all" is a cross-scope sentinel — never filtered out.
+        # When the candidate has no scope (or scope "all"), skip filtering.
+        if cand_scope_norm and cand_scope_norm != "all":
+            item_scope = str(item.get("scope", "")).strip().lower()
+            if item_scope and item_scope != "all" and item_scope != cand_scope_norm:
+                continue
 
         neighbors.append(item)
         if len(neighbors) >= k:
@@ -513,7 +529,7 @@ def run_contradiction_scan(
     apply: bool = False,
     _pipeline_fn: Callable[[str, str], list[dict[str, Any]]] | None = None,
     _neighbor_fn: (
-        Callable[[str, str, str | None, int, Path], list[dict[str, Any]]] | None
+        Callable[..., list[dict[str, Any]]] | None
     ) = None,
 ) -> ScanResult:
     """Run the NLI contradiction scan over all new/updated notes.
@@ -529,7 +545,7 @@ def run_contradiction_scan(
     _neighbor_fn:
         Optional injection seam for tests — replaces _get_semantic_neighbors.
         Signature: (candidate_text, candidate_rel_path, candidate_type, k,
-                    ledger_notes_dir) -> list[item_dict].
+                    ledger_notes_dir, candidate_scope=None) -> list[item_dict].
 
     Returns
     -------
@@ -627,6 +643,7 @@ def run_contradiction_scan(
         cand_lang_no = _is_lang_no(cand_fm)
         cand_anchor = _temporal_anchor(cand_fm)
         cand_confidence = _clamp(float(cand_fm.get("confidence", 0.5)))
+        cand_scope = str(cand_fm.get("scope", "")).strip().lower() or None
 
         neighbors = neighbor_fn(
             cand_body,
@@ -634,6 +651,7 @@ def run_contradiction_scan(
             cand_type,
             config.contradiction_neighbors_k,
             ledger_notes_dir,
+            cand_scope,
         )
 
         for neighbor_item in neighbors:
@@ -716,8 +734,11 @@ def run_contradiction_scan(
                     decision=decision,
                     action_taken="skipped",
                 ))
-                # Mark as seen so we don't re-evaluate this pair
-                state.resolved_pairs[pk] = Decision.IGNORE.value
+                if apply:
+                    # Mark IGNORE pairs as seen so we don't re-evaluate on later
+                    # --apply runs either.  Not written during --check so that a
+                    # --check run never permanently marks pairs as processed.
+                    state.resolved_pairs[pk] = Decision.IGNORE.value
                 continue
 
             if decision == Decision.SUPERSEDE:
@@ -735,16 +756,21 @@ def run_contradiction_scan(
                         decision=decision,
                         action_taken="dry_run_supersede",
                     ))
-                    state.resolved_pairs[pk] = Decision.SUPERSEDE.value
+                    # Do NOT write to state during --check; would prevent --apply
+                    # from acting on the pair.
                     continue
 
                 # Execute supersession via the canonical helper
                 from ledger.bitemporal import supersede
 
                 try:
+                    # Pass as_of=cand_anchor so valid_to on the old note is set
+                    # to the newer note's valid_from rather than today's date.
+                    # This preserves the historically correct bitemporal boundary.
                     supersede(
                         old_ref,
                         new_ref,
+                        as_of=cand_anchor,
                         reason=f"nli_contradiction:{score:.3f}",
                     )
                     scan_result.supersessions += 1
@@ -767,7 +793,10 @@ def run_contradiction_scan(
                         ),
                     )
                 except Exception:
-                    # Supersession failed (e.g. file moved) — degrade to review
+                    # Supersession failed (e.g. file moved) — degrade to review.
+                    # Write a conflict note so the pair is not silently lost, and
+                    # do NOT add the pair to resolved_pairs so it can be retried
+                    # if the underlying file issue is fixed.
                     scan_result.pair_results.append(PairResult(
                         candidate_ref=candidate_ref,
                         neighbor_ref=neighbor_rel,
@@ -775,6 +804,27 @@ def run_contradiction_scan(
                         decision=decision,
                         action_taken="supersede_failed",
                     ))
+                    # Degrade: write a conflict note to 00_inbox so the pair
+                    # surfaces for human review rather than being silently dropped.
+                    existing_fb = _existing_conflict_note(pk, inbox_dir)
+                    if existing_fb is None:
+                        now_fb = _now_utc()
+                        filename_fb = _make_conflict_note_filename(
+                            candidate_ref, neighbor_rel, now_fb
+                        )
+                        inbox_dir.mkdir(parents=True, exist_ok=True)
+                        safe_write_text(
+                            inbox_dir / filename_fb,
+                            _build_conflict_note(
+                                candidate_ref,
+                                neighbor_rel,
+                                score,
+                                cand_body,
+                                neighbor_body,
+                                now_fb,
+                            ),
+                        )
+                        scan_result.conflict_notes += 1
                 continue
 
             # REVIEW path
@@ -787,7 +837,8 @@ def run_contradiction_scan(
                     decision=decision,
                     action_taken="dry_run_conflict",
                 ))
-                state.resolved_pairs[pk] = Decision.REVIEW.value
+                # Do NOT write to state during --check; would prevent --apply
+                # from acting on the pair.
                 continue
 
             # Check idempotency: is there already a conflict note for this pair?
@@ -842,11 +893,14 @@ def run_contradiction_scan(
                 ),
             )
 
-        # After processing all neighbors, update scanned hash
-        state.scanned_hashes[candidate_ref] = content_h
+        # After processing all neighbors, update scanned hash (--apply only).
+        # During --check we must not persist any state so that a subsequent
+        # --apply run sees the full unfiltered candidate set.
+        if apply:
+            state.scanned_hashes[candidate_ref] = content_h
 
-    # Persist state only on --apply (or when there were new pairs to track)
-    if apply or scan_result.pairs_evaluated > 0:
+    # Persist state only when actually applying changes.
+    if apply:
         save_state(indices_dir, state)
 
     return scan_result
