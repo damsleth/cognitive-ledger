@@ -18,6 +18,7 @@ class ScoreComponents:
     lexical_score: float = 0.0
     scope_component: float = 0.0
     recency_component: float = 0.0
+    prior_score: float = 0.0
 
 
 @dataclass
@@ -41,6 +42,13 @@ class RetrievalCandidate:
     snippet: str
     has_next_action_checkbox: bool
     word_count: int = 0
+    created_ts: datetime | None = None
+    """Parsed creation timestamp from the `created` frontmatter field.
+
+    Optional; None when the field is absent. Used by the prior score to
+    derive note age from creation rather than last-update date.
+    Notes without this field fall back to ``updated_ts`` for age estimation.
+    """
 
 
 @dataclass
