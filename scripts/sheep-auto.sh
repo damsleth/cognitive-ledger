@@ -66,6 +66,15 @@ echo "" >> "$REPORT_FILE"
 ledger sleep status >> "$REPORT_FILE" 2>&1
 echo "" >> "$REPORT_FILE"
 
+# Run contradiction scan (--check only) when contradiction_enabled=true.
+# This is a read-only probe; --apply requires agent judgment and must be run manually.
+contradiction_enabled=$(ledger paths 2>/dev/null | grep -i "contradiction_enabled" | grep -i "true" || true)
+if ledger sleep contradictions --check >> "$REPORT_FILE" 2>&1; then
+    # Ran successfully (enabled=true or disabled — both exit 0)
+    :
+fi
+echo "" >> "$REPORT_FILE"
+
 # Surface problems
 errors=$(echo "$lint_output" | grep -c "^ERROR:" 2>/dev/null || echo "0")
 if [ "$lint_exit" -ne 0 ] || [ "$errors" -gt 0 ]; then
