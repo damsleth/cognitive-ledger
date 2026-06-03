@@ -221,6 +221,11 @@ def _apply_env_overrides(config: "LedgerConfig") -> "LedgerConfig":
         "LEDGER_WEIGHT_RECENCY": "score_weight_recency",
         "LEDGER_WEIGHT_CONFIDENCE": "score_weight_confidence",
         "LEDGER_WEIGHT_SIGNAL": "score_weight_signal",
+        "LEDGER_PRIOR_WEIGHT": "prior_weight",
+        "LEDGER_PRIOR_W_IMPORTANCE": "prior_w_importance",
+        "LEDGER_PRIOR_W_RECENCY": "prior_w_recency",
+        "LEDGER_PRIOR_W_RELEVANCE": "prior_w_relevance",
+        "LEDGER_PRIOR_HALF_LIFE": "prior_recency_half_life_days",
     }
     for env_var, attr in float_mappings.items():
         if (value := os.getenv(env_var)) is None:
@@ -233,6 +238,7 @@ def _apply_env_overrides(config: "LedgerConfig") -> "LedgerConfig":
     # Boolean overrides ("1", "true", "yes", "on" -> True; else False)
     bool_mappings = {
         "LEDGER_SIGNALS_AUTO_CAPTURE": "signals_auto_capture",
+        "LEDGER_PRIOR_ENABLED": "prior_enabled",
     }
     for env_var, attr in bool_mappings.items():
         if (value := os.getenv(env_var)) is None:
@@ -418,6 +424,61 @@ class LedgerConfig:
     Rationale: Disabled by default until signals.jsonl has enough
     entries to be meaningful. Enable via config.yaml once the
     feedback loop has accumulated data.
+    """
+
+    # =========================================================================
+    # Prior Score (Mechanism 1 — cold-start ranking)
+    # =========================================================================
+
+    prior_enabled: bool = True
+    """Whether to apply the prior score as an additive ranking term.
+
+    When True (default), a prior score is computed from note importance
+    (confidence), recency (half-life decay), and query relevance, and
+    blended into the final score via prior_weight. This makes ranking
+    non-flat before any signal feedback has accrued.
+
+    Set to False to reproduce pre-prior scores exactly (useful for A/B).
+    """
+
+    prior_weight: float = 0.10
+    """Additive weight applied to the prior score component.
+
+    Rationale: Small enough that the prior nudges ordering without
+    overriding lexical/semantic relevance. Tunable via A/B eval.
+    """
+
+    prior_w_importance: float = 0.30
+    """Weight of confidence (importance) inside the prior score.
+
+    Rationale: High-confidence notes are more reliable anchors.
+    """
+
+    prior_w_recency: float = 0.30
+    """Weight of recency inside the prior score (half-life decay).
+
+    Rationale: More recent notes tend to be more relevant, but
+    old notes should not be completely buried. The half-life
+    parameter (prior_recency_half_life_days) controls the decay rate.
+    """
+
+    prior_w_relevance: float = 0.40
+    """Weight of query-relevance inside the prior score.
+
+    In lexical mode: fraction of query tokens found in the note.
+    In semantic_hybrid mode: cosine similarity to the query vector.
+    Rationale: Relevance is the primary discriminator; the prior
+    amplifies the relevance signal for high-quality notes.
+    """
+
+    prior_recency_half_life_days: float = 180.0
+    """Half-life (in days) for the prior recency decay.
+
+    At this age a note gets 0.5 recency score; at 2x this age, 0.25.
+    Rationale: 180 days (6 months) is a reasonable balance between
+    favouring fresh content and preserving durable long-term knowledge.
+    Use a longer half-life than the existing 90-day linear decay to
+    keep older but high-quality notes competitive.
     """
 
     auto_file_synthesis: bool = False
