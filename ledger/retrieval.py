@@ -1217,8 +1217,12 @@ def rank_lexical(
     if config.score_weight_signal > 0:
         from ledger.signals import load_signal_summary
         summary = load_signal_summary()
-        total = summary.get("_meta", {}).get("total_signals", 0)
-        if total >= config.signal_min_entries:
+        # Gate on REAL (non-synthetic) signals only — seeded events must not
+        # artificially unlock signal-aware ranking (spec: "seeded events do not
+        # artificially activate scoring").
+        _meta = summary.get("_meta", {})
+        real_total = _meta.get("real_signals", _meta.get("total_signals", 0))
+        if real_total >= config.signal_min_entries:
             _signal_summary = summary
     include_reasons = True if mode == "legacy" else (limit <= _cfg().detailed_reasons_limit)
     if progressive_disclosure_active:

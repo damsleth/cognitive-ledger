@@ -510,7 +510,15 @@ class TestSeedFromQueries:
             assert e["source"] == "llm_judge"
             assert e["type"] in ("retrieval_hit", "retrieval_miss")
             assert "ts" in e
-            assert "note" in e
+            # retrieval_hit events are note-keyed; retrieval_miss events are
+            # query-level only (no "note" field) to avoid polluting per-note stats.
+            if e["type"] == "retrieval_hit":
+                assert "note" in e
+            else:
+                assert "note" not in e, (
+                    "retrieval_miss must not carry a 'note' field — doing so "
+                    "creates a ghost entry in per-note signal stats"
+                )
 
     def test_seed_relevant_note_gets_hit(self, tmp_path):
         """Note mentioning 'deploy' should be classified relevant for deploy query."""
@@ -701,3 +709,174 @@ class TestSignalStatsRealTotal:
         stats = signal_stats(signals_path=signals_path)
         assert stats["total"] == 1
         assert stats["real_total"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Signal activation gate: rank_lexical must use real_signals, not total_signals
+# ---------------------------------------------------------------------------
+
+
+class TestSignalGateUsesRealSignals:
+    """Acceptance test: seeding 20+ synthetic events must NOT unlock signal scoring.
+
+    The 20-signal gate in rank_lexical counts only real (non-synthetic) signals.
+    Before this fix, total_signals was used, allowing 20 synthetic LLM-seeded
+    events to activate signal scoring — defeating the bootstrap-safety guarantee.
+    """
+
+    def _write_note(self, path, content: str) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+
+    def test_synthetic_signals_do_not_unlock_gate(self, tmp_path):
+        """With only synthetic signals (total >= gate but real == 0),
+        rank_lexical must score the same as with no signal summary at all."""
+        import json
+        from ledger.retrieval import rank_lexical, clear_candidate_cache
+
+        config = LedgerConfig(ledger_root=tmp_path)
+        config.score_weight_signal = 0.30
+        config.signal_min_entries = 5  # small threshold for test speed
+
+        note_path = config.ledger_notes_dir / "02_facts" / "fact__gate_test.md"
+        self._write_note(
+            note_path,
+            "---\ncreated: 2025-06-01T00:00:00Z\nupdated: 2025-06-01T00:00:00Z\n"
+            "tags: [gate]\nconfidence: 0.9\nsource: user\nscope: dev\nlang: en\n---\n\n"
+            "# Gate Test\n\nGate test note.\n",
+        )
+
+        # Write a signal_summary with 10 synthetic events and 0 real events
+        signal_summary = {
+            "_meta": {
+                "total_signals": 10,
+                "real_signals": 0,
+                "summarized_at": "2026-01-01T00:00:00Z",
+            },
+            "notes": {
+                "notes/02_facts/fact__gate_test.md": {
+                    "hit_count": 10.0,
+                    "affirmations": 8.0,
+                    "corrections": 0,
+                    "stale_flags": 0,
+                    "preference_applied": 0,
+                    "rating_count": 0,
+                    "rating_sum": 0,
+                    "rating_min": None,
+                    "rating_max": None,
+                    "last_hit": "2026-01-01T00:00:00Z",
+                    "synthetic_hits": 10,
+                    "synthetic_corrections": 0,
+                    "synthetic_affirmations": 8,
+                    "signal_score": 0.99,  # artificially high
+                }
+            },
+            "retrieval_misses": {},
+        }
+        config.signal_summary_path.parent.mkdir(parents=True, exist_ok=True)
+        config.signal_summary_path.write_text(json.dumps(signal_summary), encoding="utf-8")
+
+        set_config(config)
+        clear_candidate_cache()
+        try:
+            # Score with signal weight enabled but gate should block (0 real signals < 5)
+            result_with_synthetic = rank_lexical(
+                "gate test", scope="all", limit=10
+            )
+            scores_synthetic = {r.rel_path: r.score for r in result_with_synthetic.results}
+
+            # Disable signal weight entirely to get the no-signal baseline
+            config2 = LedgerConfig(ledger_root=tmp_path)
+            config2.score_weight_signal = 0.0
+            set_config(config2)
+            clear_candidate_cache()
+            result_no_signal = rank_lexical(
+                "gate test", scope="all", limit=10
+            )
+            scores_no_signal = {r.rel_path: r.score for r in result_no_signal.results}
+
+            rel = "notes/02_facts/fact__gate_test.md"
+            assert rel in scores_synthetic, f"note missing from results: {list(scores_synthetic)}"
+            assert rel in scores_no_signal, f"note missing from no-signal results: {list(scores_no_signal)}"
+
+            # Scores must be equal: synthetic events must not have inflated the score
+            assert abs(scores_synthetic[rel] - scores_no_signal[rel]) < 1e-9, (
+                f"Synthetic signals incorrectly unlocked gate: "
+                f"synthetic={scores_synthetic[rel]:.4f} baseline={scores_no_signal[rel]:.4f}. "
+                f"The gate should require {config.signal_min_entries} REAL signals."
+            )
+        finally:
+            clear_candidate_cache()
+            reset_config()
+
+    def test_real_signals_do_unlock_gate(self, tmp_path):
+        """With enough real signals, the gate opens and signal scores affect ranking."""
+        import json
+        from ledger.retrieval import rank_lexical, clear_candidate_cache
+
+        config = LedgerConfig(ledger_root=tmp_path)
+        config.score_weight_signal = 0.30
+        config.signal_min_entries = 3
+
+        note_path = config.ledger_notes_dir / "02_facts" / "fact__real_gate.md"
+        self._write_note(
+            note_path,
+            "---\ncreated: 2025-06-01T00:00:00Z\nupdated: 2025-06-01T00:00:00Z\n"
+            "tags: [gate]\nconfidence: 0.9\nsource: user\nscope: dev\nlang: en\n---\n\n"
+            "# Real Gate\n\nReal gate test.\n",
+        )
+
+        signal_summary = {
+            "_meta": {
+                "total_signals": 5,
+                "real_signals": 5,  # meets the gate
+                "summarized_at": "2026-01-01T00:00:00Z",
+            },
+            "notes": {
+                "notes/02_facts/fact__real_gate.md": {
+                    "hit_count": 5.0,
+                    "affirmations": 4.0,
+                    "corrections": 0,
+                    "stale_flags": 0,
+                    "preference_applied": 0,
+                    "rating_count": 0,
+                    "rating_sum": 0,
+                    "rating_min": None,
+                    "rating_max": None,
+                    "last_hit": "2026-01-01T00:00:00Z",
+                    "synthetic_hits": 0,
+                    "synthetic_corrections": 0,
+                    "synthetic_affirmations": 0,
+                    "signal_score": 0.80,
+                }
+            },
+            "retrieval_misses": {},
+        }
+        config.signal_summary_path.parent.mkdir(parents=True, exist_ok=True)
+        config.signal_summary_path.write_text(json.dumps(signal_summary), encoding="utf-8")
+
+        set_config(config)
+        clear_candidate_cache()
+        try:
+            result_with_signal = rank_lexical("real gate", scope="all", limit=10)
+            scores_real = {r.rel_path: r.score for r in result_with_signal.results}
+
+            config2 = LedgerConfig(ledger_root=tmp_path)
+            config2.score_weight_signal = 0.0
+            set_config(config2)
+            clear_candidate_cache()
+            result_no_signal = rank_lexical("real gate", scope="all", limit=10)
+            scores_no_signal = {r.rel_path: r.score for r in result_no_signal.results}
+
+            rel = "notes/02_facts/fact__real_gate.md"
+            assert rel in scores_real, f"note missing from results: {list(scores_real)}"
+            assert rel in scores_no_signal, f"note missing from no-signal results: {list(scores_no_signal)}"
+
+            # Real signals should inflate score
+            assert scores_real[rel] > scores_no_signal[rel], (
+                f"Real signals did not boost score: "
+                f"real={scores_real[rel]:.4f} baseline={scores_no_signal[rel]:.4f}"
+            )
+        finally:
+            clear_candidate_cache()
+            reset_config()
