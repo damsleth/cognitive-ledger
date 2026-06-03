@@ -203,6 +203,7 @@ def _apply_env_overrides(config: "LedgerConfig") -> "LedgerConfig":
         "LEDGER_ATTENTION_MAX": "attention_shortlist_max",
         "LEDGER_REASONS_LIMIT": "detailed_reasons_limit",
         "LEDGER_EMBED_BATCH_SIZE": "embed_batch_size",
+        "LEDGER_CONTRADICTION_NEIGHBORS_K": "contradiction_neighbors_k",
     }
     for env_var, attr in int_mappings.items():
         if (value := os.getenv(env_var)) is None:
@@ -221,6 +222,9 @@ def _apply_env_overrides(config: "LedgerConfig") -> "LedgerConfig":
         "LEDGER_WEIGHT_RECENCY": "score_weight_recency",
         "LEDGER_WEIGHT_CONFIDENCE": "score_weight_confidence",
         "LEDGER_WEIGHT_SIGNAL": "score_weight_signal",
+        "LEDGER_CONTRADICTION_AUTO_THRESHOLD": "contradiction_auto_threshold",
+        "LEDGER_CONTRADICTION_REVIEW_THRESHOLD": "contradiction_review_threshold",
+        "LEDGER_CONTRADICTION_AUTO_THRESHOLD_LANG_NO": "contradiction_auto_threshold_lang_no",
     }
     for env_var, attr in float_mappings.items():
         if (value := os.getenv(env_var)) is None:
@@ -233,6 +237,8 @@ def _apply_env_overrides(config: "LedgerConfig") -> "LedgerConfig":
     # Boolean overrides ("1", "true", "yes", "on" -> True; else False)
     bool_mappings = {
         "LEDGER_SIGNALS_AUTO_CAPTURE": "signals_auto_capture",
+        "LEDGER_CONTRADICTION_ENABLED": "contradiction_enabled",
+        "LEDGER_CONTRADICTION_PROTECT_HIGHER_CONFIDENCE": "contradiction_protect_higher_confidence",
     }
     for env_var, attr in bool_mappings.items():
         if (value := os.getenv(env_var)) is None:
@@ -244,6 +250,7 @@ def _apply_env_overrides(config: "LedgerConfig") -> "LedgerConfig":
         "LEDGER_EMBED_BACKEND": "embed_backend",
         "LEDGER_EMBED_MODEL": "embed_model",
         "LEDGER_EMBED_DEVICE": "embed_device",
+        "LEDGER_CONTRADICTION_MODEL": "contradiction_model",
     }
     for env_var, attr in string_mappings.items():
         if (value := os.getenv(env_var)) is None:
@@ -586,6 +593,64 @@ class LedgerConfig:
 
     Long documents are truncated by the tokenizer; we also pre-truncate text
     by characters before tokenization to bound memory.
+    """
+
+    # =========================================================================
+    # Contradiction Detection (Gap B — NLI-based sleep scan)
+    # =========================================================================
+
+    contradiction_enabled: bool = False
+    """Master switch for the NLI-based contradiction scan.
+
+    Off by default: a machine without the model/deps behaves exactly as today.
+    Enable in config.yaml once the NLI model is downloaded and the feature is
+    validated on your corpus.
+    """
+
+    contradiction_model: str = "MoritzLaurer/mDeBERTa-v3-base-mnli-xnli"
+    """Transformers model used for NLI-based contradiction detection.
+
+    MoritzLaurer/mDeBERTa-v3-base-mnli-xnli is a multilingual 3-way
+    (entailment / neutral / contradiction) classifier trained on MNLI + XNLI.
+    It covers 15 languages. Norwegian is NOT one of XNLI's languages — see the
+    Norwegian-accuracy caveat in ledger/nli.py.
+    """
+
+    contradiction_neighbors_k: int = 8
+    """Number of nearest semantic neighbours to check per candidate note.
+
+    Retrieval uses the existing semantic index (same scope, compatible type).
+    Increasing k improves recall at the cost of NLI inference time.
+    """
+
+    contradiction_auto_threshold: float = 0.85
+    """Contradiction probability above which auto-supersession is attempted.
+
+    Both temporal ordering and confidence rules are applied before any
+    auto-supersession fires — see spec for the full decision tree.
+    """
+
+    contradiction_review_threshold: float = 0.60
+    """Contradiction probability above which a conflict note is routed to inbox.
+
+    Pairs scoring in [review_threshold, auto_threshold) are flagged for human
+    review rather than auto-resolved. Below review_threshold the pair is ignored.
+    """
+
+    contradiction_auto_threshold_lang_no: float = 0.95
+    """Stricter auto-supersession threshold for lang:no and mixed-language notes.
+
+    XNLI has no Norwegian training data; mDeBERTa-v3 accuracy on Norwegian
+    text is unvalidated. A stricter threshold reduces false auto-supersessions
+    on Norwegian-language content. See ledger/nli.py for the full caveat.
+    """
+
+    contradiction_protect_higher_confidence: bool = True
+    """When the older note has strictly higher confidence, downgrade auto to review.
+
+    Prevents a high-confidence established fact from being silently superseded
+    by a newer, lower-confidence note even when contradiction score is above the
+    auto threshold.
     """
 
     # =========================================================================
