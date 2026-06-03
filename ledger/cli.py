@@ -1096,6 +1096,18 @@ def handle_voice_dna_command(args):
         raise SystemExit(1)
 
 
+def handle_migrate_command(args, migrate_parser):
+    migrate_command = getattr(args, "migrate_command", None)
+
+    if migrate_command == "bitemporal":
+        from ledger.bitemporal import cmd_migrate_bitemporal
+        apply = bool(getattr(args, "apply", False))
+        raise SystemExit(cmd_migrate_bitemporal(apply=apply))
+
+    migrate_parser.print_help()
+    raise SystemExit(1)
+
+
 def handle_sleep_command(args):
     from ledger import maintenance as maint
     subargs = getattr(args, "subargs", []) or []
@@ -1526,6 +1538,27 @@ def main(argv=None) -> int:
         help="Print the prioritized queue as text and exit (no TUI)",
     )
 
+    # migrate subcommand
+    migrate_parser = subparsers.add_parser(
+        "migrate", help="Run one-time idempotent migrations (e.g. bitemporal back-fill)"
+    )
+    migrate_subparsers = migrate_parser.add_subparsers(dest="migrate_command")
+    migrate_bitemporal_parser = migrate_subparsers.add_parser(
+        "bitemporal",
+        help="Back-fill valid_from (and valid_to on archive notes) on eligible notes",
+    )
+    migrate_bitemporal_mode = migrate_bitemporal_parser.add_mutually_exclusive_group()
+    migrate_bitemporal_mode.add_argument(
+        "--check",
+        action="store_true",
+        help="Report what would be written without changing any files (default)",
+    )
+    migrate_bitemporal_mode.add_argument(
+        "--apply",
+        action="store_true",
+        help="Write the back-filled fields and append a timeline entry",
+    )
+
     # sleep subcommand - delegates to ledger.maintenance
     sleep_parser = subparsers.add_parser("sleep", help="Electric Sheep maintenance (sleep, lint, index, status, sync)")
     sleep_parser.add_argument("subargs", nargs=argparse.REMAINDER, help=argparse.SUPPRESS)
@@ -1631,6 +1664,10 @@ def main(argv=None) -> int:
 
         if args.command == "voice-dna":
             handle_voice_dna_command(args)
+            return 0
+
+        if args.command == "migrate":
+            handle_migrate_command(args, migrate_parser)
             return 0
 
         if args.command == "sleep":

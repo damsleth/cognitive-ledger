@@ -20,7 +20,8 @@ from __future__ import annotations
 import datetime as dt
 import json
 import shutil
-from dataclasses import dataclass
+from collections import defaultdict
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -366,3 +367,249 @@ def supersede(
         valid_to_set=valid_to_iso,
         idempotent=False,
     )
+
+
+# ---------------------------------------------------------------------------
+# Migration — back-fill valid_from (and valid_to for archive notes)
+# ---------------------------------------------------------------------------
+
+# Folders eligible for bitemporal migration.  00_inbox is intentionally absent.
+_MIGRATE_ELIGIBLE_SUBDIRS: frozenset[str] = frozenset(
+    {
+        "01_identity",
+        "02_facts",
+        "03_preferences",
+        "04_goals",
+        "06_concepts",
+        "09_archive",
+    }
+)
+
+# Subdir → label used in per-folder counts output.
+_SUBDIR_LABEL: dict[str, str] = {
+    "01_identity": "identity",
+    "02_facts": "facts",
+    "03_preferences": "preferences",
+    "04_goals": "goals",
+    "06_concepts": "concepts",
+    "09_archive": "archive",
+}
+
+
+@dataclass
+class MigrationResult:
+    """Result returned by migrate_bitemporal().
+
+    Attributes:
+        touched:    Per-folder count of notes written (apply mode) or that
+                    *would* be written (check mode).
+        skipped:    Per-folder count of notes already up to date (no-op).
+        total_eligible: Total number of eligible notes examined.
+        applied:    True when --apply was used; False for --check (dry run).
+    """
+
+    touched: dict[str, int] = field(default_factory=dict)
+    skipped: dict[str, int] = field(default_factory=dict)
+    total_eligible: int = 0
+    applied: bool = False
+
+    @property
+    def total_touched(self) -> int:
+        return sum(self.touched.values())
+
+    @property
+    def total_skipped(self) -> int:
+        return sum(self.touched.values()) + sum(self.skipped.values())
+
+
+def _extract_date_portion(iso_ts: str) -> str:
+    """Return the YYYY-MM-DD date portion of a YYYY-MM-DDTHH:MM:SSZ string.
+
+    Falls back to the full string if it does not look like an ISO timestamp.
+    """
+    if "T" in iso_ts:
+        return iso_ts.split("T")[0]
+    return iso_ts
+
+
+def _date_only_to_midnight_utc(date_str: str) -> str:
+    """Convert a YYYY-MM-DD string to a full YYYY-MM-DDTHH:MM:SSZ timestamp."""
+    d = dt.date.fromisoformat(date_str)
+    dt_midnight = dt.datetime(d.year, d.month, d.day, tzinfo=dt.timezone.utc)
+    return _to_iso(dt_midnight)
+
+
+def _note_needs_migration(
+    fm: dict[str, Any],
+    *,
+    is_archive: bool,
+) -> bool:
+    """Return True if the note is missing valid_from (or valid_to for archive)."""
+    def _is_null(val: Any) -> bool:
+        return not val or str(val).strip() in ("null", "~", "None", "")
+
+    missing_valid_from = _is_null(fm.get("valid_from"))
+    if missing_valid_from:
+        return True
+    # Archive notes also need valid_to back-filled when absent.
+    if is_archive and _is_null(fm.get("valid_to")):
+        return True
+    return False
+
+
+def _migrate_one_note(
+    abs_path: Path,
+    ledger_notes_dir: Path,
+    *,
+    apply: bool,
+) -> bool:
+    """Migrate a single note in place.  Returns True if a write was needed.
+
+    Rules:
+    - Set valid_from = <created> date at midnight UTC, if missing.
+    - For archive notes also set valid_to = <updated> date at midnight UTC,
+      if valid_to is missing.
+    - Bump updated timestamp when writing.
+    - Idempotent: if nothing would change, return False.
+    """
+    text = abs_path.read_text(encoding="utf-8")
+    fm, body = parse_frontmatter_text(text)
+
+    subdir = abs_path.parent.name
+    is_archive = subdir == "09_archive"
+
+    if not _note_needs_migration(fm, is_archive=is_archive):
+        return False
+
+    if not apply:
+        # Dry-run: report intent but do not write.
+        return True
+
+    # Back-fill valid_from from created timestamp.
+    def _is_null(val: Any) -> bool:
+        return not val or str(val).strip() in ("null", "~", "None", "")
+
+    if _is_null(fm.get("valid_from")):
+        created_raw = str(fm.get("created", "")).strip()
+        if created_raw and not _is_null(created_raw):
+            date_str = _extract_date_portion(created_raw)
+            fm["valid_from"] = _date_only_to_midnight_utc(date_str)
+
+    # Back-fill valid_to from updated for archive notes.
+    if is_archive and _is_null(fm.get("valid_to")):
+        updated_raw = str(fm.get("updated", "")).strip()
+        if updated_raw and not _is_null(updated_raw):
+            date_str = _extract_date_portion(updated_raw)
+            fm["valid_to"] = _date_only_to_midnight_utc(date_str)
+
+    # Bump transaction-time updated.
+    fm["updated"] = _to_iso(_now_utc())
+
+    content = serialize_frontmatter(fm) + "\n" + body.lstrip("\n")
+    safe_write_text(abs_path, content)
+    return True
+
+
+def migrate_bitemporal(
+    *,
+    apply: bool = False,
+) -> MigrationResult:
+    """Back-fill valid_from (and valid_to for archive notes) on eligible notes.
+
+    Implements the --check / --apply idiom:
+    - apply=False (--check): scan and report; no files are written.
+    - apply=True  (--apply): write the back-filled fields and append a timeline
+      summary entry.
+
+    Eligible folders: 01_identity, 02_facts, 03_preferences, 04_goals,
+    06_concepts, 09_archive.  00_inbox and 05_open_loops are intentionally
+    excluded.
+
+    Idempotent: re-running on an already-migrated corpus is a no-op.
+
+    Returns:
+        MigrationResult with per-folder counts and totals.
+    """
+    config = get_config()
+    ledger_notes_dir = config.ledger_notes_dir
+
+    result = MigrationResult(applied=apply)
+    touched: dict[str, int] = defaultdict(int)
+    skipped: dict[str, int] = defaultdict(int)
+
+    for subdir in sorted(_MIGRATE_ELIGIBLE_SUBDIRS):
+        folder = ledger_notes_dir / subdir
+        if not folder.is_dir():
+            continue
+        for note_path in sorted(folder.glob("*.md")):
+            if note_path.name == ".gitkeep":
+                continue
+            result.total_eligible += 1
+            label = _SUBDIR_LABEL.get(subdir, subdir)
+            was_needed = _migrate_one_note(
+                note_path,
+                ledger_notes_dir,
+                apply=apply,
+            )
+            if was_needed:
+                touched[label] += 1
+            else:
+                skipped[label] += 1
+
+    result.touched = dict(touched)
+    result.skipped = dict(skipped)
+
+    if apply and result.total_touched > 0:
+        from ledger.embeddings import append_timeline_entry  # deferred
+
+        append_timeline_entry(
+            action="updated",
+            rel_path="-",
+            description=(
+                f"migrate bitemporal: back-filled valid_from on "
+                f"{result.total_touched} notes"
+            ),
+        )
+
+    return result
+
+
+def cmd_migrate_bitemporal(apply: bool = False) -> int:
+    """CLI entry point for `ledger migrate bitemporal --check | --apply`.
+
+    Mirrors the cmd_sync --check/--apply idiom from maintenance.py.
+
+    Returns:
+        EXIT_OK (0)  in all normal cases (check or apply).
+        EXIT_USER_ERROR (1) on unexpected errors.
+    """
+    result = migrate_bitemporal(apply=apply)
+
+    mode = "--apply" if apply else "--check (dry run — use --apply to write)"
+    print(f"=== ledger migrate bitemporal {mode} ===")
+    print(f"Eligible notes examined: {result.total_eligible}")
+    print("")
+
+    all_folders = sorted(
+        set(result.touched) | set(result.skipped)
+    )
+    if all_folders:
+        print("Per-folder counts (touched / already-ok):")
+        for label in all_folders:
+            t = result.touched.get(label, 0)
+            s = result.skipped.get(label, 0)
+            print(f"  {label}: {t} touched, {s} already ok")
+    else:
+        print("No eligible note folders found.")
+
+    print("")
+    if apply:
+        print(f"Applied: {result.total_touched} notes written.")
+        if result.total_touched > 0:
+            print("Timeline entry appended.")
+    else:
+        print(
+            f"Would touch: {result.total_touched} notes "
+            f"(re-run with --apply to write)."
+        )
+    return 0
