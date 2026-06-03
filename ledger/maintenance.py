@@ -1321,6 +1321,10 @@ def cmd_sleep() -> int:
     print("   sheep lint")
     print("   -> Fix any errors")
     print("")
+    print("5b. Contradiction scan (requires contradiction_enabled=true in config)")
+    print("    ledger sleep contradictions --check   # dry run, see what would be done")
+    print("    ledger sleep contradictions --apply   # execute supersessions + inbox flags")
+    print("")
     print("6. Mark sleep complete")
     print("   # timeline.jsonl is the source of truth; appending to timeline.md is")
     print("   # silently wiped on the next `sheep index`. Use the canonical helper:")
@@ -1356,6 +1360,22 @@ def build_parser() -> argparse.ArgumentParser:
     mode_group.add_argument("--check", action="store_true", help="Check drift (default)")
     mode_group.add_argument("--apply", action="store_true", help="Write current notes snapshot as baseline")
 
+    contradictions_parser = subparsers.add_parser(
+        "contradictions",
+        help="NLI-based contradiction scan (check | apply)",
+    )
+    contra_mode = contradictions_parser.add_mutually_exclusive_group()
+    contra_mode.add_argument(
+        "--check",
+        action="store_true",
+        help="Dry run: report what would be done without writing (default)",
+    )
+    contra_mode.add_argument(
+        "--apply",
+        action="store_true",
+        help="Execute supersessions and write conflict inbox notes",
+    )
+
     return parser
 
 
@@ -1386,6 +1406,9 @@ def main(argv: list[str] | None = None) -> int:
         return _wrap_data_cmd("sheep sleep", cmd_sleep, as_json)
     if args.command == "sync":
         return _wrap_sync(apply=bool(args.apply), as_json=as_json)
+    if args.command == "contradictions":
+        from ledger.contradiction import cmd_sleep_contradictions
+        return cmd_sleep_contradictions(apply=bool(getattr(args, "apply", False)))
 
     parser.print_help()
     return 1
