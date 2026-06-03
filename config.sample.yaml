@@ -41,3 +41,20 @@ first_run: true
 # prior_w_recency: 0.30
 # prior_w_relevance: 0.40
 # prior_recency_half_life_days: 180.0
+
+# Fusion mode for semantic_hybrid (Mechanism 3 / FUSION)
+# "weighted_sum" (default, preserves existing behaviour) or "rrf" (Reciprocal
+# Rank Fusion — generates lexical + semantic rank lists separately then merges).
+# Enable rrf only after A/B eval confirms improvement.
+# fusion: weighted_sum
+# rrf_k: 60
+
+# Pseudo-Relevance Feedback (Mechanism 2 — dense path only, default off)
+# Expands the query vector via Rocchio from the top-m / bottom-n results.
+# Enable only after A/B eval. CLI flag --prf overrides this per query.
+# prf_enabled: false
+# prf_top_m: 3
+# prf_bottom_n: 5
+# prf_alpha: 1.0
+# prf_beta: 0.75
+# prf_gamma: 0.15
