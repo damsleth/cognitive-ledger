@@ -30,3 +30,14 @@ first_run: true
 # Shortlisting
 # shortlist_min_candidates: 24
 # shortlist_max_candidates: 36
+
+# Prior score (Mechanism 1 — cold-start ranking, always-on by default)
+# Adds a small additive term combining confidence, half-life recency, and query
+# relevance. Makes ranking non-flat before signal feedback has accrued.
+# Set prior_enabled to false to reproduce pre-prior scores exactly (A/B baseline).
+# prior_enabled: true
+# prior_weight: 0.10
+# prior_w_importance: 0.30
+# prior_w_recency: 0.30
+# prior_w_relevance: 0.40
+# prior_recency_half_life_days: 180.0
