@@ -183,6 +183,32 @@ class TestApplyTemporalFilter:
         result = apply_temporal_filter([c], as_of=_utc(2028), now_dt=_utc(2026, 6))
         assert result == [c]
 
+    def test_superseded_by_only_treated_as_has_validity_fields(self):
+        """A note with ONLY superseded_by set (no valid_from/valid_to) must not
+        pass through unchanged in the default path — it has validity fields."""
+        c = self._make_candidate(superseded_by="notes/09_archive/fact__old.md")
+        # Default path: no valid_to set means is_valid_at returns True.
+        # But has_any_validity_fields must be True so it goes through the
+        # is_valid_at branch rather than the unconditional pass-through.
+        result = apply_temporal_filter([c], as_of=None, now_dt=_utc(2026, 6))
+        # No valid_to means is_valid_at returns True, note is included.
+        # The key invariant: it did NOT take the unconditional pass-through.
+        assert result == [c], (
+            "note with only superseded_by but no valid_to is still 'current'; "
+            "it should pass through but NOT via the no-validity-fields shortcut"
+        )
+
+    def test_superseded_by_with_valid_to_in_past_hidden_by_default(self):
+        """A note with superseded_by set AND valid_to in the past is hidden."""
+        c = self._make_candidate(
+            valid_to=_ts(2025),
+            superseded_by="notes/09_archive/fact__old.md",
+        )
+        result = apply_temporal_filter([c], as_of=None, now_dt=_utc(2026, 6))
+        assert result == [], (
+            "note with expired valid_to must be hidden even when superseded_by is set"
+        )
+
 
 # ---------------------------------------------------------------------------
 # Note index persistence: valid_from / valid_to / superseded_by
@@ -326,21 +352,32 @@ class TestAsOfRetrievalLexical:
             "legacy note must appear in --as-of query"
 
     def test_asof_composes_with_scope(self, tmp_cfg):
-        """--as-of with --scope=dev excludes work-scoped archive notes."""
-        archive_dev = tmp_cfg.ledger_notes_dir / "09_archive" / "fact__dev_scope.md"
-        _write(archive_dev, _make_note(
-            "valid_from: 2025-01-01T00:00:00Z\nvalid_to: 2026-06-30T00:00:00Z\n",
-            body="## Statement\n\ndev scoped old thing asofscope\n",
-        ))
-        archive_work = tmp_cfg.ledger_notes_dir / "09_archive" / "fact__work_scope.md"
+        """--as-of with --scope=dev excludes work-scoped archive notes.
+
+        The scope prefilter hard-excludes candidates with *no* token overlap AND
+        wrong scope, but only when enough matching candidates exist to satisfy
+        the minimum pool threshold.  We therefore create enough dev-scoped archive
+        notes to fill the pool so the work note is not pulled in as a fallback.
+        """
+        # Create several dev-scoped archive notes that match the query token.
+        for i in range(30):
+            note = tmp_cfg.ledger_notes_dir / "09_archive" / f"fact__dev_scope{i}.md"
+            _write(note, _make_note(
+                f"valid_from: 2025-01-01T00:00:00Z\nvalid_to: 2026-06-30T00:00:00Z\n",
+                body=f"## Statement\n\ndev uniquedevxyz scoped old archived scope{i}\n",
+            ))
+        # The work note has NO token overlap with the query.
+        archive_work = tmp_cfg.ledger_notes_dir / "09_archive" / "fact__work_scope_only.md"
         _write(archive_work, _make_work_note(
             "valid_from: 2025-01-01T00:00:00Z\nvalid_to: 2026-06-30T00:00:00Z\n",
-            body="## Statement\n\nwork scoped old thing asofscope\n",
+            body="## Statement\n\nwork uniqueworkxyz different archived note\n",
         ))
         as_of = _utc(2026, 3)
-        paths = self._rank("old thing asofscope", tmp_cfg, as_of=as_of, scope="dev")
+        paths = self._rank("uniquedevxyz", tmp_cfg, as_of=as_of, scope="dev")
         assert any("fact__dev_scope" in p for p in paths), \
-            f"dev-scoped archive note should appear; got: {paths}"
+            f"dev-scoped archive notes should appear; got: {paths}"
+        assert not any("fact__work_scope_only" in p for p in paths), \
+            f"work-scoped archive note must be absent (no token overlap + wrong scope); got: {paths}"
 
     def test_asof_composes_with_limit(self, tmp_cfg):
         """--as-of with limit=1 returns at most 1 result."""
