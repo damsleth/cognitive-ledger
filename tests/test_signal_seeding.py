@@ -329,6 +329,36 @@ class TestSummarizeSyntheticDownweight:
         assert stats["corrections"] == pytest.approx(0.5)
         assert stats["synthetic_corrections"] == 1
 
+    def test_relevant_llm_judged_counts_as_synthetic_hit(self):
+        signals = [
+            {"ts": "2026-06-01T10:00:00Z", "type": "llm_judged",
+             "note": "notes/a.md", "query": "q", "relevant": True,
+             "synthetic": True, "source": "llm_judge"},
+        ]
+        summary = summarize_signals(signals=signals)
+        stats = summary["notes"]["notes/a.md"]
+        assert stats["hit_count"] == pytest.approx(0.5)
+        assert stats["synthetic_hits"] == 1
+
+    def test_irrelevant_llm_judged_does_not_create_note_stats(self):
+        signals = [
+            {"ts": "2026-06-01T10:00:00Z", "type": "llm_judged",
+             "note": "notes/a.md", "query": "q", "relevant": False,
+             "synthetic": True, "source": "llm_judge"},
+        ]
+        summary = summarize_signals(signals=signals)
+        assert "notes/a.md" not in summary["notes"]
+
+    def test_synthetic_retrieval_miss_is_downweighted(self):
+        signals = [
+            {"ts": "2026-06-01T10:00:00Z", "type": "retrieval_miss",
+             "query": "missing", "synthetic": True, "source": "llm_judge"},
+            {"ts": "2026-06-01T10:01:00Z", "type": "retrieval_miss",
+             "query": "missing"},
+        ]
+        summary = summarize_signals(signals=signals)
+        assert summary["retrieval_misses"]["missing"] == pytest.approx(1.5)
+
 
 # ---------------------------------------------------------------------------
 # signals.py: real-signal gate (20-gate ignores synthetic)
@@ -508,12 +538,13 @@ class TestSeedFromQueries:
         for e in events:
             assert e["synthetic"] is True
             assert e["source"] == "llm_judge"
-            assert e["type"] in ("retrieval_hit", "retrieval_miss")
+            assert e["type"] in ("llm_judged", "retrieval_miss")
             assert "ts" in e
-            # retrieval_hit events are note-keyed; retrieval_miss events are
-            # query-level only (no "note" field) to avoid polluting per-note stats.
-            if e["type"] == "retrieval_hit":
+            # llm_judged events are note-keyed audit records; retrieval_miss
+            # remains query-level only to avoid polluting per-note stats.
+            if e["type"] == "llm_judged":
                 assert "note" in e
+                assert "relevant" in e
             else:
                 assert "note" not in e, (
                     "retrieval_miss must not carry a 'note' field — doing so "
@@ -534,8 +565,28 @@ class TestSeedFromQueries:
             top_k=1,
             backend="dummy",
         )
-        hits = [e for e in events if e["type"] == "retrieval_hit"]
+        hits = [e for e in events if e["type"] == "llm_judged" and e["relevant"]]
         assert len(hits) >= 1
+
+    def test_seed_emits_single_query_miss_when_top_k_irrelevant(self, tmp_path):
+        notes_dir = tmp_path / "notes"
+        notes_dir.mkdir()
+        (notes_dir / "cooking.md").write_text("# Cooking\n\nPasta recipe.\n")
+        (notes_dir / "music.md").write_text("# Music\n\nJazz chords.\n")
+
+        events = seed_from_queries(
+            queries=["quantum chromodynamics"],
+            notes_dir=notes_dir,
+            top_k=2,
+            backend="dummy",
+        )
+
+        judged = [e for e in events if e["type"] == "llm_judged"]
+        misses = [e for e in events if e["type"] == "retrieval_miss"]
+        assert len(judged) == 2
+        assert all(not e["relevant"] for e in judged)
+        assert len(misses) == 1
+        assert "note" not in misses[0]
 
     def test_seed_with_custom_retrieve_fn(self, tmp_path):
         """Custom retrieve_fn is called and its results are judged."""
@@ -584,7 +635,8 @@ class TestSeedFromQueries:
             subprocess_command=str(stub),
         )
         assert len(events) == 1
-        assert events[0]["type"] == "retrieval_hit"
+        assert events[0]["type"] == "llm_judged"
+        assert events[0]["relevant"] is True
         assert events[0]["synthetic"] is True
         assert events[0].get("rating_hint") == 7
 
@@ -709,6 +761,24 @@ class TestSignalStatsRealTotal:
         stats = signal_stats(signals_path=signals_path)
         assert stats["total"] == 1
         assert stats["real_total"] == 0
+
+    def test_cli_stats_renders_fractional_synthetic_counts(self, tmp_ledger, signals_path, capsys):
+        from ledger.cli import main as cli_main
+
+        events = [
+            {"ts": "2026-06-01T10:00:00Z", "type": "retrieval_hit",
+             "note": "notes/a.md", "query": "q", "synthetic": True, "source": "llm_judge"},
+            {"ts": "2026-06-01T10:01:00Z", "type": "retrieval_miss",
+             "query": "missing", "synthetic": True, "source": "llm_judge"},
+        ]
+        for e in events:
+            append_signal_raw(e, signals_path)
+
+        exit_code = cli_main(["signal", "stats"])
+        assert exit_code in (None, 0)
+        out = capsys.readouterr().out
+        assert "0.5 hits" in out
+        assert "0.5x  missing" in out
 
 
 # ---------------------------------------------------------------------------
