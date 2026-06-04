@@ -121,6 +121,7 @@ def _copy_candidate(candidate: CandidateLike) -> RetrievalCandidate:
         valid_from=str(_candidate_value(candidate, "valid_from", "") or ""),
         valid_to=str(_candidate_value(candidate, "valid_to", "") or ""),
         superseded_by=str(_candidate_value(candidate, "superseded_by", "") or ""),
+        created_ts=_candidate_value(candidate, "created_ts"),
     )
 
 
@@ -154,6 +155,7 @@ def _scored_result(
         valid_from=base.valid_from,
         valid_to=base.valid_to,
         superseded_by=base.superseded_by,
+        created_ts=base.created_ts,
         score=score,
         reasons=list(reasons),
         components=components,
@@ -227,6 +229,101 @@ def compute_recency_component(updated_ts: dt.datetime | None, now_dt: dt.datetim
         return 0.0
     age_days = max(0.0, (now_dt - updated_ts).total_seconds() / 86400.0)
     return max(0.0, 1.0 - (age_days / 90.0))
+
+
+def compute_prior_score(
+    candidate: "CandidateLike",
+    now_dt: dt.datetime,
+    query_lexical_relevance: float = 0.0,
+) -> float:
+    """Compute the prior score for a candidate (0.0-1.0).
+
+    The prior is a query-independent quality signal combining:
+    - importance: note confidence (curated quality proxy)
+    - recency: half-life decay from creation date (falls back to updated_ts)
+    - relevance: caller-supplied query-relevance value (lexical or cosine)
+
+    The prior is designed to be additive — it nudges ranking non-flat
+    before signal feedback has accrued, without displacing the primary
+    lexical/semantic relevance score.
+
+    Age is derived from ``created_ts`` when available, otherwise falls
+    back to ``updated_ts``.  Notes without any timestamp get 0 recency.
+
+    Config weights: ``prior_w_importance``, ``prior_w_recency``,
+    ``prior_w_relevance``, ``prior_recency_half_life_days``.
+    """
+    import math
+
+    config = _cfg()
+
+    confidence = float(_candidate_value(candidate, "confidence", 0.0) or 0.0)
+    confidence = max(0.0, min(1.0, confidence))
+
+    # Prefer created_ts for age; fall back to updated_ts if absent.
+    age_ts: dt.datetime | None = (
+        _candidate_value(candidate, "created_ts")
+        or _candidate_value(candidate, "updated_ts")
+    )
+    if age_ts is not None:
+        age_days = max(0.0, (now_dt - age_ts).total_seconds() / 86400.0)
+        half_life = max(1.0, config.prior_recency_half_life_days)
+        lam = math.log(2.0) / half_life
+        prior_recency = math.exp(-lam * age_days)
+    else:
+        prior_recency = 0.0
+
+    relevance = max(0.0, min(1.0, query_lexical_relevance))
+
+    prior = (
+        config.prior_w_importance * confidence
+        + config.prior_w_recency * prior_recency
+        + config.prior_w_relevance * relevance
+    )
+    return max(0.0, min(1.0, prior))
+
+
+def prior_tiebreak_factor(
+    base_score: float,
+    leader_base_score: float,
+    tie_band: float,
+) -> float:
+    """Continuous scaling factor (0.0-1.0) for a candidate's prior contribution.
+
+    The prior is a TIE-BREAKER: it may only reorder candidates whose base
+    (pre-prior) scores are near-tied. A candidate with a clear base-score lead
+    must keep its rank regardless of its prior. This function computes the
+    factor by which a candidate's prior term is scaled so that the prior fades
+    to zero as the candidate's base-score gap to the local leader grows.
+
+    Definitions
+    -----------
+    - ``leader_base_score``: the highest base score in the candidate pool.
+    - ``gap``: the candidate's *relative* base-score shortfall to the leader,
+      ``(leader_base_score - base_score) / leader_base_score`` (clamped to
+      [0, inf); 0 when the candidate IS the leader). A relative gap makes the
+      band scale-invariant across queries with different absolute score ranges.
+    - ``tie_band``: the relative gap at which the prior contribution reaches 0.
+
+    Formula
+    -------
+        factor = clamp(1 - gap / tie_band, 0.0, 1.0)
+
+    This is a continuous linear ramp (not a hard cutoff) from 1.0 at gap == 0
+    to 0.0 at gap >= tie_band, avoiding rank instability at the boundary.
+    A non-positive ``tie_band`` disables the tie-breaker entirely (factor 0,
+    i.e. the prior never reorders anything). A non-positive or non-finite
+    leader score yields factor 1.0 (degenerate pool: fall back to flat prior).
+    """
+    if tie_band <= 0.0:
+        return 0.0
+    if leader_base_score <= 0.0:
+        return 1.0
+    gap = (leader_base_score - base_score) / leader_base_score
+    if gap <= 0.0:
+        return 1.0
+    factor = 1.0 - (gap / tie_band)
+    return max(0.0, min(1.0, factor))
 
 
 def load_aliases(path: Path) -> dict[str, list[str]]:
@@ -349,6 +446,8 @@ def _candidate_from_parts(
     scope = canonical_scope(frontmatter.get("scope", ""))
     updated_str = str(frontmatter.get("updated", "")).strip()
     updated_ts = parse_ts(updated_str)
+    created_str = str(frontmatter.get("created", "")).strip()
+    created_ts = parse_ts(created_str) if created_str else None
     confidence = confidence_value(frontmatter)
     source = str(frontmatter.get("source", "")).strip().lower()
 
@@ -415,6 +514,7 @@ def _candidate_from_parts(
         valid_from=valid_from,
         valid_to=valid_to,
         superseded_by=superseded_by,
+        created_ts=created_ts,
     )
 
 
@@ -458,12 +558,17 @@ def _candidate_to_json(candidate: RetrievalCandidate) -> dict[str, Any]:
         payload["valid_to"] = candidate.valid_to
     if candidate.superseded_by:
         payload["superseded_by"] = candidate.superseded_by
+    # Persist created ISO string when available (created_ts is derived from it,
+    # mirroring the pattern used for updated / updated_ts).
+    if candidate.created_ts is not None:
+        payload["created"] = candidate.created_ts.strftime("%Y-%m-%dT%H:%M:%SZ")
     return payload
 
 
 def _candidate_from_json(candidate_json: dict[str, Any]) -> RetrievalCandidate:
     """Deserialize candidate from JSON-friendly payload."""
     updated = str(candidate_json.get("updated", ""))
+    created = str(candidate_json.get("created", ""))
     raw_path = str(candidate_json.get("path", "") or "")
     rel_path = str(candidate_json.get("rel_path", "") or "")
     resolved_candidate_path = raw_path
@@ -511,6 +616,9 @@ def _candidate_from_json(candidate_json: dict[str, Any]) -> RetrievalCandidate:
         valid_from=str(candidate_json.get("valid_from", "") or ""),
         valid_to=str(candidate_json.get("valid_to", "") or ""),
         superseded_by=str(candidate_json.get("superseded_by", "") or ""),
+        # created_ts is recomputed from the persisted "created" ISO string,
+        # mirroring the updated / updated_ts pattern.
+        created_ts=parse_ts(created) if created else None,
     )
 
 
@@ -1077,7 +1185,19 @@ def score_candidate(
     bm25_score: float = 0.0,
     signal_summary: dict[str, Any] | None = None,
 ) -> tuple[float, list[str], ScoreComponents]:
-    """Final score for candidate in lexical retrieval modes."""
+    """Final score for candidate in lexical retrieval modes.
+
+    The returned ``score`` is the BASE score (relevance + identity boost +
+    signal + intent boosts) and does NOT include the prior. The prior is
+    computed via ``compute_prior_score`` and returned separately in
+    ``ScoreComponents.prior_score``; it is blended in afterwards by
+    ``apply_prior_tiebreak`` as a tie-breaker (see that function and
+    ``prior_tiebreak_factor``). This keeps the prior from displacing a clear
+    relevance winner — it only reorders near-tied candidates.
+
+    The identity-type boost remains part of the base score (a separate
+    additive term) so it is independently measurable from the prior.
+    """
     note_tokens = set(_candidate_value(candidate, "note_tokens", set()) or set())
     tag_tokens = set(_candidate_value(candidate, "tag_tokens", set()) or set())
     candidate_type = str(_candidate_value(candidate, "type", "") or "")
@@ -1108,7 +1228,22 @@ def score_candidate(
         + (config.score_weight_confidence * confidence)
     )
 
-    # Identity note boost
+    # Prior score — quality signal active before signal feedback accrues.
+    # Uses lexical_match as the relevance proxy in lexical retrieval mode.
+    # NOTE: the prior is NOT added to the score here. It is returned in
+    # ScoreComponents.prior_score and blended in as a tie-breaker by
+    # apply_prior_tiebreak once the full candidate pool (and its leader base
+    # score) is known. This keeps the prior from displacing a clear winner.
+    prior = 0.0
+    if config.prior_enabled:
+        prior = compute_prior_score(
+            candidate,
+            now_dt=now_dt,
+            query_lexical_relevance=lexical_match,
+        )
+
+    # Identity note boost — kept as a separate additive term so it is
+    # independently measurable from the prior.
     if candidate_type == "id":
         score += config.identity_score_boost
         if include_reasons:
@@ -1178,6 +1313,8 @@ def score_candidate(
         reasons.append(f"recency={recency:.2f}")
     if include_reasons:
         reasons.append(f"confidence={confidence:.2f}")
+    if include_reasons and prior > 0:
+        reasons.append(f"prior={prior:.3f}")
 
     score = max(0.0, min(1.0, score))
     return score, reasons, ScoreComponents(
@@ -1187,7 +1324,53 @@ def score_candidate(
         scope_match=scope_match,
         recency=recency,
         confidence=confidence,
+        prior_score=prior,
     )
+
+
+def apply_prior_tiebreak(ranked: list["ScoredResult"]) -> list["ScoredResult"]:
+    """Blend the prior into base scores as a TIE-BREAKER, then re-sort.
+
+    This is the single, shared place where the prior is folded into the final
+    score for BOTH retrieval paths (lexical ``score_candidate`` and dense
+    ``rank_query_semantic_hybrid``). Each input ``ScoredResult`` must carry:
+
+    - ``score``: the BASE score (relevance + boosts + signal), prior excluded.
+    - ``components.prior_score``: the raw prior in [0, 1] (0 when disabled).
+
+    Mechanism
+    ---------
+    1. Find the local leader's base score (the max base score in the pool).
+    2. For each candidate compute ``factor = prior_tiebreak_factor(base,
+       leader, config.prior_tie_band)`` — a continuous ramp from 1.0 (the
+       candidate is at/near the leader) to 0.0 (its relative base gap exceeds
+       the tie band). Candidates with a clear base-score lead over their
+       followers keep their rank: a trailing candidate's prior is scaled to 0,
+       so it cannot leapfrog a clear winner.
+    3. Final score = ``base + config.prior_weight * factor * prior_score``,
+       clamped to [0, 1]. The list is re-sorted by (score, updated, path).
+
+    When the prior is disabled (every ``prior_score`` is 0) or
+    ``prior_weight`` is 0, this is a no-op on the scores — it only re-sorts,
+    which is order-stable for already-sorted input, so prior_enabled=False
+    reproduces pre-prior scores exactly.
+    """
+    if not ranked:
+        return ranked
+    config = _cfg()
+    weight = float(config.prior_weight)
+    tie_band = float(config.prior_tie_band)
+    leader_base = max(item.score for item in ranked)
+    for item in ranked:
+        prior = float(getattr(item.components, "prior_score", 0.0) or 0.0)
+        if prior <= 0.0 or weight <= 0.0:
+            continue
+        factor = prior_tiebreak_factor(item.score, leader_base, tie_band)
+        if factor <= 0.0:
+            continue
+        item.score = max(0.0, min(1.0, item.score + weight * factor * prior))
+    ranked.sort(key=lambda item: (item.score, item.updated or "", item.path), reverse=True)
+    return ranked
 
 
 def apply_progressive_disclosure(
@@ -1293,8 +1476,12 @@ def rank_lexical(
     if config.score_weight_signal > 0:
         from ledger.signals import load_signal_summary
         summary = load_signal_summary()
-        total = summary.get("_meta", {}).get("total_signals", 0)
-        if total >= config.signal_min_entries:
+        # Gate on REAL (non-synthetic) signals only — seeded events must not
+        # artificially unlock signal-aware ranking (spec: "seeded events do not
+        # artificially activate scoring").
+        _meta = summary.get("_meta", {})
+        real_total = _meta.get("real_signals", _meta.get("total_signals", 0))
+        if real_total >= config.signal_min_entries:
             _signal_summary = summary
     include_reasons = True if mode == "legacy" else (limit <= _cfg().detailed_reasons_limit)
     if progressive_disclosure_active:
@@ -1408,7 +1595,8 @@ def rank_lexical(
 
         ranked.append(_scored_result(candidate, score, reasons, components))
 
-    ranked.sort(key=lambda item: (item.score, item.updated or "", item.path), reverse=True)
+    # Blend the prior in as a tie-breaker over the full pool, then sort.
+    apply_prior_tiebreak(ranked)
 
     if progressive_disclosure_active:
         output_results = apply_progressive_disclosure(
@@ -1487,6 +1675,9 @@ __all__ = [
     "has_token_overlap",
     "compute_bm25_scores",
     "prefilter_candidates_by_scope_and_type",
+    "compute_prior_score",
+    "prior_tiebreak_factor",
+    "apply_prior_tiebreak",
     "score_candidate",
     "apply_progressive_disclosure",
     "rank_lexical",
@@ -1543,7 +1734,7 @@ def related_to_text(
         )
         scored.append(_scored_result(candidate, sc, reasons, components))
 
-    scored.sort(key=lambda r: r.score, reverse=True)
+    apply_prior_tiebreak(scored)
 
     return [
         {

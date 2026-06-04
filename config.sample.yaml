@@ -42,3 +42,45 @@ first_run: true
 # contradiction_review_threshold: 0.60
 # contradiction_auto_threshold_lang_no: 0.95
 # contradiction_protect_higher_confidence: true
+
+# Prior score (Mechanism 1 — cold-start ranking, always-on by default)
+# Combines confidence, half-life recency, and query relevance, and is applied
+# as a TIE-BREAKER: its contribution scales continuously to zero as a
+# candidate's base (pre-prior) score gap to the local leader exceeds
+# prior_tie_band (a relative gap). A candidate with a clear base-score lead
+# keeps its rank regardless of prior — the prior only reorders near-ties.
+# Set prior_enabled to false to reproduce pre-prior scores exactly (A/B baseline).
+# prior_enabled: true
+# prior_weight: 0.10
+# prior_tie_band: 0.02          # relative base-score gap within which the prior breaks ties
+# prior_w_importance: 0.30
+# prior_w_recency: 0.30
+# prior_w_relevance: 0.40
+# prior_recency_half_life_days: 180.0
+
+# Fusion mode for semantic_hybrid (Mechanism 3 / FUSION)
+# "weighted_sum" (default, preserves existing behaviour) or "rrf" (Reciprocal
+# Rank Fusion — generates lexical + semantic rank lists separately then merges).
+# Keep weighted_sum: on the real corpus RRF measures worse (hit@1 0.467 vs
+# 0.733) because k=60 flattens rank differences on small candidate pools.
+# fusion: weighted_sum
+# rrf_k: 60
+
+# Pseudo-Relevance Feedback (Mechanism 2 — dense path only, default off)
+# Expands the query vector via Rocchio from the top-m / bottom-n results.
+# Enable only after A/B eval. CLI flag --prf overrides this per query.
+# prf_enabled: false
+# prf_top_m: 3
+# prf_bottom_n: 5
+# prf_alpha: 1.0
+# prf_beta: 0.75
+# prf_gamma: 0.15
+
+# LLM-judged signal seeding (Mechanism 3 — bootstrap the signal gate)
+# Run: ledger signal seed --from-history  (or --queries-file <path>)
+# Seeded events carry synthetic:true and are down-weighted by synthetic_weight.
+# Roll back with: ledger signal purge --synthetic
+# synthetic_weight: 0.5
+# judge_backend: dummy          # "dummy" (lexical heuristic) or "subprocess"
+# judge_subprocess_command: ""  # e.g. "claude -p" for the subprocess backend
+# judge_seed_top_k: 5           # notes retrieved per query during seeding
