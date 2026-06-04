@@ -715,6 +715,25 @@ class LedgerABEnvOverrideTests(unittest.TestCase):
         self.assertIn("LEDGER_WEIGHT_SIGNAL", md)
 
 
+class LedgerABDefaultModeTests(unittest.TestCase):
+    """Fix 3: default modes follow the configured retrieval_mode, not 'legacy'."""
+
+    def test_default_mode_follows_resolved_retrieval_mode(self):
+        with mock.patch(
+            "ledger.retrieval.resolve_retrieval_mode", return_value="semantic_hybrid"
+        ):
+            parser = ab_lib.build_cli_argument_parser()
+            args = parser.parse_args([])
+        self.assertEqual(args.baseline_mode, "semantic_hybrid")
+        self.assertEqual(args.candidate_mode, "semantic_hybrid")
+
+    def test_explicit_mode_flags_still_override(self):
+        parser = ab_lib.build_cli_argument_parser()
+        args = parser.parse_args(["--baseline-mode", "legacy", "--candidate-mode", "two_stage"])
+        self.assertEqual(args.baseline_mode, "legacy")
+        self.assertEqual(args.candidate_mode, "two_stage")
+
+
 class LedgerABRepoRootTests(unittest.TestCase):
     """Fix 2: repo root must be the ledger code clone, not the note corpus."""
 
