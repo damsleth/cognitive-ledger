@@ -339,10 +339,10 @@ def _serialize_scalar(value: Any) -> str:
     if not text:
         return '""'
     if text.lower() in _RESERVED_YAML_SCALARS:
-        return _json.dumps(text)
+        return _json.dumps(text, ensure_ascii=False)
     if re.fullmatch(r"[A-Za-z0-9_./:-]+", text):
         return text
-    return _json.dumps(text)
+    return _json.dumps(text, ensure_ascii=False)
 
 
 def serialize_frontmatter(fields: dict[str, Any]) -> str:
