@@ -77,6 +77,7 @@ ledger-obsidian daemon start|status|stop --vault /path/to/vault   # macOS
 ledger query "<topic>" --scope all --limit 8
 ledger query "<topic>" --scope all --limit 8 --retrieval-mode <mode>
 ledger query "<topic>" --scope dev --bundle
+ledger query "<topic>" --as-of 2025-06-01   # notes valid on that date (includes archive)
 ledger discover-source "<topic>" --source-notes-dir <root> --limit 20
 ledger embed build --target ledger --backend local --model TaylorAI/bge-micro-v2
 ledger embed status --target both
@@ -86,6 +87,31 @@ ledger notes --type <all|identity|facts|preferences|goals|loops|concepts>
 ledger context --format boot # session boot payload
 ledger context --format identity  # identity notes only
 ```
+
+### Bitemporal validity
+
+```bash
+ledger migrate bitemporal --check     # preview back-fill (no writes)
+ledger migrate bitemporal --apply     # write valid_from / valid_to + timeline entry
+ledger sleep lint                     # flags invalid timestamps, ordering errors, dangling refs
+```
+
+Four optional frontmatter fields track *when a fact was true* (valid-time), separate from
+`created`/`updated` (transaction time). Applicable to `01_identity`, `02_facts`,
+`03_preferences`, `04_goals`, `06_concepts`, and `09_archive`; `00_inbox` is exempt.
+All fields are optional — notes without them lint clean and retrieve identically to today.
+
+| Field | Meaning |
+|---|---|
+| `valid_from` | ISO 8601 UTC: when the fact became true. `null` on legacy notes = migration warning, not error. |
+| `valid_to` | ISO 8601 UTC: when the fact ceased to be true. `null` = currently valid (open interval). |
+| `superseded_by` | Logical `notes/…/note.md` path to the replacement note. Requires `valid_to` to be set. |
+| `supersedes` | List of logical `notes/…/note.md` paths this note replaces. Written by `supersede()`. |
+
+**Supersession:** when a fact is replaced, use the `supersede()` primitive in `ledger/bitemporal.py`.
+It sets `valid_to` on the old note, writes `superseded_by`, copies `supersedes` onto the new note,
+and moves the old file to `09_archive/`. The old note is never deleted.
+Default retrieval hides notes with an expired `valid_to`; use `--as-of` to query historical state.
 
 ### Signals (Feedback Loop)
 
@@ -166,6 +192,8 @@ ledger sleep sync --check && ledger sleep sync --apply
 ledger sleep sleep
 ledger sleep lint
 ledger sleep index
+ledger migrate bitemporal --check   # preview valid_from / valid_to back-fill
+ledger migrate bitemporal --apply   # write back-fill + append timeline entry
 ```
 
 ### Folder map
@@ -253,7 +281,9 @@ The ledger should maintain cohesion as it grows via periodic consolidation (“E
    If a detail feels unusually sensitive or ambiguous, ask.
 6. **Append before overwrite.** When updating a note, bump the `updated`
    timestamp and adjust sections; avoid deleting history. If a note is
-   superseded, move it to `/notes/09_archive/` instead of deleting it.
+   superseded, use the `supersede()` primitive (or `ledger migrate bitemporal`)
+   to move it to `09_archive/` with `valid_to` and `superseded_by` set — never
+   delete superseded notes.
 
 ## Folder layout
 
@@ -283,16 +313,20 @@ purpose:
 All atomic notes require YAML frontmatter. See `schema.yaml` for machine-readable
 specification. Required fields:
 
-| Field      | Format       | Notes                                          |
-| ---------- | ------------ | ---------------------------------------------- |
-| created    | ISO 8601 UTC | `2026-01-20T12:00:00Z`                         |
-| updated    | ISO 8601 UTC | bump on every edit                             |
-| tags       | list         | lowercase, no spaces                           |
-| confidence | 0.0–1.0      | <0.7 = hypothesis                              |
-| source     | enum         | user, tool, assistant, inferred                |
-| scope      | enum         | home, work, dev, personal, life (alias), meta  |
-| lang       | enum         | en, no, mixed                                  |
-| status     | enum         | **loops only**: open, closed, blocked, snoozed |
+| Field         | Format       | Notes                                                                |
+| ------------- | ------------ | -------------------------------------------------------------------- |
+| created       | ISO 8601 UTC | `2026-01-20T12:00:00Z`                                               |
+| updated       | ISO 8601 UTC | bump on every edit                                                   |
+| tags          | list         | lowercase, no spaces                                                 |
+| confidence    | 0.0–1.0      | <0.7 = hypothesis                                                    |
+| source        | enum         | user, tool, assistant, inferred                                      |
+| scope         | enum         | home, work, dev, personal, life (alias), meta                        |
+| lang          | enum         | en, no, mixed                                                        |
+| status        | enum         | **loops only**: open, closed, blocked, snoozed                       |
+| valid_from    | ISO 8601 UTC | *optional* — when the fact became true; see "Bitemporal validity"    |
+| valid_to      | ISO 8601 UTC | *optional* — when the fact ceased; null = currently valid            |
+| superseded_by | string       | *optional* — logical path to replacement; requires `valid_to`        |
+| supersedes    | list         | *optional* — logical paths this note replaces; written by supersede()|
 
 ### File naming
 

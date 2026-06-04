@@ -41,6 +41,10 @@ class RetrievalCandidate:
     snippet: str
     has_next_action_checkbox: bool
     word_count: int = 0
+    # Bitemporal validity fields (optional; absent on legacy notes)
+    valid_from: str = ""
+    valid_to: str = ""
+    superseded_by: str = ""
 
 
 @dataclass
