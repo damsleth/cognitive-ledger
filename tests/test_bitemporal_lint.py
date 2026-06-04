@@ -275,6 +275,7 @@ def test_null_valid_from_is_warning_not_error(tmp_path, capsys):
     assert rc == 0
     # Must emit a warning mentioning valid_from.
     assert "valid_from" in out
+    assert "ledger migrate bitemporal --apply" in out
 
 
 # ---------------------------------------------------------------------------
