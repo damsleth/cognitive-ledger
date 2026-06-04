@@ -401,6 +401,31 @@ class TestAsOfRetrievalLexical:
         assert any("fact__future" in p for p in paths), \
             f"future valid_from note should appear for as-of 2030; got: {paths}"
 
+    def test_ranked_results_preserve_bitemporal_fields(self, tmp_cfg):
+        """Filtering should not strip bitemporal metadata from final results."""
+        note = tmp_cfg.ledger_notes_dir / "02_facts" / "fact__metadata.md"
+        _write(note, _make_note(
+            "valid_from: 2025-01-01T00:00:00Z\nvalid_to: 2027-01-01T00:00:00Z\nsuperseded_by: notes/02_facts/fact__replacement.md\n",
+            body="## Statement\n\nmetadata preservation token\n",
+        ))
+
+        result = query_lib.rank_query(
+            "metadata preservation token",
+            scope="all",
+            limit=10,
+            retrieval_mode="legacy",
+            load_embeddings_module=lambda: None,
+            resolve_embed_model=lambda b, m: "unused",
+            now_dt=_utc(2026, 6),
+        )
+        matched = next(
+            r for r in result.results
+            if r.rel_path == "notes/02_facts/fact__metadata.md"
+        )
+        assert matched.valid_from == "2025-01-01T00:00:00Z"
+        assert matched.valid_to == "2027-01-01T00:00:00Z"
+        assert matched.superseded_by == "notes/02_facts/fact__replacement.md"
+
     def test_zero_bitemporal_corpus_ranks_identically(self, tmp_cfg):
         """A corpus with no bitemporal fields must rank identically with and without filtering."""
         for i in range(3):
