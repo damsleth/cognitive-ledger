@@ -1,9 +1,12 @@
+import argparse
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 from ledger import ab as ab_lib
 
@@ -613,6 +616,130 @@ class LedgerABSmokeIntegrationTests(unittest.TestCase):
             self.assertEqual(payload["settings"]["runs"], 1)
             self.assertEqual(payload["settings"]["eval_runs"], 1)
             self.assertEqual(payload["settings"]["query_runs"], 1)
+
+
+class LedgerABEnvOverrideTests(unittest.TestCase):
+    """Fix 1: env overrides must reach the eval + query probes and be surfaced."""
+
+    def _run_probe(self, corpus_dir: Path, env_overrides: dict) -> dict:
+        payload = {
+            "worktree": str(ROOT),
+            "corpus_dir": str(corpus_dir),
+            "cases_rel": "notes/08_indices/retrieval_eval_cases.yaml",
+            "retrieval_mode": "legacy",
+            "embed_backend": "local",
+            "embed_model": None,
+            "eval_runs": 1,
+            "query_runs": 1,
+            "k": 3,
+            "cold_query": False,
+            "env_overrides": env_overrides,
+        }
+        env = dict(os.environ)
+        env["LEDGER_ROOT"] = str(ROOT)
+        # Make sure no inherited LEDGER_WEIGHT_SIGNAL leaks into the assertion.
+        env.pop("LEDGER_WEIGHT_SIGNAL", None)
+        proc = subprocess.run(
+            [sys.executable, "-m", "ledger.ab_probe", json.dumps(payload)],
+            cwd=str(ROOT),
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        self.assertEqual(proc.returncode, 0, msg=proc.stderr)
+        return json.loads(proc.stdout)
+
+    def test_env_var_named_override_reaches_probe_and_is_surfaced(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            corpus_dir = Path(temp_dir) / "corpus"
+            write_smoke_corpus(corpus_dir)
+            out = self._run_probe(corpus_dir, {"LEDGER_WEIGHT_SIGNAL": "0.42"})
+            self.assertEqual(
+                out["applied_env_overrides"], {"LEDGER_WEIGHT_SIGNAL": "0.42"}
+            )
+
+    def test_field_named_override_still_supported(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            corpus_dir = Path(temp_dir) / "corpus"
+            write_smoke_corpus(corpus_dir)
+            out = self._run_probe(corpus_dir, {"score_weight_signal": "0.3"})
+            self.assertEqual(
+                out["applied_env_overrides"], {"score_weight_signal": "0.3"}
+            )
+
+    def test_no_overrides_yields_empty_applied_map(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            corpus_dir = Path(temp_dir) / "corpus"
+            write_smoke_corpus(corpus_dir)
+            out = self._run_probe(corpus_dir, {})
+            self.assertEqual(out["applied_env_overrides"], {})
+
+    def test_apply_probe_results_copies_applied_overrides_into_report(self):
+        report = {"baseline": {}, "candidate": {}}
+        baseline_probe = _make_fake_probe(applied={"LEDGER_WEIGHT_SIGNAL": "0.0"})
+        candidate_probe = _make_fake_probe(applied={"LEDGER_WEIGHT_SIGNAL": "0.1"})
+        decision = {"quality_deltas": {}}
+        ab_lib.apply_probe_results(
+            report,
+            baseline_probe=baseline_probe,
+            candidate_probe=candidate_probe,
+            decision=decision,
+        )
+        self.assertEqual(
+            report["baseline"]["applied_env_overrides"],
+            {"LEDGER_WEIGHT_SIGNAL": "0.0"},
+        )
+        self.assertEqual(
+            report["candidate"]["applied_env_overrides"],
+            {"LEDGER_WEIGHT_SIGNAL": "0.1"},
+        )
+
+    def test_markdown_report_proves_applied_overrides(self):
+        payload = {
+            "generated_at": "2026-06-04T00:00:00Z",
+            "baseline": {
+                "ref": "HEAD",
+                "env_overrides": {"LEDGER_WEIGHT_SIGNAL": "0.0"},
+                "applied_env_overrides": {"LEDGER_WEIGHT_SIGNAL": "0.0"},
+            },
+            "candidate": {
+                "ref": "HEAD",
+                "env_overrides": {"LEDGER_WEIGHT_SIGNAL": "0.1"},
+                "applied_env_overrides": {"LEDGER_WEIGHT_SIGNAL": "0.1"},
+            },
+            "decision": {},
+        }
+        md = ab_lib.build_markdown_report(payload)
+        self.assertIn("Config Overrides", md)
+        self.assertIn("applied", md.lower())
+        self.assertIn("LEDGER_WEIGHT_SIGNAL", md)
+
+
+def _make_fake_probe(applied: dict | None = None) -> dict:
+    """Minimal probe payload matching the shape apply_probe_results expects."""
+    def _summary():
+        return {"summary": {"p95_ms": 1.0}, "samples_ms": [1.0]}
+
+    def _metric():
+        return {"summary": {"p95_ms": 1.0}, "samples_ms": [1.0]}
+
+    return {
+        "quality": {"hit1": 0.5, "hitk": 0.6, "mrr": 0.55, "cases": 1, "k": 3, "failed": []},
+        "latency": {"eval": _summary(), "query": {**_summary(), "case_count": 1, "runs": 1, "cold_query": False}},
+        "query_metrics": {key: _metric() for key in ab_lib.QUERY_METRIC_KEYS},
+        "context_metrics": {
+            "boot_context_tokens": 0,
+            "boot_context_bytes": 0,
+            "profile_tokens": {"personal": 0, "work": 0, "dev": 0},
+            "bundle_tokens": {"p95": 0.0},
+            "notes_total_tokens": 0,
+            "avg_note_words": 0.0,
+            "p95_note_words": 0.0,
+        },
+        "maintenance_metrics": {key: 0 for key in ab_lib.MAINTENANCE_METRIC_KEYS},
+        "semantic_index": {"enabled": False},
+        "applied_env_overrides": applied or {},
+    }
 
 
 if __name__ == "__main__":
