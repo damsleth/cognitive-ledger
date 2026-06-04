@@ -17,12 +17,13 @@ import heapq
 import json
 import os
 import time
+import warnings as _warnings
 from pathlib import Path
 from typing import Any, Union
 
 from ledger.config import get_config
 from ledger.io import safe_write_text
-from ledger.layout import indices_dir, logical_path, note_type_dir, resolve_path
+from ledger.layout import NOTE_LAYOUTS, indices_dir, logical_path, note_type_dir, resolve_path
 from ledger.parsing import (
     extract_link_tokens,
     extract_title,
@@ -117,6 +118,9 @@ def _copy_candidate(candidate: CandidateLike) -> RetrievalCandidate:
         snippet=str(_candidate_value(candidate, "snippet", "") or ""),
         has_next_action_checkbox=bool(_candidate_value(candidate, "has_next_action_checkbox", False)),
         word_count=int(_candidate_value(candidate, "word_count", 0) or 0),
+        valid_from=str(_candidate_value(candidate, "valid_from", "") or ""),
+        valid_to=str(_candidate_value(candidate, "valid_to", "") or ""),
+        superseded_by=str(_candidate_value(candidate, "superseded_by", "") or ""),
     )
 
 
@@ -147,6 +151,9 @@ def _scored_result(
         snippet=base.snippet,
         has_next_action_checkbox=base.has_next_action_checkbox,
         word_count=base.word_count,
+        valid_from=base.valid_from,
+        valid_to=base.valid_to,
+        superseded_by=base.superseded_by,
         score=score,
         reasons=list(reasons),
         components=components,
@@ -376,6 +383,15 @@ def _candidate_from_parts(
         slug=slug,
     )
 
+    # Capture bitemporal validity fields (optional; absent on legacy notes).
+    def _str_or_empty(val: Any) -> str:
+        s = str(val or "").strip()
+        return "" if s in ("null", "~", "None") else s
+
+    valid_from = _str_or_empty(frontmatter.get("valid_from", ""))
+    valid_to = _str_or_empty(frontmatter.get("valid_to", ""))
+    superseded_by = _str_or_empty(frontmatter.get("superseded_by", ""))
+
     return RetrievalCandidate(
         path=str(path.resolve()),
         rel_path=str(rel_path),
@@ -396,6 +412,9 @@ def _candidate_from_parts(
         snippet=snippet_source,
         has_next_action_checkbox=bool(next_action),
         word_count=len(body.split()),
+        valid_from=valid_from,
+        valid_to=valid_to,
+        superseded_by=superseded_by,
     )
 
 
@@ -412,7 +431,7 @@ def _candidate_to_json(candidate: RetrievalCandidate) -> dict[str, Any]:
         ledger_root=_cfg().ledger_root,
         ledger_notes_dir=_cfg().ledger_notes_dir,
     ).as_posix()
-    return {
+    payload: dict[str, Any] = {
         "path": persisted_path,
         "rel_path": candidate.rel_path,
         "type": candidate.type,
@@ -432,6 +451,14 @@ def _candidate_to_json(candidate: RetrievalCandidate) -> dict[str, Any]:
         "has_next_action_checkbox": candidate.has_next_action_checkbox,
         "word_count": candidate.word_count,
     }
+    # Persist bitemporal fields only when set (keeps index lean for legacy notes).
+    if candidate.valid_from:
+        payload["valid_from"] = candidate.valid_from
+    if candidate.valid_to:
+        payload["valid_to"] = candidate.valid_to
+    if candidate.superseded_by:
+        payload["superseded_by"] = candidate.superseded_by
+    return payload
 
 
 def _candidate_from_json(candidate_json: dict[str, Any]) -> RetrievalCandidate:
@@ -480,6 +507,10 @@ def _candidate_from_json(candidate_json: dict[str, Any]) -> RetrievalCandidate:
         snippet=str(candidate_json.get("snippet", "")),
         has_next_action_checkbox=bool(candidate_json.get("has_next_action_checkbox", False)),
         word_count=int(candidate_json.get("word_count", 0) or 0),
+        # Bitemporal fields — absent in older indexes; default to empty string.
+        valid_from=str(candidate_json.get("valid_from", "") or ""),
+        valid_to=str(candidate_json.get("valid_to", "") or ""),
+        superseded_by=str(candidate_json.get("superseded_by", "") or ""),
     )
 
 
@@ -630,6 +661,132 @@ def clear_candidate_cache() -> None:
     global _CANDIDATE_CACHE, _CANDIDATE_INDEX_CACHE
     _CANDIDATE_CACHE = None
     _CANDIDATE_INDEX_CACHE = None
+
+
+def _build_archive_candidates() -> list[RetrievalCandidate]:
+    """Build retrieval candidates from notes/09_archive for --as-of queries.
+
+    Archive notes are excluded from the normal corpus (not in CORE_NOTE_TYPES)
+    so they need to be loaded separately when --as-of widens the candidate pool.
+    Returns an empty list if the archive directory does not exist.
+    """
+    config = _cfg()
+    archive_dir = config.ledger_notes_dir / "09_archive"
+    if not archive_dir.is_dir():
+        return []
+
+    candidates: list[RetrievalCandidate] = []
+    for note_path in sorted(archive_dir.glob("*.md")):
+        if note_path.name == ".gitkeep":
+            continue
+        try:
+            frontmatter, body = read_note_for_retrieval(note_path)
+        except Exception:
+            continue
+        # Determine note type from filename prefix.
+        stem = note_path.stem
+        note_type = "facts"  # default / fallback type for archived notes
+        for nt in _note_types():
+            nl = NOTE_LAYOUTS.get(nt)
+            if nl and stem.startswith(nl.prefix):
+                note_type = nt
+                break
+        candidate = _candidate_from_parts(note_path, note_type, frontmatter, body)
+        candidates.append(candidate)
+    return candidates
+
+
+def build_candidates_with_archive() -> list[RetrievalCandidate]:
+    """Return all core candidates PLUS archive notes for --as-of queries.
+
+    This is the widened candidate pool used when a temporal filter is requested.
+    The result is NOT cached (archive candidates are only needed for as-of queries).
+    """
+    return build_candidates(use_cache=False) + _build_archive_candidates()
+
+
+# ---------------------------------------------------------------------------
+# Temporal filter helpers
+# ---------------------------------------------------------------------------
+
+
+def apply_temporal_filter(
+    candidates: list[RetrievalCandidate],
+    *,
+    as_of: dt.datetime | None,
+    now_dt: dt.datetime,
+) -> list[RetrievalCandidate]:
+    """Filter candidates by valid-time interval.
+
+    Default path (as_of=None):
+    - Notes with NO validity fields pass through unchanged (golden requirement).
+    - Notes with a valid_to in the past (< now_dt) are excluded — they are
+      superseded/expired facts that should not appear in current retrieval.
+
+    --as-of path (as_of is a datetime):
+    - Keep only notes where valid_from <= as_of AND (valid_to null OR valid_to >= as_of).
+    - Notes with null valid_from are valid for all time (never silently dropped;
+      a warning is emitted to stderr so the user knows migration would help).
+    - This path naturally INCLUDES archive notes (if they are in the candidate list).
+
+    Args:
+        candidates: Full candidate pool.
+        as_of:      Target instant for temporal query, or None for current retrieval.
+        now_dt:     Current UTC datetime (used for the default-path expiry check).
+
+    Returns:
+        Filtered list of candidates.
+    """
+    from ledger.bitemporal import is_valid_at, parse_validity
+
+    filtered: list[RetrievalCandidate] = []
+    for c in candidates:
+        vf_raw = c.valid_from
+        vt_raw = c.valid_to
+
+        superseded_by_raw = c.superseded_by
+        has_any_validity_fields = bool(vf_raw or vt_raw or superseded_by_raw)
+
+        if as_of is None:
+            # Default path: pass-through notes with no validity fields.
+            if not has_any_validity_fields:
+                filtered.append(c)
+                continue
+            # Notes with valid_to in the past are hidden in current retrieval.
+            fm_stub: dict[str, Any] = {}
+            if vf_raw:
+                fm_stub["valid_from"] = vf_raw
+            if vt_raw:
+                fm_stub["valid_to"] = vt_raw
+            if is_valid_at(fm_stub, now_dt):
+                filtered.append(c)
+            # else: expired — skip silently
+        else:
+            # --as-of path: apply temporal filter strictly.
+            if not vf_raw:
+                # Null valid_from = valid for all time (open left bound).
+                # Emit a per-note warning so the user knows migration would help.
+                _warnings.warn(
+                    f"Note {c.rel_path!r} has no valid_from; treating as valid "
+                    "for all time. Run `ledger migrate bitemporal --check` to "
+                    "see migration candidates.",
+                    stacklevel=4,
+                )
+                # Still apply valid_to check if present.
+                fm_stub: dict[str, Any] = {}
+                if vt_raw:
+                    fm_stub["valid_to"] = vt_raw
+                if is_valid_at(fm_stub, as_of):
+                    filtered.append(c)
+                continue
+            fm_stub = {}
+            if vf_raw:
+                fm_stub["valid_from"] = vf_raw
+            if vt_raw:
+                fm_stub["valid_to"] = vt_raw
+            if is_valid_at(fm_stub, as_of):
+                filtered.append(c)
+    return filtered
 
 
 def candidate_index_tokens(candidate: CandidateLike) -> set[str]:
@@ -1103,8 +1260,17 @@ def rank_lexical(
     aliases_path: Path | str | None = None,
     now_dt: dt.datetime | None = None,
     retrieval_mode: str = "legacy",
+    as_of: dt.datetime | None = None,
 ) -> RetrievalResult:
-    """Rank notes using lexical retrieval modes."""
+    """Rank notes using lexical retrieval modes.
+
+    Args:
+        as_of: When set, widen the candidate pool to include 09_archive notes
+               and apply a valid-time filter so only notes valid at *as_of* are
+               returned.  The default (None) applies the current-validity filter:
+               notes with an expired valid_to are hidden, but notes with no
+               validity fields at all are passed through unchanged.
+    """
     t0 = time.perf_counter()
     now_dt = now_dt or now_utc()
     mode = resolve_retrieval_mode(retrieval_mode)
@@ -1153,11 +1319,24 @@ def rank_lexical(
             or two_stage_active
         )
         prefiltered_candidates = candidates
+
+    # When --as-of is requested widen the pool to include archive notes.
+    if as_of is not None:
+        archive_extras = _build_archive_candidates()
+        candidates = list(candidates) + archive_extras
+        prefiltered_candidates = list(prefiltered_candidates) + archive_extras
+
+    # Apply temporal filter after candidate generation.
+    candidates = apply_temporal_filter(candidates, as_of=as_of, now_dt=now_dt)
+    prefiltered_candidates = apply_temporal_filter(
+        prefiltered_candidates, as_of=as_of, now_dt=now_dt
+    )
+
     t_candidates = time.perf_counter()
 
     if scope_prefilter_active:
         prefiltered_candidates = prefilter_candidates_by_scope_and_type(
-            candidates,
+            prefiltered_candidates,
             expanded_tokens,
             scope,
             history_mode,
@@ -1297,6 +1476,8 @@ __all__ = [
     "load_note_index",
     "rebuild_note_index",
     "build_candidates",
+    "build_candidates_with_archive",
+    "apply_temporal_filter",
     "clear_candidate_cache",
     "candidate_index_tokens",
     "build_candidate_index",
