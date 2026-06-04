@@ -103,7 +103,7 @@ All fields are optional — notes without them lint clean and retrieve identical
 
 | Field | Meaning |
 |---|---|
-| `valid_from` | ISO 8601 UTC: when the fact became true. `null` on legacy notes = migration warning, not error. |
+| `valid_from` | ISO 8601 UTC: when the fact became true. Absent on legacy notes is lint-clean; missing only warns when other bitemporal fields exist. |
 | `valid_to` | ISO 8601 UTC: when the fact ceased to be true. `null` = currently valid (open interval). |
 | `superseded_by` | Logical `notes/…/note.md` path to the replacement note. Requires `valid_to` to be set. |
 | `supersedes` | List of logical `notes/…/note.md` paths this note replaces. Written by `supersede()`. |
