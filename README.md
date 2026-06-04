@@ -306,7 +306,7 @@ Sleep merges duplicates, promotes patterns into stable notes, updates indices, a
 
 ## Web UI
 
-A local read-only web interface for browsing the corpus (Phase 1: browse + read; search, backlinks, and graph land in later phases - see `.plans/41-web-interface-v1.md`).
+A local read-only web interface for browsing the corpus. Browse/read, search, backlinks, `/healthz`, and `/admin/reload` are available; graph view is the remaining v1 slice (see `.plans/41-web-interface-v1.md`).
 
 ```bash
 pip install 'cognitive-ledger[web]'        # installs FastAPI + uvicorn + jinja2 + markdown-it-py
@@ -319,7 +319,10 @@ Routes:
 - `/` and `/browse` - recent activity across all types
 - `/browse/{type}` - listing per note type (e.g. `/browse/facts`, `/browse/loops?status=open`)
 - `/browse/all` - aggregated listing
-- `/note/{stem}` - rendered note with frontmatter, body, and broken-link panel
+- `/note/{stem}` - rendered note with frontmatter, body, backlinks, outgoing links, and broken-link panel
+- `/search?q=...` - lexical or semantic-hybrid search
+- `/healthz` - JSON readiness/status probe
+- `/admin/reload` - POST endpoint that reloads the corpus and clears search cache
 
 The server is local-only by default (`127.0.0.1`); binding to a non-loopback host prints a warning since the ledger has no auth.
 
