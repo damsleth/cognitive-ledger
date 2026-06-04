@@ -43,26 +43,60 @@ def main() -> int:
     else:
         cases_path = str((worktree / payload["cases_rel"]).resolve())
 
-    # Apply config overrides before any queries run.
-    # Keys are config field names (e.g. score_weight_signal=0.15).
+    # Apply config overrides before any queries (and the eval probe) run.
+    #
+    # Override keys may be either:
+    #   * environment-variable names (the documented form, e.g.
+    #     LEDGER_WEIGHT_SIGNAL=0.1, LEDGER_PRIOR_ENABLED=0), which we push into
+    #     os.environ so the config loader's normal env-override path applies
+    #     them; or
+    #   * raw config field names (e.g. score_weight_signal=0.15), which we set
+    #     directly on the freshly built config object as a fallback.
+    #
+    # Previously the loop matched keys against config *field* names only, so the
+    # documented LEDGER_* env-var form was silently dropped (it never reached
+    # the eval or query probes). We now route LEDGER_* keys through os.environ
+    # before reset_config() so they take effect everywhere.
     env_overrides = payload.get("env_overrides", {})
+    applied_overrides: dict[str, str] = {}
     if env_overrides:
         from ledger.config import reset_config
+
+        env_named = {
+            key: value
+            for key, value in env_overrides.items()
+            if str(key).upper() == str(key) and str(key).startswith("LEDGER_")
+        }
+        field_named = {
+            key: value for key, value in env_overrides.items() if key not in env_named
+        }
+
+        # Push env-var-named overrides into the process environment so the
+        # standard config loader (_apply_env_overrides) picks them up.
+        for key, value in env_named.items():
+            os.environ[key] = str(value)
+            applied_overrides[key] = str(value)
+
         reset_config()
         cfg = get_config()
-        for key, value in env_overrides.items():
+
+        # Field-named overrides are applied directly to the loaded config.
+        for key, value in field_named.items():
             if not hasattr(cfg, key):
                 print(f"warning: unknown config key: {key}", file=sys.stderr)
                 continue
             current = getattr(cfg, key)
-            if isinstance(current, float):
-                setattr(cfg, key, float(value))
+            # bool must be checked before int (bool is a subclass of int).
+            if isinstance(current, bool):
+                coerced = str(value).strip().lower() in ("true", "1", "yes", "on")
+            elif isinstance(current, float):
+                coerced = float(value)
             elif isinstance(current, int):
-                setattr(cfg, key, int(value))
-            elif isinstance(current, str):
-                setattr(cfg, key, str(value))
-            elif isinstance(current, bool):
-                setattr(cfg, key, str(value).lower() in ("true", "1", "yes"))
+                coerced = int(value)
+            else:
+                coerced = str(value)
+            setattr(cfg, key, coerced)
+            applied_overrides[key] = str(value)
 
     import importlib
     ledger_script = importlib.import_module("ledger.cli")
@@ -249,6 +283,7 @@ def main() -> int:
             "lint_warnings": int(counters.warnings),
         },
         "semantic_index": semantic_index,
+        "applied_env_overrides": applied_overrides,
     }
     print(json.dumps(out, ensure_ascii=False))
     return 0

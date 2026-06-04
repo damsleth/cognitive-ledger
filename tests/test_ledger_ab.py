@@ -1,9 +1,12 @@
+import argparse
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 from ledger import ab as ab_lib
 
@@ -613,6 +616,271 @@ class LedgerABSmokeIntegrationTests(unittest.TestCase):
             self.assertEqual(payload["settings"]["runs"], 1)
             self.assertEqual(payload["settings"]["eval_runs"], 1)
             self.assertEqual(payload["settings"]["query_runs"], 1)
+
+
+class LedgerABEnvOverrideTests(unittest.TestCase):
+    """Fix 1: env overrides must reach the eval + query probes and be surfaced."""
+
+    def _run_probe(self, corpus_dir: Path, env_overrides: dict) -> dict:
+        payload = {
+            "worktree": str(ROOT),
+            "corpus_dir": str(corpus_dir),
+            "cases_rel": "notes/08_indices/retrieval_eval_cases.yaml",
+            "retrieval_mode": "legacy",
+            "embed_backend": "local",
+            "embed_model": None,
+            "eval_runs": 1,
+            "query_runs": 1,
+            "k": 3,
+            "cold_query": False,
+            "env_overrides": env_overrides,
+        }
+        env = dict(os.environ)
+        env["LEDGER_ROOT"] = str(ROOT)
+        # Make sure no inherited LEDGER_WEIGHT_SIGNAL leaks into the assertion.
+        env.pop("LEDGER_WEIGHT_SIGNAL", None)
+        proc = subprocess.run(
+            [sys.executable, "-m", "ledger.ab_probe", json.dumps(payload)],
+            cwd=str(ROOT),
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        self.assertEqual(proc.returncode, 0, msg=proc.stderr)
+        return json.loads(proc.stdout)
+
+    def test_env_var_named_override_reaches_probe_and_is_surfaced(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            corpus_dir = Path(temp_dir) / "corpus"
+            write_smoke_corpus(corpus_dir)
+            out = self._run_probe(corpus_dir, {"LEDGER_WEIGHT_SIGNAL": "0.42"})
+            self.assertEqual(
+                out["applied_env_overrides"], {"LEDGER_WEIGHT_SIGNAL": "0.42"}
+            )
+
+    def test_field_named_override_still_supported(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            corpus_dir = Path(temp_dir) / "corpus"
+            write_smoke_corpus(corpus_dir)
+            out = self._run_probe(corpus_dir, {"score_weight_signal": "0.3"})
+            self.assertEqual(
+                out["applied_env_overrides"], {"score_weight_signal": "0.3"}
+            )
+
+    def test_no_overrides_yields_empty_applied_map(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            corpus_dir = Path(temp_dir) / "corpus"
+            write_smoke_corpus(corpus_dir)
+            out = self._run_probe(corpus_dir, {})
+            self.assertEqual(out["applied_env_overrides"], {})
+
+    def test_apply_probe_results_copies_applied_overrides_into_report(self):
+        report = {"baseline": {}, "candidate": {}}
+        baseline_probe = _make_fake_probe(applied={"LEDGER_WEIGHT_SIGNAL": "0.0"})
+        candidate_probe = _make_fake_probe(applied={"LEDGER_WEIGHT_SIGNAL": "0.1"})
+        decision = {"quality_deltas": {}}
+        ab_lib.apply_probe_results(
+            report,
+            baseline_probe=baseline_probe,
+            candidate_probe=candidate_probe,
+            decision=decision,
+        )
+        self.assertEqual(
+            report["baseline"]["applied_env_overrides"],
+            {"LEDGER_WEIGHT_SIGNAL": "0.0"},
+        )
+        self.assertEqual(
+            report["candidate"]["applied_env_overrides"],
+            {"LEDGER_WEIGHT_SIGNAL": "0.1"},
+        )
+
+    def test_markdown_report_proves_applied_overrides(self):
+        payload = {
+            "generated_at": "2026-06-04T00:00:00Z",
+            "baseline": {
+                "ref": "HEAD",
+                "env_overrides": {"LEDGER_WEIGHT_SIGNAL": "0.0"},
+                "applied_env_overrides": {"LEDGER_WEIGHT_SIGNAL": "0.0"},
+            },
+            "candidate": {
+                "ref": "HEAD",
+                "env_overrides": {"LEDGER_WEIGHT_SIGNAL": "0.1"},
+                "applied_env_overrides": {"LEDGER_WEIGHT_SIGNAL": "0.1"},
+            },
+            "decision": {},
+        }
+        md = ab_lib.build_markdown_report(payload)
+        self.assertIn("Config Overrides", md)
+        self.assertIn("applied", md.lower())
+        self.assertIn("LEDGER_WEIGHT_SIGNAL", md)
+
+
+class LedgerABDefaultModeTests(unittest.TestCase):
+    """Fix 3: default modes follow the configured retrieval_mode, not 'legacy'."""
+
+    def test_default_mode_follows_resolved_retrieval_mode(self):
+        with mock.patch(
+            "ledger.retrieval.resolve_retrieval_mode", return_value="semantic_hybrid"
+        ):
+            parser = ab_lib.build_cli_argument_parser()
+            args = parser.parse_args([])
+        self.assertEqual(args.baseline_mode, "semantic_hybrid")
+        self.assertEqual(args.candidate_mode, "semantic_hybrid")
+
+    def test_explicit_mode_flags_still_override(self):
+        parser = ab_lib.build_cli_argument_parser()
+        args = parser.parse_args(["--baseline-mode", "legacy", "--candidate-mode", "two_stage"])
+        self.assertEqual(args.baseline_mode, "legacy")
+        self.assertEqual(args.candidate_mode, "two_stage")
+
+
+class LedgerABRepoRootTests(unittest.TestCase):
+    """Fix 2: repo root must be the ledger code clone, not the note corpus."""
+
+    def test_corpus_dir_is_not_a_ledger_code_repo(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            corpus = Path(temp_dir) / "ledger-notes"
+            (corpus / ".git").mkdir(parents=True)  # a git repo, but no ledger/ab.py
+            self.assertFalse(ab_lib._is_ledger_code_repo(corpus))
+
+    def test_source_clone_is_a_ledger_code_repo(self):
+        # The test runs inside the real source checkout.
+        self.assertTrue(ab_lib._is_ledger_code_repo(ROOT))
+
+    def test_resolve_repo_root_rejects_corpus_pointed_ledger_root(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            corpus = Path(temp_dir) / "ledger-notes"
+            (corpus / ".git").mkdir(parents=True)
+
+            class FakeConfig:
+                ledger_root = corpus
+
+            with mock.patch("ledger.config.get_config", return_value=FakeConfig()), \
+                mock.patch(
+                    "ledger.ab.subprocess.check_output",
+                    side_effect=subprocess.CalledProcessError(1, "git"),
+                ):
+                with self.assertRaises(ab_lib.InvalidSetupError):
+                    ab_lib._resolve_repo_root()
+
+
+class LedgerABSameRefWorktreeTests(unittest.TestCase):
+    """Fix 2: same-ref runs must execute the named ref, not whatever is HEAD."""
+
+    def _make_args(self, ref: str) -> argparse.Namespace:
+        parser = ab_lib.build_cli_argument_parser()
+        return parser.parse_args(
+            [
+                "--baseline-ref", ref,
+                "--candidate-ref", ref,
+                "--baseline-mode", "legacy",
+                "--candidate-mode", "legacy",
+                "--runs", "1",
+            ]
+        )
+
+    def _run_with_stubs(self, ref_commit: str, head_commit: str):
+        """Run run_cli_harness with all git/probe boundaries stubbed."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            corpus = Path(temp_dir) / "corpus"
+            write_smoke_corpus(corpus)
+            out_dir = Path(temp_dir) / "out"
+
+            args = self._make_args(ref_commit)
+            args.corpus = str(corpus)
+            args.out_dir = str(out_dir)
+
+            probe_roots: list[str] = []
+            created_worktrees: list[str] = []
+
+            def fake_probe(repo_root, worktree_root, **kwargs):
+                probe_roots.append(str(worktree_root))
+                return _make_fake_probe()
+
+            def fake_create(repo_root, ref, target_path):
+                created_worktrees.append(str(target_path))
+                Path(target_path).mkdir(parents=True, exist_ok=True)
+
+            with mock.patch.object(ab_lib, "_ensure_git_available"), \
+                mock.patch.object(ab_lib, "_resolve_repo_root", return_value=ROOT), \
+                mock.patch.object(ab_lib, "_resolve_ref", return_value=ref_commit), \
+                mock.patch.object(ab_lib, "_resolve_head_commit", return_value=head_commit), \
+                mock.patch.object(ab_lib, "_create_worktree", side_effect=fake_create), \
+                mock.patch.object(ab_lib, "_remove_worktree"), \
+                mock.patch.object(ab_lib, "run_probe_for_side", side_effect=fake_probe):
+                exit_code = ab_lib.run_cli_harness(args)
+
+            report = json.loads((out_dir / "ab_eval.json").read_text(encoding="utf-8"))
+            return exit_code, probe_roots, created_worktrees, report
+
+    def test_probes_repo_root_directly_when_ref_equals_head(self):
+        commit = "a" * 40
+        _exit, probe_roots, created, report = self._run_with_stubs(commit, commit)
+        self.assertEqual(created, [])  # no worktree needed
+        self.assertEqual(set(probe_roots), {str(ROOT)})
+        self.assertEqual(report["baseline"]["commit"], commit)
+
+    def test_creates_worktree_when_ref_differs_from_head(self):
+        ref_commit = "a" * 40
+        head_commit = "b" * 40
+        _exit, probe_roots, created, report = self._run_with_stubs(ref_commit, head_commit)
+        self.assertEqual(len(created), 1)  # one worktree at the named ref
+        # Both probes ran in that worktree, not repo_root.
+        self.assertEqual(set(probe_roots), {created[0]})
+        self.assertNotIn(str(ROOT), probe_roots)
+        # Report records the resolved commit, not the literal ref string.
+        self.assertEqual(report["baseline"]["commit"], ref_commit)
+
+    def test_nonexistent_ref_fails_loudly(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            corpus = Path(temp_dir) / "corpus"
+            write_smoke_corpus(corpus)
+            out_dir = Path(temp_dir) / "out"
+            args = self._make_args("no-such-ref")
+            args.corpus = str(corpus)
+            args.out_dir = str(out_dir)
+
+            def fake_resolve_ref(repo_root, ref):
+                raise ab_lib.InvalidSetupError("fatal: Needed a single revision")
+
+            with mock.patch.object(ab_lib, "_ensure_git_available"), \
+                mock.patch.object(ab_lib, "_resolve_repo_root", return_value=ROOT), \
+                mock.patch.object(ab_lib, "_resolve_ref", side_effect=fake_resolve_ref), \
+                mock.patch.object(ab_lib, "run_probe_for_side") as probe_mock:
+                exit_code = ab_lib.run_cli_harness(args)
+
+            self.assertEqual(exit_code, ab_lib.EXIT_INVALID_SETUP)
+            probe_mock.assert_not_called()  # must NOT silently probe current tree
+            report = json.loads((out_dir / "ab_eval.json").read_text(encoding="utf-8"))
+            self.assertEqual(report["decision"]["decision"], "invalid_setup")
+            self.assertIn("no-such-ref", report["decision"]["reason"])
+
+
+def _make_fake_probe(applied: dict | None = None) -> dict:
+    """Minimal probe payload matching the shape apply_probe_results expects."""
+    def _summary():
+        return {"summary": {"p95_ms": 1.0}, "samples_ms": [1.0]}
+
+    def _metric():
+        return {"summary": {"p95_ms": 1.0}, "samples_ms": [1.0]}
+
+    return {
+        "quality": {"hit1": 0.5, "hitk": 0.6, "mrr": 0.55, "cases": 1, "k": 3, "failed": []},
+        "latency": {"eval": _summary(), "query": {**_summary(), "case_count": 1, "runs": 1, "cold_query": False}},
+        "query_metrics": {key: _metric() for key in ab_lib.QUERY_METRIC_KEYS},
+        "context_metrics": {
+            "boot_context_tokens": 0,
+            "boot_context_bytes": 0,
+            "profile_tokens": {"personal": 0, "work": 0, "dev": 0},
+            "bundle_tokens": {"p95": 0.0},
+            "notes_total_tokens": 0,
+            "avg_note_words": 0.0,
+            "p95_note_words": 0.0,
+        },
+        "maintenance_metrics": {key: 0 for key in ab_lib.MAINTENANCE_METRIC_KEYS},
+        "semantic_index": {"enabled": False},
+        "applied_env_overrides": applied or {},
+    }
 
 
 if __name__ == "__main__":
