@@ -49,7 +49,8 @@ first_run: true
 # Fusion mode for semantic_hybrid (Mechanism 3 / FUSION)
 # "weighted_sum" (default, preserves existing behaviour) or "rrf" (Reciprocal
 # Rank Fusion — generates lexical + semantic rank lists separately then merges).
-# Enable rrf only after A/B eval confirms improvement.
+# Keep weighted_sum: on the real corpus RRF measures worse (hit@1 0.467 vs
+# 0.733) because k=60 flattens rank differences on small candidate pools.
 # fusion: weighted_sum
 # rrf_k: 60
 
