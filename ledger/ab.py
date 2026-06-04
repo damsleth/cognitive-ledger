@@ -756,10 +756,10 @@ def build_markdown_report(payload: dict[str, Any]) -> str:
         f"{candidate.get('embed_backend', 'local')}/{candidate.get('embed_model') or '(default)'}"
     )
     lines.append(
-        f"| Baseline | `{baseline.get('ref', '')}` | `{baseline.get('commit', '')}` | `{baseline.get('retrieval_mode', 'legacy')}` | `{baseline_embed}` |"
+        f"| Baseline | `{baseline.get('ref', '')}` | `{baseline.get('commit', '')}` | `{baseline.get('retrieval_mode', '(unset)')}` | `{baseline_embed}` |"
     )
     lines.append(
-        f"| Candidate | `{candidate.get('ref', '')}` | `{candidate.get('commit', '')}` | `{candidate.get('retrieval_mode', 'legacy')}` | `{candidate_embed}` |"
+        f"| Candidate | `{candidate.get('ref', '')}` | `{candidate.get('commit', '')}` | `{candidate.get('retrieval_mode', '(unset)')}` | `{candidate_embed}` |"
     )
     lines.append("")
 
@@ -1048,14 +1048,20 @@ def _cli_finalize_direct_probe(
 
 def build_cli_argument_parser() -> argparse.ArgumentParser:
     from ledger.config import get_config as _get_config
+    from ledger.retrieval import resolve_retrieval_mode as _resolve_retrieval_mode
     _retrieval_modes = _get_config().retrieval_modes
+    # Default to the user's *configured* retrieval mode (e.g. semantic_hybrid),
+    # not the historical "legacy" hard-default — an A/B without explicit mode
+    # flags should benchmark the mode the ledger actually uses. Explicit
+    # --baseline-mode / --candidate-mode flags still override.
+    _default_mode = _resolve_retrieval_mode(None)
     parser = argparse.ArgumentParser(
         description="A/B harness for Cognitive Ledger retrieval quality and latency"
     )
     parser.add_argument("--baseline-ref", default="main")
     parser.add_argument("--candidate-ref", default="HEAD")
-    parser.add_argument("--baseline-mode", choices=_retrieval_modes, default="legacy")
-    parser.add_argument("--candidate-mode", choices=_retrieval_modes, default="legacy")
+    parser.add_argument("--baseline-mode", choices=_retrieval_modes, default=_default_mode)
+    parser.add_argument("--candidate-mode", choices=_retrieval_modes, default=_default_mode)
     parser.add_argument("--baseline-embed-backend", choices=EMBED_BACKENDS, default="local")
     parser.add_argument("--candidate-embed-backend", choices=EMBED_BACKENDS, default="local")
     parser.add_argument("--baseline-embed-model", default=None)
@@ -1195,6 +1201,12 @@ def run_cli_harness(args: argparse.Namespace) -> int:
 
     json_path = out_dir / "ab_eval.json"
     markdown_path = out_dir / "ab_eval.md"
+
+    print(
+        f"A/B run: baseline={args.baseline_ref} (mode={args.baseline_mode}) "
+        f"vs candidate={args.candidate_ref} (mode={args.candidate_mode}) "
+        f"| repo_root={repo_root} | corpus={corpus_dir}"
+    )
 
     report: dict[str, Any] = {
         "generated_at": _utc_now_iso(),
