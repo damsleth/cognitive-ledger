@@ -184,6 +184,28 @@ def verbose_items(args, note_type, loop_status=None):
         print("")
 
 
+def _parse_as_of(raw: str | None):
+    """Parse --as-of argument to a timezone-aware datetime or None."""
+    if not raw:
+        return None
+    import datetime as _dt
+    # Try full ISO timestamp first.
+    try:
+        return _dt.datetime.strptime(raw, "%Y-%m-%dT%H:%M:%SZ").replace(
+            tzinfo=_dt.timezone.utc
+        )
+    except ValueError:
+        pass
+    # Try date-only.
+    try:
+        d = _dt.date.fromisoformat(raw)
+        return _dt.datetime(d.year, d.month, d.day, tzinfo=_dt.timezone.utc)
+    except ValueError:
+        raise ValueError(
+            f"--as-of: invalid date {raw!r}. Expected YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ."
+        )
+
+
 def handle_query_command(args):
     try:
         validated_query = validate_query(args.text)
@@ -199,6 +221,12 @@ def handle_query_command(args):
         print(f"error: {e}", file=sys.stderr)
         raise SystemExit(2)
 
+    try:
+        as_of = _parse_as_of(getattr(args, "as_of", None))
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        raise SystemExit(2)
+
     payload = rank_query(
         query=validated_query,
         scope=validated_scope,
@@ -207,6 +235,7 @@ def handle_query_command(args):
         retrieval_mode=args.retrieval_mode,
         embed_backend=args.embed_backend,
         embed_model=args.embed_model,
+        as_of=as_of,
     )
 
     view = getattr(args, "view", "context")
@@ -1096,6 +1125,18 @@ def handle_voice_dna_command(args):
         raise SystemExit(1)
 
 
+def handle_migrate_command(args, migrate_parser):
+    migrate_command = getattr(args, "migrate_command", None)
+
+    if migrate_command == "bitemporal":
+        from ledger.bitemporal import cmd_migrate_bitemporal
+        apply = bool(getattr(args, "apply", False))
+        raise SystemExit(cmd_migrate_bitemporal(apply=apply))
+
+    migrate_parser.print_help()
+    raise SystemExit(1)
+
+
 def handle_sleep_command(args):
     from ledger import maintenance as maint
     subargs = getattr(args, "subargs", []) or []
@@ -1256,6 +1297,17 @@ def main(argv=None) -> int:
     )
     query_parser.add_argument("--json", action="store_true", dest="json")
     query_parser.add_argument("--bundle", action="store_true")
+    query_parser.add_argument(
+        "--as-of",
+        dest="as_of",
+        default=None,
+        metavar="DATE",
+        help=(
+            "Retrieve notes valid at DATE (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ). "
+            "Widens the corpus to include 09_archive notes. "
+            "Default: current-validity only (expired notes hidden)."
+        ),
+    )
     query_parser.add_argument(
         "--pick",
         action="store_true",
@@ -1526,6 +1578,27 @@ def main(argv=None) -> int:
         help="Print the prioritized queue as text and exit (no TUI)",
     )
 
+    # migrate subcommand
+    migrate_parser = subparsers.add_parser(
+        "migrate", help="Run one-time idempotent migrations (e.g. bitemporal back-fill)"
+    )
+    migrate_subparsers = migrate_parser.add_subparsers(dest="migrate_command")
+    migrate_bitemporal_parser = migrate_subparsers.add_parser(
+        "bitemporal",
+        help="Back-fill valid_from (and valid_to on archive notes) on eligible notes",
+    )
+    migrate_bitemporal_mode = migrate_bitemporal_parser.add_mutually_exclusive_group()
+    migrate_bitemporal_mode.add_argument(
+        "--check",
+        action="store_true",
+        help="Report what would be written without changing any files (default)",
+    )
+    migrate_bitemporal_mode.add_argument(
+        "--apply",
+        action="store_true",
+        help="Write the back-filled fields and append a timeline entry",
+    )
+
     # sleep subcommand - delegates to ledger.maintenance
     sleep_parser = subparsers.add_parser("sleep", help="Electric Sheep maintenance (sleep, lint, index, status, sync)")
     sleep_parser.add_argument("subargs", nargs=argparse.REMAINDER, help=argparse.SUPPRESS)
@@ -1631,6 +1704,10 @@ def main(argv=None) -> int:
 
         if args.command == "voice-dna":
             handle_voice_dna_command(args)
+            return 0
+
+        if args.command == "migrate":
+            handle_migrate_command(args, migrate_parser)
             return 0
 
         if args.command == "sleep":

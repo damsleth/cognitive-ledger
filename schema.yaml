@@ -66,6 +66,23 @@ frontmatter:
     external_id: # stable upstream key, e.g. "<project>/<name>" — enables
                  # idempotent re-import (match-and-update, not duplicate)
 
+  # Valid-time (bitemporal) fields — when the fact was true in the world.
+  # Distinct from transaction time (created/updated = when it was recorded).
+  # Applicable to fact-like note types: 01_identity, 02_facts,
+  # 03_preferences, 04_goals, 06_concepts. Exempt: 00_inbox.
+  # All fields are optional; a note without them lints clean.
+  bitemporal:
+    valid_from:     # ISO 8601 UTC: when the fact became true
+                    # null on legacy notes = warning (suggest migration), not error
+    valid_to:       # ISO 8601 UTC: when the fact ceased to be true
+                    # null = currently valid (open interval)
+                    # set on supersession; valid_from <= valid_to when both present
+    superseded_by:  # notes/…/note.md logical path to the replacement note
+                    # required: valid_to must be set when superseded_by is set
+                    # must resolve to an existing note (dangling ref = error)
+    supersedes:     # list of notes/…/note.md logical paths this note replaces
+                    # written by the supersede() primitive in ledger/bitemporal.py
+
   # Enum definitions
   enums:
     source:
@@ -116,6 +133,25 @@ frontmatter:
     updated:
       type: string
       pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+    valid_from:
+      type: string
+      optional: true
+      pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+      note: "null on legacy notes triggers a migration warning, not an error"
+    valid_to:
+      type: string
+      optional: true
+      pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+      note: "null = open interval (currently valid); must be >= valid_from when set"
+    superseded_by:
+      type: string
+      optional: true
+      note: "logical notes/... path; must resolve to an existing note; requires valid_to"
+    supersedes:
+      type: list
+      optional: true
+      item_type: string
+      note: "list of logical notes/... paths this note replaces"
 
 # Timeline specification
 timeline:
