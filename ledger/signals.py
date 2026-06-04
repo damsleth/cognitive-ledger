@@ -24,6 +24,7 @@ SIGNAL_TYPES = (
     "preference_applied",
     "rating",
     "supersession",
+    "contradiction_flagged",
 )
 
 

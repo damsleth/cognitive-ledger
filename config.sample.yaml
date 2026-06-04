@@ -30,3 +30,15 @@ first_run: true
 # Shortlisting
 # shortlist_min_candidates: 24
 # shortlist_max_candidates: 36
+
+# Contradiction detection (Gap B — NLI-based sleep scan)
+# Off by default; requires the NLI model to be downloaded first.
+# CAVEAT: Norwegian (lang:no) accuracy is unvalidated — XNLI has no Norwegian
+# training data. Use a stricter threshold for Norwegian-language corpora.
+# contradiction_enabled: false
+# contradiction_model: MoritzLaurer/mDeBERTa-v3-base-mnli-xnli
+# contradiction_neighbors_k: 8
+# contradiction_auto_threshold: 0.85
+# contradiction_review_threshold: 0.60
+# contradiction_auto_threshold_lang_no: 0.95
+# contradiction_protect_higher_confidence: true
