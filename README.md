@@ -290,9 +290,11 @@ Periodic maintenance keeps the ledger coherent as it grows:
 ```bash
 ledger sleep sync --check && ledger sleep sync --apply
 ledger sleep sleep
+ledger sleep contradictions --check   # dry-run NLI contradiction scan
+ledger sleep contradictions --apply   # auto-supersede or route conflicts to 00_inbox
 ```
 
-Sleep merges duplicates, promotes patterns into stable notes, updates indices, and tightens open loops.
+Sleep merges duplicates, promotes patterns into stable notes, updates indices, and tightens open loops. The contradiction scan uses a local NLI classifier to detect contradicting note pairs; off by default (`contradiction_enabled: false` in `~/.config/ledger/config.yaml`). See `AGENTS.md` for config keys, thresholds, and the Norwegian-accuracy caveat.
 
 ## Web UI
 
