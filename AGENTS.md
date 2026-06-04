@@ -103,7 +103,7 @@ All fields are optional — notes without them lint clean and retrieve identical
 
 | Field | Meaning |
 |---|---|
-| `valid_from` | ISO 8601 UTC: when the fact became true. `null` on legacy notes = migration warning, not error. |
+| `valid_from` | ISO 8601 UTC: when the fact became true. Absent on legacy notes is lint-clean; missing only warns when other bitemporal fields exist. |
 | `valid_to` | ISO 8601 UTC: when the fact ceased to be true. `null` = currently valid (open interval). |
 | `superseded_by` | Logical `notes/…/note.md` path to the replacement note. Requires `valid_to` to be set. |
 | `supersedes` | List of logical `notes/…/note.md` paths this note replaces. Written by `supersede()`. |
@@ -192,9 +192,35 @@ ledger sleep sync --check && ledger sleep sync --apply
 ledger sleep sleep
 ledger sleep lint
 ledger sleep index
+ledger sleep contradictions --check    # dry-run NLI contradiction scan (requires contradiction_enabled=true)
+ledger sleep contradictions --apply    # execute: auto-supersede or write conflict notes to 00_inbox
 ledger migrate bitemporal --check   # preview valid_from / valid_to back-fill
 ledger migrate bitemporal --apply   # write back-fill + append timeline entry
 ```
+
+**Contradiction scan** (`ledger sleep contradictions`) uses a local NLI classifier to detect pairs of notes whose content contradicts each other. Three outcomes:
+
+- **auto-supersede** — score ≥ `contradiction_auto_threshold` (default 0.85) + candidate is strictly newer + no confidence inversion → calls `supersede()`, moves old note to `09_archive/`.
+- **review** — score ≥ `contradiction_review_threshold` (default 0.60) but below auto threshold, or ordering is ambiguous, or confidence guard fires, or either note is in `01_identity/` → writes a **conflict note** to `notes/00_inbox/` (filename `conflict__{timestamp}__{stem_a}__{stem_b}.md`, tags `[conflict, nli, review]`, checklist for human resolver).
+- **ignore** — score below review threshold → no action.
+
+Hard rules (not config-overridable): identity notes are never auto-superseded; duplicate conflict inbox records for the same pair are not created; re-running on an already-resolved pair is a no-op.
+
+**Norwegian caveat.** The default model (`MoritzLaurer/mDeBERTa-v3-base-mnli-xnli`) is trained on MNLI + XNLI (15 languages); Norwegian is not among them. NLI accuracy on `lang:no` notes is unvalidated. A stricter auto threshold (`contradiction_auto_threshold_lang_no`, default 0.95) applies when either note has `lang:no`. If your corpus is predominantly Norwegian, hand-check ~20 real Norwegian pairs before trusting auto-resolution and rely on the review path until validated.
+
+The scan is off by default (`contradiction_enabled: false`). Enable in `~/.config/ledger/config.yaml` once the NLI model is downloaded and validated.
+
+**Config keys:**
+
+| Key | Default | Env override |
+|---|---|---|
+| `contradiction_enabled` | `false` | `LEDGER_CONTRADICTION_ENABLED` |
+| `contradiction_model` | `MoritzLaurer/mDeBERTa-v3-base-mnli-xnli` | `LEDGER_CONTRADICTION_MODEL` |
+| `contradiction_neighbors_k` | `8` | `LEDGER_CONTRADICTION_NEIGHBORS_K` |
+| `contradiction_auto_threshold` | `0.85` | `LEDGER_CONTRADICTION_AUTO_THRESHOLD` |
+| `contradiction_review_threshold` | `0.60` | `LEDGER_CONTRADICTION_REVIEW_THRESHOLD` |
+| `contradiction_auto_threshold_lang_no` | `0.95` | `LEDGER_CONTRADICTION_AUTO_THRESHOLD_LANG_NO` |
+| `contradiction_protect_higher_confidence` | `true` | `LEDGER_CONTRADICTION_PROTECT_HIGHER_CONFIDENCE` |
 
 ### Folder map
 
