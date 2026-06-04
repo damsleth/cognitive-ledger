@@ -626,6 +626,12 @@ def apply_probe_results(
 ) -> dict[str, Any]:
     report["baseline"]["semantic_index"] = baseline_probe.get("semantic_index", {})
     report["candidate"]["semantic_index"] = candidate_probe.get("semantic_index", {})
+    report["baseline"]["applied_env_overrides"] = baseline_probe.get(
+        "applied_env_overrides", {}
+    )
+    report["candidate"]["applied_env_overrides"] = candidate_probe.get(
+        "applied_env_overrides", {}
+    )
     report["baseline"]["quality"] = baseline_probe["quality"]
     report["candidate"]["quality"] = candidate_probe["quality"]
     report["baseline"]["latency"] = baseline_probe["latency"]
@@ -759,16 +765,34 @@ def build_markdown_report(payload: dict[str, Any]) -> str:
 
     baseline_env = baseline.get("env_overrides", {})
     candidate_env = candidate.get("env_overrides", {})
-    if baseline_env or candidate_env:
+    baseline_applied = baseline.get("applied_env_overrides", {})
+    candidate_applied = candidate.get("applied_env_overrides", {})
+    if baseline_env or candidate_env or baseline_applied or candidate_applied:
         lines.append("## Config Overrides")
         lines.append("")
-        all_keys = sorted(set(list(baseline_env.keys()) + list(candidate_env.keys())))
-        lines.append("| Key | Baseline | Candidate |")
-        lines.append("| --- | --- | --- |")
+        all_keys = sorted(
+            set(baseline_env)
+            | set(candidate_env)
+            | set(baseline_applied)
+            | set(candidate_applied)
+        )
+        lines.append(
+            "Requested overrides (`--baseline-env` / `--candidate-env`) and the "
+            "values the isolated probe actually applied:"
+        )
+        lines.append("")
+        lines.append(
+            "| Key | Baseline (requested) | Baseline (applied) | Candidate (requested) | Candidate (applied) |"
+        )
+        lines.append("| --- | --- | --- | --- | --- |")
         for key in all_keys:
-            b_val = baseline_env.get(key, "(default)")
-            c_val = candidate_env.get(key, "(default)")
-            lines.append(f"| `{key}` | `{b_val}` | `{c_val}` |")
+            b_req = baseline_env.get(key, "(default)")
+            b_app = baseline_applied.get(key, "(not applied)")
+            c_req = candidate_env.get(key, "(default)")
+            c_app = candidate_applied.get(key, "(not applied)")
+            lines.append(
+                f"| `{key}` | `{b_req}` | `{b_app}` | `{c_req}` | `{c_app}` |"
+            )
         lines.append("")
 
     if baseline.get("quality") and candidate.get("quality"):
