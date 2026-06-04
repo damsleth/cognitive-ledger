@@ -62,6 +62,7 @@ class LintCounters:
     warn_loop_missing_checkbox: int = 0
     warn_placeholder_links: int = 0
     warn_timeline_wildcard: int = 0
+    warn_bitemporal_null_valid_from: int = 0
 
 
 def _config_paths() -> tuple[Path, Path, Path]:
@@ -420,6 +421,113 @@ def _is_open_loop(path: Path, frontmatter: dict[str, Any]) -> bool:
     return str(frontmatter.get("status", "open")).strip().lower() == "open"
 
 
+# Folders eligible for bitemporal field validation (00_inbox is exempt).
+_BITEMPORAL_ELIGIBLE_FOLDERS = frozenset(
+    {
+        "/01_identity/",
+        "/02_facts/",
+        "/03_preferences/",
+        "/04_goals/",
+        "/06_concepts/",
+        "/09_archive/",
+    }
+)
+
+
+def _lint_bitemporal(
+    path: Path,
+    frontmatter: dict[str, Any],
+    fm_raw_value: Any,
+    counters: LintCounters,
+) -> None:
+    """Validate bitemporal (valid-time) frontmatter fields.
+
+    Rules (from GAP A spec):
+    - valid_from and valid_to must match TIMESTAMP_PATTERN when present.
+    - valid_from <= valid_to when both set (error).
+    - null valid_to is OK (open interval, currently valid).
+    - null valid_from on a note that has other bitemporal fields, or on a
+      fact-like note, emits a WARN (not an error) suggesting migration.
+    - superseded_by must resolve to an existing note (dangling = error).
+    - superseded_by set requires non-null valid_to (error).
+    - 00_inbox notes are exempt (no rules applied).
+    """
+    rel = _relative(path)
+    # 00_inbox is exempt from bitemporal validation entirely.
+    if "/00_inbox/" in f"/{rel}":
+        return
+
+    is_eligible = any(folder in f"/{rel}" for folder in _BITEMPORAL_ELIGIBLE_FOLDERS)
+
+    valid_from_raw = fm_raw_value("valid_from") or str(frontmatter.get("valid_from", "")).strip()
+    valid_to_raw = fm_raw_value("valid_to") or str(frontmatter.get("valid_to", "")).strip()
+    superseded_by_raw = (
+        fm_raw_value("superseded_by") or str(frontmatter.get("superseded_by", "")).strip()
+    )
+
+    # Normalise YAML null representations to empty string.
+    for sentinel in ("null", "~", "None"):
+        if valid_from_raw == sentinel:
+            valid_from_raw = ""
+        if valid_to_raw == sentinel:
+            valid_to_raw = ""
+        if superseded_by_raw == sentinel:
+            superseded_by_raw = ""
+
+    has_any_bitemporal = bool(valid_from_raw or valid_to_raw or superseded_by_raw)
+
+    # Validate valid_from format.
+    if valid_from_raw:
+        if not TIMESTAMP_PATTERN.match(valid_from_raw):
+            _lint_error(path, f"invalid valid_from timestamp: {valid_from_raw}")
+            counters.errors += 1
+
+    # Validate valid_to format.
+    if valid_to_raw:
+        if not TIMESTAMP_PATTERN.match(valid_to_raw):
+            _lint_error(path, f"invalid valid_to timestamp: {valid_to_raw}")
+            counters.errors += 1
+
+    # valid_from <= valid_to when both present and valid.
+    if valid_from_raw and valid_to_raw:
+        if (
+            TIMESTAMP_PATTERN.match(valid_from_raw)
+            and TIMESTAMP_PATTERN.match(valid_to_raw)
+            and valid_from_raw > valid_to_raw
+        ):
+            _lint_error(
+                path,
+                f"valid_from ({valid_from_raw}) is after valid_to ({valid_to_raw})",
+            )
+            counters.errors += 1
+
+    # superseded_by requires valid_to.
+    if superseded_by_raw and not valid_to_raw:
+        _lint_error(path, "superseded_by is set but valid_to is missing")
+        counters.errors += 1
+
+    # superseded_by must resolve to an existing note.
+    if superseded_by_raw:
+        config = get_config()
+        # superseded_by should be a logical notes/... path.
+        if superseded_by_raw.startswith("notes/"):
+            target_abs = (
+                config.ledger_notes_dir / superseded_by_raw[len("notes/"):]
+            )
+        else:
+            target_abs = config.ledger_notes_dir / superseded_by_raw
+        if not target_abs.exists():
+            _lint_error(path, f"superseded_by references non-existent note: {superseded_by_raw}")
+            counters.errors += 1
+
+    # Warn when valid_from is absent on eligible notes that carry other
+    # bitemporal fields, or on any eligible note (migration suggestion).
+    if is_eligible and not valid_from_raw and has_any_bitemporal:
+        _lint_warn(path, "valid_from is null; consider running `ledger migrate bitemporal --apply` to back-fill")
+        counters.warnings += 1
+        counters.warn_bitemporal_null_valid_from += 1
+
+
 def _lint_note(path: Path, counters: LintCounters) -> None:
     text = path.read_text(encoding="utf-8")
     lines = text.splitlines()
@@ -563,6 +671,11 @@ def _lint_note(path: Path, counters: LintCounters) -> None:
             _lint_warn(path, "synthesized note has no outgoing links (should reference sources)")
             counters.warnings += 1
 
+    # --- Bitemporal (valid-time) field validation ---
+    # Applicable to fact-like types (01_identity, 02_facts, 03_preferences,
+    # 04_goals, 06_concepts, 09_archive). 00_inbox notes are exempt.
+    _lint_bitemporal(path, frontmatter, fm_raw_value, counters)
+
 
 def _lint_timeline(timeline: Path, counters: LintCounters) -> None:
     print("\nValidating timeline...")
@@ -627,6 +740,7 @@ def cmd_lint() -> int:
     print(f"  open_loop_missing_next_action_checkbox: {counters.warn_loop_missing_checkbox}")
     print(f"  placeholder_links: {counters.warn_placeholder_links}")
     print(f"  timeline_wildcard_paths: {counters.warn_timeline_wildcard}")
+    print(f"  bitemporal_null_valid_from: {counters.warn_bitemporal_null_valid_from}")
 
     return 1 if counters.errors > 0 else 0
 
