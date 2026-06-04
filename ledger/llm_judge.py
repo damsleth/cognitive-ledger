@@ -268,6 +268,7 @@ def seed_from_queries(
     events: list[dict[str, Any]] = []
     for query in queries:
         candidates = retrieve_fn(query, notes_dir, top_k)
+        relevant_count = 0
         for rel_path in candidates:
             abs_path = notes_dir / rel_path
             try:
@@ -282,25 +283,33 @@ def seed_from_queries(
                 subprocess_command=subprocess_command,
             )
             ts = _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-            sig_type = "retrieval_hit" if verdict.relevant else "retrieval_miss"
             event: dict[str, Any] = {
                 "ts": ts,
-                "type": sig_type,
+                "type": "llm_judged",
                 "query": query,
+                "note": rel_path,
+                "relevant": bool(verdict.relevant),
                 "synthetic": True,
                 "source": "llm_judge",
             }
-            # retrieval_hit is note-keyed; retrieval_miss is query-level only.
-            # Adding a "note" field to a miss event would create a ghost entry in
-            # per-note signal stats (the type is not handled in summarize_signals
-            # per-note branches) and corrupt retrieval_miss query coverage stats.
             if verdict.relevant:
-                event["note"] = rel_path
+                relevant_count += 1
             if verdict.rating is not None:
                 event["rating_hint"] = verdict.rating
             if verdict.reason:
                 event["detail"] = verdict.reason
             events.append(event)
+        if candidates and relevant_count == 0:
+            events.append(
+                {
+                    "ts": _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    "type": "retrieval_miss",
+                    "query": query,
+                    "synthetic": True,
+                    "source": "llm_judge",
+                    "detail": "no_relevant_top_k",
+                }
+            )
 
     return events
 

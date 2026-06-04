@@ -176,6 +176,7 @@ signals:
     - stale_flag          # note referenced but content is outdated
     - preference_applied  # agent successfully applies a preference
     - rating              # explicit 1-10 satisfaction rating
+    - llm_judged          # synthetic judge verdict for a query/note pair
   min_entries_for_scoring: 20  # signal scoring disabled below this threshold
 
 # Recommended tags (not enforced, but recognized by tooling)
