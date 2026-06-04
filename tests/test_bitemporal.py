@@ -318,6 +318,27 @@ class TestSupersededIdempotency:
         second = supersede(archive_old_ref, new_ref)
         assert second.idempotent is True
 
+    def test_idempotent_when_recalled_with_original_old_ref(self, tmp_config):
+        """A repeated call with the original old_ref should still be idempotent.
+
+        The first call moves the old note into 09_archive, so callers should not
+        have to rewrite their old_ref to the archive path just to retry safely.
+        """
+        facts = tmp_config.ledger_notes_dir / "02_facts"
+        old = facts / "fact__idem_original_old.md"
+        new = facts / "fact__idem_original_new.md"
+        _write(old, _note_content("valid_from: 2025-01-01T00:00:00Z\n"))
+        _write(new, _note_content("valid_from: 2026-01-01T00:00:00Z\n"))
+        old_ref = "notes/02_facts/fact__idem_original_old.md"
+        new_ref = "notes/02_facts/fact__idem_original_new.md"
+
+        first = supersede(old_ref, new_ref)
+        second = supersede(old_ref, new_ref)
+
+        assert first.idempotent is False
+        assert second.idempotent is True
+        assert second.old_ref == "notes/09_archive/fact__idem_original_old.md"
+
 
 # ---------------------------------------------------------------------------
 # supersede() — error cases
