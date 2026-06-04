@@ -10,6 +10,7 @@ from ledger.config import get_config
 from ledger import retrieval as retrieval_lib
 from ledger.parsing import shorten
 from ledger.retrieval import (
+    apply_prior_tiebreak,
     compute_prior_score,
     compute_recency_component,
     expand_query_tokens,
@@ -519,19 +520,39 @@ def rank_query_semantic_hybrid(
     # -------------------------------------------------------------------------
     rrf_scores: dict[str, float] = {}
     if fusion_mode == "rrf":
-        # Semantic rank list (by descending cosine score)
-        semantic_ranked_paths = [
-            p for p, _ in sorted(score_by_rel_path.items(), key=lambda kv: kv[1], reverse=True)
-        ]
-        # Lexical rank list (by descending lexical_score_component)
-        _lex_scored: list[tuple[float, str]] = []
+        # Build BOTH rank lists over the SAME candidate pool so they are
+        # comparable rankings.  Previously the lexical list only contained
+        # candidates with lexical overlap > 0; that meant a strong-semantic /
+        # zero-lexical note appeared in just ONE list while a weak-semantic but
+        # lexically-matched note appeared in BOTH and accumulated ~2x the RRF
+        # score — systematically demoting pure-semantic winners.  Ranking the
+        # full pool in each list (zero-overlap candidates fall to the bottom of
+        # the lexical list, by score then rel_path for determinism) restores a
+        # proper reciprocal-rank comparison.
+        pool_paths = [str(result_get(_c, "rel_path", "")) for _c in candidates]
+        pool_paths = [p for p in pool_paths if p]
+
+        # Semantic rank list: every candidate ordered by descending cosine.
+        semantic_ranked_paths = sorted(
+            pool_paths,
+            key=lambda p: (score_by_rel_path.get(p, 0.0), p),
+            reverse=True,
+        )
+
+        # Lexical rank list: every candidate ordered by descending lexical
+        # score (zero-overlap candidates tie at 0 and sort to the bottom).
+        _lex_by_path: dict[str, float] = {}
         for _c in candidates:
             _rp = str(result_get(_c, "rel_path", ""))
+            if not _rp:
+                continue
             _ls, _, _ = lexical_score_component(_c, expanded_tokens)
-            if _ls > 0:
-                _lex_scored.append((_ls, _rp))
-        _lex_scored.sort(reverse=True)
-        lexical_ranked_paths = [p for _, p in _lex_scored]
+            _lex_by_path[_rp] = _ls
+        lexical_ranked_paths = sorted(
+            pool_paths,
+            key=lambda p: (_lex_by_path.get(p, 0.0), p),
+            reverse=True,
+        )
 
         rrf_scores = reciprocal_rank_fusion(
             [semantic_ranked_paths, lexical_ranked_paths],
@@ -572,28 +593,32 @@ def rank_query_semantic_hybrid(
             # Use normalised RRF score as the combined relevance signal; still
             # blend with scope and recency for diversity.
             rrf_score = rrf_scores.get(rel_path, 0.0)
-            # Normalise RRF score to [0, 1] by dividing by the theoretical max
-            # (1/(k+1) when the item is rank-1 in both lists).
-            max_rrf = 2.0 / (int(config.rrf_k) + 1)
+            # Normalise RRF to [0, 1] against the MAX RRF actually observed in
+            # this pool (not the theoretical rank-1-in-both maximum).  With the
+            # theoretical max, scores compressed into a tiny band near 0 and the
+            # minor recency/scope terms dominated ordering; normalising to the
+            # observed max spreads scores across the full range so the fused
+            # rank — not recency noise — drives ordering.
+            max_rrf = max(rrf_scores.values()) if rrf_scores else 0.0
             rrf_normalised = rrf_score / max_rrf if max_rrf > 0 else 0.0
+            # Prior is blended later as a tie-breaker (apply_prior_tiebreak).
             final_score = (
                 (config.semantic_weight_vector + config.semantic_weight_lexical) * rrf_normalised
                 + config.semantic_weight_scope * scope_component
                 + config.semantic_weight_recency * recency_component
-                + config.prior_weight * prior
                 + config.score_weight_signal * sig_score
             )
             final_score = max(0.0, min(1.0, final_score))
             if rrf_score == 0.0:
                 continue
         else:
-            # Default: weighted_sum formula with full fusion (prior + signal added)
+            # Default: weighted_sum formula. The prior is NOT added here; it is
+            # blended in afterwards as a tie-breaker by apply_prior_tiebreak.
             final_score = (
                 (config.semantic_weight_vector * semantic_component)
                 + (config.semantic_weight_lexical * lexical_score)
                 + (config.semantic_weight_scope * scope_component)
                 + (config.semantic_weight_recency * recency_component)
-                + config.prior_weight * prior
                 + config.score_weight_signal * sig_score
             )
             final_score = max(0.0, min(1.0, final_score))
@@ -637,18 +662,14 @@ def rank_query_semantic_hybrid(
                     scope_component=scope_component,
                     recency_component=recency_component,
                     recency=recency_component,
+                    prior_score=prior,
                 ),
             )
         )
 
-    ranked.sort(
-        key=lambda item: (
-            item.score,
-            item.updated or "",
-            item.path,
-        ),
-        reverse=True,
-    )
+    # Blend the prior in as a tie-breaker over the full pool, then sort.
+    # (single shared implementation used by both retrieval paths)
+    apply_prior_tiebreak(ranked)
 
     score_ms = (time.perf_counter() - score_started) * 1000.0
     total_ms = (time.perf_counter() - started) * 1000.0
