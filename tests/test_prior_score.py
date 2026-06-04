@@ -26,8 +26,13 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from ledger.config import LedgerConfig, set_config, reset_config
-from ledger.retrieval import compute_prior_score, score_candidate
-from ledger.retrieval_types import ScoreComponents
+from ledger.retrieval import (
+    apply_prior_tiebreak,
+    compute_prior_score,
+    prior_tiebreak_factor,
+    score_candidate,
+)
+from ledger.retrieval_types import ScoreComponents, ScoredResult
 
 
 @pytest.fixture(autouse=True)
@@ -213,9 +218,85 @@ class TestComputePriorScore:
         assert score == 0.0
 
 
+class TestPriorTiebreakFactor:
+    """Unit tests for prior_tiebreak_factor — the continuous tie-band ramp."""
+
+    def test_leader_gets_full_factor(self):
+        """The leader (gap 0) gets factor 1.0."""
+        assert prior_tiebreak_factor(0.9, 0.9, 0.05) == 1.0
+
+    def test_beyond_band_gets_zero(self):
+        """A candidate trailing by more than the band gets factor 0.0."""
+        # leader 1.0, candidate 0.9 → relative gap 0.10 > band 0.05 → 0.0
+        assert prior_tiebreak_factor(0.9, 1.0, 0.05) == 0.0
+
+    def test_continuous_ramp_midpoint(self):
+        """At half the band the factor is ~0.5 (continuous, not a cliff)."""
+        # leader 1.0, candidate 0.975 → rel gap 0.025 = band/2 → factor 0.5
+        f = prior_tiebreak_factor(0.975, 1.0, 0.05)
+        assert abs(f - 0.5) < 1e-9, f
+
+    def test_monotonic_decreasing_with_gap(self):
+        """Factor decreases as the base-score gap widens."""
+        f_small = prior_tiebreak_factor(0.99, 1.0, 0.05)
+        f_large = prior_tiebreak_factor(0.97, 1.0, 0.05)
+        assert f_small > f_large
+
+    def test_zero_band_disables_prior(self):
+        """A non-positive tie band disables the prior entirely (factor 0)."""
+        assert prior_tiebreak_factor(1.0, 1.0, 0.0) == 0.0
+
+    def test_degenerate_leader_returns_one(self):
+        """A non-positive leader score falls back to factor 1.0."""
+        assert prior_tiebreak_factor(0.0, 0.0, 0.05) == 1.0
+
+
 # ---------------------------------------------------------------------------
 # score_candidate integration tests
 # ---------------------------------------------------------------------------
+
+
+def _as_scored(candidate: dict, score: float, reasons, components) -> ScoredResult:
+    """Wrap a scored candidate into a ScoredResult for apply_prior_tiebreak."""
+    return ScoredResult(
+        path=candidate["path"],
+        rel_path=candidate["rel_path"],
+        type=candidate.get("type", ""),
+        title=candidate.get("title", ""),
+        statement=candidate.get("statement", ""),
+        body=candidate.get("body", ""),
+        updated=candidate.get("updated", ""),
+        updated_ts=candidate.get("updated_ts"),
+        confidence=candidate.get("confidence", 0.0),
+        source=candidate.get("source", ""),
+        scope=candidate.get("scope", ""),
+        status=candidate.get("status", ""),
+        tags=candidate.get("tags", []),
+        note_tokens=candidate.get("note_tokens", set()),
+        tag_tokens=candidate.get("tag_tokens", set()),
+        attention_tokens=candidate.get("attention_tokens", set()),
+        snippet=candidate.get("snippet", ""),
+        has_next_action_checkbox=candidate.get("has_next_action_checkbox", False),
+        created_ts=candidate.get("created_ts"),
+        score=score,
+        reasons=list(reasons),
+        components=components,
+    )
+
+
+def _final_scores(candidates: list[dict], config: LedgerConfig, query_tokens: set[str], bm25_score: float = 0.5) -> dict[str, float]:
+    """Run the full base-score + prior-tiebreak pipeline; return rel_path->final score."""
+    set_config(config)
+    ranked = []
+    for cand in candidates:
+        sc, reasons, comps = score_candidate(
+            cand, query_tokens, "all",
+            False, False, False, NOW, [],
+            include_reasons=True, bm25_score=bm25_score,
+        )
+        ranked.append(_as_scored(cand, sc, reasons, comps))
+    apply_prior_tiebreak(ranked)
+    return {r.rel_path: r.score for r in ranked}
 
 
 class TestScoreCandidatePrior:
@@ -266,28 +347,38 @@ class TestScoreCandidatePrior:
         assert abs(score_off - expected) < 1e-9, f"golden mismatch: {score_off} != {expected}"
 
     def test_prior_enabled_true_adds_to_score(self):
-        """Enabling the prior should increase the score for a high-quality note."""
+        """Enabling the prior should increase the *final* score for a high-quality
+        note that is the local leader (the prior is now blended as a tie-breaker
+        by apply_prior_tiebreak, not baked into score_candidate)."""
         candidate = _make_candidate(
             confidence=0.9,
             updated_ts=RECENT_TS,
             note_tokens={"test"},
         )
+        query_tokens = {"test"}
+
+        # Base score (no prior) is identical whether or not the prior is enabled.
         config_off = LedgerConfig()
         config_off.prior_enabled = False
-        score_off, _, _ = self._score(candidate, config_off)
+        base_off = _final_scores([candidate], config_off, query_tokens)[candidate["rel_path"]]
 
         config_on = LedgerConfig()
         config_on.prior_enabled = True
         config_on.prior_weight = 0.10
-        score_on, reasons_on, components_on = self._score(candidate, config_on)
+        final_on = _final_scores([candidate], config_on, query_tokens)[candidate["rel_path"]]
 
-        assert score_on > score_off
+        # As the sole (leader) candidate, the prior gets factor 1.0 and lifts it.
+        assert final_on > base_off
+
+        # The raw prior is still surfaced via reasons and components.
+        _, reasons_on, components_on = self._score(candidate, config_on, query_tokens)
         assert any("prior=" in r for r in reasons_on)
         assert components_on.prior_score > 0.0
 
-    def test_high_confidence_recent_ranks_above_low_confidence_stale(self):
-        """In a zero-signal corpus the high-quality note should rank higher."""
-        # Both notes have the same lexical tokens → same BM25/lexical signals.
+    def test_near_tied_candidates_ordered_by_prior(self):
+        """TIE-BREAKER (a): two candidates with IDENTICAL base scores get ordered
+        by their confidence/recency prior."""
+        # Both notes share the same lexical tokens, scope, bm25 → identical base.
         query_tokens = {"test"}
         good = _make_candidate(
             confidence=0.95,
@@ -297,7 +388,7 @@ class TestScoreCandidatePrior:
         )
         bad = _make_candidate(
             confidence=0.20,
-            updated_ts=STALE_TS,
+            updated_ts=RECENT_TS,
             created_ts=STALE_TS,
             note_tokens={"test"},
             rel_path="notes/02_facts/fact__bad.md",
@@ -305,33 +396,65 @@ class TestScoreCandidatePrior:
         config = LedgerConfig()
         config.prior_enabled = True
         config.prior_weight = 0.10
-        set_config(config)
+        scores = _final_scores([good, bad], config, query_tokens, bm25_score=0.5)
+        assert scores[good["rel_path"]] > scores[bad["rel_path"]], (
+            f"good={scores[good['rel_path']]:.4f} bad={scores[bad['rel_path']]:.4f}"
+        )
 
-        score_good, _, _ = score_candidate(
-            good, query_tokens, "all",
-            False, False, False, NOW, [],
-            include_reasons=True, bm25_score=0.5,
+    def test_clear_base_winner_keeps_rank_despite_low_prior(self):
+        """TIE-BREAKER (b) — REGRESSION GUARD: a clear base-score winner with LOW
+        confidence/recency must stay rank-1 even with the prior enabled.
+
+        This is the exact case the flat-additive prior regressed: a strong
+        relevance leader (high lexical overlap) but poor quality prior must not
+        be displaced by a weak-relevance, high-quality note."""
+        query_tokens = {"alpha", "beta", "gamma", "delta"}
+        # Equal base recency (same updated_ts) and equal base confidence so the
+        # BASE score difference comes purely from lexical overlap: the winner
+        # matches all four query tokens, the loser only one — a clear base lead.
+        winner = _make_candidate(
+            confidence=0.5,
+            updated_ts=NOW,
+            created_ts=STALE_TS,  # poor prior recency
+            note_tokens={"alpha", "beta", "gamma", "delta"},
+            rel_path="notes/02_facts/fact__winner.md",
         )
-        score_bad, _, _ = score_candidate(
-            bad, query_tokens, "all",
-            False, False, False, NOW, [],
-            include_reasons=True, bm25_score=0.5,
+        # Loser: weak relevance (one token) but a pristine prior (fresh created_ts).
+        # Drive the prior with recency only so it does not leak into the base.
+        loser = _make_candidate(
+            confidence=0.5,
+            updated_ts=NOW,
+            created_ts=FRESH_TS,  # strong prior recency
+            note_tokens={"alpha"},
+            rel_path="notes/02_facts/fact__loser.md",
         )
-        assert score_good > score_bad, f"good={score_good:.4f} bad={score_bad:.4f}"
+        config = LedgerConfig()
+        config.prior_enabled = True
+        config.prior_weight = 0.10  # default weight — the tie band keeps it safe
+        config.prior_w_importance = 0.0
+        config.prior_w_relevance = 0.0
+        config.prior_w_recency = 1.0
+        scores = _final_scores([winner, loser], config, query_tokens, bm25_score=0.0)
+        assert scores[winner["rel_path"]] > scores[loser["rel_path"]], (
+            "Clear semantic/lexical winner must not be displaced by a high-prior "
+            f"loser: winner={scores[winner['rel_path']]:.4f} "
+            f"loser={scores[loser['rel_path']]:.4f}"
+        )
 
     def test_same_note_different_age_orders_by_recency(self):
-        """Two identical notes differing only in creation age must order younger first."""
+        """Two identical-base notes differing only in creation age order younger first
+        (the prior breaks the tie by recency)."""
         query_tokens = {"test"}
         young = _make_candidate(
             confidence=0.8,
             created_ts=FRESH_TS,
-            updated_ts=FRESH_TS,
+            updated_ts=NOW,
             note_tokens={"test"},
         )
         old = _make_candidate(
             confidence=0.8,
             created_ts=STALE_TS,
-            updated_ts=STALE_TS,
+            updated_ts=NOW,
             note_tokens={"test"},
             rel_path="notes/02_facts/fact__old.md",
         )
@@ -342,27 +465,18 @@ class TestScoreCandidatePrior:
         config.prior_w_importance = 0.0
         config.prior_w_relevance = 0.0
         config.prior_w_recency = 1.0
-        set_config(config)
-
-        score_young, _, _ = score_candidate(
-            young, query_tokens, "all",
-            False, False, False, NOW, [],
-            include_reasons=False, bm25_score=0.3,
+        scores = _final_scores([young, old], config, query_tokens, bm25_score=0.3)
+        assert scores[young["rel_path"]] > scores[old["rel_path"]], (
+            f"young={scores[young['rel_path']]:.4f} old={scores[old['rel_path']]:.4f}"
         )
-        score_old, _, _ = score_candidate(
-            old, query_tokens, "all",
-            False, False, False, NOW, [],
-            include_reasons=False, bm25_score=0.3,
-        )
-        assert score_young > score_old, f"young={score_young:.4f} old={score_old:.4f}"
 
-    def test_identity_boost_not_double_counted(self):
-        """Identity boost and prior should both appear but be independently additive.
+    def test_identity_boost_in_base_and_prior_independent(self):
+        """The identity boost lives in the base score (score_candidate) while the
+        prior is a separate component blended later by apply_prior_tiebreak.
 
-        Specifically: score_identity(prior_on) - score_identity(prior_off)
-        should equal score_fact(prior_on) - score_fact(prior_off),
-        confirming the prior adds the same delta regardless of type,
-        and the identity boost is a separate, constant additive term.
+        With identical confidence/age/relevance the identity and fact candidates
+        get the same raw prior; the only score difference is the identity boost,
+        which is part of the base score returned by score_candidate.
         """
         query_tokens = {"mission"}
         identity_candidate = _make_candidate(
@@ -382,66 +496,45 @@ class TestScoreCandidatePrior:
             rel_path="notes/02_facts/fact__mission.md",
         )
 
-        config_off = LedgerConfig()
-        config_off.prior_enabled = False
-        set_config(config_off)
-        id_off, _, _ = score_candidate(
-            identity_candidate, query_tokens, "all",
-            False, False, False, NOW, [], include_reasons=True, bm25_score=0.4,
-        )
-        fact_off, _, _ = score_candidate(
-            fact_candidate, query_tokens, "all",
-            False, False, False, NOW, [], include_reasons=True, bm25_score=0.4,
-        )
-
         config_on = LedgerConfig()
         config_on.prior_enabled = True
         config_on.prior_weight = 0.10
         set_config(config_on)
-        id_on, id_reasons, id_components = score_candidate(
+        id_base, id_reasons, id_components = score_candidate(
             identity_candidate, query_tokens, "all",
             False, False, False, NOW, [], include_reasons=True, bm25_score=0.4,
         )
-        fact_on, _, _ = score_candidate(
+        fact_base, _, fact_components = score_candidate(
             fact_candidate, query_tokens, "all",
             False, False, False, NOW, [], include_reasons=True, bm25_score=0.4,
         )
 
-        # Prior delta should be the same for both (same confidence, age, relevance)
-        delta_id = id_on - id_off
-        delta_fact = fact_on - fact_off
-        assert abs(delta_id - delta_fact) < 1e-9, (
-            f"Prior delta differs by type: id Δ={delta_id:.6f} fact Δ={delta_fact:.6f}"
+        # Base score difference equals exactly the identity boost.
+        assert abs((id_base - fact_base) - config_on.identity_score_boost) < 1e-9, (
+            f"identity base Δ={id_base - fact_base:.6f} "
+            f"boost={config_on.identity_score_boost:.6f}"
         )
-
-        # Identity boost appears in reasons
-        assert any("identity_boost" in r for r in id_reasons)
-        # Prior appears in reasons too (they are separate)
-        assert any("prior=" in r for r in id_reasons)
-        # The prior score component is tracked in ScoreComponents
+        # The raw prior is identical (same confidence/age/relevance) and tracked separately.
+        assert abs(id_components.prior_score - fact_components.prior_score) < 1e-9
         assert id_components.prior_score > 0.0
+        # Identity boost appears in reasons; prior surfaced separately.
+        assert any("identity_boost" in r for r in id_reasons)
+        assert any("prior=" in r for r in id_reasons)
 
     def test_prior_weight_zero_has_no_effect(self):
-        """Setting prior_weight=0 should produce the same score as prior_enabled=False."""
+        """prior_weight=0 must produce the same FINAL score as prior_enabled=False
+        (verified through the full base + tie-break pipeline)."""
         candidate = _make_candidate(confidence=0.9, updated_ts=RECENT_TS)
         query_tokens = {"test"}
 
         config_off = LedgerConfig()
         config_off.prior_enabled = False
-        set_config(config_off)
-        score_off, _, _ = score_candidate(
-            candidate, query_tokens, "all",
-            False, False, False, NOW, [], include_reasons=False, bm25_score=0.5,
-        )
+        score_off = _final_scores([candidate], config_off, query_tokens)[candidate["rel_path"]]
 
         config_zero = LedgerConfig()
         config_zero.prior_enabled = True
         config_zero.prior_weight = 0.0
-        set_config(config_zero)
-        score_zero, _, _ = score_candidate(
-            candidate, query_tokens, "all",
-            False, False, False, NOW, [], include_reasons=False, bm25_score=0.5,
-        )
+        score_zero = _final_scores([candidate], config_zero, query_tokens)[candidate["rel_path"]]
 
         assert abs(score_off - score_zero) < 1e-9
 
@@ -653,3 +746,118 @@ class TestSemanticHybridPriorAndSignal:
         finally:
             clear_candidate_cache()
             reset_config()
+
+    def test_clear_winner_keeps_rank1_despite_low_prior(self, tmp_path):
+        """REGRESSION (b) on the semantic_hybrid path: a clear cosine winner with
+        LOW confidence must stay rank-1 even with the prior enabled at the
+        default weight. This is the exact regression the tie-band design fixes."""
+        from ledger import query as q
+        from ledger.retrieval import clear_candidate_cache
+
+        config = LedgerConfig(ledger_root=tmp_path)
+        config.prior_enabled = True
+        config.prior_weight = 0.10  # default
+        config.prior_w_importance = 1.0  # confidence-dominated prior
+        config.prior_w_recency = 0.0
+        config.prior_w_relevance = 0.0
+
+        # Clear winner: much higher cosine but LOW confidence.
+        note_winner = config.ledger_notes_dir / "02_facts" / "fact__winner.md"
+        # Distractor: lower cosine but pristine (high) confidence.
+        note_distractor = config.ledger_notes_dir / "02_facts" / "fact__distractor.md"
+        self._make_note(note_winner, confidence=0.05)
+        self._make_note(note_distractor, confidence=1.0)
+
+        set_config(config)
+        clear_candidate_cache()
+        try:
+            result = q.rank_query_semantic_hybrid(
+                "test query",
+                scope="all",
+                limit=10,
+                now_dt=NOW,
+                load_embeddings_module=self._fake_embed_fn({
+                    "notes/02_facts/fact__winner.md": 0.92,       # clear lead
+                    "notes/02_facts/fact__distractor.md": 0.70,
+                }),
+                resolve_embed_model=lambda b, m: "fake",
+            )
+            paths = [r.rel_path for r in result.results]
+            assert paths[0] == "notes/02_facts/fact__winner.md", (
+                f"Clear cosine winner must stay rank-1; got order {paths}"
+            )
+        finally:
+            clear_candidate_cache()
+            reset_config()
+
+    def test_prior_disabled_reproduces_prechange_scores_exactly(self, tmp_path):
+        """(c) prior_enabled=False must reproduce the pre-prior scores exactly:
+        the final scores must equal those computed with prior_weight forced to 0,
+        across a multi-note pool."""
+        from ledger import query as q
+        from ledger.retrieval import clear_candidate_cache
+
+        cosines = {
+            "notes/02_facts/fact__a.md": 0.92,
+            "notes/02_facts/fact__b.md": 0.71,
+            "notes/02_facts/fact__c.md": 0.55,
+        }
+
+        def _run(prior_enabled: bool):
+            config = LedgerConfig(ledger_root=tmp_path)
+            config.prior_enabled = prior_enabled
+            config.prior_weight = 0.10
+            for name, conf in (("a", 0.1), ("b", 0.95), ("c", 0.5)):
+                self._make_note(
+                    config.ledger_notes_dir / "02_facts" / f"fact__{name}.md",
+                    confidence=conf,
+                )
+            set_config(config)
+            clear_candidate_cache()
+            try:
+                result = q.rank_query_semantic_hybrid(
+                    "test query",
+                    scope="all",
+                    limit=10,
+                    now_dt=NOW,
+                    load_embeddings_module=self._fake_embed_fn(cosines),
+                    resolve_embed_model=lambda b, m: "fake",
+                )
+                return {r.rel_path: r.score for r in result.results}
+            finally:
+                clear_candidate_cache()
+                reset_config()
+
+        scores_off = _run(prior_enabled=False)
+        # With prior disabled, no prior_score is set → tie-break is a pure no-op,
+        # so scores must equal the base (pre-change) scores exactly.
+        # Recompute base directly with prior_weight=0 to confirm equivalence.
+        config_zero = LedgerConfig(ledger_root=tmp_path)
+        config_zero.prior_enabled = True
+        config_zero.prior_weight = 0.0
+        for name, conf in (("a", 0.1), ("b", 0.95), ("c", 0.5)):
+            self._make_note(
+                config_zero.ledger_notes_dir / "02_facts" / f"fact__{name}.md",
+                confidence=conf,
+            )
+        set_config(config_zero)
+        clear_candidate_cache()
+        try:
+            result_zero = q.rank_query_semantic_hybrid(
+                "test query",
+                scope="all",
+                limit=10,
+                now_dt=NOW,
+                load_embeddings_module=self._fake_embed_fn(cosines),
+                resolve_embed_model=lambda b, m: "fake",
+            )
+            scores_zero = {r.rel_path: r.score for r in result_zero.results}
+        finally:
+            clear_candidate_cache()
+            reset_config()
+
+        assert scores_off.keys() == scores_zero.keys()
+        for path in scores_off:
+            assert abs(scores_off[path] - scores_zero[path]) < 1e-12, (
+                f"{path}: prior-off {scores_off[path]} != weight-0 {scores_zero[path]}"
+            )
