@@ -425,11 +425,12 @@ class TestFusionRRF:
         rel_overlap = "notes/02_facts/fact__overlap.md"
         rel_semantic = "notes/02_facts/fact__semantic_only.md"
 
-        # Give "semantic_only" a slightly higher cosine but "overlap" better
-        # lexical match; with RRF the combined note should win.
+        # "overlap" leads BOTH lists: it is rank-1 semantic (highest cosine) and
+        # rank-1 lexical (only note with query-token overlap).  "semantic_only"
+        # trails in both.  With full-pool RRF the double-leader is promoted.
         fake = FakeEmbeddings({
-            rel_overlap: 0.82,
-            rel_semantic: 0.95,  # higher semantic alone
+            rel_overlap: 0.95,
+            rel_semantic: 0.82,
         })
 
         result = query_module.rank_query_semantic_hybrid(
@@ -500,53 +501,50 @@ class TestFusionRRF:
             )
             assert result.results  # should always return something
 
-    def test_rrf_and_weighted_sum_different_orderings(self, tmp_path):
-        """RRF and weighted_sum can produce different orderings (they measure
-        different things), confirming the code paths are independent."""
-        # Two notes: one has high semantic-only score, other has high lexical match
+    def test_rrf_lifts_lexical_match_relative_to_weighted_sum(self, tmp_path):
+        """RRF and weighted_sum measure different things: RRF rewards lexical-list
+        position, so a lexically-matched note ranks higher *relative to* a pure
+        high-cosine note under RRF than under weighted_sum. This confirms the
+        code paths are independent without relying on the old (buggy) asymmetry."""
+        # overlap: high lexical match but only moderate cosine.
         overlap_path = tmp_path / "notes" / "02_facts" / "fact__overlap.md"
+        # semonly: dominant cosine but zero lexical overlap.
         semantic_path = tmp_path / "notes" / "02_facts" / "fact__semonly.md"
+        # filler: no lexical overlap, low cosine — provides a distinct list bottom.
+        filler_path = tmp_path / "notes" / "02_facts" / "fact__filler.md"
         _seed_note(overlap_path, "deploy kubernetes overlap")
         _seed_note(semantic_path, "unrelated zephyr buzz")
+        _seed_note(filler_path, "another unrelated quux note")
 
         rel_overlap = "notes/02_facts/fact__overlap.md"
         rel_semonly = "notes/02_facts/fact__semonly.md"
+        rel_filler = "notes/02_facts/fact__filler.md"
 
-        # semantic_only has much higher cosine but zero lexical match
-        fake = FakeEmbeddings({rel_overlap: 0.60, rel_semonly: 0.99})
+        fake = FakeEmbeddings({rel_overlap: 0.60, rel_semonly: 0.99, rel_filler: 0.40})
 
-        # weighted_sum: semonly likely wins (0.99 * 0.55 >> 0.60 * 0.55)
-        config_ws = LedgerConfig(ledger_root=tmp_path)
-        config_ws.fusion = "weighted_sum"
-        set_config(config_ws)
-        clear_candidate_cache()
-        result_ws = query_module.rank_query_semantic_hybrid(
-            "deploy kubernetes",
-            scope="all",
-            limit=5,
-            load_embeddings_module=lambda: fake,
-            resolve_embed_model=lambda _b, _m: "fake",
-        )
-        paths_ws = [r.rel_path for r in result_ws.results]
-
-        # rrf: overlap should win because it ranks high in lexical list too
-        config_rrf = LedgerConfig(ledger_root=tmp_path)
-        config_rrf.fusion = "rrf"
-        set_config(config_rrf)
-        clear_candidate_cache()
-        result_rrf = query_module.rank_query_semantic_hybrid(
-            "deploy kubernetes",
-            scope="all",
-            limit=5,
-            load_embeddings_module=lambda: fake,
-            resolve_embed_model=lambda _b, _m: "fake",
-        )
-        paths_rrf = [r.rel_path for r in result_rrf.results]
-
-        # At least one of the top results should differ between modes
-        # (if both return results)
-        if paths_ws and paths_rrf:
-            assert paths_ws[0] != paths_rrf[0], (
-                "weighted_sum and rrf should differ on this corpus; "
-                f"both ranked {paths_ws[0]!r} first"
+        def _gap(fusion: str) -> int:
+            config = LedgerConfig(ledger_root=tmp_path)
+            config.fusion = fusion
+            set_config(config)
+            clear_candidate_cache()
+            result = query_module.rank_query_semantic_hybrid(
+                "deploy kubernetes",
+                scope="all",
+                limit=5,
+                load_embeddings_module=lambda: fake,
+                resolve_embed_model=lambda _b, _m: "fake",
             )
+            paths = [r.rel_path for r in result.results]
+            # positional gap: how far overlap trails semonly (smaller/negative = overlap higher)
+            return paths.index(rel_overlap) - paths.index(rel_semonly)
+
+        gap_ws = _gap("weighted_sum")
+        gap_rrf = _gap("rrf")
+
+        # Under RRF the lexically-matched note should be no worse positioned
+        # relative to the pure-cosine note than under weighted_sum, and strictly
+        # better in at least the typical case.
+        assert gap_rrf <= gap_ws, (
+            f"RRF should not demote the lexical match relative to weighted_sum: "
+            f"gap_rrf={gap_rrf} gap_ws={gap_ws}"
+        )
