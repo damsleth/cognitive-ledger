@@ -626,6 +626,12 @@ def apply_probe_results(
 ) -> dict[str, Any]:
     report["baseline"]["semantic_index"] = baseline_probe.get("semantic_index", {})
     report["candidate"]["semantic_index"] = candidate_probe.get("semantic_index", {})
+    report["baseline"]["applied_env_overrides"] = baseline_probe.get(
+        "applied_env_overrides", {}
+    )
+    report["candidate"]["applied_env_overrides"] = candidate_probe.get(
+        "applied_env_overrides", {}
+    )
     report["baseline"]["quality"] = baseline_probe["quality"]
     report["candidate"]["quality"] = candidate_probe["quality"]
     report["baseline"]["latency"] = baseline_probe["latency"]
@@ -750,25 +756,43 @@ def build_markdown_report(payload: dict[str, Any]) -> str:
         f"{candidate.get('embed_backend', 'local')}/{candidate.get('embed_model') or '(default)'}"
     )
     lines.append(
-        f"| Baseline | `{baseline.get('ref', '')}` | `{baseline.get('commit', '')}` | `{baseline.get('retrieval_mode', 'legacy')}` | `{baseline_embed}` |"
+        f"| Baseline | `{baseline.get('ref', '')}` | `{baseline.get('commit', '')}` | `{baseline.get('retrieval_mode', '(unset)')}` | `{baseline_embed}` |"
     )
     lines.append(
-        f"| Candidate | `{candidate.get('ref', '')}` | `{candidate.get('commit', '')}` | `{candidate.get('retrieval_mode', 'legacy')}` | `{candidate_embed}` |"
+        f"| Candidate | `{candidate.get('ref', '')}` | `{candidate.get('commit', '')}` | `{candidate.get('retrieval_mode', '(unset)')}` | `{candidate_embed}` |"
     )
     lines.append("")
 
     baseline_env = baseline.get("env_overrides", {})
     candidate_env = candidate.get("env_overrides", {})
-    if baseline_env or candidate_env:
+    baseline_applied = baseline.get("applied_env_overrides", {})
+    candidate_applied = candidate.get("applied_env_overrides", {})
+    if baseline_env or candidate_env or baseline_applied or candidate_applied:
         lines.append("## Config Overrides")
         lines.append("")
-        all_keys = sorted(set(list(baseline_env.keys()) + list(candidate_env.keys())))
-        lines.append("| Key | Baseline | Candidate |")
-        lines.append("| --- | --- | --- |")
+        all_keys = sorted(
+            set(baseline_env)
+            | set(candidate_env)
+            | set(baseline_applied)
+            | set(candidate_applied)
+        )
+        lines.append(
+            "Requested overrides (`--baseline-env` / `--candidate-env`) and the "
+            "values the isolated probe actually applied:"
+        )
+        lines.append("")
+        lines.append(
+            "| Key | Baseline (requested) | Baseline (applied) | Candidate (requested) | Candidate (applied) |"
+        )
+        lines.append("| --- | --- | --- | --- | --- |")
         for key in all_keys:
-            b_val = baseline_env.get(key, "(default)")
-            c_val = candidate_env.get(key, "(default)")
-            lines.append(f"| `{key}` | `{b_val}` | `{c_val}` |")
+            b_req = baseline_env.get(key, "(default)")
+            b_app = baseline_applied.get(key, "(not applied)")
+            c_req = candidate_env.get(key, "(default)")
+            c_app = candidate_applied.get(key, "(not applied)")
+            lines.append(
+                f"| `{key}` | `{b_req}` | `{b_app}` | `{c_req}` | `{c_app}` |"
+            )
         lines.append("")
 
     if baseline.get("quality") and candidate.get("quality"):
@@ -963,6 +987,11 @@ def _resolve_ref(repo_root: Path, ref: str) -> str:
     return _run_git(repo_root, "rev-parse", "--verify", ref)
 
 
+def _resolve_head_commit(repo_root: Path) -> str:
+    """Resolve the commit currently checked out in ``repo_root``."""
+    return _run_git(repo_root, "rev-parse", "HEAD")
+
+
 def _create_worktree(repo_root: Path, ref: str, target_path: Path) -> None:
     _run_git(repo_root, "worktree", "add", "--detach", str(target_path), ref)
 
@@ -984,6 +1013,8 @@ def _cli_finalize_direct_probe(
     candidate_probe: dict[str, Any],
     json_path: Path,
     markdown_path: Path,
+    baseline_commit: str | None = None,
+    candidate_commit: str | None = None,
 ) -> int:
     decision = decide_outcome(
         baseline_quality=baseline_probe["quality"],
@@ -999,8 +1030,8 @@ def _cli_finalize_direct_probe(
         report,
         corpus_root=corpus_root,
         cases_rel=cases_rel,
-        baseline_ref=args.baseline_ref,
-        candidate_ref=args.candidate_ref,
+        baseline_ref=baseline_commit if baseline_commit is not None else args.baseline_ref,
+        candidate_ref=candidate_commit if candidate_commit is not None else args.candidate_ref,
         baseline_probe=baseline_probe,
         candidate_probe=candidate_probe,
         decision=decision,
@@ -1017,14 +1048,20 @@ def _cli_finalize_direct_probe(
 
 def build_cli_argument_parser() -> argparse.ArgumentParser:
     from ledger.config import get_config as _get_config
+    from ledger.retrieval import resolve_retrieval_mode as _resolve_retrieval_mode
     _retrieval_modes = _get_config().retrieval_modes
+    # Default to the user's *configured* retrieval mode (e.g. semantic_hybrid),
+    # not the historical "legacy" hard-default — an A/B without explicit mode
+    # flags should benchmark the mode the ledger actually uses. Explicit
+    # --baseline-mode / --candidate-mode flags still override.
+    _default_mode = _resolve_retrieval_mode(None)
     parser = argparse.ArgumentParser(
         description="A/B harness for Cognitive Ledger retrieval quality and latency"
     )
     parser.add_argument("--baseline-ref", default="main")
     parser.add_argument("--candidate-ref", default="HEAD")
-    parser.add_argument("--baseline-mode", choices=_retrieval_modes, default="legacy")
-    parser.add_argument("--candidate-mode", choices=_retrieval_modes, default="legacy")
+    parser.add_argument("--baseline-mode", choices=_retrieval_modes, default=_default_mode)
+    parser.add_argument("--candidate-mode", choices=_retrieval_modes, default=_default_mode)
     parser.add_argument("--baseline-embed-backend", choices=EMBED_BACKENDS, default="local")
     parser.add_argument("--candidate-embed-backend", choices=EMBED_BACKENDS, default="local")
     parser.add_argument("--baseline-embed-model", default=None)
@@ -1061,17 +1098,29 @@ def build_cli_argument_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _is_ledger_code_repo(path: Path) -> bool:
+    """True if ``path`` is a git checkout that actually contains the ledger code.
+
+    Guards against `LEDGER_ROOT` pointing at the note *corpus* (which may be a
+    git repo of its own but has no `ledger/ab.py`): probing/worktree-ing there
+    would resolve refs against the wrong tree.
+    """
+    return (path / ".git").exists() and (path / "ledger" / "ab.py").is_file()
+
+
 def _resolve_repo_root() -> Path:
     """Resolve the git repo root for A/B worktree operations.
 
-    Prefers `LEDGER_ROOT` (via config); falls back to `git rev-parse --show-toplevel`
-    from cwd. Never trust `Path(__file__).parent.parent` - that points into
-    site-packages when the package is installed.
+    Prefers `LEDGER_ROOT` (via config) **only when it points at the ledger
+    source clone** (has a `.git` and a `ledger/ab.py`); otherwise falls back to
+    `git rev-parse --show-toplevel` from cwd. Never trust
+    `Path(__file__).parent.parent` - that points into site-packages when the
+    package is installed.
     """
     from ledger.config import get_config as _get_config
 
     candidate = _get_config().ledger_root
-    if (candidate / ".git").exists():
+    if _is_ledger_code_repo(candidate):
         return candidate
     try:
         toplevel = subprocess.check_output(
@@ -1085,7 +1134,15 @@ def _resolve_repo_root() -> Path:
             f"A/B harness requires a git repo. Set LEDGER_ROOT to the cognitive-ledger "
             f"source clone, or run from inside it. Tried: {candidate}"
         )
-    return Path(toplevel).resolve()
+    resolved = Path(toplevel).resolve()
+    if not _is_ledger_code_repo(resolved):
+        raise InvalidSetupError(
+            f"A/B harness resolved repo root {resolved} but it does not contain the "
+            f"ledger source (ledger/ab.py). LEDGER_ROOT ({candidate}) likely points at "
+            f"the note corpus instead of the cognitive-ledger code clone; set it to the "
+            f"source clone or run from inside it."
+        )
+    return resolved
 
 
 def run_cli_harness(args: argparse.Namespace) -> int:
@@ -1145,6 +1202,12 @@ def run_cli_harness(args: argparse.Namespace) -> int:
     json_path = out_dir / "ab_eval.json"
     markdown_path = out_dir / "ab_eval.md"
 
+    print(
+        f"A/B run: baseline={args.baseline_ref} (mode={args.baseline_mode}) "
+        f"vs candidate={args.candidate_ref} (mode={args.candidate_mode}) "
+        f"| repo_root={repo_root} | corpus={corpus_dir}"
+    )
+
     report: dict[str, Any] = {
         "generated_at": _utc_now_iso(),
         "repo_root": str(repo_root),
@@ -1202,37 +1265,23 @@ def run_cli_harness(args: argparse.Namespace) -> int:
     temp_worktree_root: Path | None = None
 
     try:
+        # Resolve both refs up front. A ref that does not exist is a hard error
+        # (exit 4) — we must NOT silently fall back to probing whatever tree
+        # happens to be checked out in repo_root.
         try:
             baseline_commit = _resolve_ref(repo_root, args.baseline_ref)
+        except InvalidSetupError as exc:
+            raise InvalidSetupError(
+                f"cannot resolve --baseline-ref {args.baseline_ref!r} in {repo_root}: {exc}"
+            ) from exc
+        try:
             candidate_commit = _resolve_ref(repo_root, args.candidate_ref)
-        except InvalidSetupError:
-            if args.baseline_ref != args.candidate_ref:
-                raise
+        except InvalidSetupError as exc:
+            raise InvalidSetupError(
+                f"cannot resolve --candidate-ref {args.candidate_ref!r} in {repo_root}: {exc}"
+            ) from exc
 
-            cases_rel = normalize_cases_path(corpus_dir, args.cases)
-            direct_baseline = run_probe_for_side(
-                repo_root, repo_root,
-                cases_rel=cases_rel, k=args.k,
-                eval_runs=eval_runs, query_runs=query_runs,
-                retrieval_mode=args.baseline_mode, cold_query=args.cold_query,
-                embed_backend=baseline_embed_backend, embed_model=baseline_embed_model,
-                side_label="baseline", corpus_dir=corpus_dir,
-                env_overrides=baseline_env_overrides or None,
-            )
-            direct_candidate = run_probe_for_side(
-                repo_root, repo_root,
-                cases_rel=cases_rel, k=args.k,
-                eval_runs=eval_runs, query_runs=query_runs,
-                retrieval_mode=args.candidate_mode, cold_query=args.cold_query,
-                embed_backend=candidate_embed_backend, embed_model=candidate_embed_model,
-                side_label="candidate", corpus_dir=corpus_dir,
-                env_overrides=candidate_env_overrides or None,
-            )
-            return _cli_finalize_direct_probe(
-                report=report, corpus_root=corpus_dir, cases_rel=cases_rel,
-                args=args, baseline_probe=direct_baseline, candidate_probe=direct_candidate,
-                json_path=json_path, markdown_path=markdown_path,
-            )
+        head_commit = _resolve_head_commit(repo_root)
 
         report["baseline"]["commit"] = baseline_commit
         report["candidate"]["commit"] = candidate_commit
@@ -1240,8 +1289,22 @@ def run_cli_harness(args: argparse.Namespace) -> int:
         cases_rel = normalize_cases_path(corpus_dir, args.cases)
 
         if baseline_commit == candidate_commit:
+            # Both sides target the same commit. Only probe repo_root directly
+            # when it is *already* checked out there; otherwise build a worktree
+            # at the resolved commit so we run the named ref's code, not the
+            # current working tree.
+            if baseline_commit == head_commit:
+                probe_root = repo_root
+            else:
+                temp_worktree_root = Path(
+                    tempfile.mkdtemp(prefix="ledger-ab-worktrees-")
+                )
+                probe_root = temp_worktree_root / "ref"
+                _create_worktree(repo_root, args.baseline_ref, probe_root)
+                worktree_paths.append(probe_root)
+
             direct_baseline = run_probe_for_side(
-                repo_root, repo_root,
+                repo_root, probe_root,
                 cases_rel=cases_rel, k=args.k,
                 eval_runs=eval_runs, query_runs=query_runs,
                 retrieval_mode=args.baseline_mode, cold_query=args.cold_query,
@@ -1250,7 +1313,7 @@ def run_cli_harness(args: argparse.Namespace) -> int:
                 env_overrides=baseline_env_overrides or None,
             )
             direct_candidate = run_probe_for_side(
-                repo_root, repo_root,
+                repo_root, probe_root,
                 cases_rel=cases_rel, k=args.k,
                 eval_runs=eval_runs, query_runs=query_runs,
                 retrieval_mode=args.candidate_mode, cold_query=args.cold_query,
@@ -1262,6 +1325,7 @@ def run_cli_harness(args: argparse.Namespace) -> int:
                 report=report, corpus_root=corpus_dir, cases_rel=cases_rel,
                 args=args, baseline_probe=direct_baseline, candidate_probe=direct_candidate,
                 json_path=json_path, markdown_path=markdown_path,
+                baseline_commit=baseline_commit, candidate_commit=candidate_commit,
             )
 
         temp_worktree_root = Path(tempfile.mkdtemp(prefix="ledger-ab-worktrees-"))
