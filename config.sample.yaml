@@ -32,11 +32,15 @@ first_run: true
 # shortlist_max_candidates: 36
 
 # Prior score (Mechanism 1 — cold-start ranking, always-on by default)
-# Adds a small additive term combining confidence, half-life recency, and query
-# relevance. Makes ranking non-flat before signal feedback has accrued.
+# Combines confidence, half-life recency, and query relevance, and is applied
+# as a TIE-BREAKER: its contribution scales continuously to zero as a
+# candidate's base (pre-prior) score gap to the local leader exceeds
+# prior_tie_band (a relative gap). A candidate with a clear base-score lead
+# keeps its rank regardless of prior — the prior only reorders near-ties.
 # Set prior_enabled to false to reproduce pre-prior scores exactly (A/B baseline).
 # prior_enabled: true
 # prior_weight: 0.10
+# prior_tie_band: 0.02          # relative base-score gap within which the prior breaks ties
 # prior_w_importance: 0.30
 # prior_w_recency: 0.30
 # prior_w_relevance: 0.40

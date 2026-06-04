@@ -274,6 +274,49 @@ def compute_prior_score(
     return max(0.0, min(1.0, prior))
 
 
+def prior_tiebreak_factor(
+    base_score: float,
+    leader_base_score: float,
+    tie_band: float,
+) -> float:
+    """Continuous scaling factor (0.0-1.0) for a candidate's prior contribution.
+
+    The prior is a TIE-BREAKER: it may only reorder candidates whose base
+    (pre-prior) scores are near-tied. A candidate with a clear base-score lead
+    must keep its rank regardless of its prior. This function computes the
+    factor by which a candidate's prior term is scaled so that the prior fades
+    to zero as the candidate's base-score gap to the local leader grows.
+
+    Definitions
+    -----------
+    - ``leader_base_score``: the highest base score in the candidate pool.
+    - ``gap``: the candidate's *relative* base-score shortfall to the leader,
+      ``(leader_base_score - base_score) / leader_base_score`` (clamped to
+      [0, inf); 0 when the candidate IS the leader). A relative gap makes the
+      band scale-invariant across queries with different absolute score ranges.
+    - ``tie_band``: the relative gap at which the prior contribution reaches 0.
+
+    Formula
+    -------
+        factor = clamp(1 - gap / tie_band, 0.0, 1.0)
+
+    This is a continuous linear ramp (not a hard cutoff) from 1.0 at gap == 0
+    to 0.0 at gap >= tie_band, avoiding rank instability at the boundary.
+    A non-positive ``tie_band`` disables the tie-breaker entirely (factor 0,
+    i.e. the prior never reorders anything). A non-positive or non-finite
+    leader score yields factor 1.0 (degenerate pool: fall back to flat prior).
+    """
+    if tie_band <= 0.0:
+        return 0.0
+    if leader_base_score <= 0.0:
+        return 1.0
+    gap = (leader_base_score - base_score) / leader_base_score
+    if gap <= 0.0:
+        return 1.0
+    factor = 1.0 - (gap / tie_band)
+    return max(0.0, min(1.0, factor))
+
+
 def load_aliases(path: Path) -> dict[str, list[str]]:
     """Load query aliases from JSON file."""
     try:
@@ -986,14 +1029,16 @@ def score_candidate(
 ) -> tuple[float, list[str], ScoreComponents]:
     """Final score for candidate in lexical retrieval modes.
 
-    When ``config.prior_enabled`` is True an additional prior score is
-    computed via ``compute_prior_score`` and blended in with weight
-    ``config.prior_weight``.  The prior encodes note quality (confidence),
-    half-life recency, and query relevance into a single coherent term that
-    makes ranking non-flat before signal feedback has accrued.
+    The returned ``score`` is the BASE score (relevance + identity boost +
+    signal + intent boosts) and does NOT include the prior. The prior is
+    computed via ``compute_prior_score`` and returned separately in
+    ``ScoreComponents.prior_score``; it is blended in afterwards by
+    ``apply_prior_tiebreak`` as a tie-breaker (see that function and
+    ``prior_tiebreak_factor``). This keeps the prior from displacing a clear
+    relevance winner — it only reorders near-tied candidates.
 
-    The identity-type boost remains a separate additive term so that
-    the two mechanisms are independently measurable.
+    The identity-type boost remains part of the base score (a separate
+    additive term) so it is independently measurable from the prior.
     """
     note_tokens = set(_candidate_value(candidate, "note_tokens", set()) or set())
     tag_tokens = set(_candidate_value(candidate, "tag_tokens", set()) or set())
@@ -1025,9 +1070,12 @@ def score_candidate(
         + (config.score_weight_confidence * confidence)
     )
 
-    # Prior score — additive quality signal active before signal feedback accrues.
+    # Prior score — quality signal active before signal feedback accrues.
     # Uses lexical_match as the relevance proxy in lexical retrieval mode.
-    # Independent of the identity boost; both are additive on the same base score.
+    # NOTE: the prior is NOT added to the score here. It is returned in
+    # ScoreComponents.prior_score and blended in as a tie-breaker by
+    # apply_prior_tiebreak once the full candidate pool (and its leader base
+    # score) is known. This keeps the prior from displacing a clear winner.
     prior = 0.0
     if config.prior_enabled:
         prior = compute_prior_score(
@@ -1035,7 +1083,6 @@ def score_candidate(
             now_dt=now_dt,
             query_lexical_relevance=lexical_match,
         )
-        score += config.prior_weight * prior
 
     # Identity note boost — kept as a separate additive term so it is
     # independently measurable from the prior.
@@ -1121,6 +1168,51 @@ def score_candidate(
         confidence=confidence,
         prior_score=prior,
     )
+
+
+def apply_prior_tiebreak(ranked: list["ScoredResult"]) -> list["ScoredResult"]:
+    """Blend the prior into base scores as a TIE-BREAKER, then re-sort.
+
+    This is the single, shared place where the prior is folded into the final
+    score for BOTH retrieval paths (lexical ``score_candidate`` and dense
+    ``rank_query_semantic_hybrid``). Each input ``ScoredResult`` must carry:
+
+    - ``score``: the BASE score (relevance + boosts + signal), prior excluded.
+    - ``components.prior_score``: the raw prior in [0, 1] (0 when disabled).
+
+    Mechanism
+    ---------
+    1. Find the local leader's base score (the max base score in the pool).
+    2. For each candidate compute ``factor = prior_tiebreak_factor(base,
+       leader, config.prior_tie_band)`` — a continuous ramp from 1.0 (the
+       candidate is at/near the leader) to 0.0 (its relative base gap exceeds
+       the tie band). Candidates with a clear base-score lead over their
+       followers keep their rank: a trailing candidate's prior is scaled to 0,
+       so it cannot leapfrog a clear winner.
+    3. Final score = ``base + config.prior_weight * factor * prior_score``,
+       clamped to [0, 1]. The list is re-sorted by (score, updated, path).
+
+    When the prior is disabled (every ``prior_score`` is 0) or
+    ``prior_weight`` is 0, this is a no-op on the scores — it only re-sorts,
+    which is order-stable for already-sorted input, so prior_enabled=False
+    reproduces pre-prior scores exactly.
+    """
+    if not ranked:
+        return ranked
+    config = _cfg()
+    weight = float(config.prior_weight)
+    tie_band = float(config.prior_tie_band)
+    leader_base = max(item.score for item in ranked)
+    for item in ranked:
+        prior = float(getattr(item.components, "prior_score", 0.0) or 0.0)
+        if prior <= 0.0 or weight <= 0.0:
+            continue
+        factor = prior_tiebreak_factor(item.score, leader_base, tie_band)
+        if factor <= 0.0:
+            continue
+        item.score = max(0.0, min(1.0, item.score + weight * factor * prior))
+    ranked.sort(key=lambda item: (item.score, item.updated or "", item.path), reverse=True)
+    return ranked
 
 
 def apply_progressive_disclosure(
@@ -1323,7 +1415,8 @@ def rank_lexical(
 
         ranked.append(_scored_result(candidate, score, reasons, components))
 
-    ranked.sort(key=lambda item: (item.score, item.updated or "", item.path), reverse=True)
+    # Blend the prior in as a tie-breaker over the full pool, then sort.
+    apply_prior_tiebreak(ranked)
 
     if progressive_disclosure_active:
         output_results = apply_progressive_disclosure(
@@ -1401,6 +1494,8 @@ __all__ = [
     "compute_bm25_scores",
     "prefilter_candidates_by_scope_and_type",
     "compute_prior_score",
+    "prior_tiebreak_factor",
+    "apply_prior_tiebreak",
     "score_candidate",
     "apply_progressive_disclosure",
     "rank_lexical",
@@ -1457,7 +1552,7 @@ def related_to_text(
         )
         scored.append(_scored_result(candidate, sc, reasons, components))
 
-    scored.sort(key=lambda r: r.score, reverse=True)
+    apply_prior_tiebreak(scored)
 
     return [
         {
