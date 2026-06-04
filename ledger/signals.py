@@ -193,6 +193,13 @@ def summarize_signals(
         # Weight multiplier: synthetic events count fractionally
         weight: float = synthetic_weight if is_synthetic else 1.0
 
+        sig_type = entry.get("type", "")
+        if sig_type == "llm_judged" and not bool(entry.get("relevant", False)):
+            # A negative top-k judge verdict is useful audit data, but treating
+            # it as a global note correction would demote notes for one query.
+            # It also should not make the note look human-reviewed.
+            continue
+
         note_path = entry.get("note", "")
         if not note_path:
             continue
@@ -217,10 +224,9 @@ def summarize_signals(
             }
 
         stats = notes[note_path]
-        sig_type = entry.get("type", "")
         ts = entry.get("ts", "")
 
-        if sig_type == "retrieval_hit":
+        if sig_type == "retrieval_hit" or sig_type == "llm_judged":
             stats["hit_count"] += weight
             if ts > stats["last_hit"]:
                 stats["last_hit"] = ts
@@ -266,12 +272,14 @@ def summarize_signals(
             stats["signal_score"] = round(sentiment, 4)
 
     # Collect retrieval miss stats (real and synthetic)
-    miss_queries: dict[str, int] = {}
+    miss_queries: dict[str, float] = {}
     for entry in signals:
         if entry.get("type") == "retrieval_miss":
             q = entry.get("query", "")
             if q:
-                miss_queries[q] = miss_queries.get(q, 0) + 1
+                is_synthetic = bool(entry.get("synthetic", False))
+                weight = synthetic_weight if is_synthetic else 1.0
+                miss_queries[q] = miss_queries.get(q, 0.0) + weight
 
     return {
         "_meta": {

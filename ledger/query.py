@@ -98,6 +98,7 @@ def scored_result_to_dict(item: RetrievalCandidate | ScoredResult | dict[str, An
             "lexical_score": float(getattr(components, "lexical_score", 0.0) or 0.0),
             "scope_component": float(getattr(components, "scope_component", 0.0) or 0.0),
             "recency_component": float(getattr(components, "recency_component", 0.0) or 0.0),
+            "prior_score": float(getattr(components, "prior_score", 0.0) or 0.0),
         },
         "disclosure_level": str(getattr(item, "disclosure_level", "") or ""),
     }
@@ -182,6 +183,7 @@ def _result_detail_fields(item: ScoredResult | dict[str, Any]) -> dict[str, Any]
             "lexical_score": float(getattr(components, "lexical_score", 0.0) or 0.0),
             "scope_component": float(getattr(components, "scope_component", 0.0) or 0.0),
             "recency_component": float(getattr(components, "recency_component", 0.0) or 0.0),
+            "prior_score": float(getattr(components, "prior_score", 0.0) or 0.0),
         }
     return data
 
@@ -259,6 +261,7 @@ def _scored_result_from_candidate(
         snippet=str(result_get(candidate, "snippet", "") or ""),
         has_next_action_checkbox=bool(result_get(candidate, "has_next_action_checkbox", False)),
         word_count=int(result_get(candidate, "word_count", 0) or 0),
+        created_ts=result_get(candidate, "created_ts"),
         score=score,
         reasons=reasons,
         components=components,
@@ -403,8 +406,11 @@ def rank_query_semantic_hybrid(
     expanded_tokens, expansion_events = expand_query_tokens(query_tokens, aliases)
     include_reasons = limit <= _detailed_reasons_limit()
 
-    # Resolve fusion mode: explicit arg > config
+    # Resolve fusion mode. Invalid config/env values fall back to the documented
+    # default and report the effective mode truthfully in result metadata.
     fusion_mode = str(config.fusion or "weighted_sum").strip().lower()
+    if fusion_mode not in {"weighted_sum", "rrf"}:
+        fusion_mode = "weighted_sum"
 
     # Resolve PRF flag: explicit arg > config
     _use_prf = config.prf_enabled if prf_enabled is None else bool(prf_enabled)
@@ -470,16 +476,29 @@ def rank_query_semantic_hybrid(
         _prf_all_paths = [p for p, _ in _prf_by_score[:prf_pool_size]]
         _prf_bottom_paths = [p for p, _ in _prf_by_score[max(0, len(_prf_all_paths) - config.prf_bottom_n) :]]
 
-        # Retrieve the actual embedding vectors for the pseudo-relevant docs.
-        # embeddings module exposes embed_query_text; we use score_by_rel_path's
-        # stored vectors if available, otherwise fall back to re-embedding the
-        # candidate body text.  The simplest safe path: re-use semantic.get
-        # "item_vectors" when the embeddings module provides it; otherwise skip.
+        # Retrieve the actual index vectors for the pseudo-relevant docs. Tests
+        # can provide them directly in the semantic payload; the real embeddings
+        # module exposes them via load_semantic_index().
         _item_vectors: dict[str, Any] = semantic.get("item_vectors") or {}
+        _item_list = semantic.get("items") or []
+        _index_template = str(semantic.get("text_template", "none") or "none")
+        if not _item_vectors and hasattr(embeddings, "load_semantic_index"):
+            try:
+                _index_data, _vectors = embeddings.load_semantic_index("ledger", backend, model)
+                if _index_data is not None and _vectors is not None:
+                    _item_list = _index_data.get("items", []) or []
+                    _index_template = str(_index_data.get("text_template", "none") or "none")
+                    _item_vectors = {
+                        str(item.get("rel_path", "")): _vectors[i]
+                        for i, item in enumerate(_item_list[: _vectors.shape[0]])
+                        if item.get("rel_path")
+                    }
+            except Exception:
+                _item_vectors = {}
         if _item_vectors:
             try:
                 _q_vec = embeddings.embed_query_text(
-                    query, backend=backend, model=model, text_template="none"
+                    query, backend=backend, model=model, text_template=_index_template
                 )
                 _expanded_q_vec = prf_expand_query_vector(
                     _q_vec,
@@ -493,7 +512,6 @@ def rank_query_semantic_hybrid(
                 # Re-compute cosine scores with expanded vector
                 import numpy as np
                 _vecs_matrix = None
-                _item_list = semantic.get("items") or []
                 if _item_list:
                     _rows = [
                         np.asarray(_item_vectors.get(item.get("rel_path", ""), np.zeros(1)), dtype=np.float32).reshape(-1)

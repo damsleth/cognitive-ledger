@@ -117,6 +117,7 @@ def _copy_candidate(candidate: CandidateLike) -> RetrievalCandidate:
         snippet=str(_candidate_value(candidate, "snippet", "") or ""),
         has_next_action_checkbox=bool(_candidate_value(candidate, "has_next_action_checkbox", False)),
         word_count=int(_candidate_value(candidate, "word_count", 0) or 0),
+        created_ts=_candidate_value(candidate, "created_ts"),
     )
 
 
@@ -147,6 +148,7 @@ def _scored_result(
         snippet=base.snippet,
         has_next_action_checkbox=base.has_next_action_checkbox,
         word_count=base.word_count,
+        created_ts=base.created_ts,
         score=score,
         reasons=list(reasons),
         components=components,

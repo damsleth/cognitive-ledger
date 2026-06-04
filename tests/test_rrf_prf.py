@@ -306,6 +306,35 @@ class FakeEmbeddings:
         return v.reshape(1, -1)
 
 
+class FakeEmbeddingsWithIndex(FakeEmbeddings):
+    """Fake the real embeddings module shape: vectors live in load_semantic_index."""
+
+    def __init__(
+        self,
+        score_map: dict[str, float],
+        vectors: np.ndarray,
+        items: list[dict],
+        *,
+        text_template: str = "none",
+    ):
+        super().__init__(score_map)
+        self._vectors = vectors
+        self._index_items = items
+        self._text_template = text_template
+        self.query_templates: list[str] = []
+
+    def load_semantic_index(self, target, backend, model):
+        return {
+            "items": self._index_items,
+            "text_template": self._text_template,
+            "item_count": len(self._index_items),
+        }, self._vectors
+
+    def embed_query_text(self, text, *, backend="local", model=None, text_template="none"):
+        self.query_templates.append(text_template)
+        return np.array([[1.0, 0.0]], dtype=np.float32)
+
+
 class TestFusionWeightedSumGolden:
     """fusion=weighted_sum (default) must produce byte-identical results to pre-change."""
 
@@ -348,6 +377,49 @@ class TestFusionWeightedSumGolden:
         assert result.semantic is not None
         assert result.semantic.get("fusion") == "weighted_sum"
 
+    def test_invalid_fusion_falls_back_to_weighted_sum_metadata(self, tmp_path):
+        config = LedgerConfig(ledger_root=tmp_path)
+        config.fusion = "typo"
+        set_config(config)
+
+        rel_path = "notes/02_facts/fact__fallback.md"
+        _seed_note(config.ledger_notes_dir / "02_facts" / "fact__fallback.md", "fallback test")
+        fake = FakeEmbeddings({rel_path: 0.70})
+
+        result = query_module.rank_query_semantic_hybrid(
+            "fallback test",
+            scope="all",
+            limit=5,
+            load_embeddings_module=lambda: fake,
+            resolve_embed_model=lambda _b, _m: "fake",
+        )
+
+        assert result.semantic is not None
+        assert result.semantic.get("fusion") == "weighted_sum"
+        assert result.effective_retrieval_mode == "semantic_hybrid"
+
+    def test_prior_score_is_serialized_in_detail_components(self, tmp_path):
+        config = LedgerConfig(ledger_root=tmp_path)
+        config.prior_enabled = True
+        set_config(config)
+
+        rel_path = "notes/02_facts/fact__prior_json.md"
+        _seed_note(config.ledger_notes_dir / "02_facts" / "fact__prior_json.md", "prior json")
+        fake = FakeEmbeddings({rel_path: 0.70})
+
+        result = query_module.rank_query_semantic_hybrid(
+            "prior json",
+            scope="all",
+            limit=5,
+            load_embeddings_module=lambda: fake,
+            resolve_embed_model=lambda _b, _m: "fake",
+        )
+        payload = query_module.query_result_to_json(result, view="detail")
+
+        components = payload["results"][0]["components"]
+        assert "prior_score" in components
+        assert components["prior_score"] > 0.0
+
     def test_prf_off_does_not_change_results(self, tmp_path):
         """--prf off (default) produces the same results as not passing the flag."""
         config = LedgerConfig(ledger_root=tmp_path)
@@ -379,6 +451,46 @@ class TestFusionWeightedSumGolden:
         for a, b in zip(result_no_flag.results, result_prf_off.results):
             assert a.rel_path == b.rel_path
             assert abs(a.score - b.score) < 1e-9
+
+    def test_prf_uses_real_index_vectors_and_text_template(self, tmp_path):
+        config = LedgerConfig(ledger_root=tmp_path)
+        config.prf_enabled = True
+        config.prf_top_m = 1
+        config.prf_bottom_n = 1
+        set_config(config)
+
+        rel_a = "notes/02_facts/fact__a.md"
+        rel_b = "notes/02_facts/fact__b.md"
+        _seed_note(config.ledger_notes_dir / "02_facts" / "fact__a.md", "alpha")
+        _seed_note(config.ledger_notes_dir / "02_facts" / "fact__b.md", "beta")
+
+        vectors = np.array(
+            [
+                [0.0, 1.0],  # initially top, but away from query after PRF
+                [1.0, 0.0],
+            ],
+            dtype=np.float32,
+        )
+        items = [{"rel_path": rel_a}, {"rel_path": rel_b}]
+        fake = FakeEmbeddingsWithIndex(
+            {rel_a: 0.99, rel_b: 0.10},
+            vectors,
+            items,
+            text_template="e5_prefix",
+        )
+
+        result = query_module.rank_query_semantic_hybrid(
+            "alpha beta",
+            scope="all",
+            limit=5,
+            prf_enabled=True,
+            load_embeddings_module=lambda: fake,
+            resolve_embed_model=lambda _b, _m: "fake",
+        )
+
+        assert fake.query_templates == ["e5_prefix"]
+        rescored = {r.rel_path: r.components.semantic_similarity for r in result.results}
+        assert rescored[rel_b] > rescored[rel_a]
 
 
 class TestFusionRRF:
