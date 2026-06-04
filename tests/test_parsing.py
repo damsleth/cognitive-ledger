@@ -12,6 +12,7 @@ from ledger.parsing.frontmatter import (
     parse_frontmatter_text,
     parse_timestamp,
     normalize_tags,
+    serialize_frontmatter,
     to_parsed_frontmatter,
 )
 from ledger.parsing.sections import (
@@ -205,6 +206,23 @@ Body content.
         fm, body = parse_frontmatter_text(text)
         self.assertEqual(fm, {})
         self.assertEqual(body, text)
+
+
+class TestSerializeFrontmatter(unittest.TestCase):
+    """Tests for serialize_frontmatter function."""
+
+    def test_preserves_non_ascii_list_values(self):
+        text = serialize_frontmatter({
+            "tags": ["røde-kors", "østfold"],
+            "scope": "personal",
+        })
+
+        self.assertIn('"røde-kors"', text)
+        self.assertIn('"østfold"', text)
+        self.assertNotIn("\\u00", text)
+
+        fm, _ = parse_frontmatter_text(text + "\n# Body\n")
+        self.assertEqual(fm["tags"], ["røde-kors", "østfold"])
 
 
 class TestParseTimestamp(unittest.TestCase):
