@@ -177,7 +177,21 @@ Optional ranking mechanisms (all off by default; enable after A/B validation):
 ledger eval --cases "$(ledger paths --field ledger_notes_dir)/08_indices/retrieval_eval_cases.yaml" --k 3
 ledger ab run --baseline-ref main --candidate-ref HEAD --runs 5     # uses ledger_notes_dir from config.yaml
 ledger ab run --corpus ~/Code/ledger-notes --baseline-ref main --candidate-ref HEAD --runs 5
+
+# Config A/B on a single ref (e.g. validate a signal weight before flipping it).
+# --candidate-env / --baseline-env take LEDGER_* env-var names; the values
+# reach BOTH the eval and the query probes and are echoed back in the report
+# (the "Config Overrides" table shows requested vs. applied).
+ledger ab run --baseline-ref HEAD --candidate-ref HEAD \
+  --candidate-env LEDGER_WEIGHT_SIGNAL=0.1 --runs 5
 ```
+
+`--baseline-mode` / `--candidate-mode` default to your **configured**
+`retrieval_mode` (e.g. `semantic_hybrid`), not `legacy`; pass the flags
+explicitly to benchmark a different mode. When both refs resolve to the same
+commit, the harness probes that commit's code (building a worktree if it is not
+the currently checked-out HEAD); a ref that does not exist is refused with a
+clear error rather than silently probing the working tree.
 
 ### Retrieval Mode A/B Results
 
