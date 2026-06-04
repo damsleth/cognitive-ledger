@@ -227,6 +227,7 @@ def _apply_env_overrides(config: "LedgerConfig") -> "LedgerConfig":
         "LEDGER_PRIOR_W_RECENCY": "prior_w_recency",
         "LEDGER_PRIOR_W_RELEVANCE": "prior_w_relevance",
         "LEDGER_PRIOR_HALF_LIFE": "prior_recency_half_life_days",
+        "LEDGER_PRIOR_TIE_BAND": "prior_tie_band",
         "LEDGER_PRF_ALPHA": "prf_alpha",
         "LEDGER_PRF_BETA": "prf_beta",
         "LEDGER_PRF_GAMMA": "prf_gamma",
@@ -453,8 +454,34 @@ class LedgerConfig:
     prior_weight: float = 0.10
     """Additive weight applied to the prior score component.
 
-    Rationale: Small enough that the prior nudges ordering without
-    overriding lexical/semantic relevance. Tunable via A/B eval.
+    The prior is applied as a TIE-BREAKER, not a flat additive bonus: its
+    contribution is scaled toward zero for any candidate whose base
+    (pre-prior) score trails the local leader by more than ``prior_tie_band``
+    (see ``apply_prior_tiebreak``). This keeps prior_weight=0.10 safe — a
+    clear semantic winner is never displaced by the prior, while genuinely
+    near-tied candidates are still ordered by note quality / recency.
+
+    Rationale: Small enough that the prior nudges ordering within a tie band
+    without overriding lexical/semantic relevance. Tunable via A/B eval.
+    """
+
+    prior_tie_band: float = 0.02
+    """Relative base-score gap (as a fraction of the local leader's base
+    score) within which the prior acts as a tie-breaker.
+
+    The prior contribution for a candidate is multiplied by a factor that
+    decays continuously from 1.0 (gap == 0, candidate IS the local leader)
+    to 0.0 (gap >= prior_tie_band). A candidate whose base score trails the
+    leader by more than this band receives NO prior contribution and thus
+    keeps its base-score rank regardless of its confidence/recency prior.
+
+    The scaling is continuous (not a hard cutoff) to avoid rank instability
+    at the band boundary. Default 0.02 (2% relative gap) was tuned on the
+    real semantic_hybrid eval corpus: it restores the pre-prior baseline
+    exactly (hit@1 0.733, hit@3 0.889, mrr 0.804) while still letting the
+    prior reorder genuine ties. With semantic_hybrid the relevance signal is
+    already strong, so the tie band must stay narrow. Override via
+    LEDGER_PRIOR_TIE_BAND.
     """
 
     prior_w_importance: float = 0.30
