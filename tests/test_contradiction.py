@@ -521,6 +521,39 @@ class TestScanAmbiguousOrderingInbox:
         finally:
             reset_config()
 
+    def test_conflict_note_appends_timeline_entry(self, tmp_path: Path):
+        """Creating a conflict inbox note is a note operation and must be logged."""
+        config = _make_config(tmp_path)
+        notes_dir = config.ledger_notes_dir
+        try:
+            note_a = notes_dir / "02_facts" / "fact__timeline_a.md"
+            _write(note_a, _note_content(created=_TS_OLD, valid_from=_TS_OLD))
+            note_b = notes_dir / "02_facts" / "fact__timeline_b.md"
+            _write(note_b, _note_content(created=_TS_OLD, valid_from=_TS_OLD))
+
+            neighbor_items = [
+                {"rel_path": "notes/02_facts/fact__timeline_b.md", "type": "fact"}
+            ]
+            run_contradiction_scan(
+                apply=True,
+                _pipeline_fn=_fake_pipeline(contradiction=0.91),
+                _neighbor_fn=_make_neighbor_fn(neighbor_items),
+            )
+
+            entries = [
+                json.loads(line)
+                for line in config.timeline_jsonl_path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            conflict_entries = [
+                e for e in entries
+                if e.get("action") == "created" and "notes/00_inbox/conflict__" in e.get("path", "")
+            ]
+            assert conflict_entries, "conflict note creation must be visible in timeline"
+
+        finally:
+            reset_config()
+
 
 class TestScanOlderHigherConfidence:
     """Older note with higher confidence → downgrade auto to review."""
@@ -1006,6 +1039,71 @@ class TestMissingEmbedIndex:
 
         finally:
             reset_config()
+
+
+# ---------------------------------------------------------------------------
+# Missing NLI model/dependency path
+# ---------------------------------------------------------------------------
+
+class TestMissingNli:
+    """NLI dependency/model failures are reported cleanly without writes."""
+
+    def test_nli_unavailable_exits_scan_cleanly(self, tmp_path: Path):
+        config = _make_config(tmp_path)
+        notes_dir = config.ledger_notes_dir
+        try:
+            note_a = notes_dir / "02_facts" / "fact__nli_a.md"
+            _write(note_a, _note_content(created=_TS_NEW, valid_from=_TS_NEW))
+            note_b = notes_dir / "02_facts" / "fact__nli_b.md"
+            _write(note_b, _note_content(created=_TS_OLD, valid_from=_TS_OLD))
+
+            def _unavailable_pipeline(_premise: str, _hypothesis: str):
+                raise RuntimeError("transformers missing")
+
+            result = run_contradiction_scan(
+                apply=True,
+                _pipeline_fn=_unavailable_pipeline,
+                _neighbor_fn=_make_neighbor_fn([
+                    {"rel_path": "notes/02_facts/fact__nli_b.md", "type": "fact"}
+                ]),
+            )
+
+            assert result.nli_available is False
+            assert "transformers missing" in result.nli_unavailable_reason
+            assert result.pairs_evaluated == 0
+            assert not (notes_dir / "08_indices" / "contradiction_state.json").exists()
+            assert not list((notes_dir / "00_inbox").glob("conflict__*.md"))
+
+        finally:
+            reset_config()
+
+    def test_nli_unavailable_cmd_exits_0(self, tmp_path: Path, capsys):
+        import unittest.mock as mock
+
+        _make_config(tmp_path)
+        result = ScanResult(
+            enabled=True,
+            semantic_index_available=True,
+            nli_available=False,
+            candidates_scanned=1,
+            pairs_evaluated=0,
+            supersessions=0,
+            conflict_notes=0,
+            ignored=0,
+            dry_run=True,
+            nli_unavailable_reason="model is not cached",
+        )
+
+        try:
+            with mock.patch("ledger.contradiction.run_contradiction_scan", return_value=result):
+                rc = cmd_sleep_contradictions(apply=False)
+        finally:
+            reset_config()
+
+        assert rc == 0
+        out = capsys.readouterr().out
+        assert "NLI classifier unavailable" in out
+        assert "model is not cached" in out
 
 
 # ---------------------------------------------------------------------------

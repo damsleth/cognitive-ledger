@@ -73,7 +73,8 @@ frontmatter:
   # All fields are optional; a note without them lints clean.
   bitemporal:
     valid_from:     # ISO 8601 UTC: when the fact became true
-                    # null on legacy notes = warning (suggest migration), not error
+                    # absent on legacy notes = lint-clean; missing only warns
+                    # when other bitemporal fields are present
     valid_to:       # ISO 8601 UTC: when the fact ceased to be true
                     # null = currently valid (open interval)
                     # set on supersession; valid_from <= valid_to when both present
@@ -137,7 +138,7 @@ frontmatter:
       type: string
       optional: true
       pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
-      note: "null on legacy notes triggers a migration warning, not an error"
+      note: "absent on legacy notes is lint-clean; missing only warns when other bitemporal fields are present"
     valid_to:
       type: string
       optional: true
@@ -212,6 +213,8 @@ signals:
     - stale_flag          # note referenced but content is outdated
     - preference_applied  # agent successfully applies a preference
     - rating              # explicit 1-10 satisfaction rating
+    - supersession        # bitemporal supersede() archived a replaced note
+    - contradiction_flagged # NLI scan surfaced a contradiction pair
   min_entries_for_scoring: 20  # signal scoring disabled below this threshold
 
 # Recommended tags (not enforced, but recognized by tooling)

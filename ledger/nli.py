@@ -147,9 +147,10 @@ def score_pair(
         raw = _pipeline_fn(premise, hypothesis)
     else:
         pipe = get_nli_pipeline(model_name, device)
-        # transformers text-classification with return_all_scores=True returns
-        # [[{label, score}, ...]] for a single input.
-        result = pipe(f"{premise}</s>{hypothesis}")
+        # NLI classifiers are trained on sentence pairs. Passing a manually
+        # concatenated string turns the task into single-sequence classification
+        # and can produce noisy contradiction scores.
+        result = pipe({"text": premise, "text_pair": hypothesis})
         raw = result[0] if isinstance(result[0], list) else result
 
     # Normalise label names to lowercase without hyphens.

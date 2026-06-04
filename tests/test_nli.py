@@ -83,6 +83,25 @@ class TestScorePair:
         assert result["entailment"] == pytest.approx(0.0)
         assert result["neutral"] == pytest.approx(0.0)
 
+    def test_real_pipeline_receives_sentence_pair_input(self, monkeypatch):
+        """Production NLI path must call transformers with text/text_pair."""
+        calls: list[Any] = []
+
+        def _fake_pipe(payload: Any):
+            calls.append(payload)
+            return [[
+                {"label": "CONTRADICTION", "score": 0.2},
+                {"label": "NEUTRAL", "score": 0.7},
+                {"label": "ENTAILMENT", "score": 0.1},
+            ]]
+
+        monkeypatch.setattr("ledger.nli.get_nli_pipeline", lambda *a, **kw: _fake_pipe)
+
+        result = score_pair("Premise", "Hypothesis", model_name="fake", device="cpu")
+
+        assert result["contradiction"] == pytest.approx(0.2)
+        assert calls == [{"text": "Premise", "text_pair": "Hypothesis"}]
+
 
 # ---------------------------------------------------------------------------
 # contradiction_score (bidirectional)
