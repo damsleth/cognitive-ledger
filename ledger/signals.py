@@ -25,6 +25,7 @@ SIGNAL_TYPES = (
     "rating",
     "supersession",
     "contradiction_flagged",
+    "llm_judged",
 )
 
 
@@ -40,6 +41,8 @@ def append_signal(
     detail: str = "",
     rating: int | None = None,
     session: str = "",
+    synthetic: bool = False,
+    source: str = "",
 ) -> dict[str, Any]:
     """Append a signal entry to signals.jsonl.
 
@@ -50,6 +53,10 @@ def append_signal(
         detail: Free-text detail.
         rating: Explicit 1-10 rating (for rating type).
         session: Optional session identifier.
+        synthetic: If True, mark event as LLM-seeded (not real user feedback).
+            Synthetic events are down-weighted in ``summarize_signals`` by
+            ``config.synthetic_weight`` (default 0.5).
+        source: Source identifier for synthetic events, e.g. ``"llm_judge"``.
 
     Returns:
         The signal entry dict that was appended.
@@ -77,6 +84,10 @@ def append_signal(
         entry["rating"] = max(1, min(10, int(rating)))
     if session:
         entry["session"] = session
+    if synthetic:
+        entry["synthetic"] = True
+    if source:
+        entry["source"] = source
 
     config = get_config()
     signals_path = config.signals_path
@@ -87,6 +98,23 @@ def append_signal(
         f.write(line + "\n")
 
     return entry
+
+
+def append_signal_raw(entry: dict[str, Any], signals_path: Path) -> None:
+    """Write a pre-built signal dict directly to signals.jsonl.
+
+    Used by the seeding workflow to bulk-write synthetic events without
+    going through ``append_signal``'s config lookup.  The caller must
+    ensure the entry is well-formed (has ``ts`` and ``type`` keys).
+
+    Args:
+        entry: Signal dict to write.
+        signals_path: Absolute path to the signals.jsonl file.
+    """
+    signals_path.parent.mkdir(parents=True, exist_ok=True)
+    line = json.dumps(entry, ensure_ascii=False)
+    with open(signals_path, "a", encoding="utf-8") as f:
+        f.write(line + "\n")
 
 
 def read_signals(
@@ -134,6 +162,15 @@ def summarize_signals(
 ) -> dict[str, Any]:
     """Build a per-note signal summary from the full signal log.
 
+    Synthetic signals (``synthetic: true``) are down-weighted by
+    ``config.synthetic_weight`` (default 0.5) relative to real signals.
+    The 20-signal gate (``signal_min_entries``) counts only REAL
+    (non-synthetic) signals so seeded events do not artificially
+    activate scoring.
+
+    Old JSONL files without the ``synthetic`` field parse identically to
+    before — missing ``synthetic`` is treated as ``False``.
+
     Args:
         signals_path: Override path (for testing).
         signals: Pre-loaded signal list (avoids re-reading JSONL).
@@ -143,9 +180,28 @@ def summarize_signals(
     """
     if signals is None:
         signals = read_signals(signals_path=signals_path)
+
+    config = get_config()
+    synthetic_weight: float = getattr(config, "synthetic_weight", 0.5)
+
     notes: dict[str, dict[str, Any]] = {}
+    real_signal_count: int = 0
 
     for entry in signals:
+        is_synthetic = bool(entry.get("synthetic", False))
+        if not is_synthetic:
+            real_signal_count += 1
+
+        # Weight multiplier: synthetic events count fractionally
+        weight: float = synthetic_weight if is_synthetic else 1.0
+
+        sig_type = entry.get("type", "")
+        if sig_type == "llm_judged" and not bool(entry.get("relevant", False)):
+            # A negative top-k judge verdict is useful audit data, but treating
+            # it as a global note correction would demote notes for one query.
+            # It also should not make the note look human-reviewed.
+            continue
+
         note_path = entry.get("note", "")
         if not note_path:
             continue
@@ -162,24 +218,34 @@ def summarize_signals(
                 "rating_max": None,
                 "stale_flags": 0,
                 "preference_applied": 0,
+                # Synthetic-specific counters (not used in signal_score formula
+                # directly, but available for diagnostics)
+                "synthetic_hits": 0,
+                "synthetic_corrections": 0,
+                "synthetic_affirmations": 0,
             }
 
         stats = notes[note_path]
-        sig_type = entry.get("type", "")
         ts = entry.get("ts", "")
 
-        if sig_type == "retrieval_hit":
-            stats["hit_count"] += 1
+        if sig_type == "retrieval_hit" or sig_type == "llm_judged":
+            stats["hit_count"] += weight
             if ts > stats["last_hit"]:
                 stats["last_hit"] = ts
+            if is_synthetic:
+                stats["synthetic_hits"] += 1
         elif sig_type == "correction":
-            stats["corrections"] += 1
+            stats["corrections"] += weight
+            if is_synthetic:
+                stats["synthetic_corrections"] += 1
         elif sig_type == "affirmation":
-            stats["affirmations"] += 1
+            stats["affirmations"] += weight
+            if is_synthetic:
+                stats["synthetic_affirmations"] += 1
         elif sig_type == "stale_flag":
-            stats["stale_flags"] += 1
+            stats["stale_flags"] += weight
         elif sig_type == "preference_applied":
-            stats["preference_applied"] += 1
+            stats["preference_applied"] += weight
         elif sig_type == "rating":
             if "rating" in entry:
                 r = entry["rating"]
@@ -207,17 +273,20 @@ def summarize_signals(
         else:
             stats["signal_score"] = round(sentiment, 4)
 
-    # Collect retrieval miss stats
-    miss_queries: dict[str, int] = {}
+    # Collect retrieval miss stats (real and synthetic)
+    miss_queries: dict[str, float] = {}
     for entry in signals:
         if entry.get("type") == "retrieval_miss":
             q = entry.get("query", "")
             if q:
-                miss_queries[q] = miss_queries.get(q, 0) + 1
+                is_synthetic = bool(entry.get("synthetic", False))
+                weight = synthetic_weight if is_synthetic else 1.0
+                miss_queries[q] = miss_queries.get(q, 0.0) + weight
 
     return {
         "_meta": {
             "total_signals": len(signals),
+            "real_signals": real_signal_count,
             "summarized_at": _now_iso(),
         },
         "notes": notes,
@@ -225,6 +294,56 @@ def summarize_signals(
             sorted(miss_queries.items(), key=lambda kv: kv[1], reverse=True)[:20]
         ),
     }
+
+
+def purge_synthetic_signals(
+    signals_path: Path | None = None,
+) -> int:
+    """Remove all synthetic signal events from signals.jsonl.
+
+    Reads the existing JSONL, drops every entry where ``synthetic`` is
+    truthy, and rewrites the file in place.  Returns the number of
+    entries removed.
+
+    This is a full rollback of all LLM-seeded signals.  Run
+    ``ledger signal summarize`` afterwards to refresh ``signal_summary.json``.
+
+    Args:
+        signals_path: Override path (for testing).
+
+    Returns:
+        Number of entries that were removed.
+    """
+    config = get_config()
+    path = signals_path or config.signals_path
+    if not path.is_file():
+        return 0
+
+    kept: list[str] = []
+    removed = 0
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            # Preserve unparseable lines as-is
+            kept.append(line)
+            continue
+        if entry.get("synthetic", False):
+            removed += 1
+        else:
+            kept.append(line)
+
+    # Rewrite atomically: write to .tmp then rename
+    tmp_path = path.with_suffix(".jsonl.tmp")
+    tmp_path.write_text(
+        "\n".join(kept) + ("\n" if kept else ""),
+        encoding="utf-8",
+    )
+    tmp_path.replace(path)
+    return removed
 
 
 def write_summary(signals_path: Path | None = None) -> Path:
@@ -284,13 +403,18 @@ def signal_stats(signals_path: Path | None = None) -> dict[str, Any]:
     """Compute aggregate stats for display.
 
     Returns:
-        Dict with counts by type, top notes, coverage gaps.
+        Dict with counts by type, top notes, coverage gaps, and
+        ``real_total`` — the count of non-synthetic signals used for
+        the activation gate.
     """
     signals = read_signals(signals_path=signals_path)
     by_type: dict[str, int] = {}
+    real_total: int = 0
     for entry in signals:
         sig_type = entry.get("type", "unknown")
         by_type[sig_type] = by_type.get(sig_type, 0) + 1
+        if not entry.get("synthetic", False):
+            real_total += 1
 
     summary = summarize_signals(signals=signals)
     notes_data = summary.get("notes", {})
@@ -308,6 +432,7 @@ def signal_stats(signals_path: Path | None = None) -> dict[str, Any]:
 
     return {
         "total": len(signals),
+        "real_total": real_total,
         "by_type": by_type,
         "top_notes": [(path, stats.get("hit_count", 0)) for path, stats in top_notes],
         "corrections_pending": len(corrections_pending),

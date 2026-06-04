@@ -204,6 +204,7 @@ def _apply_env_overrides(config: "LedgerConfig") -> "LedgerConfig":
         "LEDGER_REASONS_LIMIT": "detailed_reasons_limit",
         "LEDGER_EMBED_BATCH_SIZE": "embed_batch_size",
         "LEDGER_CONTRADICTION_NEIGHBORS_K": "contradiction_neighbors_k",
+        "LEDGER_JUDGE_SEED_TOP_K": "judge_seed_top_k",
     }
     for env_var, attr in int_mappings.items():
         if (value := os.getenv(env_var)) is None:
@@ -225,6 +226,16 @@ def _apply_env_overrides(config: "LedgerConfig") -> "LedgerConfig":
         "LEDGER_CONTRADICTION_AUTO_THRESHOLD": "contradiction_auto_threshold",
         "LEDGER_CONTRADICTION_REVIEW_THRESHOLD": "contradiction_review_threshold",
         "LEDGER_CONTRADICTION_AUTO_THRESHOLD_LANG_NO": "contradiction_auto_threshold_lang_no",
+        "LEDGER_PRIOR_WEIGHT": "prior_weight",
+        "LEDGER_PRIOR_W_IMPORTANCE": "prior_w_importance",
+        "LEDGER_PRIOR_W_RECENCY": "prior_w_recency",
+        "LEDGER_PRIOR_W_RELEVANCE": "prior_w_relevance",
+        "LEDGER_PRIOR_HALF_LIFE": "prior_recency_half_life_days",
+        "LEDGER_PRIOR_TIE_BAND": "prior_tie_band",
+        "LEDGER_PRF_ALPHA": "prf_alpha",
+        "LEDGER_PRF_BETA": "prf_beta",
+        "LEDGER_PRF_GAMMA": "prf_gamma",
+        "LEDGER_SYNTHETIC_WEIGHT": "synthetic_weight",
     }
     for env_var, attr in float_mappings.items():
         if (value := os.getenv(env_var)) is None:
@@ -239,6 +250,8 @@ def _apply_env_overrides(config: "LedgerConfig") -> "LedgerConfig":
         "LEDGER_SIGNALS_AUTO_CAPTURE": "signals_auto_capture",
         "LEDGER_CONTRADICTION_ENABLED": "contradiction_enabled",
         "LEDGER_CONTRADICTION_PROTECT_HIGHER_CONFIDENCE": "contradiction_protect_higher_confidence",
+        "LEDGER_PRIOR_ENABLED": "prior_enabled",
+        "LEDGER_PRF_ENABLED": "prf_enabled",
     }
     for env_var, attr in bool_mappings.items():
         if (value := os.getenv(env_var)) is None:
@@ -251,6 +264,9 @@ def _apply_env_overrides(config: "LedgerConfig") -> "LedgerConfig":
         "LEDGER_EMBED_MODEL": "embed_model",
         "LEDGER_EMBED_DEVICE": "embed_device",
         "LEDGER_CONTRADICTION_MODEL": "contradiction_model",
+        "LEDGER_FUSION": "fusion",
+        "LEDGER_JUDGE_BACKEND": "judge_backend",
+        "LEDGER_JUDGE_COMMAND": "judge_subprocess_command",
     }
     for env_var, attr in string_mappings.items():
         if (value := os.getenv(env_var)) is None:
@@ -427,6 +443,87 @@ class LedgerConfig:
     feedback loop has accumulated data.
     """
 
+    # =========================================================================
+    # Prior Score (Mechanism 1 — cold-start ranking)
+    # =========================================================================
+
+    prior_enabled: bool = True
+    """Whether to apply the prior score as an additive ranking term.
+
+    When True (default), a prior score is computed from note importance
+    (confidence), recency (half-life decay), and query relevance, and
+    blended into the final score via prior_weight. This makes ranking
+    non-flat before any signal feedback has accrued.
+
+    Set to False to reproduce pre-prior scores exactly (useful for A/B).
+    """
+
+    prior_weight: float = 0.10
+    """Additive weight applied to the prior score component.
+
+    The prior is applied as a TIE-BREAKER, not a flat additive bonus: its
+    contribution is scaled toward zero for any candidate whose base
+    (pre-prior) score trails the local leader by more than ``prior_tie_band``
+    (see ``apply_prior_tiebreak``). This keeps prior_weight=0.10 safe — a
+    clear semantic winner is never displaced by the prior, while genuinely
+    near-tied candidates are still ordered by note quality / recency.
+
+    Rationale: Small enough that the prior nudges ordering within a tie band
+    without overriding lexical/semantic relevance. Tunable via A/B eval.
+    """
+
+    prior_tie_band: float = 0.02
+    """Relative base-score gap (as a fraction of the local leader's base
+    score) within which the prior acts as a tie-breaker.
+
+    The prior contribution for a candidate is multiplied by a factor that
+    decays continuously from 1.0 (gap == 0, candidate IS the local leader)
+    to 0.0 (gap >= prior_tie_band). A candidate whose base score trails the
+    leader by more than this band receives NO prior contribution and thus
+    keeps its base-score rank regardless of its confidence/recency prior.
+
+    The scaling is continuous (not a hard cutoff) to avoid rank instability
+    at the band boundary. Default 0.02 (2% relative gap) was tuned on the
+    real semantic_hybrid eval corpus: it restores the pre-prior baseline
+    exactly (hit@1 0.733, hit@3 0.889, mrr 0.804) while still letting the
+    prior reorder genuine ties. With semantic_hybrid the relevance signal is
+    already strong, so the tie band must stay narrow. Override via
+    LEDGER_PRIOR_TIE_BAND.
+    """
+
+    prior_w_importance: float = 0.30
+    """Weight of confidence (importance) inside the prior score.
+
+    Rationale: High-confidence notes are more reliable anchors.
+    """
+
+    prior_w_recency: float = 0.30
+    """Weight of recency inside the prior score (half-life decay).
+
+    Rationale: More recent notes tend to be more relevant, but
+    old notes should not be completely buried. The half-life
+    parameter (prior_recency_half_life_days) controls the decay rate.
+    """
+
+    prior_w_relevance: float = 0.40
+    """Weight of query-relevance inside the prior score.
+
+    In lexical mode: fraction of query tokens found in the note.
+    In semantic_hybrid mode: cosine similarity to the query vector.
+    Rationale: Relevance is the primary discriminator; the prior
+    amplifies the relevance signal for high-quality notes.
+    """
+
+    prior_recency_half_life_days: float = 180.0
+    """Half-life (in days) for the prior recency decay.
+
+    At this age a note gets 0.5 recency score; at 2x this age, 0.25.
+    Rationale: 180 days (6 months) is a reasonable balance between
+    favouring fresh content and preserving durable long-term knowledge.
+    Use a longer half-life than the existing 90-day linear decay to
+    keep older but high-quality notes competitive.
+    """
+
     auto_file_synthesis: bool = False
     """Whether to automatically file synthesized answers as notes.
 
@@ -458,6 +555,49 @@ class LedgerConfig:
     A query that returns nothing, or whose best hit scores under this
     floor, is treated as a coverage gap when ``signals_auto_capture`` is
     on. Tuned conservatively: only genuinely weak matches log a miss.
+    """
+
+    synthetic_weight: float = 0.5
+    """Down-weight factor applied to synthetic (LLM-seeded) signal events.
+
+    Synthetic events (``synthetic: true``) count as this fraction of a real
+    signal when computing ``signal_score`` and per-note stats.  Default 0.5
+    means a seeded retrieval_hit contributes half as much as a real user hit.
+
+    Set to 0.0 to ignore synthetic events entirely; 1.0 to treat them as
+    equal to real signals (not recommended until judge quality is validated).
+    """
+
+    judge_backend: str = "dummy"
+    """Backend used by ``ledger signal seed`` to judge (query, note) pairs.
+
+    ``"dummy"`` — deterministic lexical-overlap heuristic (no network, no
+    LLM call; stable for tests and offline use).
+
+    ``"subprocess"`` — shells out to ``judge_subprocess_command``.  The
+    command receives a JSON object on stdin and must return a JSON verdict.
+    Example: ``claude -p`` or an Ollama call.
+    """
+
+    judge_subprocess_command: str = ""
+    """Shell command template for the subprocess judge backend.
+
+    Used only when ``judge_backend = "subprocess"``.
+    The command receives the prompt payload as JSON on stdin and must
+    write a JSON verdict to stdout with keys ``relevant`` (bool),
+    ``rating`` (int 1–10, optional), ``reason`` (str, optional).
+
+    Example values:
+      ``"claude -p"``
+      ``"/usr/local/bin/ollama run llama3 --format json"``
+    """
+
+    judge_seed_top_k: int = 5
+    """Number of notes retrieved per query during ``ledger signal seed``.
+
+    Higher values produce more seeded events but increase judge calls.
+    Keep low (3–5) for the dummy backend; can raise to 10+ with a fast
+    subprocess backend once quality is validated.
     """
 
     # =========================================================================
@@ -652,6 +792,67 @@ class LedgerConfig:
     by a newer, lower-confidence note even when contradiction score is above the
     auto threshold.
     """
+
+    # =========================================================================
+    # Fusion Mode (semantic_hybrid)
+    # =========================================================================
+
+    fusion: str = "weighted_sum"
+    """Fusion strategy for combining lexical and semantic candidate lists.
+
+    Allowed values:
+      - "weighted_sum": existing behaviour — single pass weighted-sum formula
+        using semantic_weight_* constants. Default; byte-identical to previous
+        behaviour when selected.
+      - "rrf": Reciprocal Rank Fusion — generates a lexical ranking and a
+        semantic ranking independently, then merges with RRF(k=rrf_k).
+        Opt-in pending A/B eval; does not affect weighted_sum path.
+
+    Override via LEDGER_FUSION env var.
+    """
+
+    rrf_k: int = 60
+    """RRF smoothing constant (k in 1/(k+rank)).
+
+    Higher k reduces the score difference between adjacent ranks.
+    Standard value used in literature is 60.
+    """
+
+    # =========================================================================
+    # Pseudo-Relevance Feedback (PRF — Mechanism 2, dense-vector only)
+    # =========================================================================
+
+    prf_enabled: bool = False
+    """Whether to apply pseudo-relevance feedback to expand the query vector.
+
+    Default off. Only active on the semantic_hybrid / semantic_rerank dense
+    path. Has no effect on lexical modes.
+
+    When on, the top ``prf_top_m`` results are used as pseudo-positives and
+    the bottom ``prf_bottom_n`` of an expanded pool as pseudo-negatives.
+    The query vector is then updated via the Rocchio formula:
+      q2 = alpha*q + beta*mean(pos) - gamma*mean(neg)
+    and re-ranking is performed with q2.
+
+    Set to true only after A/B validation shows improvement. Toggle via
+    config.yaml: ``prf_enabled: true`` or CLI flag ``--prf``.
+    Override via LEDGER_PRF_ENABLED env var.
+    """
+
+    prf_top_m: int = 3
+    """Number of top results used as pseudo-positive vectors in PRF."""
+
+    prf_bottom_n: int = 5
+    """Number of bottom results used as pseudo-negative vectors in PRF."""
+
+    prf_alpha: float = 1.0
+    """Rocchio alpha: weight of original query vector."""
+
+    prf_beta: float = 0.75
+    """Rocchio beta: weight of pseudo-positive centroid."""
+
+    prf_gamma: float = 0.15
+    """Rocchio gamma: weight of pseudo-negative centroid."""
 
     # =========================================================================
     # Text Processing
