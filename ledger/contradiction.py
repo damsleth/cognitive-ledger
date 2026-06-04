@@ -510,6 +510,7 @@ class ScanResult:
     """Aggregate result of a full contradiction scan run."""
     enabled: bool
     semantic_index_available: bool
+    nli_available: bool
     candidates_scanned: int
     pairs_evaluated: int
     supersessions: int
@@ -518,6 +519,7 @@ class ScanResult:
     dry_run: bool
     pair_results: list[PairResult] = field(default_factory=list)
     missing_embed_index: bool = False
+    nli_unavailable_reason: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -557,6 +559,7 @@ def run_contradiction_scan(
         return ScanResult(
             enabled=False,
             semantic_index_available=False,
+            nli_available=False,
             candidates_scanned=0,
             pairs_evaluated=0,
             supersessions=0,
@@ -620,6 +623,7 @@ def run_contradiction_scan(
     scan_result = ScanResult(
         enabled=True,
         semantic_index_available=semantic_available,
+        nli_available=True,
         candidates_scanned=len(candidates),
         pairs_evaluated=0,
         supersessions=0,
@@ -642,7 +646,7 @@ def run_contradiction_scan(
         cand_is_identity = _is_identity_path(candidate_abs)
         cand_lang_no = _is_lang_no(cand_fm)
         cand_anchor = _temporal_anchor(cand_fm)
-        cand_confidence = _clamp(float(cand_fm.get("confidence", 0.5)))
+        cand_confidence = _confidence(cand_fm)
         cand_scope = str(cand_fm.get("scope", "")).strip().lower() or None
 
         neighbors = neighbor_fn(
@@ -681,7 +685,7 @@ def run_contradiction_scan(
             neighbor_is_identity = _is_identity_path(neighbor_abs)
             neighbor_lang_no = _is_lang_no(neighbor_fm)
             neighbor_anchor = _temporal_anchor(neighbor_fm)
-            neighbor_confidence = _clamp(float(neighbor_fm.get("confidence", 0.5)))
+            neighbor_confidence = _confidence(neighbor_fm)
 
             # Bidirectional NLI score
             nli_kwargs: dict[str, Any] = {
@@ -690,7 +694,12 @@ def run_contradiction_scan(
             }
             if _pipeline_fn is not None:
                 nli_kwargs["_pipeline_fn"] = _pipeline_fn
-            score = nli_score(cand_body, neighbor_body, **nli_kwargs)
+            try:
+                score = nli_score(cand_body, neighbor_body, **nli_kwargs)
+            except Exception as exc:
+                scan_result.nli_available = False
+                scan_result.nli_unavailable_reason = str(exc)
+                return scan_result
 
             scan_result.pairs_evaluated += 1
 
@@ -824,6 +833,12 @@ def run_contradiction_scan(
                                 now_fb,
                             ),
                         )
+                        _append_conflict_timeline(
+                            f"notes/00_inbox/{filename_fb}",
+                            candidate_ref,
+                            neighbor_rel,
+                            score,
+                        )
                         scan_result.conflict_notes += 1
                 continue
 
@@ -868,6 +883,12 @@ def run_contradiction_scan(
                 now,
             )
             safe_write_text(conflict_path, conflict_content)
+            _append_conflict_timeline(
+                f"notes/00_inbox/{filename}",
+                candidate_ref,
+                neighbor_rel,
+                score,
+            )
             scan_result.conflict_notes += 1
             scan_result.pair_results.append(PairResult(
                 candidate_ref=candidate_ref,
@@ -914,6 +935,14 @@ def _clamp(v: float, lo: float = 0.0, hi: float = 1.0) -> float:
     return max(lo, min(hi, v))
 
 
+def _confidence(fm: dict[str, Any]) -> float:
+    """Return a lint-tolerant confidence value for decision guards."""
+    try:
+        return _clamp(float(fm.get("confidence", 0.5)))
+    except (TypeError, ValueError):
+        return 0.5
+
+
 def _rel_path_to_abs(rel_path: str, ledger_notes_dir: Path) -> Path | None:
     """Convert a notes/... logical path to an absolute path."""
     if rel_path.startswith("notes/"):
@@ -926,6 +955,28 @@ def _emit_signal_safe(signal_type: str, *, note: str, detail: str) -> None:
     try:
         from ledger.signals import append_signal
         append_signal(signal_type, note=note, detail=detail)
+    except Exception:
+        pass
+
+
+def _append_conflict_timeline(
+    conflict_ref: str,
+    candidate_ref: str,
+    neighbor_ref: str,
+    score: float,
+) -> None:
+    """Append a best-effort timeline entry for generated conflict notes."""
+    try:
+        from ledger.embeddings import append_timeline_entry
+
+        append_timeline_entry(
+            action="created",
+            rel_path=conflict_ref,
+            description=(
+                f"nli contradiction review for {candidate_ref} vs "
+                f"{neighbor_ref} (score={score:.3f})"
+            ),
+        )
     except Exception:
         pass
 
@@ -960,6 +1011,14 @@ def cmd_sleep_contradictions(*, apply: bool = False) -> int:
         print("ERROR: semantic index unavailable.")
         print("Run `ledger embed build` first, then retry the contradiction scan.")
         return 0  # Exit 0 per spec: report cleanly, no crash
+
+    if not result.nli_available:
+        print("ERROR: NLI classifier unavailable.")
+        if result.nli_unavailable_reason:
+            print(result.nli_unavailable_reason)
+        print("Install embeddings dependencies and download the configured model,")
+        print("or set contradiction_enabled: false until the model is available.")
+        return 0  # Maintenance should report cleanly, not crash.
 
     print(f"Candidates scanned: {result.candidates_scanned}")
     print(f"Pairs evaluated:    {result.pairs_evaluated}")
