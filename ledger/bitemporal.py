@@ -175,6 +175,25 @@ def _resolve_note(
     return abs_path
 
 
+def _resolve_archived_note_fallback(ref: str, *, ledger_notes_dir: Path) -> Path | None:
+    """Resolve the archived counterpart for a missing logical note ref.
+
+    Supersession moves notes into ``notes/09_archive/`` while keeping the
+    filename.  A repeated ``supersede(old_ref, new_ref)`` call using the
+    original pre-move ``old_ref`` should therefore be able to find the archived
+    note and take the normal idempotency path.
+    """
+    if ref.startswith("notes/09_archive/") or "/09_archive/" in ref:
+        return None
+    name = Path(ref).name
+    if not name:
+        return None
+    archive_path = (ledger_notes_dir / "09_archive" / name).resolve()
+    if archive_path.exists():
+        return archive_path
+    return None
+
+
 def _logical_ref(abs_path: Path, ledger_notes_dir: Path) -> str:
     """Return the canonical logical notes/... string for *abs_path*."""
     rel = logical_note_path(abs_path, ledger_notes_dir)
@@ -229,7 +248,16 @@ def supersede(
     ledger_notes_dir = config.ledger_notes_dir
 
     # --- 1. Resolve paths ---
-    old_abs = _resolve_note(old_ref, ledger_notes_dir=ledger_notes_dir)
+    try:
+        old_abs = _resolve_note(old_ref, ledger_notes_dir=ledger_notes_dir)
+    except NoteNotFoundError:
+        archive_fallback = _resolve_archived_note_fallback(
+            old_ref,
+            ledger_notes_dir=ledger_notes_dir,
+        )
+        if archive_fallback is None:
+            raise
+        old_abs = archive_fallback
     new_abs = _resolve_note(new_ref, ledger_notes_dir=ledger_notes_dir)
 
     # Canonical logical refs (always notes/... format)

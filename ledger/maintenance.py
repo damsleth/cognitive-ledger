@@ -523,7 +523,7 @@ def _lint_bitemporal(
     # Warn when valid_from is absent on eligible notes that carry other
     # bitemporal fields, or on any eligible note (migration suggestion).
     if is_eligible and not valid_from_raw and has_any_bitemporal:
-        _lint_warn(path, "valid_from is null; consider running `ledger migrate --apply` to back-fill")
+        _lint_warn(path, "valid_from is null; consider running `ledger migrate bitemporal --apply` to back-fill")
         counters.warnings += 1
         counters.warn_bitemporal_null_valid_from += 1
 
