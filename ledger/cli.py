@@ -691,14 +691,14 @@ def handle_signal_command(args):
         if stats["top_notes"]:
             print("\nTop notes by hit count:")
             for note_path, hits in stats["top_notes"][:5]:
-                print(f"  {hits:3d} hits  {note_path}")
+                print(f"  {float(hits):3g} hits  {note_path}")
         if stats["corrections_pending"]:
             print(f"\nNotes with corrections pending review: {stats['corrections_pending']}")
         misses = stats.get("retrieval_misses", {})
         if misses:
             print("\nTop retrieval miss queries:")
             for query, count in list(misses.items())[:5]:
-                print(f"  {count:3d}x  {query}")
+                print(f"  {float(count):3g}x  {query}")
 
     elif sub == "seed":
         _handle_signal_seed(args)
