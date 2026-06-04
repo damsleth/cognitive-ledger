@@ -236,6 +236,7 @@ def handle_query_command(args):
         embed_backend=args.embed_backend,
         embed_model=args.embed_model,
         as_of=as_of,
+        prf_enabled=True if getattr(args, "prf", False) else None,
     )
 
     view = getattr(args, "view", "context")
@@ -710,25 +711,130 @@ def handle_signal_command(args):
         from ledger import review
 
         stats = sig.signal_stats()
-        print(f"Total signals: {stats['total']}")
-        activation = review.activation_status(stats["total"])
+        print(f"Total signals: {stats['total']} (real: {stats.get('real_total', stats['total'])})")
+        activation = review.activation_status(
+            stats["total"], real_signals=stats.get("real_total")
+        )
         print(f"Activation: [{activation['state']}] {activation['message']}")
         print(f"By type: {json.dumps(stats['by_type'], indent=2)}")
         if stats["top_notes"]:
             print("\nTop notes by hit count:")
             for note_path, hits in stats["top_notes"][:5]:
-                print(f"  {hits:3d} hits  {note_path}")
+                print(f"  {float(hits):3g} hits  {note_path}")
         if stats["corrections_pending"]:
             print(f"\nNotes with corrections pending review: {stats['corrections_pending']}")
         misses = stats.get("retrieval_misses", {})
         if misses:
             print("\nTop retrieval miss queries:")
             for query, count in list(misses.items())[:5]:
-                print(f"  {count:3d}x  {query}")
+                print(f"  {float(count):3g}x  {query}")
+
+    elif sub == "seed":
+        _handle_signal_seed(args)
+
+    elif sub == "purge":
+        _handle_signal_purge(args)
 
     else:
-        print("Usage: ledger signal {add|summarize|stats}")
+        print("Usage: ledger signal {add|summarize|stats|seed|purge}")
         raise SystemExit(1)
+
+
+def _handle_signal_seed(args):
+    """Implement ``ledger signal seed --from-history / --queries-file``."""
+    from ledger import signals as sig
+    from ledger.llm_judge import seed_from_queries
+    from ledger.layout import indices_dir
+
+    cfg = get_config()
+    notes_dir = cfg.ledger_notes_dir
+    backend = getattr(args, "backend", None) or cfg.judge_backend
+    subprocess_cmd = getattr(args, "judge_command", None) or cfg.judge_subprocess_command
+    top_k = getattr(args, "top_k", None) or cfg.judge_seed_top_k
+    limit: int | None = getattr(args, "limit", None)
+
+    # Collect queries: --from-history reads query_log.jsonl; --queries-file reads a file
+    queries: list[str] = []
+    if getattr(args, "from_history", False):
+        log_path = indices_dir(notes_dir) / "query_log.jsonl"
+        if not log_path.is_file():
+            print(
+                f"No query history found at {log_path}.\n"
+                "Enable query logging first: LEDGER_QUERY_LOG=1 ledger query <q>\n"
+                "Or supply queries directly: ledger signal seed --queries-file <path>"
+            )
+            raise SystemExit(1)
+        seen: set[str] = set()
+        for line in log_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entry = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            q = entry.get("query", "")
+            if q and q not in seen:
+                seen.add(q)
+                queries.append(q)
+
+    queries_file: str | None = getattr(args, "queries_file", None)
+    if queries_file:
+        p = Path(queries_file)
+        if not p.is_file():
+            print(f"Queries file not found: {queries_file}")
+            raise SystemExit(1)
+        for line in p.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line and not line.startswith("#"):
+                queries.append(line)
+
+    if not queries:
+        print(
+            "No queries supplied. Use --from-history or --queries-file <path>."
+        )
+        raise SystemExit(1)
+
+    if limit is not None and limit > 0:
+        queries = queries[:limit]
+
+    print(
+        f"Seeding signals for {len(queries)} query(ies) "
+        f"(backend={backend!r}, top_k={top_k}) …"
+    )
+
+    events = seed_from_queries(
+        queries=queries,
+        notes_dir=notes_dir,
+        top_k=top_k,
+        backend=backend,
+        subprocess_command=subprocess_cmd,
+    )
+
+    signals_path = cfg.signals_path
+    for event in events:
+        sig.append_signal_raw(event, signals_path)
+
+    print(f"Seeded {len(events)} synthetic signal(s) → {signals_path}")
+    if events:
+        print("Run 'ledger signal summarize' to refresh signal_summary.json.")
+
+
+def _handle_signal_purge(args):
+    """Implement ``ledger signal purge --synthetic``."""
+    from ledger import signals as sig
+
+    if not getattr(args, "synthetic", False):
+        print(
+            "ledger signal purge requires a scope flag.\n"
+            "  --synthetic   remove all LLM-seeded (synthetic) events"
+        )
+        raise SystemExit(1)
+
+    removed = sig.purge_synthetic_signals()
+    print(f"Purged {removed} synthetic signal(s).")
+    if removed:
+        print("Run 'ledger signal summarize' to refresh signal_summary.json.")
 
 
 def handle_review_command(args):
@@ -1313,6 +1419,18 @@ def main(argv=None) -> int:
         action="store_true",
         help="After results, ask which one helped and log a retrieval_hit signal",
     )
+    query_parser.add_argument(
+        "--prf",
+        action="store_true",
+        default=False,
+        dest="prf",
+        help=(
+            "Enable Pseudo-Relevance Feedback for this query (semantic_hybrid / "
+            "semantic_rerank modes only). Expands the query vector via Rocchio "
+            "using the top pseudo-positive and bottom pseudo-negative results. "
+            "Default off; enable persistently via prf_enabled: true in config.yaml."
+        ),
+    )
 
     discover_parser = subparsers.add_parser(
         "discover-source", help="Semantic discovery on source notes (source_only output)"
@@ -1539,6 +1657,67 @@ def main(argv=None) -> int:
 
     signal_subparsers.add_parser("summarize", help="Rebuild signal_summary.json")
     signal_subparsers.add_parser("stats", help="Print signal statistics")
+
+    signal_seed_parser = signal_subparsers.add_parser(
+        "seed",
+        help="Seed synthetic signals from query history via an LLM judge",
+    )
+    signal_seed_src = signal_seed_parser.add_mutually_exclusive_group()
+    signal_seed_src.add_argument(
+        "--from-history",
+        action="store_true",
+        dest="from_history",
+        default=False,
+        help="Read queries from the query_log.jsonl telemetry file",
+    )
+    signal_seed_src.add_argument(
+        "--queries-file",
+        dest="queries_file",
+        default=None,
+        metavar="PATH",
+        help="Plain-text file with one query per line (# lines are comments)",
+    )
+    signal_seed_parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Cap the number of queries processed (default: all)",
+    )
+    signal_seed_parser.add_argument(
+        "--backend",
+        default=None,
+        choices=("dummy", "subprocess"),
+        help="Judge backend: 'dummy' (lexical heuristic) or 'subprocess' "
+             "(configurable LLM command). Defaults to config judge_backend.",
+    )
+    signal_seed_parser.add_argument(
+        "--judge-command",
+        dest="judge_command",
+        default=None,
+        metavar="CMD",
+        help="Shell command for subprocess backend (e.g. 'claude -p'). "
+             "Overrides config judge_subprocess_command.",
+    )
+    signal_seed_parser.add_argument(
+        "--top-k",
+        type=int,
+        dest="top_k",
+        default=None,
+        metavar="K",
+        help="Number of notes to retrieve per query (default: config judge_seed_top_k)",
+    )
+
+    signal_purge_parser = signal_subparsers.add_parser(
+        "purge",
+        help="Remove seeded signal events from signals.jsonl",
+    )
+    signal_purge_parser.add_argument(
+        "--synthetic",
+        action="store_true",
+        default=False,
+        help="Remove all synthetic (LLM-seeded) events — full rollback",
+    )
 
     review_parser = subparsers.add_parser(
         "review",

@@ -76,6 +76,7 @@ ledger-obsidian daemon start|status|stop --vault /path/to/vault   # macOS
 ```bash
 ledger query "<topic>" --scope all --limit 8
 ledger query "<topic>" --scope all --limit 8 --retrieval-mode <mode>
+ledger query "<topic>" --scope all --limit 8 --prf   # per-query PRF (dense path only)
 ledger query "<topic>" --scope dev --bundle
 ledger query "<topic>" --as-of 2025-06-01   # notes valid on that date (includes archive)
 ledger discover-source "<topic>" --source-notes-dir <root> --limit 20
@@ -113,6 +114,12 @@ It sets `valid_to` on the old note, writes `superseded_by`, copies `supersedes` 
 and moves the old file to `09_archive/`. The old note is never deleted.
 Default retrieval hides notes with an expired `valid_to`; use `--as-of` to query historical state.
 
+**Prior score (cold-start ranking, always-on, applied as a TIE-BREAKER).** Before signal feedback accrues, a prior combining note confidence, half-life recency decay (default 180 days), and query relevance breaks ties between near-equal candidates. It is *not* a flat additive bonus: each candidate's prior contribution scales continuously to zero as its base (pre-prior) score gap to the local leader exceeds `prior_tie_band` (default 0.02, a 2% relative gap), so a clear semantic/lexical winner keeps rank-1 regardless of its prior. The blend is implemented once in `apply_prior_tiebreak` (in `ledger/retrieval.py`) and used by both the lexical and `semantic_hybrid` paths. Config keys (all optional, safe defaults): `prior_enabled` (true), `prior_weight` (0.10), `prior_tie_band` (0.02), `prior_w_importance` (0.30), `prior_w_recency` (0.30), `prior_w_relevance` (0.40), `prior_recency_half_life_days` (180.0). Env overrides: `LEDGER_PRIOR_ENABLED`, `LEDGER_PRIOR_WEIGHT`, `LEDGER_PRIOR_TIE_BAND`, `LEDGER_PRIOR_W_IMPORTANCE/RECENCY/RELEVANCE`, `LEDGER_PRIOR_HALF_LIFE`. Set `prior_enabled: false` to reproduce pre-prior scores as an A/B baseline.
+
+**Fusion mode (`semantic_hybrid`).** `fusion: weighted_sum` (default, byte-identical to previous behaviour) or `fusion: rrf` (Reciprocal Rank Fusion — merges independent lexical + semantic rank lists over the full candidate pool). `rrf_k` controls the smoothing constant (default 60). Env: `LEDGER_FUSION`. **Keep `fusion: weighted_sum`: on the real corpus RRF measures worse (hit@1 0.467 vs 0.733, mrr 0.654 vs 0.804) — `k=60` flattens rank differences on small candidate pools. RRF remains opt-in pending a genuine improvement.**
+
+**PRF — Pseudo-Relevance Feedback (dense path, default off).** Expands the query vector via the Rocchio formula using top-m pseudo-positive and bottom-n pseudo-negative results before re-ranking. Config: `prf_enabled` (false), `prf_top_m` (3), `prf_bottom_n` (5), `prf_alpha` (1.0), `prf_beta` (0.75), `prf_gamma` (0.15). Env: `LEDGER_PRF_ENABLED`, `LEDGER_PRF_ALPHA/BETA/GAMMA`. Per-query: `--prf` flag. **Keep `prf_enabled: false` until `ledger ab run` proves improvement.**
+
 ### Signals (Feedback Loop)
 
 ```bash
@@ -120,11 +127,20 @@ ledger signal add --type retrieval_hit --query "deploy" --note notes/02_facts/fa
 ledger signal add --type correction --note notes/03_preferences/pref__x.md --detail "outdated"
 ledger signal add --type rating --rating 8
 ledger signal summarize      # rebuild signal_summary.json
-ledger signal stats          # show signal counts, top notes, gaps
+ledger signal stats          # show signal counts, top notes, gaps (reports real_total)
+
+# Bootstrapping the signal gate via LLM judge
+ledger signal seed --from-history          # read queries from query_log.jsonl
+ledger signal seed --queries-file queries.txt --backend subprocess --judge-command "claude -p"
+ledger signal purge --synthetic            # roll back all seeded events
 ```
 
 Signal types: `retrieval_hit`, `retrieval_miss`, `correction`, `affirmation`,
-`stale_flag`, `preference_applied`, `rating`.
+`stale_flag`, `preference_applied`, `rating`, `llm_judged`.
+
+**Synthetic signals and the activation gate.** `ledger signal seed` writes events tagged `synthetic: true`. These are down-weighted by `synthetic_weight` (default 0.5) in `summarize_signals` — a seeded hit counts as half a real hit. The 20-signal gate (`signal_min_entries`) counts only real (non-synthetic) signals so seeding cannot artificially unlock ranking. `signal stats` reports `real_total` alongside the overall count. Roll back with `ledger signal purge --synthetic` then `ledger signal summarize`.
+
+**PRF and RRF stay off until A/B validation.** `prf_enabled` and `fusion: rrf` default to off. Enable only after `ledger ab run` shows recall@k improvement without latency regression — same discipline as `score_weight_signal`.
 
 **Scan-and-judge review (TUI):** `ledger review` walks a *prioritized* queue —
 the notes most worth judging surface first (corrections pending →
