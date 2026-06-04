@@ -28,3 +28,6 @@ Top-level plan files under `.plans/` were reviewed and enriched. The `done/` fol
 - [ ] Log full traceback in CLI top-level except handlers when LEDGER_DEBUG=1; today emit_action swallows the underlying exception
 - [ ] Document LEDGER_EMBEDDINGS_OFFLINE env var in AGENTS.md (added today in ledger/embeddings.py to silence HF Hub metadata round-trip)
 - [ ] make sheep status/lint/sleep emit structured fields under --json (index/sync already do) — migrated from hugr/.plans
+- [ ] Keep `contradiction_enabled: false` until the NLI model is downloaded and ~20 real Norwegian contradiction pairs are hand-checked.
+- [ ] Keep `prf_enabled: false` until `ledger ab run` shows recall@k improvement without latency regression.
+- [ ] Keep `fusion: weighted_sum`; only switch to `rrf` after a future A/B run beats weighted-sum on the real corpus.
