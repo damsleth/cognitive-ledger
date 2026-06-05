@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2026-06-05 (0.7.0)
 
 ### Added
 - **`ledger.text` — shared text helpers.** `sha1_text`, `sha1_file`, `slugify`, `normalize_statement`, `count_words`, `infer_lang`, `frontmatter_to_text`, and `write_markdown` now live in a provider-agnostic core module. `ledger.claude_memory` and `ledger.embeddings` use the shared copies (removing a core→backend dependency and a duplicated `sha1_text`); the Obsidian backend's `utils` re-exports them for intra-backend callers.
