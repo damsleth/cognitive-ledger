@@ -8,8 +8,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-from ledger.obsidian.config import default_config
-from ledger.obsidian.doctor import run_doctor
+from ledger.importers.backends.obsidian.config import default_config
+from ledger.importers.backends.obsidian.doctor import run_doctor
 
 
 def _make_healthy_vault(tmp: Path) -> Path:
