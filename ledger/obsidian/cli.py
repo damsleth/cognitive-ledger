@@ -1,19 +1,8 @@
 from __future__ import annotations
 
 import argparse
-import json
-import platform
 import sys
 from pathlib import Path
-
-from .bases import write_bases
-from .config import config_summary, default_config, load_config, save_config, validate_config
-from .daemon import daemon_status, start_daemon, stop_daemon
-from .doctor import run_doctor
-from .importer import run_import
-from .layout import ensure_layout
-from .queue import sync_queue
-from .watch import run_watch
 
 
 def _parse_root(path: str) -> Path:
@@ -31,140 +20,66 @@ def _add_root_argument(parser: argparse.ArgumentParser) -> None:
 
 
 def cmd_init(args: argparse.Namespace) -> int:
+    from ledger.importers.backends.obsidian import ObsidianBackend
     vault_root = _parse_root(args.root)
-    config = default_config(vault_root)
-
-    ensure_layout(config)
-    save_config(config)
-    base_files = write_bases(config)
-
-    print(f"initialized: {config.ledger_root}")
-    print(config_summary(config))
-    for base_file in base_files:
-        rel = base_file.resolve().relative_to(vault_root.resolve()).as_posix()
-        print(f"base: {rel}")
-
     auto_start = args.auto_start and not args.no_auto_start
-    if auto_start and platform.system().lower() == "darwin":
-        try:
-            msg = start_daemon(config)
-            print(msg)
-        except Exception as exc:
-            print(f"warn: failed to auto-start daemon: {exc}")
-            return 0  # init succeeded; daemon auto-start is optional
-    elif auto_start:
-        print("warn: auto-start is macOS-only; run `ledger-obsidian watch --vault ...` manually")
-
-    return 0
+    return ObsidianBackend(vault_root).init(auto_start=auto_start)
 
 
 def cmd_import(args: argparse.Namespace) -> int:
-    config = load_config(_parse_root(args.root))
-    validate_config(config)
-
-    result = run_import(
-        config,
-        dry_run=bool(args.dry_run),
-        max_files=args.max_files,
-        max_notes=args.max_notes,
+    from ledger.importers.backends.obsidian import ObsidianBackend
+    from ledger.importers.types import ImportOptions
+    root = _parse_root(args.root)
+    options = ImportOptions(root=root, dry_run=bool(args.dry_run))
+    return ObsidianBackend(root).run_import(
+        options, max_files=args.max_files, max_notes=args.max_notes
     )
-
-    print(
-        json.dumps(
-            {
-                "selected_files": result.selected_files,
-                "notes_created": result.notes_created,
-                "queue_created": result.queue_created,
-                "skipped_low_confidence": result.skipped_low_confidence,
-                "skipped_deduped": result.skipped_deduped,
-                "dry_run": result.dry_run,
-            },
-            indent=2,
-        )
-    )
-    return 0
 
 
 def cmd_bootstrap(args: argparse.Namespace) -> int:
+    from ledger.importers.backends.obsidian import ObsidianBackend
+    from ledger.importers.types import ImportOptions
     root = _parse_root(args.root)
-    config = default_config(root)
-
-    if not args.dry_run:
-        ensure_layout(config)
-        save_config(config)
-        write_bases(config)
-        validate_config(config)
-
-    result = run_import(
-        config,
-        dry_run=bool(args.dry_run),
-        max_files=args.max_files,
-        max_notes=args.max_notes,
+    options = ImportOptions(root=root, dry_run=bool(args.dry_run))
+    return ObsidianBackend(root).bootstrap(
+        options, max_files=args.max_files, max_notes=args.max_notes
     )
-
-    print(f"initialized: {config.ledger_root}")
-    print(config_summary(config))
-    print(
-        json.dumps(
-            {
-                "selected_files": result.selected_files,
-                "notes_created": result.notes_created,
-                "queue_created": result.queue_created,
-                "skipped_low_confidence": result.skipped_low_confidence,
-                "skipped_deduped": result.skipped_deduped,
-                "dry_run": result.dry_run,
-            },
-            indent=2,
-        )
-    )
-    return 0
 
 
 def cmd_watch(args: argparse.Namespace) -> int:
-    config = load_config(_parse_root(args.root))
-    validate_config(config)
-    return run_watch(config, debounce_seconds=args.debounce_seconds)
+    from ledger.importers.backends.obsidian import ObsidianBackend
+    root = _parse_root(args.root)
+    return ObsidianBackend(root).watch(debounce_seconds=args.debounce_seconds)
 
 
 def cmd_daemon(args: argparse.Namespace) -> int:
     if not getattr(args, "root", None):
         print("error: --vault or --root is required")
         return 2
-    config = load_config(_parse_root(args.root))
-    validate_config(config)
-
+    from ledger.importers.backends.obsidian import ObsidianBackend
+    root = _parse_root(args.root)
+    backend = ObsidianBackend(root)
     if args.daemon_command == "start":
-        print(start_daemon(config))
-        return 0
+        return backend.daemon_start()
     if args.daemon_command == "stop":
-        print(stop_daemon(config))
-        return 0
+        return backend.daemon_stop()
     if args.daemon_command == "status":
-        running, detail = daemon_status(config)
-        print(detail)
-        return 0 if running else 1
-
+        return backend.daemon_status()
     print("unknown daemon command")
     return 2
 
 
 def cmd_doctor(args: argparse.Namespace) -> int:
-    config = load_config(_parse_root(args.root))
-    code, lines = run_doctor(config)
-    for line in lines:
-        print(line)
-    return code
+    from ledger.importers.backends.obsidian import ObsidianBackend
+    return ObsidianBackend(_parse_root(args.root)).run_doctor()
 
 
 def cmd_queue_sync(args: argparse.Namespace) -> int:
     if not getattr(args, "root", None):
         print("error: --vault or --root is required")
         return 2
-    config = load_config(_parse_root(args.root))
-    validate_config(config)
-    result = sync_queue(config)
-    print(json.dumps(result, indent=2))
-    return 0
+    from ledger.importers.backends.obsidian import ObsidianBackend
+    return ObsidianBackend(_parse_root(args.root)).queue_sync()
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -229,7 +144,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def cmd_related(args: argparse.Namespace) -> int:
-    from ledger.retrieval import related_to_text
+    from ledger.importers.backends.obsidian import ObsidianBackend
 
     if args.note_path:
         note_path = Path(args.note_path).expanduser().resolve()
@@ -240,21 +155,9 @@ def cmd_related(args: argparse.Namespace) -> int:
     else:
         text = args.query_text
 
-    results = related_to_text(text, top_k=args.limit)
-
-    if args.json_output:
-        print(json.dumps(results, indent=2, ensure_ascii=False))
-        return 0
-
-    if not results:
-        print("No related notes found.")
-        return 0
-
-    print(f"Related notes ({len(results)}):")
-    for r in results:
-        print(f"  {r['score']:.3f}  {r['title']}")
-        print(f"         {r['path']}")
-    return 0
+    return ObsidianBackend(Path(".")).related(
+        text=text, top_k=args.limit, json_output=args.json_output
+    )
 
 
 def _emit_obsidian_doctor(as_json: bool) -> int:

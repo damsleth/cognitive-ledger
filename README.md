@@ -12,7 +12,8 @@ and owa-tools (M365 read/write). The suite gives you one install
 contract (output classes, exit codes, action envelopes - see
 [hugr/CONVENTIONS.md](https://github.com/damsleth/hugr/blob/main/CONVENTIONS.md)).
 The `ledger`, `ledger-obsidian`, and `sheep` binaries continue to
-work standalone.
+work standalone. `ledger-obsidian` is superseded by `ledger import obsidian`
+(same behavior, unified CLI); it will be removed in a future release.
 
 ## What
 A structured, file-based memory system for AI agents. Small atomic notes (facts, preferences, goals, open loops, concepts, identity) stored as markdown with YAML frontmatter. Searchable, versionable, and designed to fit inside context windows. Includes a feedback loop that captures retrieval signals to improve ranking over time.
@@ -103,12 +104,13 @@ You don't need to move your notes. Bootstrap the ledger inside your existing not
 
 ```bash
 # Generic markdown notes
-ledger-obsidian bootstrap --root ~/Code/notes
-ledger-obsidian import --root ~/Code/notes
+ledger import folder import --root ~/Code/notes
+ledger import folder doctor --root ~/Code/notes
 
 # Obsidian vault
-ledger-obsidian init --vault /path/to/your/obsidian-vault
-ledger-obsidian import --vault /path/to/vault
+ledger import obsidian init --vault /path/to/your/obsidian-vault
+ledger import obsidian bootstrap --vault /path/to/vault
+ledger import obsidian import --vault /path/to/vault
 ```
 
 This creates a `cognitive-ledger/` subdirectory inside your notes tree. Source notes are never edited.
@@ -116,10 +118,10 @@ This creates a `cognitive-ledger/` subdirectory inside your notes tree. Source n
 ### Keeping it in sync
 
 ```bash
-ledger-obsidian watch --vault /path/to/vault          # live sync
-ledger-obsidian daemon start --vault /path/to/vault    # macOS background service
-ledger-obsidian queue sync --vault /path/to/vault      # manual sync
-ledger-obsidian doctor --vault /path/to/vault          # health check
+ledger import obsidian watch --vault /path/to/vault          # live sync
+ledger import obsidian daemon start --vault /path/to/vault    # macOS background service
+ledger import obsidian queue sync --vault /path/to/vault      # manual sync
+ledger import obsidian doctor --vault /path/to/vault          # health check
 ```
 
 ## Indexing and Retrieval
