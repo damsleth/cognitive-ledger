@@ -1,10 +1,14 @@
 # Changelog
 
-## Unreleased
+## 2026-06-05 (0.6.0)
 
 ### Added
-- **`ledger import` — unified import adapter CLI.** New `ledger import {folder|obsidian} {subcommand}` command family replaces the separate `ledger-obsidian` binary for import workflows. `ledger import obsidian` is a full-parity wrapper over the Obsidian adapter (init, import, bootstrap, watch, daemon start/stop/status, doctor, queue sync, related). `ledger import folder` is a new generic backend for plain markdown trees (import, doctor). Adapter logic lives in `ledger/importers/`; backends are argparse-free for direct testability. `ledger-obsidian` continues to work unchanged — it will be removed in a future release once parity is confirmed.
-- **`ledger-obsidian` retired as implementation owner (Phase 2).** All Obsidian command logic (`init`, `import`, `bootstrap`, `watch`, `daemon`, `doctor`, `queue sync`, `related`) now lives exclusively in `ObsidianBackend` (`ledger/importers/backends/obsidian.py`). `ledger/obsidian/cli.py` is now a thin shim: the parser and public `cmd_*` symbols are preserved for back-compat, but every function delegates to `ObsidianBackend`. No user-facing change — both `ledger-obsidian` and `ledger import obsidian` route through the same backend.
+- **`ledger --version` / `ledger -v`** — prints the installed package version and exits.
+- **`ledger import` — unified import adapter CLI.** New `ledger import {folder|obsidian} {subcommand}` command family replaces the separate `ledger-obsidian` binary for import workflows. `ledger import obsidian` is a full-parity wrapper over the Obsidian adapter (init, import, bootstrap, watch, daemon start/stop/status, doctor, queue sync, related). `ledger import folder` is a new generic backend for plain markdown trees (import, doctor). Adapter logic lives in `ledger/importers/`; backends are argparse-free for direct testability.
+
+### Removed
+- **`ledger-obsidian` binary removed.** All functionality is available via `ledger import obsidian {subcommand}`. Update any scripts or tools that call `ledger-obsidian` directly.
+- **`ledger/obsidian/cli.py` shim removed.** The thin shim that delegated from the old CLI to `ObsidianBackend` has been deleted. Direct imports of `ledger.obsidian.cli` will fail — use `ledger.importers.backends.obsidian.ObsidianBackend` or `ledger.cli.main` instead.
 
 ## 2026-06-04 (0.5.0)
 

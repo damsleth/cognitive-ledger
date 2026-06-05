@@ -77,7 +77,7 @@ below). `[[wikilinks]]` in the source body are preserved verbatim.
 ## Schema proposal — making the ledger a clean sink for both pipelines
 
 The ledger now receives notes from at least three external channels:
-`ledger-obsidian import`, `ledger import-claude-memory`, and (via YAAMS
+`ledger import obsidian import`, `ledger import-claude-memory`, and (via YAAMS
 `promote`) the firehose. Today each invents its own provenance
 convention. The following additive, non-breaking schema changes make
 external ingestion first-class and serve **both** YAAMS and Claude-memory
