@@ -40,8 +40,8 @@ def test_init_creates_expected_layout(tmp_path):
         vault / "cognitive-ledger" / "notes" / "05_open_loops",
         vault / "cognitive-ledger" / "notes" / "06_concepts",
         vault / "cognitive-ledger" / "notes" / "08_indices" / "timeline.md",
-        vault / "cognitive-ledger" / "notes" / "08_indices" / "obsidian_import_log.md",
-        vault / "cognitive-ledger" / "notes" / "08_indices" / "obsidian_scan.md",
+        vault / "cognitive-ledger" / "notes" / "08_indices" / "importers" / "obsidian" / "import_log.md",
+        vault / "cognitive-ledger" / "notes" / "08_indices" / "importers" / "obsidian" / "scan.md",
         vault / "cognitive-ledger" / "config.json",
         vault / "cognitive-ledger" / "bases" / "ledger_candidates.base",
         vault / "cognitive-ledger" / "bases" / "ledger_notes.base",
@@ -89,6 +89,50 @@ def test_import_applies_gates_and_does_not_modify_source_files(tmp_path):
     events = load_timeline_jsonl(vault / "cognitive-ledger" / "notes" / "08_indices" / "timeline.jsonl")
     assert any(event["desc"] == "imported from Obsidian" for event in events)
     assert all(str(event["path"]).startswith("notes/") for event in events)
+
+
+def test_import_writes_state_under_shared_adapter_root(tmp_path):
+    vault = _make_vault(tmp_path)
+    ledger_main(["import", "obsidian", "init", "--vault", str(vault), "--no-auto-start"])
+
+    source = vault / "04-dev" / "workflow.md"
+    source.parent.mkdir(parents=True, exist_ok=True)
+    source.write_text("I prefer concise responses with explicit tradeoffs.\n", encoding="utf-8")
+
+    config = load_config(vault)
+    run_import(config)
+
+    adapter_dir = vault / "cognitive-ledger" / "notes" / "08_indices" / "importers" / "obsidian"
+    assert (adapter_dir / "state.json").is_file()
+    assert (adapter_dir / "import_log.md").is_file()
+    assert (adapter_dir / "scan.md").is_file()
+
+
+def test_legacy_state_files_are_relocated_once(tmp_path):
+    vault = _make_vault(tmp_path)
+    ledger_main(["import", "obsidian", "init", "--vault", str(vault), "--no-auto-start"])
+
+    config = load_config(vault)
+    indices = vault / "cognitive-ledger" / "notes" / "08_indices"
+
+    # Simulate a pre-phase-4 vault: loose prefixed files, no adapter dir.
+    legacy_state = {"version": 1, "processed_files": {"old.md": {"mtime_ms": 1}}}
+    (indices / "obsidian_import_state.json").write_text(json.dumps(legacy_state), encoding="utf-8")
+    legacy_log = indices / "obsidian_import_log.md"
+    legacy_log.write_text("# Obsidian Import Log\nlegacy entry\n", encoding="utf-8")
+    config.state_path.unlink(missing_ok=True)
+    config.log_path.unlink(missing_ok=True)
+
+    result = run_import(config, dry_run=True)
+    assert result is not None
+
+    # Relocated, not duplicated.
+    assert not (indices / "obsidian_import_state.json").exists()
+    assert not legacy_log.exists()
+    assert json.loads(config.state_path.read_text(encoding="utf-8"))["processed_files"] == {
+        "old.md": {"mtime_ms": 1}
+    }
+    assert "legacy entry" in config.log_path.read_text(encoding="utf-8")
 
 
 def test_reimport_is_idempotent_for_unchanged_files(tmp_path):
