@@ -55,7 +55,7 @@ frontmatter:
       required: true
 
   # Optional provenance fields (the "provenance triad"). Written by the
-  # external importers (ledger-obsidian, import-claude-memory, YAAMS
+  # external importers (ledger import obsidian, import-claude-memory, YAAMS
   # promote). Kept distinct from `source`: `source` is the epistemic
   # origin (who the fact came from); these describe the ingest channel
   # and the upstream artifact. Tolerated by lint; documented here so they
