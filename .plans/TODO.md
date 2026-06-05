@@ -6,7 +6,7 @@ Top-level plan files under `.plans/` were reviewed and enriched. The `done/` fol
 
 ## Active plan order
 
-1. `42-import-adapters-refactor.md` - `ledger/importers/` skeleton exists; next slice is the `ledger-obsidian` parity matrix plus `ledger import` CLI dispatch scaffolding.
+1. `42-import-adapters-refactor.md` - Phases 1–3 complete (2026-06-05). Phase 4 (storage/layout normalization under shared adapter-state root) is next.
 2. `41-web-interface-v1.md` - Phases 1-3, `/healthz`, `/admin/reload`, search cache busting, and static provenance shipped; next slice is Phase 4 graph view.
 3. `36-yaams-tier2-a-rejection-log.md` - add explicit `ledger inbox reject` and versioned rejection JSONL (current CLI only exposes `inbox {list|triage|cleanup}`).
 4. `38-yaams-tier2-c-semantic-dedup.md` - implement `ledger embed search` before YAAMS wiring (current `embed` subcommands are `build|status|clean`).
@@ -18,6 +18,7 @@ Top-level plan files under `.plans/` were reviewed and enriched. The `done/` fol
 - Strip private fenced content from every index, prompt, JSON output, and web/search snippet.
 - Update README/CHANGELOG only for shipped user-facing behavior, not for plan edits.
 - Preserve existing uncommitted work unless the active task explicitly owns it.
+- [ ] Decouple ObsidianBackend CLI-facing I/O: init/bootstrap/run_import/watch/daemon_*/run_doctor/queue_sync/related print directly and return int exit codes; move rendering into ledger/importers/cli.py and return typed results like import_once/doctor (TODO marker in backends/obsidian/__init__.py)
 - [ ] Add tests for ledger.query rank modes: two_stage, scope_type_prefilter, progressive_disclosure (tests/test_query.py is thin vs query.py 682 LoC)
 - [ ] Add --json output to ledger briefing (cli.py ~925); briefing currently text-only, blocks programmatic use
 - [ ] Move _note_index_path / _candidates_path helpers into ledger/layout.py and replace duplicate path construction in maintenance.py and retrieval.py

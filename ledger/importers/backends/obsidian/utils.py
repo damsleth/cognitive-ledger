@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import re
@@ -11,6 +10,16 @@ from typing import Any
 from ledger.io import safe_append_line, safe_read_text, safe_write_text
 from ledger.io.safe_write import append_timeline_entry
 from ledger.layout import logical_path
+from ledger.text import (  # noqa: F401 — re-exported for intra-backend callers
+    count_words,
+    frontmatter_to_text,
+    infer_lang,
+    normalize_statement,
+    sha1_file,
+    sha1_text,
+    slugify,
+    write_markdown,
+)
 from ledger.timeline import append_timeline_jsonl
 
 
@@ -30,45 +39,6 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def sha1_text(text: str) -> str:
-    return hashlib.sha1(text.encode("utf-8")).hexdigest()
-
-
-def sha1_file(path: Path) -> str:
-    hasher = hashlib.sha1()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(65536), b""):
-            hasher.update(chunk)
-    return hasher.hexdigest()
-
-
-def slugify(value: str, max_len: int = 80) -> str:
-    slug = re.sub(r"['`\"]+", "", value.strip().lower())
-    slug = re.sub(r"[^a-z0-9]+", "_", slug)
-    slug = re.sub(r"_+", "_", slug).strip("_")
-    return (slug[:max_len] or "untitled").strip("_") or "untitled"
-
-
-def normalize_statement(value: str) -> str:
-    return re.sub(r"\s+", " ", value.strip().lower())
-
-
-def count_words(text: str) -> int:
-    return len(re.findall(r"\S+", text))
-
-
-def infer_lang(content: str) -> str:
-    has_no = bool(re.search(r"\b(og|ikke|jeg|du|vi|skal|med|uten|hvor|hva|hvis)\b", content, re.I))
-    has_en = bool(re.search(r"\b(and|not|i|you|we|should|with|without|what|if)\b", content, re.I))
-    if has_no and has_en:
-        return "mixed"
-    if has_no:
-        return "no"
-    if has_en:
-        return "en"
-    return "mixed"
-
-
 def infer_scope_from_relpath(path_rel: str) -> str:
     parts = [part.lower() for part in Path(path_rel).parts]
     if "01-home" in parts or "home" in parts:
@@ -86,21 +56,6 @@ def infer_scope_from_relpath(path_rel: str) -> str:
     if "92-archive" in parts or "archive" in parts:
         return "personal"
     return "personal"
-
-
-def frontmatter_to_text(fields: dict[str, Any]) -> str:
-    """Serialize a frontmatter dict to YAML text.
-
-    Delegates to the canonical serializer in ledger.parsing.frontmatter.
-    """
-    from ledger.parsing.frontmatter import serialize_frontmatter
-
-    return serialize_frontmatter(fields)
-
-
-def write_markdown(path: Path, frontmatter: dict[str, Any], body: str) -> None:
-    text = frontmatter_to_text(frontmatter) + "\n\n" + body.rstrip() + "\n"
-    safe_write_text(path, text)
 
 
 def ensure_timeline(path: Path) -> None:

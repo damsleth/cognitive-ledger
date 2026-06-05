@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- **`ledger.text` — shared text helpers.** `sha1_text`, `sha1_file`, `slugify`, `normalize_statement`, `count_words`, `infer_lang`, `frontmatter_to_text`, and `write_markdown` now live in a provider-agnostic core module. `ledger.claude_memory` and `ledger.embeddings` use the shared copies (removing a core→backend dependency and a duplicated `sha1_text`); the Obsidian backend's `utils` re-exports them for intra-backend callers.
+
+### Changed
+- **`ledger.importers.backends.obsidian` is now the canonical home for all Obsidian adapter logic.** The twelve implementation modules (`config`, `models`, `state`, `layout`, `bases`, `importer`, `doctor`, `queue`, `watch`, `daemon`, `utils`, `extraction`) have been moved from `ledger/obsidian/` into `ledger/importers/backends/obsidian/`. `ObsidianBackend` imports its implementation modules at module level (package-relative); only the heavy `ledger.retrieval` import stays lazy (used by `related`). All tests target the new paths.
+
+### Removed
+- **`ledger.obsidian` package deleted.** No compatibility stub remains — no internal or external consumers were found. Import `ledger.importers.backends.obsidian` (backend + submodules) or `ledger.text` (generic helpers) instead.
+
 ## 2026-06-05 (0.6.0)
 
 ### Added

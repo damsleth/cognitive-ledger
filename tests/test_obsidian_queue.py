@@ -6,9 +6,9 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from ledger.cli import main as ledger_main
-from ledger.obsidian.config import load_config
-from ledger.obsidian.importer import run_import
-from ledger.obsidian.queue import sync_queue
+from ledger.importers.backends.obsidian.config import load_config
+from ledger.importers.backends.obsidian.importer import run_import
+from ledger.importers.backends.obsidian.queue import sync_queue
 from ledger.parsing import parse_frontmatter_text
 
 
