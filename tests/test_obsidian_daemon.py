@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from ledger.obsidian.config import default_config
-from ledger.obsidian.daemon import daemon_label, daemon_status, plist_path, start_daemon, stop_daemon
+from ledger.importers.backends.obsidian.config import default_config
+from ledger.importers.backends.obsidian.daemon import daemon_label, daemon_status, plist_path, start_daemon, stop_daemon
 
 
 class _Proc:
