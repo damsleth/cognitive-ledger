@@ -6,7 +6,7 @@ Top-level plan files under `.plans/` were reviewed and enriched. The `done/` fol
 
 ## Active plan order
 
-1. `42-import-adapters-refactor.md` - start the backend abstraction under `ledger/importers/` (never `ledger/import/`); first slice is a parity matrix plus a small typed backend skeleton.
+1. `42-import-adapters-refactor.md` - `ledger/importers/` skeleton exists; next slice is the `ledger-obsidian` parity matrix plus `ledger import` CLI dispatch scaffolding.
 2. `41-web-interface-v1.md` - Phases 1-3, `/healthz`, `/admin/reload`, search cache busting, and static provenance shipped; next slice is Phase 4 graph view.
 3. `36-yaams-tier2-a-rejection-log.md` - add explicit `ledger inbox reject` and versioned rejection JSONL (current CLI only exposes `inbox {list|triage|cleanup}`).
 4. `38-yaams-tier2-c-semantic-dedup.md` - implement `ledger embed search` before YAAMS wiring (current `embed` subcommands are `build|status|clean`).
