@@ -9,9 +9,9 @@ runtime dependency and stays independently shippable - the suite's
 loose-coupling axiom. Mirrors the equivalent files in yaams,
 owa-piggy, and owa-tools.
 
-``ledger``, ``ledger-obsidian``, and ``sheep`` all import from here;
-the ``tool=`` override on the envelope helpers lets ``sheep`` stamp
-its own name onto otherwise-shared plumbing.
+``ledger`` and ``sheep`` import from here; the ``tool=`` override on
+the envelope helpers lets ``sheep`` stamp its own name onto
+otherwise-shared plumbing.
 
 See https://github.com/damsleth/hugr/blob/main/CONVENTIONS.md.
 """

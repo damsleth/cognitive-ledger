@@ -49,7 +49,9 @@ def _plist_content(config: ObsidianLedgerConfig) -> str:
     args = [
         sys.executable,
         "-m",
-        "ledger.obsidian.cli",
+        "ledger",
+        "import",
+        "obsidian",
         "watch",
         "--vault",
         str(config.vault_root),

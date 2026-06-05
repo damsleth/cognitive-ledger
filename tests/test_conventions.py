@@ -90,7 +90,7 @@ def test_action_envelope_failure_has_error_object():
 
 
 def test_action_envelope_tool_override():
-  # Used so sheep / ledger-obsidian binaries emit their own name.
+  # Used so sheep emits its own name.
   env = action_envelope(command="status", ok=True, tool="sheep")
   assert env["tool"] == "sheep"
 
