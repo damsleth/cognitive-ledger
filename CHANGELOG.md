@@ -3,7 +3,8 @@
 ## Unreleased
 
 ### Added
-- Started the import adapter backend skeleton under `ledger/importers/`, including shared backend result types and a guard test ensuring no `ledger/import/` package is introduced.
+- **`ledger import` — unified import adapter CLI.** New `ledger import {folder|obsidian} {subcommand}` command family replaces the separate `ledger-obsidian` binary for import workflows. `ledger import obsidian` is a full-parity wrapper over the Obsidian adapter (init, import, bootstrap, watch, daemon start/stop/status, doctor, queue sync, related). `ledger import folder` is a new generic backend for plain markdown trees (import, doctor). Adapter logic lives in `ledger/importers/`; backends are argparse-free for direct testability. `ledger-obsidian` continues to work unchanged — it will be removed in a future release once parity is confirmed.
+- **`ledger-obsidian` retired as implementation owner (Phase 2).** All Obsidian command logic (`init`, `import`, `bootstrap`, `watch`, `daemon`, `doctor`, `queue sync`, `related`) now lives exclusively in `ObsidianBackend` (`ledger/importers/backends/obsidian.py`). `ledger/obsidian/cli.py` is now a thin shim: the parser and public `cmd_*` symbols are preserved for back-compat, but every function delegates to `ObsidianBackend`. No user-facing change — both `ledger-obsidian` and `ledger import obsidian` route through the same backend.
 
 ## 2026-06-04 (0.5.0)
 

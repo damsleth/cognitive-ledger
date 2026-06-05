@@ -1592,6 +1592,9 @@ def main(argv=None) -> int:
     ingest_record_parser.add_argument("--source-notes-dir", dest="source_notes_dir", default=None)
     ingest_record_parser.add_argument("--json", action="store_true", dest="json")
 
+    from ledger.importers.cli import build_import_subparser, handle_import_command as _handle_import_command
+    import_parser = build_import_subparser(subparsers)
+
     links_parser = subparsers.add_parser("links", help="Show link graph")
     links_parser.add_argument("note_path", nargs="?", help="Show links for a specific note")
 
@@ -1864,6 +1867,9 @@ def main(argv=None) -> int:
         if args.command == "ingest":
             handle_ingest_command(args)
             return 0
+
+        if args.command == "import":
+            return _handle_import_command(args, import_parser)
 
         if args.command == "links":
             handle_links_command(args)
