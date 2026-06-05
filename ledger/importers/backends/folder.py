@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from ledger.importers.state import backend_state_dir, load_json_state, save_json_state
 from ledger.importers.types import DoctorResult, ImportOptions, ImportResult
 
 
@@ -27,12 +29,19 @@ class FolderBackend:
         options: ImportOptions,
         *,
         dest: Path | None = None,
+        state_dir: Path | None = None,
     ) -> ImportResult:
         """Copy markdown files from ``options.root`` into the ledger inbox.
 
         ``dest`` overrides the inbox directory; when omitted the ledger config
         supplies ``ledger_notes_dir/00_inbox``.  ``dry_run=True`` skips all
         writes and config access, returning the file count as ``imported``.
+
+        A run summary is recorded in the shared adapter-state root
+        (``<notes_dir>/08_indices/importers/folder/state.json``).  ``state_dir``
+        overrides that location; when both ``dest`` and ``state_dir`` are
+        omitted it is derived from the ledger config, and when only ``dest``
+        is overridden no state is written.
         """
         if not self.root.is_dir():
             return ImportResult(
@@ -52,7 +61,10 @@ class FolderBackend:
 
         if dest is None:
             from ledger.config import get_config
-            dest = get_config().ledger_notes_dir / "00_inbox"
+            notes_dir = get_config().ledger_notes_dir
+            dest = notes_dir / "00_inbox"
+            if state_dir is None:
+                state_dir = backend_state_dir(notes_dir, self.name)
 
         imported = 0
         skipped = 0
@@ -72,10 +84,31 @@ class FolderBackend:
                 continue
             imported += 1
 
-        return ImportResult(
+        result = ImportResult(
             backend=self.name,
             scanned=len(files),
             imported=imported,
             skipped=skipped,
             errors=tuple(errors_list),
         )
+
+        if state_dir is not None:
+            self._record_run(state_dir, result)
+
+        return result
+
+    def _record_run(self, state_dir: Path, result: ImportResult) -> None:
+        """Persist a run summary in the shared adapter-state root."""
+        state_path = state_dir / "state.json"
+        state = load_json_state(state_path)
+        state.update(
+            {
+                "version": 1,
+                "root": str(self.root),
+                "last_run": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "scanned": result.scanned,
+                "imported": result.imported,
+                "skipped": result.skipped,
+            }
+        )
+        save_json_state(state_path, state)

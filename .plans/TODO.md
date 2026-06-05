@@ -6,11 +6,10 @@ Top-level plan files under `.plans/` were reviewed and enriched. The `done/` fol
 
 ## Active plan order
 
-1. `42-import-adapters-refactor.md` - Phases 1–3 complete (2026-06-05). Phase 4 (storage/layout normalization under shared adapter-state root) is next.
-2. `41-web-interface-v1.md` - Phases 1-3, `/healthz`, `/admin/reload`, search cache busting, and static provenance shipped; next slice is Phase 4 graph view.
-3. `36-yaams-tier2-a-rejection-log.md` - add explicit `ledger inbox reject` and versioned rejection JSONL (current CLI only exposes `inbox {list|triage|cleanup}`).
-4. `38-yaams-tier2-c-semantic-dedup.md` - implement `ledger embed search` before YAAMS wiring (current `embed` subcommands are `build|status|clean`).
-5. `cognitive_ledger_improvement_tasks_2026-05-03.md` - split the first PR into demo init + doctor expansion, then review.
+1. `41-web-interface-v1.md` - Phases 1-3, `/healthz`, `/admin/reload`, search cache busting, and static provenance shipped; next slice is Phase 4 graph view.
+2. `36-yaams-tier2-a-rejection-log.md` - add explicit `ledger inbox reject` and versioned rejection JSONL (current CLI only exposes `inbox {list|triage|cleanup}`).
+3. `38-yaams-tier2-c-semantic-dedup.md` - implement `ledger embed search` before YAAMS wiring (current `embed` subcommands are `build|status|clean`).
+4. `cognitive_ledger_improvement_tasks_2026-05-03.md` - split the first PR into demo init + doctor expansion, then review.
 
 ## Cross-cutting checks before executing any plan
 
@@ -28,6 +27,7 @@ Top-level plan files under `.plans/` were reviewed and enriched. The `done/` fol
 - [ ] Add parametrized tests for ledger.inbox.triage_suggestions() type-inference heuristics (covers all 5 note types + fallback)
 - [ ] Log full traceback in CLI top-level except handlers when LEDGER_DEBUG=1; today emit_action swallows the underlying exception
 - [ ] Document LEDGER_EMBEDDINGS_OFFLINE env var in AGENTS.md (added today in ledger/embeddings.py to silence HF Hub metadata round-trip)
+- [ ] Normalize claude_memory_import_state.json under the shared adapter-state root (08_indices/importers/claude_memory/state.json) — left loose in 08_indices when plan 42 phase 4 normalized folder+obsidian; ledger import-claude-memory is not a plan-42 backend yet
 - [ ] make sheep status/lint/sleep emit structured fields under --json (index/sync already do) — migrated from hugr/.plans
 - [ ] Keep `contradiction_enabled: false` until the NLI model is downloaded and ~20 real Norwegian contradiction pairs are hand-checked.
 - [ ] Keep `prf_enabled: false` until `ledger ab run` shows recall@k improvement without latency regression.

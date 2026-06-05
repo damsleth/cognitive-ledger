@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+- **Shared adapter-state root for import backends (plan 42, phase 4).** All import-backend state now lives under `<notes_dir>/08_indices/importers/<backend>/` instead of loose prefixed files in `08_indices`. The Obsidian adapter's `obsidian_import_state.json` / `obsidian_import_log.md` / `obsidian_scan.md` become `importers/obsidian/{state.json,import_log.md,scan.md}`; existing files are relocated automatically on the next import, queue sync, or init (one-time, no data loss). The folder backend records a run summary in `importers/folder/state.json`. Shared helpers (`backend_state_dir`, `load_json_state`, `save_json_state`, `relocate_legacy_file`) live in the new `ledger/importers/state.py`.
+
 ## 2026-06-05 (0.7.0)
 
 ### Added
