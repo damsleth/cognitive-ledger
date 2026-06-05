@@ -4,11 +4,31 @@ import json
 from dataclasses import asdict
 
 from ledger.io import safe_write_text
+from ledger.importers.state import relocate_legacy_file
 
 from .models import ImportState, ObsidianLedgerConfig
 
 
+# Pre-phase-4 layout: loose prefixed files directly in 08_indices.
+LEGACY_STATE_FILES: dict[str, str] = {
+    "state.json": "obsidian_import_state.json",
+    "import_log.md": "obsidian_import_log.md",
+    "scan.md": "obsidian_scan.md",
+}
+
+
+def migrate_legacy_state(config: ObsidianLedgerConfig) -> list[str]:
+    """One-time relocation of pre-phase-4 state files into the adapter-state dir."""
+    moved: list[str] = []
+    for new_name, legacy_name in LEGACY_STATE_FILES.items():
+        legacy = config.indices_root / legacy_name
+        if relocate_legacy_file(legacy, config.adapter_state_dir / new_name):
+            moved.append(legacy_name)
+    return moved
+
+
 def load_state(config: ObsidianLedgerConfig) -> ImportState:
+    migrate_legacy_state(config)
     if not config.state_path.is_file():
         return ImportState(
             version=1,

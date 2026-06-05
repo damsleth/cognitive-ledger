@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from ledger.importers.state import backend_state_dir
+
 
 @dataclass
 class ScanRow:
@@ -75,16 +77,20 @@ class ObsidianLedgerConfig:
         return self.ledger_root / "bases"
 
     @property
+    def adapter_state_dir(self) -> Path:
+        return backend_state_dir(self.notes_root, "obsidian")
+
+    @property
     def state_path(self) -> Path:
-        return self.indices_root / "obsidian_import_state.json"
+        return self.adapter_state_dir / "state.json"
 
     @property
     def log_path(self) -> Path:
-        return self.indices_root / "obsidian_import_log.md"
+        return self.adapter_state_dir / "import_log.md"
 
     @property
     def scan_path(self) -> Path:
-        return self.indices_root / "obsidian_scan.md"
+        return self.adapter_state_dir / "scan.md"
 
     @property
     def timeline_path(self) -> Path:
