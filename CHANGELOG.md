@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Added
+- Started the import adapter backend skeleton under `ledger/importers/`, including shared backend result types and a guard test ensuring no `ledger/import/` package is introduced.
+
 ## 2026-06-04 (0.5.0)
 
 ### Added
