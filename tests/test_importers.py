@@ -117,7 +117,7 @@ def test_folder_backend_satisfies_protocol(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# CLI parser structure tests (parity with ledger-obsidian surface)
+# CLI parser structure tests (ledger import obsidian surface)
 # ---------------------------------------------------------------------------
 
 def _make_parser():

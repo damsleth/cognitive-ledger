@@ -11,9 +11,8 @@ and owa-tools (M365 read/write). The suite gives you one install
 (`brew install damsleth/tap/hugr`), one verb surface, and one CLI
 contract (output classes, exit codes, action envelopes - see
 [hugr/CONVENTIONS.md](https://github.com/damsleth/hugr/blob/main/CONVENTIONS.md)).
-The `ledger`, `ledger-obsidian`, and `sheep` binaries continue to
-work standalone. `ledger-obsidian` is superseded by `ledger import obsidian`
-(same behavior, unified CLI); it will be removed in a future release.
+The `ledger` and `sheep` binaries work standalone. Obsidian vault workflows
+use `ledger import obsidian {subcommand}`.
 
 ## What
 A structured, file-based memory system for AI agents. Small atomic notes (facts, preferences, goals, open loops, concepts, identity) stored as markdown with YAML frontmatter. Searchable, versionable, and designed to fit inside context windows. Includes a feedback loop that captures retrieval signals to improve ranking over time.

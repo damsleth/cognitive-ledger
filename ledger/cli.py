@@ -1304,7 +1304,9 @@ def main(argv=None) -> int:
         return maint.main(raw[1:])
 
     cfg = get_config()
+    from ledger import __version__
     parser = argparse.ArgumentParser(description="Cognitive Ledger retrieval helpers")
+    parser.add_argument("-v", "--version", action="version", version=f"ledger {__version__}")
     subparsers = parser.add_subparsers(dest="command")
 
     loops_parser = subparsers.add_parser("loops", help="List loops (default: open)")
