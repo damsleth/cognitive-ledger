@@ -25,7 +25,7 @@ The mapping is intentionally transparent: the dry-run report shows the
 ledger type, scope, and the heuristic reason for every file so the
 classification can be reviewed before anything lands.
 
-Design mirrors :mod:`ledger.obsidian.importer` (scan → classify → write,
+Design mirrors :mod:`ledger.importers.backends.obsidian.importer` (scan → classify → write,
 with a JSON state file for idempotent re-import) but is self-contained
 because the source frontmatter is a different shape.
 """
@@ -48,8 +48,8 @@ from ledger.layout import (
     inbox_dir,
     note_type_dir,
 )
-from ledger.obsidian.utils import infer_lang, sha1_file, slugify, write_markdown
 from ledger.parsing import strip_private_tags
+from ledger.text import infer_lang, sha1_file, sha1_text, slugify, write_markdown
 
 
 DEFAULT_MEMORY_ROOT = Path.home() / ".claude" / "projects"
@@ -578,8 +578,6 @@ def run_import(
         slug = slugify(note.name)
         target = target_dir / f"{prefix}{slug}.md"
         while target.exists():
-            from ledger.obsidian.utils import sha1_text
-
             suffix = sha1_text(f"{note.external_id}|{note.origin_hash}")[:6]
             target = target_dir / f"{prefix}{slug}__{suffix}.md"
 

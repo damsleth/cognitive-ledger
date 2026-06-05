@@ -8,7 +8,6 @@ be reused by query/eval/discovery flows and tested independently.
 from __future__ import annotations
 
 import datetime as dt
-import hashlib
 import json
 import os
 import re
@@ -24,6 +23,7 @@ from ledger.config import get_config
 from ledger.layout import logical_path, note_type_dir
 from ledger.io import append_timeline_entry as append_timeline_entry_safe
 from ledger.parsing import extract_title, parse_frontmatter_text
+from ledger.text import sha1_text
 
 SUPPORTED_BACKENDS = ("local", "openai")
 SUPPORTED_TARGETS = ("ledger", "source", "both")
@@ -184,12 +184,6 @@ def normalize_for_hash(frontmatter: dict[str, Any], body: str, title: str) -> st
         "confidence": str(frontmatter.get("confidence", "")).strip(),
     }
     return json.dumps(payload, sort_keys=True, ensure_ascii=False)
-
-
-def sha1_text(text: str) -> str:
-    digest = hashlib.sha1()
-    digest.update(text.encode("utf-8"))
-    return digest.hexdigest()
 
 
 def ensure_parent(path: Path) -> None:

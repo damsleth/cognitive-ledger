@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ledger.obsidian.extraction import extract_candidates
-from ledger.obsidian.importer import _filter_file_candidates
+from ledger.importers.backends.obsidian.extraction import extract_candidates
+from ledger.importers.backends.obsidian.importer import _filter_file_candidates
 
 
 def test_extract_candidates_classifies_preference_decision_and_loop():
