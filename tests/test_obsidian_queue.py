@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from ledger.obsidian.cli import main as obsidian_main
+from ledger.cli import main as ledger_main
 from ledger.obsidian.config import load_config
 from ledger.obsidian.importer import run_import
 from ledger.obsidian.queue import sync_queue
@@ -24,7 +24,7 @@ def _make_vault(tmp: Path) -> Path:
 
 
 def _init_vault(vault: Path) -> None:
-  obsidian_main(["init", "--vault", str(vault), "--no-auto-start"])
+  ledger_main(["import", "obsidian", "init", "--vault", str(vault), "--no-auto-start"])
 
 
 def _write_candidate_file(inbox: Path, name: str, frontmatter: dict, body: str) -> Path:

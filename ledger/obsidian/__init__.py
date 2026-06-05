@@ -10,10 +10,9 @@ from __future__ import annotations
 from importlib import import_module
 from typing import Any
 
-__all__ = ["main", "load_config", "run_import", "sync_queue"]
+__all__ = ["load_config", "run_import", "sync_queue"]
 
 _EXPORTS = {
-    "main": ("ledger.obsidian.cli", "main"),
     "load_config": ("ledger.obsidian.config", "load_config"),
     "run_import": ("ledger.obsidian.importer", "run_import"),
     "sync_queue": ("ledger.obsidian.queue", "sync_queue"),

@@ -35,6 +35,14 @@ def test_daemon_start_status_stop_with_mocked_launchctl(tmp_path, monkeypatch):
     monkeypatch.setattr("subprocess.run", fake_run)
 
     start_msg = start_daemon(config)
+
+    plist = plist_path(config).read_text(encoding="utf-8")
+    assert "ledger.obsidian.cli" not in plist
+    assert "ledger" in plist
+    assert "import" in plist
+    assert "obsidian" in plist
+    assert "watch" in plist
+
     running, status_msg = daemon_status(config)
     stop_msg = stop_daemon(config)
 

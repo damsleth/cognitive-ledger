@@ -62,13 +62,13 @@ If none apply: don't write. Noise kills retrieval.
 
 ```bash
 pipx install cognitive-ledger
-ledger-obsidian init --vault /path/to/obsidian-vault
-ledger-obsidian import --vault /path/to/obsidian-vault
-ledger-obsidian bootstrap --root ~/Code/notes
-ledger-obsidian watch --vault /path/to/obsidian-vault
-ledger-obsidian queue sync --vault /path/to/obsidian-vault
-ledger-obsidian doctor --vault /path/to/obsidian-vault
-ledger-obsidian daemon start|status|stop --vault /path/to/vault   # macOS
+ledger import obsidian init --vault /path/to/obsidian-vault
+ledger import obsidian import --vault /path/to/obsidian-vault
+ledger import obsidian bootstrap --root ~/Code/notes
+ledger import obsidian watch --vault /path/to/obsidian-vault
+ledger import obsidian queue sync --vault /path/to/obsidian-vault
+ledger import obsidian doctor --vault /path/to/obsidian-vault
+ledger import obsidian daemon start|status|stop --vault /path/to/vault   # macOS
 ```
 
 ### Retrieve & Eval

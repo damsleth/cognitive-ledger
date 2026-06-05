@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from ledger.parsing import parse_frontmatter_text
-from ledger.obsidian.cli import main as obsidian_main
+from ledger.cli import main as ledger_main
 from ledger.obsidian.config import load_config
 from ledger.obsidian.importer import run_import
 from ledger.obsidian.queue import sync_queue
@@ -29,7 +29,7 @@ def _make_note_root(tmp_path: Path) -> Path:
 def test_init_creates_expected_layout(tmp_path):
     vault = _make_vault(tmp_path)
 
-    rc = obsidian_main(["init", "--vault", str(vault), "--no-auto-start"])
+    rc = ledger_main(["import", "obsidian", "init", "--vault", str(vault), "--no-auto-start"])
     assert rc == 0
 
     expected_paths = [
@@ -53,7 +53,7 @@ def test_init_creates_expected_layout(tmp_path):
 
 def test_import_applies_gates_and_does_not_modify_source_files(tmp_path):
     vault = _make_vault(tmp_path)
-    obsidian_main(["init", "--vault", str(vault), "--no-auto-start"])
+    ledger_main(["import", "obsidian", "init", "--vault", str(vault), "--no-auto-start"])
 
     source_pref = vault / "04-dev" / "workflow.md"
     source_pref.parent.mkdir(parents=True, exist_ok=True)
@@ -93,7 +93,7 @@ def test_import_applies_gates_and_does_not_modify_source_files(tmp_path):
 
 def test_reimport_is_idempotent_for_unchanged_files(tmp_path):
     vault = _make_vault(tmp_path)
-    obsidian_main(["init", "--vault", str(vault), "--no-auto-start"])
+    ledger_main(["import", "obsidian", "init", "--vault", str(vault), "--no-auto-start"])
 
     source = vault / "04-dev" / "workflow.md"
     source.parent.mkdir(parents=True, exist_ok=True)
@@ -110,7 +110,7 @@ def test_reimport_is_idempotent_for_unchanged_files(tmp_path):
 
 def test_queue_sync_promotes_approved_candidates_idempotently(tmp_path):
     vault = _make_vault(tmp_path)
-    obsidian_main(["init", "--vault", str(vault), "--no-auto-start"])
+    ledger_main(["import", "obsidian", "init", "--vault", str(vault), "--no-auto-start"])
 
     source = vault / "04-dev" / "tasks.md"
     source.parent.mkdir(parents=True, exist_ok=True)
@@ -172,7 +172,7 @@ def test_bootstrap_supports_generic_markdown_root_via_root_alias(tmp_path):
         encoding="utf-8",
     )
 
-    rc = obsidian_main(["bootstrap", "--root", str(root), "--max-files", "10", "--max-notes", "10"])
+    rc = ledger_main(["import", "obsidian", "bootstrap", "--root", str(root), "--max-files", "10", "--max-notes", "10"])
     assert rc == 0
 
     preferences = list((root / "cognitive-ledger" / "notes" / "03_preferences").glob("pref__*.md"))

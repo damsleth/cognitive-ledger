@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import platform
+import sys
 from pathlib import Path
 
 from ledger.importers.types import DoctorResult, ImportOptions, ImportResult
@@ -18,7 +19,7 @@ class ObsidianBackend:
 
     name = "obsidian"
 
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path | None) -> None:
         self.root = root
         self._config = None
 
@@ -151,16 +152,25 @@ class ObsidianBackend:
         return run_watch(config, debounce_seconds=debounce_seconds)
 
     def daemon_start(self) -> int:
+        if self.root is None:
+            print("error: --vault or --root is required", file=sys.stderr)
+            return 2
         from ledger.obsidian.daemon import start_daemon
         print(start_daemon(self._load_config()))
         return 0
 
     def daemon_stop(self) -> int:
+        if self.root is None:
+            print("error: --vault or --root is required", file=sys.stderr)
+            return 2
         from ledger.obsidian.daemon import stop_daemon
         print(stop_daemon(self._load_config()))
         return 0
 
     def daemon_status(self) -> int:
+        if self.root is None:
+            print("error: --vault or --root is required", file=sys.stderr)
+            return 2
         from ledger.obsidian.daemon import daemon_status
         running, detail = daemon_status(self._load_config())
         print(detail)
@@ -179,6 +189,9 @@ class ObsidianBackend:
         return code
 
     def queue_sync(self) -> int:
+        if self.root is None:
+            print("error: --vault or --root is required", file=sys.stderr)
+            return 2
         from ledger.obsidian.config import validate_config
         from ledger.obsidian.queue import sync_queue
         config = self._load_config()
