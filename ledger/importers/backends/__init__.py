@@ -1,5 +1,6 @@
-"""Import backend implementations.
+"""Import backend implementations."""
 
-Concrete folder and Obsidian backends will live here once Plan 42 moves beyond
-the shared contract.
-"""
+from .folder import FolderBackend
+from .obsidian import ObsidianBackend
+
+__all__ = ["FolderBackend", "ObsidianBackend"]
