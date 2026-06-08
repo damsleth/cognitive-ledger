@@ -1069,6 +1069,7 @@ def handle_briefing_command(args):
 
 
 def handle_inbox_command(args):
+    import json
     from ledger.inbox import list_inbox, triage_suggestions
 
     sub = getattr(args, "inbox_command", None)
@@ -1083,6 +1084,12 @@ def handle_inbox_command(args):
             print(f"  {item['filename']} - {item['title']}")
 
     elif sub == "triage":
+        if getattr(args, "fzf", False):
+            from ledger.inbox_triage import run_fzf_triage
+            raise SystemExit(run_fzf_triage())
+        if getattr(args, "interactive", False):
+            from ledger.inbox_triage import run_interactive_triage
+            raise SystemExit(run_interactive_triage())
         suggestions = triage_suggestions()
         if not suggestions:
             print("Inbox is empty.")
@@ -1112,8 +1119,43 @@ def handle_inbox_command(args):
         if not args.apply:
             print("\nRun with --apply to remove these files.")
 
+    elif sub == "reject":
+        from ledger.inbox import reject_inbox_item
+
+        try:
+            result = reject_inbox_item(
+                args.path,
+                reason=args.reason,
+                remove=not getattr(args, "keep", False),
+            )
+        except (FileNotFoundError, ValueError) as exc:
+            if getattr(args, "json", False):
+                payload = {
+                    "tool": "ledger",
+                    "command": "inbox reject",
+                    "ok": False,
+                    "error": {"code": "invalid_input", "message": str(exc)},
+                }
+                print(json.dumps(payload, ensure_ascii=False))
+            else:
+                print(f"ledger inbox reject: {exc}", file=sys.stderr)
+            raise SystemExit(1)
+
+        if getattr(args, "json", False):
+            payload = {
+                "tool": "ledger",
+                "command": "inbox reject",
+                "ok": True,
+                **result,
+            }
+            print(json.dumps(payload, ensure_ascii=False))
+        else:
+            verb = "rejected" if result["removed"] else "logged rejection for"
+            print(f"{verb} {result['filename']} (reason: {result['reason']})")
+            print(f"  logged to {result['rejected_to']}")
+
     else:
-        print("Usage: ledger inbox {list|triage|cleanup}")
+        print("Usage: ledger inbox {list|triage|cleanup|reject}")
         raise SystemExit(1)
 
 
@@ -1606,10 +1648,36 @@ def main(argv=None) -> int:
     inbox_parser = subparsers.add_parser("inbox", help="Manage inbox captures")
     inbox_subparsers = inbox_parser.add_subparsers(dest="inbox_command")
     inbox_subparsers.add_parser("list", help="List inbox items")
-    inbox_subparsers.add_parser("triage", help="Suggest target types for inbox items")
+    inbox_triage_parser = inbox_subparsers.add_parser(
+        "triage", help="Suggest target types or run interactive batch triage"
+    )
+    inbox_triage_parser.add_argument(
+        "--interactive",
+        action="store_true",
+        help="Run an interactive batch triage UI instead of printing suggestions",
+    )
+    inbox_triage_parser.add_argument(
+        "--fzf",
+        action="store_true",
+        help="Use fzf for selection (requires fzf on PATH)",
+    )
     cleanup_parser = inbox_subparsers.add_parser("cleanup", help="Remove orphaned locks and stale auto-generated items")
     cleanup_parser.add_argument("--days", type=int, default=14, help="Age threshold for stale items (default: 14)")
     cleanup_parser.add_argument("--apply", action="store_true", help="Actually delete (default is dry-run)")
+    reject_parser = inbox_subparsers.add_parser("reject", help="Log a rejection signature and remove an inbox item")
+    reject_parser.add_argument("path", help="Inbox filename, logical notes/... path, or absolute path")
+    reject_parser.add_argument(
+        "--reason",
+        choices=("discarded", "duplicate", "merged", "not_durable"),
+        default="discarded",
+        help="Rejection reason (default: discarded)",
+    )
+    reject_parser.add_argument(
+        "--keep",
+        action="store_true",
+        help="Log the rejection but do not delete the inbox file",
+    )
+    reject_parser.add_argument("--json", action="store_true", dest="json", help="Emit action envelope on stdout.")
 
     import_cm_parser = subparsers.add_parser(
         "import-claude-memory",
