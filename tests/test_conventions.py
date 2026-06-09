@@ -1,8 +1,4 @@
-"""Tests for the hugr CLI contract helpers in ledger/conventions.py.
-
-Mirrors the YAAMS test_conventions.py - they'll fold into a shared
-hugr-conventions package later.
-"""
+"""Tests for the CLI contract helpers in ledger/conventions.py."""
 from __future__ import annotations
 
 import io

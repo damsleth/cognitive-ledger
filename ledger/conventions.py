@@ -1,19 +1,14 @@
-"""cognitive-ledger implementation of the hugr suite CLI contract.
+"""cognitive-ledger CLI contract.
 
 The wire contract (action/error envelopes, NDJSON streaming, the
 doctor payload shape, the 0-5 exit-code taxonomy, redact()) is
-specified by CONVENTIONS.md in the hugr repo. cognitive-ledger keeps
-a self-contained hand-copy of it here rather than depending on a
+defined here as a self-contained module rather than depending on a
 separate package, so ledger installs cleanly with no third-party
-runtime dependency and stays independently shippable - the suite's
-loose-coupling axiom. Mirrors the equivalent files in yaams,
-owa-piggy, and owa-tools.
+runtime dependency and stays independently shippable.
 
 ``ledger`` and ``sheep`` import from here; the ``tool=`` override on
 the envelope helpers lets ``sheep`` stamp its own name onto
 otherwise-shared plumbing.
-
-See https://github.com/damsleth/hugr/blob/main/CONVENTIONS.md.
 """
 
 from __future__ import annotations
