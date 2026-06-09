@@ -1,7 +1,7 @@
-"""`sheep --doctor` hugr contract checks.
+"""`sheep --doctor` CLI contract checks.
 
 The sheep binary must expose the same data-class doctor schema as `ledger
---doctor` so that `hugr doctor` can fan out over a stable shape (tool,
+--doctor` so a caller can fan out over a stable shape (tool,
 version, config_path?, data_path?, findings[]).
 """
 from __future__ import annotations

@@ -1,6 +1,6 @@
 """`ledger --doctor` data-class health check.
 
-Pins the hugr CONVENTIONS.md doctor JSON schema for the ledger tool.
+Pins the CLI contract doctor JSON schema for the ledger tool.
 """
 from __future__ import annotations
 
