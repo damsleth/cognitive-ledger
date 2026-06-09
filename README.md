@@ -3,15 +3,11 @@ Deepening your agent's cognitive lightcone with a persistent, hybrid markdown+em
 
 ![Cognitive Lightcone](cognitive_lightcone.png)
 
-## Suite
+## CLI contract
 
-cognitive-ledger is Tier 2 in the **[hugr](https://github.com/damsleth/hugr)**
-memory suite, alongside YAAMS (Tier 1 raw), owa-piggy (M365 auth),
-and owa-tools (M365 read/write). The suite gives you one install
-(`brew install damsleth/tap/hugr`), one verb surface, and one CLI
-contract (output classes, exit codes, action envelopes - see
-[hugr/CONVENTIONS.md](https://github.com/damsleth/hugr/blob/main/CONVENTIONS.md)).
-The `ledger` and `sheep` binaries work standalone. Obsidian vault workflows
+The `ledger` and `sheep` binaries follow a single CLI contract: stable
+output classes, a 0-5 exit-code taxonomy, and action envelopes (see
+`ledger/conventions.py`). They work standalone. Obsidian vault workflows
 use `ledger import obsidian {subcommand}`.
 
 ## What

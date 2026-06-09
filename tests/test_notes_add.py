@@ -224,7 +224,7 @@ class AddNoteTests(unittest.TestCase):
 
 
 class CLIIntegrationTests(unittest.TestCase):
-    """Drive the actual `ledger` console script, mirroring how hugr remember shells out."""
+    """Drive the actual `ledger` console script, mirroring how automation callers shell out."""
 
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()

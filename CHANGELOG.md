@@ -132,15 +132,15 @@
 ## 2026-05-12 (0.2.4)
 
 ### Added
-- **`ledger --doctor` + `sheep --doctor` + `ledger-obsidian --doctor`** for the hugr suite parity contract. Each binary emits the suite-standard health-check JSON envelope (`tool`, `version`, `ok`, `checks`, `installed`).
-- **`ledger init --json`** action envelope so `hugr ledger init` returns a structured ok/error payload instead of human text.
+- **`ledger --doctor` + `sheep --doctor` + `ledger-obsidian --doctor`** for the CLI parity contract. Each binary emits a standard health-check JSON envelope (`tool`, `version`, `ok`, `checks`, `installed`).
+- **`ledger init --json`** action envelope so `ledger init` returns a structured ok/error payload instead of human text.
 - **`--json` on `ledger loops`, `ledger notes`, and the `sheep` subcommands** (`status`, `lint`, `index`, `sleep`, `sync`). Data-class commands now emit machine-readable output uniformly across the CLI.
 - **Action envelopes on `ledger ingest`, `ledger embed`, and `ledger context build/profiles`** so action commands carry a terminal `{type:"result", ok, ...}` envelope when invoked with `--json`.
-- **`ledger/conventions.py`** - shared helpers for the hugr suite CLI contract (envelope shapes, exit codes, stream routing). Lets the rest of the suite import the same contract module instead of re-implementing it.
+- **`ledger/conventions.py`** - shared helpers for the CLI contract (envelope shapes, exit codes, stream routing). Lets `ledger` and `sheep` import the same contract module instead of re-implementing it.
 - **Reserved-key contract test** pinning `ledger query --json` output (no top-level `ok` on success; reserved keys stay reserved).
 
 ### Changed
-- README now points at the hugr suite as the umbrella project.
+- README now documents the CLI contract shared by the `ledger` and `sheep` binaries.
 - Version bumped to `0.2.4`.
 
 ## 2026-05-08

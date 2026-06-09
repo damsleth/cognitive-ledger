@@ -1,7 +1,7 @@
 """Create a single note from a body of text.
 
 The canonical write path for `ledger notes add` and for AI/automation
-callers (hugr remember, owa-* "save this", etc.). Builds a properly
+callers (owa-* "save this", etc.). Builds a properly
 shaped markdown note with frontmatter, derives a slug, places the
 file in either ``00_inbox/`` (default, conservative) or the typed
 folder (``--no-inbox``), and records a timeline entry.
@@ -32,7 +32,7 @@ from ledger.layout import (
 )
 
 
-# Accept the natural variants callers (humans, hugr, owa-*) use.
+# Accept the natural variants callers (humans, owa-*) use.
 # Canonical keys are the NOTE_LAYOUTS keys (plural for everything
 # except identity/loops which are already singular-shaped or plural-shaped
 # correctly).
