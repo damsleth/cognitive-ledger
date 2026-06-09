@@ -1,7 +1,7 @@
 """`sheep --json <cmd>` smoke tests.
 
 Each sheep subcommand emits structured JSON on stdout under --json,
-following the hugr CONVENTIONS.md output classes:
+following the CLI contract output classes:
 
 - status:   data    -> raw status doc, no top-level `ok`
 - lint:     data    -> {tool, command, exit_code, human_lines}
