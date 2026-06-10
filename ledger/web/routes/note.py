@@ -16,7 +16,7 @@ def _corpus(request: Request) -> Corpus:
 
 
 @router.get("/note/{stem}", response_class=HTMLResponse)
-async def note_detail(request: Request, stem: str) -> HTMLResponse:
+def note_detail(request: Request, stem: str) -> HTMLResponse:
     corpus = _corpus(request)
     templates = request.app.state.templates
     item = corpus.get_by_stem(stem)
@@ -41,6 +41,7 @@ async def note_detail(request: Request, stem: str) -> HTMLResponse:
             "retrieval_hit",
             query=request.query_params.get("q", ""),
             note=rel_path,
+            channel="web",
         )
 
     rendered = render_body(item.body, corpus)
