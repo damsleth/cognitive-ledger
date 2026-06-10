@@ -221,3 +221,14 @@ Added after server boot.
         item = corpus.get_by_stem("fact__newly_added")
         assert item is not None
         assert item.title == "Newly Added"
+
+
+class TestStatusbar:
+    def test_statusbar_shows_corpus_size(self, client) -> None:
+        resp = client.get("/browse")
+        assert resp.status_code == 200
+        body = resp.text
+        # notes count in statusbar
+        assert "notes" in body
+        # reload button present
+        assert 'hx-post="/admin/reload"' in body

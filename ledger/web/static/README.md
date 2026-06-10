@@ -11,6 +11,13 @@ bumping the version recorded here.
 - **Upstream:** https://github.com/bigskysoftware/htmx
 - **License:** Zero-Clause BSD (0BSD) - permits redistribution without attribution.
 
+## d3.v7.min.js
+
+- **Version:** 7.9.0
+- **Source:** https://unpkg.com/d3@7.9.0/dist/d3.min.js
+- **Upstream:** https://github.com/d3/d3
+- **License:** ISC
+
 ## style.css
 
 Project-original CSS. No third-party assets vendored.
