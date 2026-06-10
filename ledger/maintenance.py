@@ -652,10 +652,58 @@ def _lint_timeline(timeline: Path, counters: LintCounters) -> None:
         prev_ts = ts
 
 
-def cmd_lint() -> int:
-    _notes_dir, _indices_dir, timeline = _config_paths()
-    print("=== Lint ===")
+def cmd_lint(as_json: bool = False) -> int:
+    import io
+    import contextlib
 
+    _notes_dir, _indices_dir, timeline = _config_paths()
+
+    if as_json:
+        buf = io.StringIO()
+        counters = LintCounters()
+        with contextlib.redirect_stdout(buf):
+            for path in _iter_note_files(include_indices=False):
+                _lint_note(path, counters)
+            _lint_timeline(timeline, counters)
+
+        issues: list[dict[str, str]] = []
+        for line in buf.getvalue().splitlines():
+            line = line.strip()
+            if line.startswith("ERROR:"):
+                rest = line[len("ERROR:"):].strip()
+                parts = rest.split(" - ", 1)
+                issues.append({
+                    "level": "error",
+                    "path": parts[0].strip() if len(parts) > 1 else "",
+                    "message": parts[1].strip() if len(parts) > 1 else rest,
+                })
+            elif line.startswith("WARN:"):
+                rest = line[len("WARN:"):].strip()
+                parts = rest.split(" - ", 1)
+                issues.append({
+                    "level": "warn",
+                    "path": parts[0].strip() if len(parts) > 1 else "",
+                    "message": parts[1].strip() if len(parts) > 1 else rest,
+                })
+
+        payload = {
+            "issues": issues,
+            "errors": counters.errors,
+            "warnings": counters.warnings,
+            "warning_summary": {
+                "large_files": counters.warn_large_files,
+                "inferred_high_confidence": counters.warn_inferred_confidence,
+                "open_loop_missing_next_action_section": counters.warn_loop_missing_next_action,
+                "open_loop_missing_next_action_checkbox": counters.warn_loop_missing_checkbox,
+                "placeholder_links": counters.warn_placeholder_links,
+                "timeline_wildcard_paths": counters.warn_timeline_wildcard,
+                "bitemporal_null_valid_from": counters.warn_bitemporal_null_valid_from,
+            },
+        }
+        print(json.dumps(payload, ensure_ascii=False))
+        return 1 if counters.errors > 0 else 0
+
+    print("=== Lint ===")
     counters = LintCounters()
     for path in _iter_note_files(include_indices=False):
         _lint_note(path, counters)
@@ -1225,8 +1273,68 @@ def _cmd_index_impl() -> int:
     return 0
 
 
-def cmd_sleep() -> int:
+def cmd_sleep(as_json: bool = False) -> int:
     _notes_dir, _indices_dir, _timeline = _config_paths()
+
+    _SLEEP_ITEMS = [
+        {
+            "step": 1,
+            "title": "Triage inbox",
+            "command": "fd . notes/00_inbox",
+            "guidance": "Promote, archive, or delete each item",
+        },
+        {
+            "step": 2,
+            "title": "Review open loops",
+            "command": "fd loop__ notes/05_open_loops",
+            "guidance": "Close resolved, snooze stale, ensure next actions exist",
+        },
+        {
+            "step": 3,
+            "title": "Check for duplicates",
+            "command": "sheep index && head -20 notes/08_indices/sizes.md",
+            "guidance": "Merge similar notes, archive duplicates",
+        },
+        {
+            "step": 4,
+            "title": "Regenerate indices",
+            "command": "sheep index",
+            "guidance": "",
+        },
+        {
+            "step": 5,
+            "title": "Lint",
+            "command": "sheep lint",
+            "guidance": "Fix any errors",
+        },
+        {
+            "step": "5b",
+            "title": "Contradiction scan",
+            "command": "ledger sleep contradictions --check",
+            "guidance": "Requires contradiction_enabled=true in config. Use --apply to execute.",
+        },
+        {
+            "step": 6,
+            "title": "Mark sleep complete",
+            "command": (
+                f"{sys.executable} -c "
+                "\"from ledger.embeddings import append_timeline_entry; "
+                "append_timeline_entry('sleep', '-', 'consolidation complete')\""
+            ),
+            "guidance": "timeline.jsonl is the source of truth",
+        },
+        {
+            "step": 7,
+            "title": "Commit",
+            "command": 'git add -A && git commit -m "sleep: weekly consolidation"',
+            "guidance": "",
+        },
+    ]
+
+    if as_json:
+        payload = {"items": _SLEEP_ITEMS}
+        print(json.dumps(payload, ensure_ascii=False))
+        return 0
 
     print("=== Electric Sheep - Sleep Checklist ===")
     print("")
@@ -1330,11 +1438,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "status":
         return cmd_status(as_json=as_json)
     if args.command == "lint":
-        return _wrap_data_cmd("sheep lint", cmd_lint, as_json)
+        return cmd_lint(as_json=as_json)
     if args.command == "index":
         return cmd_index(as_json=as_json)
     if args.command == "sleep":
-        return _wrap_data_cmd("sheep sleep", cmd_sleep, as_json)
+        return cmd_sleep(as_json=as_json)
     if args.command == "sync":
         return _wrap_sync(apply=bool(args.apply), as_json=as_json)
     if args.command == "contradictions":
