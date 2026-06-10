@@ -41,6 +41,15 @@ class DoctorResult:
     errors: tuple[str, ...] = ()
 
 
+@dataclass(frozen=True)
+class QueueSyncResult:
+    """Result of a queue sync operation."""
+
+    promoted: int = 0
+    rejected: int = 0
+    pending: int = 0
+
+
 @runtime_checkable
 class ImportBackend(Protocol):
     """Minimal contract shared by import backends."""
