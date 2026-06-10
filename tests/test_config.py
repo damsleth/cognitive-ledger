@@ -401,5 +401,66 @@ class TestConfigPaths(unittest.TestCase):
         self.assertIn("semantic", str(config.semantic_root))
 
 
+class TestProfiles(unittest.TestCase):
+    """Tests for LedgerConfig.profiles and resolve_profile()."""
+
+    def test_default_profiles_exist(self):
+        config = LedgerConfig()
+        self.assertIn("work", config.profiles)
+        self.assertIn("personal", config.profiles)
+        self.assertIn("dev", config.profiles)
+
+    def test_default_work_profile_shape(self):
+        config = LedgerConfig()
+        work = config.profiles["work"]
+        self.assertEqual(work["scope"], "work")
+        self.assertIn("retrieval_mode", work)
+        self.assertIn("limit", work)
+
+    def test_resolve_profile_returns_dict(self):
+        config = LedgerConfig()
+        result = config.resolve_profile("work")
+        self.assertIsInstance(result, dict)
+        self.assertEqual(result["scope"], "work")
+
+    def test_resolve_profile_unknown_returns_empty(self):
+        config = LedgerConfig()
+        result = config.resolve_profile("nonexistent_profile")
+        self.assertEqual(result, {})
+
+    def test_resolve_profile_returns_copy(self):
+        """Mutating the returned dict must not affect the config."""
+        config = LedgerConfig()
+        result = config.resolve_profile("work")
+        result["scope"] = "mutated"
+        self.assertEqual(config.profiles["work"]["scope"], "work")
+
+    def test_custom_profile_via_field(self):
+        config = LedgerConfig(profiles={
+            "custom": {"scope": "all", "limit": 5}
+        })
+        result = config.resolve_profile("custom")
+        self.assertEqual(result["scope"], "all")
+        self.assertEqual(result["limit"], 5)
+
+    def test_negative_eval_max_score_default(self):
+        config = LedgerConfig()
+        self.assertAlmostEqual(config.negative_eval_max_score, 0.5, places=2)
+
+
+class TestWritePolicy(unittest.TestCase):
+    """Tests for LedgerConfig.write_policy."""
+
+    def test_default_write_policy_keys(self):
+        config = LedgerConfig()
+        wp = config.write_policy
+        self.assertIn("mode", wp)
+        self.assertIn("report_level", wp)
+
+    def test_default_mode_is_auto_write(self):
+        config = LedgerConfig()
+        self.assertEqual(config.write_policy["mode"], "auto-write")
+
+
 if __name__ == "__main__":
     unittest.main()

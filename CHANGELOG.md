@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+### Added
+- **`ledger init --demo`**: writes 5 sample notes (fact, preference, goal, open loop, concept)
+  to illustrate ledger structure. Idempotent: skips files that already exist.
+- **`ledger --doctor --fix`**: auto-repairs safe issues: creates missing notes directory,
+  creates missing `timeline.md`, removes stale `.lock` files.
+- **7 new doctor checks**: `notes_subdir_missing`, `timeline_missing`, `note_index_missing`,
+  `semantic_index_missing`, `sentence_transformers_missing`, `stale_lock_files`,
+  `private_fence_in_index`. `DoctorFinding` gains `fixable`, `fixed`, and `fix_detail` fields.
+- **Negative eval cases** (`expected_none: true`): eval cases can now assert that a query
+  returns no high-scoring result. New output fields: `negative_cases`, `negative_pass_count`,
+  `false_positive_rate`, `abstain_accuracy`. New config key: `negative_eval_max_score` (default 0.5).
+- **`ledger sleep duplicates`**: scans for exact-content, title-overlap, and near-duplicate
+  notes using word-bag Jaccard similarity. New `ledger/duplicates.py` module with
+  `DuplicateFinding` dataclass and `scan_duplicates()`.
+- **`LedgerConfig.profiles`**: named scope presets (`work`, `personal`, `dev`) with per-profile
+  `scope`, `retrieval_mode`, and `limit`. `resolve_profile()` helper returns a copy.
+  `--profile <name>` flag added to `ledger query` and `ledger context`.
+- **`LedgerConfig.write_policy`**: `mode` and `report_level` fields appended to
+  `ledger context --format boot` payload so agents have the policy at startup.
+  Mode/report-level definitions added to `AGENTS.md`.
+- **`docs/privacy.md`**: documents what is stored, redaction model, private fences,
+  index file privacy, and deletion semantics.
+- **`docs/trust-boundaries.md`**: documents principal tiers, write/read policy, index
+  trust, external service boundaries, and threat model.
+- **`scripts/check-doc-links.py`**: validates Markdown links in `docs/` and `README.md`.
+
 ### Changed
 - **Shared adapter-state root for import backends (plan 42, phase 4).** All import-backend state now lives under `<notes_dir>/08_indices/importers/<backend>/` instead of loose prefixed files in `08_indices`. The Obsidian adapter's `obsidian_import_state.json` / `obsidian_import_log.md` / `obsidian_scan.md` become `importers/obsidian/{state.json,import_log.md,scan.md}`; existing files are relocated automatically on the next import, queue sync, or init (one-time, no data loss). The folder backend records a run summary in `importers/folder/state.json`. Shared helpers (`backend_state_dir`, `load_json_state`, `save_json_state`, `relocate_legacy_file`) live in the new `ledger/importers/state.py`.
 

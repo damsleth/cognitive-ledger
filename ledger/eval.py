@@ -51,10 +51,32 @@ def parse_yaml_scalar(value: str) -> str:
 
 
 def parse_eval_cases(path: str | Path) -> list[dict[str, Any]]:
-    """Parse retrieval eval cases from lightweight YAML."""
+    """Parse retrieval eval cases from lightweight YAML.
+
+    Supports two case shapes:
+
+    Positive case (expected_any)::
+
+        - query: "some topic"
+          scope: all
+          expected_any:
+            - notes/02_facts/fact__something.md
+
+    Negative case (expected_none)::
+
+        - query: "query that should return nothing"
+          scope: all
+          expected_none: true
+
+    Negative cases assert that the top-k results do NOT include any note
+    with a score above ``negative_eval_max_score`` (from config, default 0.5).
+    They are tracked separately from positive cases and contribute to a
+    ``false_positive_rate`` metric.
+    """
     cases = []
     current = None
     in_expected = False
+    in_expected_none = False  # currently unused (flag, not list)
 
     for raw_line in Path(path).read_text(encoding="utf-8").splitlines():
         line = raw_line.rstrip()
@@ -70,12 +92,14 @@ def parse_eval_cases(path: str | Path) -> list[dict[str, Any]]:
                 "query": "",
                 "scope": "all",
                 "expected_any": [],
+                "expected_none": False,
             }
             key, value = stripped[2:].split(":", 1)
             key = key.strip()
             if key in {"id", "query", "scope"}:
                 current[key] = parse_yaml_scalar(value)
             in_expected = key == "expected_any"
+            in_expected_none = False
             continue
 
         if current is None:
@@ -88,15 +112,31 @@ def parse_eval_cases(path: str | Path) -> list[dict[str, Any]]:
             if key in {"id", "query", "scope"}:
                 current[key] = parse_yaml_scalar(value)
                 in_expected = False
+                in_expected_none = False
+                continue
+            if key == "expected_none":
+                parsed_val = parse_yaml_scalar(value).lower()
+                current["expected_none"] = parsed_val in {"true", "yes", "1"}
+                in_expected = False
+                in_expected_none = False
                 continue
 
         if re.match(r"^scope:\s*", stripped):
             current["scope"] = parse_yaml_scalar(stripped.split(":", 1)[1]) or "all"
             in_expected = False
+            in_expected_none = False
             continue
 
         if re.match(r"^expected_any:\s*$", stripped):
             in_expected = True
+            in_expected_none = False
+            continue
+
+        if re.match(r"^expected_none:\s*", stripped):
+            val = parse_yaml_scalar(stripped.split(":", 1)[1]).lower()
+            current["expected_none"] = val in {"true", "yes", "1"}
+            in_expected = False
+            in_expected_none = False
             continue
 
         if in_expected and re.match(r"^-\s+", stripped):
@@ -186,6 +226,19 @@ def validate_eval_cases(cases: list[dict[str, Any]], strict_cases: bool = False)
 
         if scope not in get_config().query_scopes:
             errors.append(f"{case_label}: invalid scope '{scope}'")
+
+        expected_none = bool(case.get("expected_none", False))
+
+        # Mutual exclusion: expected_none and expected_any cannot coexist.
+        if expected_none and expected:
+            errors.append(
+                f"{case_label}: expected_none and expected_any are mutually exclusive"
+            )
+            continue
+
+        # Negative cases need no path validation.
+        if expected_none:
+            continue
 
         if not isinstance(expected, list) or not expected:
             errors.append(f"{case_label}: expected_any must contain at least one path")
@@ -299,18 +352,31 @@ def run_eval(
             "mrr": 0.0,
             "failed": [],
             "k": k,
+            "negative_cases": 0,
+            "negative_pass_count": 0,
+            "false_positive_rate": 0.0,
+            "abstain_accuracy": 0.0,
         }
 
     ranker = rank_query_fn or rank_lexical
-    total = len(cases)
+    # Separate positive and negative cases.
+    positive_cases = [c for c in cases if not c.get("expected_none", False)]
+    negative_cases = [c for c in cases if c.get("expected_none", False)]
+    total = len(positive_cases)
+
     hit1_count = 0
     hitk_count = 0
     rr_total = 0.0
     failed = []
     per_case: list[dict[str, Any]] = []
 
+    # Score threshold for "false positive" in negative cases.
+    neg_max_score: float = float(getattr(get_config(), "negative_eval_max_score", 0.5))
+
     for idx, case in enumerate(cases, start=1):
         case_id = str(case.get("id", "")).strip() or f"case_{idx}"
+        is_negative = bool(case.get("expected_none", False))
+
         payload = _invoke_rank_query(
             ranker,
             case["query"],
@@ -322,6 +388,32 @@ def run_eval(
         )
 
         results = _payload_results(payload)
+
+        if is_negative:
+            # Negative case: pass if no top result exceeds the score threshold.
+            # For legacy lexical ranker, use rank position as a proxy.
+            top_score = 0.0
+            if results:
+                first = results[0]
+                if isinstance(first, dict):
+                    top_score = float(first.get("score", 0.0))
+                else:
+                    top_score = float(getattr(first, "score", 0.0))
+            # If top score is above threshold it's a false positive.
+            is_false_positive = top_score > neg_max_score and bool(results)
+            if emit_ranks:
+                per_case.append({
+                    "id": case_id,
+                    "query": case["query"],
+                    "scope": case.get("scope", "all"),
+                    "expected_none": True,
+                    "top_score": top_score,
+                    "false_positive": is_false_positive,
+                    "top_results": [_result_rel_path(item) for item in results[:3]],
+                })
+            continue
+
+        # Positive case scoring.
         expected_sets = [path_candidates_from_expected(path) for path in case.get("expected_any", [])]
 
         best_rank = None
@@ -370,16 +462,50 @@ def run_eval(
                 "top_results": [_result_rel_path(item) for item in results[:10]],
             })
 
+    # Negative case metrics.
+    neg_total = len(negative_cases)
+    neg_pass_count = 0
+    false_positive_rate = 0.0
+    abstain_accuracy = 0.0
+    if neg_total > 0:
+        # Re-score negative cases.
+        for case in negative_cases:
+            payload = _invoke_rank_query(
+                ranker,
+                case["query"],
+                scope=case.get("scope", "all"),
+                limit=k,
+                retrieval_mode=retrieval_mode,
+                embed_backend=embed_backend,
+                embed_model=embed_model,
+            )
+            results = _payload_results(payload)
+            top_score = 0.0
+            if results:
+                first = results[0]
+                if isinstance(first, dict):
+                    top_score = float(first.get("score", 0.0))
+                else:
+                    top_score = float(getattr(first, "score", 0.0))
+            if not results or top_score <= neg_max_score:
+                neg_pass_count += 1
+        false_positive_rate = 1.0 - (neg_pass_count / neg_total)
+        abstain_accuracy = neg_pass_count / neg_total
+
     out: dict[str, Any] = {
         "retrieval_mode": resolve_retrieval_mode(retrieval_mode),
         "cases": total,
-        "hit1": hit1_count / total,
-        "hitk": hitk_count / total,
-        "mrr": rr_total / total,
+        "hit1": hit1_count / total if total else 0.0,
+        "hitk": hitk_count / total if total else 0.0,
+        "mrr": rr_total / total if total else 0.0,
         "failed": failed,
         "k": k,
         "hit1_count": hit1_count,
         "hitk_count": hitk_count,
+        "negative_cases": neg_total,
+        "negative_pass_count": neg_pass_count,
+        "false_positive_rate": false_positive_rate,
+        "abstain_accuracy": abstain_accuracy,
     }
     if emit_ranks:
         out["per_case"] = per_case
@@ -394,6 +520,16 @@ def print_eval_result(result: dict[str, Any]) -> None:
     print(f"hit@1: {result['hit1']:.3f} ({result.get('hit1_count', 0)}/{cases})")
     print(f"hit@{k}: {result['hitk']:.3f} ({result.get('hitk_count', 0)}/{cases})")
     print(f"mrr: {result['mrr']:.3f}")
+
+    neg_total = result.get("negative_cases", 0)
+    if neg_total > 0:
+        neg_pass = result.get("negative_pass_count", 0)
+        fpr = result.get("false_positive_rate", 0.0)
+        abstain = result.get("abstain_accuracy", 0.0)
+        print(
+            f"negative_eval: {neg_pass}/{neg_total} pass "
+            f"(abstain_accuracy={abstain:.3f}, false_positive_rate={fpr:.3f})"
+        )
 
     hitk_ok = result["hitk"] >= 0.80
     mrr_ok = result["mrr"] >= 0.65
