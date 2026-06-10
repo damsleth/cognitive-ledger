@@ -4,8 +4,8 @@ Each sheep subcommand emits structured JSON on stdout under --json,
 following the CLI contract output classes:
 
 - status:   data    -> raw status doc, no top-level `ok`
-- lint:     data    -> {tool, command, exit_code, human_lines}
-- sleep:    data    -> {tool, command, exit_code, human_lines}
+- lint:     data    -> {issues: [...], errors, warnings, warning_summary}
+- sleep:    data    -> {items: [...]}
 - sync (no --apply): data -> {applied: false, ...}
 - sync --apply:      action -> envelope (ok/error/stats)
 - index:    action  -> envelope (ok/error/stats)
@@ -39,20 +39,32 @@ def test_sheep_status_human_default_still_works():
   assert "Sleep Status" in result.stdout
 
 
-def test_sheep_lint_json_wraps_human_lines():
+def test_sheep_lint_json_structured_fields():
   result = _run("--json", "lint")
   payload = json.loads(result.stdout.strip())
-  assert payload["tool"] == "sheep"
-  assert payload["command"] == "sheep lint"
-  assert "exit_code" in payload
-  assert isinstance(payload["human_lines"], list)
+  assert "issues" in payload
+  assert isinstance(payload["issues"], list)
+  assert "errors" in payload
+  assert "warnings" in payload
+  assert "warning_summary" in payload
+  # Each issue dict (if any) must have level/path/message fields.
+  for issue in payload["issues"]:
+    assert "level" in issue
+    assert "path" in issue
+    assert "message" in issue
 
 
-def test_sheep_sleep_json_wraps_human_lines():
+def test_sheep_sleep_json_structured_fields():
   result = _run("--json", "sleep")
   payload = json.loads(result.stdout.strip())
-  assert payload["command"] == "sheep sleep"
-  assert isinstance(payload["human_lines"], list)
+  assert "items" in payload
+  assert isinstance(payload["items"], list)
+  assert len(payload["items"]) > 0
+  # Each item must have step/title/command fields.
+  for item in payload["items"]:
+    assert "step" in item
+    assert "title" in item
+    assert "command" in item
 
 
 def test_sheep_sync_check_is_data_class():
