@@ -16,7 +16,29 @@ if str(ROOT) not in sys.path:
 
 def load_ledger_module():
     import ledger.cli as module
-    return module
+    import ledger.retrieval as _retrieval
+    import ledger.eval as _eval
+
+    class _LedgerProxy:
+        """Thin proxy combining ledger.cli with canonical sub-module symbols.
+
+        Attribute reads fall through ledger.cli → ledger.retrieval → ledger.eval.
+        Attribute writes are forwarded to ledger.cli so that tests can monkey-patch
+        module-level names (e.g. load_embeddings_module) just as they did before.
+        """
+
+        def __getattr__(self, name):
+            for mod in (module, _retrieval, _eval):
+                try:
+                    return getattr(mod, name)
+                except AttributeError:
+                    pass
+            raise AttributeError(f"'_LedgerProxy' has no attribute {name!r}")
+
+        def __setattr__(self, name, value):
+            setattr(module, name, value)
+
+    return _LedgerProxy()
 
 
 def payload_get(payload, key, default=None):

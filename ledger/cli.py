@@ -60,26 +60,6 @@ compact_loop_line = browse_lib.compact_loop_line
 compact_generic_line = browse_lib.compact_generic_line
 format_detail = browse_lib.format_detail
 
-# Re-exports for test compatibility
-from ledger.retrieval import (  # noqa: E402,F811
-    build_attention_tokens, candidate_from_note, build_candidates,
-    clear_candidate_cache, build_candidate_index,
-    retrieve_candidates_from_index, coarse_candidate_score,
-    shortlist_candidates,
-    prefilter_candidates_by_scope_and_type, score_candidate,
-    compute_recency_component, expand_query_tokens,
-)
-from ledger.eval import (  # noqa: E402,F811
-    EvalCaseValidationError, parse_eval_cases, extract_notes_relative_path,
-    path_candidates_from_expected, normalize_expected_path,
-    validate_eval_cases, print_eval_result, baseline_metrics,
-    build_baseline_snapshot, write_baseline_snapshot,
-    compare_with_baseline, format_baseline_comparison, eval_result_to_json,
-)
-from ledger.query import (  # noqa: E402,F811
-    bundle_results, format_query_results_human, query_result_to_json,
-)
-
 
 def maybe_log_query_telemetry(**_kwargs):
     pass

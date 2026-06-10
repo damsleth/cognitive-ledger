@@ -18,6 +18,8 @@ from ledger import context as context_mod
 from ledger import maintenance as maintenance_mod
 from ledger import retrieval as retrieval_mod
 from ledger.config import get_config
+from ledger.eval import parse_eval_cases as _parse_eval_cases
+from ledger.query import bundle_results as _bundle_results
 from ledger.layout import resolve_path
 from ledger.parsing import parse_timestamp
 
@@ -150,7 +152,7 @@ def main() -> int:
         measured_ms = (time.perf_counter_ns() - started) / 1_000_000.0
         index_samples.append(float(index_payload.get("build_ms", measured_ms) or measured_ms))
 
-    cases = ledger_script.parse_eval_cases(cases_path)
+    cases = _parse_eval_cases(cases_path)
     query_wall_samples = []
     query_total_samples = []
     candidate_build_samples = []
@@ -196,7 +198,7 @@ def main() -> int:
                 results = query_payload.get("results", [])
             if results is None:
                 results = []
-            bundle = ledger_script.bundle_results(results, word_budget=1200)
+            bundle = _bundle_results(results, word_budget=1200)
             bundle_token_samples.append(sum(len(str(item.get("excerpt", "")).split()) for item in bundle))
 
     config = get_config()
