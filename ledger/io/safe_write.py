@@ -85,14 +85,12 @@ class FileLock:
             fcntl.flock(self._fd, fcntl.LOCK_UN)
             os.close(self._fd)
             self._fd = None
-            # Best-effort cleanup of the lock file. fcntl.flock is per-fd,
-            # not per-path, so unlinking after LOCK_UN is safe — any other
-            # waiter holds its own fd and is unaffected. We swallow errors
-            # because a missing/already-removed lock file is fine.
-            try:
-                self.lock_path.unlink()
-            except OSError:
-                pass
+            # Do NOT unlink the lock file here. Unlinking after releasing
+            # the flock creates a race: another waiter may have already
+            # opened the same path; a third process then creates a new lock
+            # file and acquires flock — two processes now believe they hold
+            # the lock. The lock file accumulates but is harmless; advisory
+            # locking is per-fd, not per-path.
 
 
 @contextmanager

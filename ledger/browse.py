@@ -16,6 +16,7 @@ from ledger.parsing import (
     parse_frontmatter_text,
     parse_sections,
     shorten,
+    strip_private_tags,
 )
 
 
@@ -66,7 +67,7 @@ def _rel_display_path(path: str | Path) -> Path:
 def read_note(path: str | Path) -> tuple[dict[str, Any], str]:
     text = Path(path).read_text(encoding="utf-8")
     frontmatter, body = parse_frontmatter_text(text)
-    return frontmatter, body.strip()
+    return frontmatter, strip_private_tags(body).strip()
 
 
 def loop_item(path: str | Path) -> BrowseItem:

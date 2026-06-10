@@ -28,6 +28,7 @@ from ledger.parsing import (
     normalize_tags,
     parse_timestamp,
     NoteLink,
+    strip_private_tags,
 )
 
 
@@ -439,7 +440,8 @@ def read_note_file(path: Path) -> tuple[dict[str, Any], str]:
         Tuple of (frontmatter dict, body string).
     """
     text = path.read_text(encoding="utf-8")
-    return parse_frontmatter_text(text)
+    fm, body = parse_frontmatter_text(text)
+    return fm, strip_private_tags(body)
 
 
 def read_note(path: Path, note_type: str | None = None) -> BaseNote:

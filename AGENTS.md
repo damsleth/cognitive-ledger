@@ -35,7 +35,7 @@ Apply the voice profile to tone, sentence structure, and vocabulary when writing
 - No chat transcripts — ever
 - No invented facts — use `source: inferred` + `confidence < 0.7`
 - Always bump `updated` timestamp when editing
-- Always append to `notes/08_indices/timeline.md` after any note operation
+- Always append to `notes/08_indices/timeline.md` after any note operation via `ledger timeline add`
 
 ### Should I write?
 
