@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from ledger.config import get_config
+from ledger.eval import parse_eval_cases as _parse_eval_cases
 from ledger.layout import logical_path, resolve_path
 
 EXIT_BENEFICIAL = 0
@@ -397,7 +398,8 @@ def probe_query_latency(
     embed_backend: str = "local",
     embed_model: str | None = None,
 ) -> dict[str, Any]:
-    cases = module.parse_eval_cases(str(cases_path))
+    parse_fn = getattr(module, "parse_eval_cases", None) or _parse_eval_cases
+    cases = parse_fn(str(cases_path))
     if not cases:
         raise InvalidSetupError("No eval cases found for query latency probe")
 
