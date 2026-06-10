@@ -60,6 +60,27 @@ def test_init_json_envelope_shape(tmp_path: Path):
     assert env["error"]["code"]
 
 
+def test_init_demo_flag_json_envelope(tmp_path: Path):
+  """--demo flag writes demo notes and reports them in the envelope stats."""
+  root = tmp_path / "ledger"
+  notes = tmp_path / "notes"
+  notes.mkdir()
+  source = tmp_path / "source"
+  source.mkdir()
+  result = _run([
+    "init",
+    "--root", str(root),
+    "--ledger-notes-dir", str(notes),
+    "--source-notes-dir", str(source),
+    "--demo",
+    "--json",
+  ])
+  env = _last_json_line(result.stdout)
+  assert env["ok"] is True
+  demo_items = [i for i in env["stats"]["created"] if i.startswith("demo: ")]
+  assert len(demo_items) == 5, f"expected 5 demo items, got {demo_items}"
+
+
 def test_init_human_default_unchanged(tmp_path: Path):
   root = tmp_path / "ledger"
   notes = tmp_path / "notes"
