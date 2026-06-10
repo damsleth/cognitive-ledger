@@ -232,3 +232,93 @@ not send to hosted LLMs unless an explicit config flag allows it.
 Every YAAMS-facing field is gated by `contract_version`. Bump it on any
 breaking field rename/removal; additive fields do not bump. Both repos branch
 on `contract_version` and degrade open on an unknown value.
+
+---
+
+## 4. Tier-1 query (cogled → YAAMS, read-only, Phase D)
+
+Cogled calls YAAMS as a subprocess to retrieve raw tier-1 results that are
+then fused with tier-2 results via Reciprocal Rank Fusion.  This is
+**read-only and opt-in**: only activated by `ledger query --include-tier1`.
+YAAMS receives no writes; the call is invisible to YAAMS's signal log.
+
+### Pinned invocation
+
+```bash
+yaams query "<text>" --top-k N --tier raw --no-parse --no-log --json
+```
+
+Flags:
+- `--tier raw` — excludes `tier2_ledger` source so cogled notes are not
+  double-counted in the fused result set.
+- `--no-parse` — skips YAAMS's internal LLM query parser; cogled sends the
+  verbatim query string.
+- `--no-log` — keeps cogled-driven probes out of YAAMS's query-signal log.
+- `--json` — machine-readable output; cogled does not parse human prose.
+
+### Exact JSON response shape
+
+```json
+{
+  "query_id": "q_20260610T033047_929d71d1",
+  "question": "<query text>",
+  "retrieval_ms": 191.8,
+  "synthesis_ms": 0.0,
+  "results": [
+    {
+      "id": "cons:987897b41f32abcd1234567890abcdef",
+      "kind": "consolidation",
+      "source": "imessage",
+      "timestamp": "2025-10-20T07:07:03.164862+02:00",
+      "sender": "AkershusRK",
+      "subject": "Akershus 01",
+      "content_preview": "imessage 2025-10-20 AkershusRK: ...",
+      "score": 0.0355,
+      "item_count": 4,
+      "metadata": {}
+    }
+  ]
+}
+```
+
+### Depended-on fields (cogled reads these)
+
+| Field | Used for |
+|-------|----------|
+| `results[].id` | Deduplication key and `display_id` (`yaams:<id[:24]>`) |
+| `results[].kind` | Passed through as `kind` in fused output |
+| `results[].source` | Shown in human output; passed through in JSON |
+| `results[].timestamp` | Shown in human output |
+| `results[].sender` | Shown in human output |
+| `results[].subject` | Shown in human output |
+| `results[].content_preview` | Mapped to `content`; capped at 280 chars in JSON |
+| `results[].score` | Passed through; used for `--tier1-min-score` filtering |
+| `results[].metadata` | Accepted but **not** dumped in JSON output (privacy) |
+
+Fields absent from a result are treated as empty string / 0.0 (degrade open).
+
+### Stability
+
+This interface is **read-only** and additive.  YAAMS needs no changes for
+Phase D.  Cogled degrades to tier-2-only with a stderr warning if YAAMS is
+absent, times out, exits non-zero, or returns invalid JSON.
+
+### Degrade-open posture
+
+| Failure mode | Cogled behaviour |
+|---|---|
+| `yaams` binary not found | `unavailable_reason: yaams_not_found`; tier-2 only |
+| Subprocess timeout (10 s) | `unavailable_reason: timeout`; tier-2 only |
+| Non-zero exit code N | `unavailable_reason: yaams_exit_N`; tier-2 only |
+| Invalid / non-array JSON | `unavailable_reason: invalid_json`; tier-2 only |
+
+In all error cases cogled prints `warning: tier-1 unavailable (<reason>)` to
+stderr and returns tier-2 results unchanged.
+
+### Privacy
+
+Tier-1 results are raw personal communications (iMessage, mail, calendar,
+Teams, GitHub).  They are **local-only**: never sent to a hosted LLM, never
+written to the cogled notes store, never included in the boot context.  The
+`metadata` field is dropped from JSON output; `content` is capped at 280
+characters.
