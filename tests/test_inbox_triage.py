@@ -537,5 +537,93 @@ class TestRangeAcceptSkipsContradict(InteractiveLoopTests):
         self.assertIn("accepted:", out)
 
 
+# ---------------------------------------------------------------------------
+# Parametrized tests for triage_suggestions() type-inference heuristics
+# ---------------------------------------------------------------------------
+
+import pytest
+
+
+def _make_inbox_note(tmp_path: Path, body_text: str) -> Path:
+    """Write a minimal inbox note with *body_text* as note body and return notes_dir."""
+    from ledger.config import LedgerConfig, reset_config, set_config
+
+    notes_dir = tmp_path / "notes"
+    for folder in (
+        "00_inbox", "01_identity", "02_facts", "03_preferences",
+        "04_goals", "05_open_loops", "06_concepts", "07_projects",
+        "08_indices", "09_archive",
+    ):
+        (notes_dir / folder).mkdir(parents=True)
+    (notes_dir / "08_indices" / "timeline.md").write_text("# Timeline\n", encoding="utf-8")
+
+    cfg = LedgerConfig(
+        ledger_root=tmp_path,
+        ledger_notes_dir=notes_dir,
+        source_notes_dir=tmp_path / "source",
+    )
+    set_config(cfg)
+
+    note = notes_dir / "00_inbox" / "test_note.md"
+    note.write_text(
+        "---\ncreated: 2026-06-01T10:00:00Z\nupdated: 2026-06-01T10:00:00Z\n"
+        "tags: [test]\nconfidence: 0.6\nsource: inferred\nscope: personal\n"
+        "lang: en\npromoted_by: yaams\nyaams_candidate_id: aabbccdd\n---\n\n"
+        f"# Test Note\n\n## Statement\n{body_text}\n",
+        encoding="utf-8",
+    )
+    return notes_dir
+
+
+_TYPE_INFERENCE_CASES = [
+    # (body_text, expected_suggested_type)
+    # --- preferences: first signal wins
+    ("I prefer dark mode going forward.", "preferences"),
+    # --- facts: signal keyword
+    ("We decided to use PostgreSQL as the primary database.", "facts"),
+    # --- goals: objective keyword
+    ("The goal is to achieve 99% uptime by Q3.", "goals"),
+    # --- loops: open-loop keyword
+    ("TODO: revisit this decision after the sprint.", "loops"),
+    # --- concepts: definition keyword (avoid "is a" which triggers facts first)
+    ("The concept of immutability follows a recurring pattern in functional programming.", "concepts"),
+    # --- fallback: no recognisable signal -> "facts"
+    ("Random unstructured note without any signal keywords here.", "facts"),
+]
+
+
+@pytest.mark.parametrize("body_text,expected_type", _TYPE_INFERENCE_CASES)
+def test_triage_type_inference(tmp_path, body_text, expected_type):
+    """triage_suggestions() infers the correct suggested_type from note content."""
+    from ledger.config import reset_config
+    from ledger.inbox import triage_suggestions
+
+    notes_dir = _make_inbox_note(tmp_path, body_text)
+    try:
+        suggestions = triage_suggestions(notes_dir)
+        assert len(suggestions) == 1, f"Expected 1 suggestion, got {len(suggestions)}"
+        assert suggestions[0]["suggested_type"] == expected_type, (
+            f"body={body_text!r}: expected {expected_type!r}, "
+            f"got {suggestions[0]['suggested_type']!r} "
+            f"(reason: {suggestions[0].get('reason')})"
+        )
+    finally:
+        reset_config()
+
+
+@pytest.mark.parametrize("body_text,expected_type", _TYPE_INFERENCE_CASES)
+def test_triage_reason_populated(tmp_path, body_text, expected_type):
+    """triage_suggestions() always populates a non-empty 'reason' field."""
+    from ledger.config import reset_config
+    from ledger.inbox import triage_suggestions
+
+    notes_dir = _make_inbox_note(tmp_path, body_text)
+    try:
+        suggestions = triage_suggestions(notes_dir)
+        assert suggestions[0]["reason"], "reason field should be non-empty"
+    finally:
+        reset_config()
+
+
 if __name__ == "__main__":
     unittest.main()
