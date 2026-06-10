@@ -471,6 +471,102 @@ class CLIHandlerCoverageTests(unittest.TestCase):
         _, out, _ = _capture(self.cli.handle_briefing_command, args)
         self.assertGreater(len(out), 0)
 
+    # ---- handle_embed_search_command -----------------------------------------
+
+    def test_embed_search_json_prints_contract_payload(self):
+        """handle_embed_search_command --json prints the contract shape."""
+        import ledger.cli as cli_mod
+        import ledger.semantic as sem_mod
+
+        canned = {
+            "target": "ledger",
+            "backend": "local",
+            "model": "BAAI/bge-m3",
+            "available": True,
+            "reason": "",
+            "index_built_at": "2026-06-09T10:00:00Z",
+            "index_item_count": 3,
+            "results": [
+                {
+                    "rel_path": "02_facts/fact__test.md",
+                    "type": "fact",
+                    "scope": "work",
+                    "status": "active",
+                    "lang": "en",
+                    "updated": "2026-05-01T00:00:00Z",
+                    "cosine_similarity": 0.91,
+                }
+            ],
+        }
+        original = sem_mod.semantic_search_target
+        try:
+            sem_mod.semantic_search_target = lambda *a, **kw: canned
+            cli_mod.semantic_lib = sem_mod
+            args = SimpleNamespace(
+                query="test query",
+                target="ledger",
+                limit=5,
+                embed_backend=None,
+                embed_model=None,
+                allow_api_on_source=False,
+                json=True,
+            )
+            _, out, _ = _capture(cli_mod.handle_embed_search_command, args)
+        finally:
+            sem_mod.semantic_search_target = original
+
+        payload = json.loads(out)
+        self.assertTrue(payload["available"])
+        self.assertEqual(payload["target"], "ledger")
+        self.assertIn("index_built_at", payload)
+        self.assertIn("results", payload)
+        self.assertEqual(len(payload["results"]), 1)
+        self.assertEqual(payload["results"][0]["rel_path"], "02_facts/fact__test.md")
+
+    def test_embed_search_validates_query(self):
+        """handle_embed_search_command raises SystemExit on empty query."""
+        import ledger.cli as cli_mod
+
+        args = SimpleNamespace(
+            query="",
+            target="ledger",
+            limit=5,
+            embed_backend=None,
+            embed_model=None,
+            allow_api_on_source=False,
+            json=True,
+        )
+        with self.assertRaises(SystemExit):
+            _capture(cli_mod.handle_embed_search_command, args)
+
+    def test_embed_search_parser_wiring(self):
+        """main(['embed', 'search', '--query', 'x', '--json']) dispatches without error."""
+        import ledger.cli as cli_mod
+        import ledger.semantic as sem_mod
+
+        canned = {
+            "target": "ledger",
+            "backend": "local",
+            "model": "BAAI/bge-m3",
+            "available": False,
+            "reason": "missing_index",
+            "index_built_at": "",
+            "index_item_count": 0,
+            "results": [],
+        }
+        original = sem_mod.semantic_search_target
+        try:
+            sem_mod.semantic_search_target = lambda *a, **kw: canned
+            cli_mod.semantic_lib = sem_mod
+            rv, out, _ = _capture(cli_mod.main, ["embed", "search", "--query", "x", "--json"])
+        finally:
+            sem_mod.semantic_search_target = original
+
+        self.assertEqual(rv, 0)
+        payload = json.loads(out)
+        self.assertFalse(payload["available"])
+        self.assertEqual(payload["reason"], "missing_index")
+
     # ---- handle_ingest_command --------------------------------------------
 
     def test_ingest_scan_with_empty_source(self):

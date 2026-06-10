@@ -112,6 +112,95 @@ def semantic_search_source(
     )
 
 
+def semantic_search_target(
+    query: str,
+    *,
+    target: str = "ledger",
+    limit: int = 5,
+    embed_backend: str = "local",
+    embed_model: str | None = None,
+    allow_api_on_source: bool = False,
+    load_embeddings_module_fn: Callable[[], Any] | None = None,
+    resolve_embed_model_fn: Callable[..., str] | None = None,
+) -> dict[str, Any]:
+    if load_embeddings_module_fn is None:
+        load_embeddings_module_fn = load_embeddings_module
+    if resolve_embed_model_fn is None:
+        resolve_embed_model_fn = resolve_embed_model
+    embeddings = load_embeddings_module_fn()
+    resolved_model = resolve_embed_model_fn(
+        embed_backend,
+        embed_model,
+        load_embeddings_module_fn=load_embeddings_module_fn,
+    )
+    payload = embeddings.semantic_search(
+        query=query,
+        target=target,
+        backend=embed_backend,
+        model=resolved_model,
+        limit=limit,
+        allow_api_on_source=allow_api_on_source,
+    )
+
+    if not payload.get("available", False):
+        return {
+            "target": str(payload.get("target", target) or target),
+            "backend": str(payload.get("backend", embed_backend) or embed_backend),
+            "model": str(payload.get("model", resolved_model) or resolved_model),
+            "available": False,
+            "reason": str(payload.get("reason") or ""),
+            "index_built_at": str(payload.get("index_built_at", "") or ""),
+            "index_item_count": int(payload.get("index_item_count", 0) or 0),
+            "results": [],
+        }
+
+    _DROP = {"score_by_id", "score_by_rel_path", "abs_path", "content_hash", "row", "id", "embedding_text"}
+    projected_results = [
+        {
+            "rel_path": str(item.get("rel_path", "") or ""),
+            "type": str(item.get("type", "") or ""),
+            "scope": str(item.get("scope", "") or ""),
+            "status": str(item.get("status", "") or ""),
+            "lang": str(item.get("lang", "") or ""),
+            "updated": str(item.get("updated", "") or ""),
+            "cosine_similarity": float(item.get("cosine_similarity", 0.0) or 0.0),
+        }
+        for item in payload.get("results", [])
+    ]
+
+    return {
+        "target": str(payload.get("target", target) or target),
+        "backend": str(payload.get("backend", embed_backend) or embed_backend),
+        "model": str(payload.get("model", resolved_model) or resolved_model),
+        "available": True,
+        "reason": str(payload.get("reason") or ""),
+        "index_built_at": str(payload.get("index_built_at", "") or ""),
+        "index_item_count": int(payload.get("index_item_count", 0) or 0),
+        "results": projected_results,
+    }
+
+
+def format_embed_search_human(payload: dict[str, Any]) -> str:
+    lines = [
+        f"target: {payload.get('target', 'ledger')}",
+        f"backend: {payload.get('backend', 'local')}",
+        f"model: {payload.get('model', '')}",
+    ]
+    if not payload.get("available", False):
+        lines.append(f"available: no ({payload.get('reason', 'unknown')})")
+        return "\n".join(lines)
+
+    lines.append(f"results: {len(payload.get('results', []))}")
+    for item in payload.get("results", []):
+        lines.append(
+            "- "
+            f"{float(item.get('cosine_similarity', 0.0)):.3f} | "
+            f"{item.get('rel_path', '')} | "
+            f"{item.get('scope', '')}"
+        )
+    return "\n".join(lines)
+
+
 def build_semantic_index(
     *,
     target: str,

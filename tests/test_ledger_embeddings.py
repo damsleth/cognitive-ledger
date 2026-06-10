@@ -311,6 +311,23 @@ class LedgerEmbeddingsTests(unittest.TestCase):
         self.assertTrue(first["available"])
         self.assertTrue(second["available"])
         self.assertEqual(self.call_log, [("local", "fake-local-model", 1)])
+        # index_built_at is present and non-empty on a freshly built index
+        self.assertIn("index_built_at", first)
+        self.assertNotEqual(first["index_built_at"], "")
+
+    def test_semantic_score_map_index_built_at_on_missing_index(self):
+        # When no index is built, semantic_score_map returns available:False
+        # and index_built_at is present but empty.
+        result = self.embeddings.semantic_score_map(
+            query="alpha",
+            target="ledger",
+            backend="local",
+            model="fake-local-model",
+        )
+        self.assertFalse(result["available"])
+        self.assertEqual(result["reason"], "missing_index")
+        self.assertIn("index_built_at", result)
+        self.assertEqual(result["index_built_at"], "")
 
     def test_local_encoder_cache_reuses_model_instance(self):
         created_models = []
