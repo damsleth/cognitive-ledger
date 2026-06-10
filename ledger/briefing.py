@@ -195,6 +195,86 @@ def daily_briefing() -> str:
     return "\n".join(lines)
 
 
+def daily_briefing_data() -> dict[str, Any]:
+    """Return the daily briefing as structured data suitable for JSON serialisation."""
+    config = get_config()
+
+    def _logical_note_path(path: Path) -> str:
+        return logical_path(
+            path,
+            ledger_root=config.ledger_root,
+            ledger_notes_dir=config.ledger_notes_dir,
+        ).as_posix()
+
+    now = datetime.now(timezone.utc)
+    nudge_log = _load_nudge_log()
+
+    open_loops = get_notes("loops", loop_status="open")
+    blocked_loops = get_notes("loops", loop_status="blocked")
+    all_active = open_loops + blocked_loops
+    all_active.sort(key=lambda l: _loop_staleness(l, now), reverse=True)
+
+    loops_out: list[dict[str, Any]] = []
+    nudge_candidates: list[BaseNote] = []
+    for loop in all_active:
+        staleness = _loop_staleness(loop, now)
+        entry: dict[str, Any] = {
+            "title": loop.title,
+            "path": _logical_note_path(loop.path),
+            "status": loop.status,
+            "staleness_days": staleness,
+        }
+        loops_out.append(entry)
+        if staleness > 7 and _should_nudge(_logical_note_path(loop.path), nudge_log, now):
+            nudge_candidates.append(loop)
+
+    nudges_out: list[dict[str, Any]] = []
+    for loop in nudge_candidates[:5]:
+        staleness = _loop_staleness(loop, now)
+        nudges_out.append({
+            "title": loop.title,
+            "path": _logical_note_path(loop.path),
+            "staleness_days": staleness,
+            "status": loop.status,
+        })
+        _record_nudge(_logical_note_path(loop.path), nudge_log, now)
+    if nudges_out:
+        _save_nudge_log(nudge_log)
+
+    since = now - timedelta(hours=24)
+    recent = timeline_lib.timeline_since(config.timeline_jsonl_path, since)
+    recent_out = [
+        {
+            "action": e.get("action", "?"),
+            "path": e.get("path", "?"),
+            "desc": e.get("desc", ""),
+        }
+        for e in recent[-10:]
+    ] if recent else []
+
+    stale_count = sum(1 for l in all_active if _loop_staleness(l, now) > 14)
+    inbox_path = inbox_dir(config.ledger_notes_dir)
+    inbox_count = len(list(inbox_path.glob("*.md"))) if inbox_path.is_dir() else 0
+
+    suggestions: list[str] = []
+    if stale_count:
+        suggestions.append(f"{stale_count} loop(s) stale >14d - close, snooze, or update?")
+    if inbox_count:
+        suggestions.append(f"{inbox_count} inbox item(s) - run `ledger inbox triage`")
+
+    closed_recent = len([e for e in recent if e.get("action") == "closed"]) if recent else 0
+
+    return {
+        "generated_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "open_loops": loops_out,
+        "nudges": nudges_out,
+        "recent_changes": recent_out,
+        "suggestions": suggestions,
+        "closed_recently": closed_recent,
+        "inbox_count": inbox_count,
+    }
+
+
 def weekly_review() -> str:
     """Generate a weekly review as extended markdown.
 
