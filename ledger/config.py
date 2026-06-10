@@ -215,7 +215,11 @@ def _apply_env_overrides(config: "LedgerConfig") -> "LedgerConfig":
         try:
             setattr(config, attr, int(value))
         except ValueError:
-            pass
+            import warnings
+            warnings.warn(
+                f"Ignoring invalid integer value {value!r} for {env_var}",
+                stacklevel=3,
+            )
 
     # Float overrides
     float_mappings = {
@@ -246,7 +250,11 @@ def _apply_env_overrides(config: "LedgerConfig") -> "LedgerConfig":
         try:
             setattr(config, attr, float(value))
         except ValueError:
-            pass
+            import warnings
+            warnings.warn(
+                f"Ignoring invalid float value {value!r} for {env_var}",
+                stacklevel=3,
+            )
 
     # Boolean overrides ("1", "true", "yes", "on" -> True; else False)
     bool_mappings = {
@@ -972,8 +980,75 @@ class LedgerConfig:
     """
 
     # =========================================================================
+    # Profiles (named scope presets)
+    # =========================================================================
+
+    profiles: dict[str, dict[str, Any]] = field(default_factory=lambda: {
+        "work": {
+            "scope": "work",
+            "retrieval_mode": "semantic_hybrid",
+            "limit": 8,
+        },
+        "personal": {
+            "scope": "personal",
+            "retrieval_mode": "semantic_hybrid",
+            "limit": 6,
+        },
+        "dev": {
+            "scope": "dev",
+            "retrieval_mode": "semantic_hybrid",
+            "limit": 8,
+        },
+    })
+    """Named query / context presets.
+
+    Each profile is a dict with optional keys:
+      - ``scope``: note scope filter (e.g. "work", "personal", "all")
+      - ``retrieval_mode``: override the retrieval mode for this profile
+      - ``limit``: default result limit for this profile
+
+    Users may define additional profiles in ``~/.config/ledger/config.yaml``.
+    Built-in profiles are ``work``, ``personal``, and ``dev``.
+    """
+
+    # =========================================================================
+    # Write Policy
+    # =========================================================================
+
+    write_policy: dict[str, Any] = field(default_factory=lambda: {
+        "mode": "auto-write",
+        "report_level": "summary",
+    })
+    """Agent write policy injected into context payloads.
+
+    Keys:
+      - ``mode``: one of ``auto-write``, ``silent-write``, ``ask-to-write``
+        (see AGENTS.md for semantics).
+      - ``report_level``: one of ``summary`` (one-line per change),
+        ``verbose`` (full diff), ``silent`` (no report).
+
+    This dict is appended verbatim to the ``build_context()`` boot payload
+    so agents have the policy available without reading AGENTS.md.
+    """
+
+    # =========================================================================
     # Methods
     # =========================================================================
+
+    def resolve_profile(self, name: str) -> dict[str, Any]:
+        """Return the merged profile dict for *name*, or an empty dict if not found.
+
+        Always returns a plain dict — safe to call with arbitrary user input.
+
+        Example::
+
+            cfg.resolve_profile("work")
+            # -> {"scope": "work", "retrieval_mode": "semantic_hybrid", "limit": 8}
+
+            cfg.resolve_profile("nonexistent")
+            # -> {}
+        """
+        return dict(self.profiles.get(name, {}))
 
     def __post_init__(self) -> None:
         self._ledger_notes_dir_explicit = self.ledger_notes_dir is not None

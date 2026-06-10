@@ -9,6 +9,7 @@ through ``$EDITOR`` or the CLI show up on the next page load.
 
 from __future__ import annotations
 
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -56,6 +57,8 @@ class Corpus:
         self._broken_outgoing: dict[str, list[str]] = {}
         self._titles: dict[str, str] = {}
         self._meta: dict[str, dict[str, str]] = {}
+        self._neg_cache: set[str] = set()  # stems not found (avoids repeated directory scans)
+        self._lock: threading.Lock = threading.Lock()
         self._refresh_stem_index()
         self._rebuild_link_maps()
 
@@ -76,6 +79,7 @@ class Corpus:
         note body. Called after the user runs ``ledger sleep index`` and
         hits ``/admin/reload`` to pick up new notes without restarting.
         """
+        self._neg_cache.clear()
         self._refresh_stem_index()
         self._rebuild_link_maps()
 
@@ -141,24 +145,32 @@ class Corpus:
 
     def get_by_stem(self, stem: str) -> browse_lib.BrowseItem | None:
         """Resolve a note by filename stem (e.g. ``"fact__nocos_account"``)."""
-        # Refresh lazily on miss: a new note added since startup is rare
-        # but should still be reachable.
-        path = self._stem_index.get(stem)
-        if path is None:
-            self._refresh_stem_index()
+        with self._lock:
             path = self._stem_index.get(stem)
-        if path is None or not path.is_file():
-            return None
-        note_type = self._infer_type(path)
+            if path is None:
+                # Refresh lazily on miss: a new note added since startup is
+                # rare but should still be reachable.
+                self._refresh_stem_index()
+                path = self._stem_index.get(stem)
+            if path is None or not path.is_file():
+                return None
+            note_type = self._infer_type(path)
         if note_type == "loops":
             return browse_lib.loop_item(path)
         return browse_lib.generic_item(path, note_type)
 
     def stem_exists(self, stem: str) -> bool:
+        # Fast-path without lock for hot path (concurrent reads are safe on dict.get)
         if stem in self._stem_index:
             return True
-        self._refresh_stem_index()
-        return stem in self._stem_index
+        if stem in self._neg_cache:
+            return False
+        with self._lock:
+            self._refresh_stem_index()
+            found = stem in self._stem_index
+        if not found:
+            self._neg_cache.add(stem)
+        return found
 
     # ------------------------------------------------------------------
     # Backlinks

@@ -22,7 +22,7 @@ import numpy as np
 from ledger.config import get_config
 from ledger.layout import logical_path, note_type_dir
 from ledger.io import append_timeline_entry as append_timeline_entry_safe
-from ledger.parsing import extract_title, parse_frontmatter_text
+from ledger.parsing import extract_title, parse_frontmatter_text, strip_private_tags
 from ledger.text import sha1_text
 
 SUPPORTED_BACKENDS = ("local", "openai")
@@ -228,6 +228,7 @@ def build_item_record(path: Path, target: str, source_root: Path | None = None) 
     abs_path = path.resolve()
     text = abs_path.read_text(encoding="utf-8")
     frontmatter, body = parse_frontmatter_text(text)
+    body = strip_private_tags(body)
 
     if target == "ledger":
         cfg = get_config()

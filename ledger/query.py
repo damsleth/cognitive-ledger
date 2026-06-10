@@ -516,7 +516,7 @@ def rank_query_semantic_hybrid(
         _prf_by_score = sorted(score_by_rel_path.items(), key=lambda kv: kv[1], reverse=True)
         _prf_top_paths = [p for p, _ in _prf_by_score[: config.prf_top_m]]
         _prf_all_paths = [p for p, _ in _prf_by_score[:prf_pool_size]]
-        _prf_bottom_paths = [p for p, _ in _prf_by_score[max(0, len(_prf_all_paths) - config.prf_bottom_n) :]]
+        _prf_bottom_paths = _prf_all_paths[-config.prf_bottom_n :]
 
         # Retrieve the actual index vectors for the pseudo-relevant docs. Tests
         # can provide them directly in the semantic payload; the real embeddings
@@ -866,6 +866,18 @@ def rank_query_semantic_rerank(
     return base
 
 
+def _default_load_embeddings_module():
+    """Lazy import of the embeddings module (default for rank_query)."""
+    from ledger import embeddings as _emb
+    return _emb
+
+
+def _default_resolve_embed_model(backend: str, model: str | None) -> str:
+    """Resolve embed model using the semantic module (default for rank_query)."""
+    from ledger.semantic import resolve_model as _resolve
+    return _resolve(backend, model)
+
+
 def rank_query(
     query: str,
     *,
@@ -877,8 +889,8 @@ def rank_query(
     embed_backend: str = "local",
     embed_model: str | None = None,
     prf_enabled: bool | None = None,
-    load_embeddings_module: Callable[[], Any],
-    resolve_embed_model: Callable[[str, str | None], str],
+    load_embeddings_module: Callable[[], Any] = _default_load_embeddings_module,
+    resolve_embed_model: Callable[[str, str | None], str] = _default_resolve_embed_model,
     as_of=None,
 ) -> RetrievalResult:
     mode = resolve_retrieval_mode(retrieval_mode)
