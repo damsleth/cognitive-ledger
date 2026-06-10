@@ -139,10 +139,35 @@ def regenerate_timeline_markdown(
     timeline_jsonl_path: Path | str,
     timeline_md_path: Path | str,
 ) -> None:
-    """Regenerate timeline markdown from JSONL source."""
-    events = load_timeline_jsonl(timeline_jsonl_path)
-    events.sort(key=lambda item: str(item.get("ts", "")))
-    safe_write_text(Path(timeline_md_path), render_timeline_markdown(events))
+    """Regenerate timeline markdown from JSONL source.
+
+    Merges any md-only entries (manually appended lines not present in the
+    JSONL) into the JSONL file before rendering, so hand-written timeline
+    entries are preserved and deduplicated.
+    """
+    jsonl_path = Path(timeline_jsonl_path)
+    md_path = Path(timeline_md_path)
+
+    jsonl_events = load_timeline_jsonl(jsonl_path)
+
+    # Collect keys already in JSONL to detect md-only entries
+    jsonl_keys = {(str(e.get("ts", "")), str(e.get("path", ""))) for e in jsonl_events}
+
+    # Parse md for entries not yet in jsonl
+    md_only: list[dict[str, Any]] = []
+    for md_event in parse_timeline_markdown(md_path):
+        key = (str(md_event.get("ts", "")), str(md_event.get("path", "")))
+        if key not in jsonl_keys:
+            md_only.append(md_event)
+
+    # Merge md-only entries into jsonl persistently
+    if md_only:
+        for event in md_only:
+            append_timeline_jsonl(jsonl_path, event)
+        jsonl_events = load_timeline_jsonl(jsonl_path)
+
+    jsonl_events.sort(key=lambda item: str(item.get("ts", "")))
+    safe_write_text(md_path, render_timeline_markdown(jsonl_events))
 
 
 def timeline_since(timeline_jsonl_path: Path | str, since: datetime | str) -> list[dict[str, Any]]:

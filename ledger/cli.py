@@ -194,11 +194,37 @@ def _parse_as_of(raw: str | None):
         )
 
 
+def _resolve_query_args_from_profile(args) -> tuple[str, int, str]:
+    """Resolve scope, limit, and retrieval_mode by merging profile defaults
+    with explicit CLI flags.  Explicit flags always win over profile defaults.
+    """
+    cfg = get_config()
+    profile_name = getattr(args, "profile", None)
+    profile = cfg.resolve_profile(profile_name) if profile_name else {}
+
+    _scope_raw = getattr(args, "scope", None)
+    scope = _scope_raw if _scope_raw is not None else profile.get("scope", "all")
+    # Use `is None` check (not `or`) so explicit 0 is not replaced by the
+    # profile default — validate_limit will then catch it as invalid.
+    _limit_raw = getattr(args, "limit", None)
+    limit = _limit_raw if _limit_raw is not None else profile.get("limit", 8)
+    _mode_raw = getattr(args, "retrieval_mode", None)
+    retrieval_mode = (
+        _mode_raw
+        if _mode_raw is not None
+        else (profile.get("retrieval_mode") or resolve_retrieval_mode(None))
+    )
+    return str(scope), int(limit), str(retrieval_mode)
+
+
 def handle_query_command(args):
+    # Resolve scope/limit/retrieval_mode from profile + explicit flags.
+    _scope, _limit, _retrieval_mode = _resolve_query_args_from_profile(args)
+
     try:
         validated_query = validate_query(args.text)
-        validated_scope = validate_scope(args.scope)
-        validated_limit = validate_limit(args.limit, min_val=1, max_val=1000)
+        validated_scope = validate_scope(_scope)
+        validated_limit = validate_limit(_limit, min_val=1, max_val=1000)
     except QueryValidationError as e:
         print(f"error: {e.message}", file=sys.stderr)
         raise SystemExit(2)
@@ -220,7 +246,7 @@ def handle_query_command(args):
         scope=validated_scope,
         limit=validated_limit,
         aliases_path=get_config().aliases_path,
-        retrieval_mode=args.retrieval_mode,
+        retrieval_mode=_retrieval_mode,
         embed_backend=args.embed_backend,
         embed_model=args.embed_model,
         as_of=as_of,
@@ -1735,10 +1761,19 @@ def main(argv=None) -> int:
     # --doctor is a top-level flag per the CLI contract. Handle it
     # before argparse so it composes with --json without polluting the
     # subparser surface.
-    if "--doctor" in raw:
+    # Only inspect flags before the first positional argument to avoid
+    # matching `ledger query "--doctor"` which passes --doctor as a
+    # literal query string.
+    _pre_positional = []
+    for _tok in raw:
+        if _tok.startswith("-"):
+            _pre_positional.append(_tok)
+        else:
+            break
+    if "--doctor" in _pre_positional:
         from ledger.doctor import emit_doctor
-        as_json = "--json" in raw
-        fix = "--fix" in raw
+        as_json = "--json" in _pre_positional[:2]
+        fix = "--fix" in _pre_positional
         return emit_doctor(None, as_json, fix=fix)
 
     # argparse.REMAINDER misroutes when nested under subparsers (bpo-9334),
@@ -1829,12 +1864,21 @@ def main(argv=None) -> int:
 
     query_parser = subparsers.add_parser("query", help="Rank notes for a query")
     query_parser.add_argument("text", help="query text")
-    query_parser.add_argument("--scope", choices=cfg.query_scopes, default="all")
-    query_parser.add_argument("--limit", type=int, default=8)
+    query_parser.add_argument(
+        "--profile",
+        dest="profile",
+        default=None,
+        help=(
+            "Named query profile from config (e.g. 'work', 'personal', 'dev'). "
+            "Overridden by explicit --scope/--limit/--retrieval-mode flags."
+        ),
+    )
+    query_parser.add_argument("--scope", choices=cfg.query_scopes, default=None)
+    query_parser.add_argument("--limit", type=int, default=None)
     query_parser.add_argument(
         "--retrieval-mode",
         choices=cfg.retrieval_modes,
-        default=resolve_retrieval_mode(None),
+        default=None,
         help="Retrieval strategy (default from config; override with LEDGER_RETRIEVAL_MODE)",
     )
     query_parser.add_argument(
@@ -2050,6 +2094,15 @@ def main(argv=None) -> int:
         choices=("boot", "identity", "json"),
         default="boot",
         help="Output format: boot (full payload), identity (identity notes only), json (scored items)",
+    )
+    context_parser.add_argument(
+        "--profile",
+        dest="profile",
+        default=None,
+        help=(
+            "Named context profile from config (e.g. 'work', 'personal', 'dev'). "
+            "Overrides scope filtering for the context payload."
+        ),
     )
     context_subparsers = context_parser.add_subparsers(dest="context_command")
 

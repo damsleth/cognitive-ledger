@@ -31,7 +31,7 @@ def _searcher(request: Request) -> Searcher:
 
 
 @router.get("/search", response_class=HTMLResponse)
-async def search(
+def search(
     request: Request,
     q: str = "",
     mode: str = DEFAULT_MODE,
@@ -51,7 +51,7 @@ async def search(
     if request.app.state.config.signals_auto_capture and results.query and results.empty:
         from ledger import signals
 
-        signals.append_signal("retrieval_miss", query=results.query)
+        signals.append_signal("retrieval_miss", query=results.query, channel="web")
 
     types = corpus.note_types()
     scopes = list(request.app.state.config.query_scopes)

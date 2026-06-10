@@ -457,6 +457,10 @@ def run_fzf_triage(notes_dir: Path | None = None) -> int:
         capture_output=True,
         text=True,
     )
+    # fzf returns 130 on Esc/Ctrl-C (user cancelled) — abort without promoting
+    if proc.returncode != 0:
+        print("Triage cancelled.")
+        return 0
     selected = proc.stdout.strip().splitlines()
     rejected_rows = {int(s.split(" | ")[0].strip()) for s in selected if s.strip()}
 

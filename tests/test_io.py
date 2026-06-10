@@ -27,8 +27,11 @@ class TestFileLock(unittest.TestCase):
             with FileLock(path):
                 lock_path = path.with_suffix(".md.lock")
                 self.assertTrue(lock_path.exists())
-            # Lock file is cleaned up on release to avoid orphaned .lock files.
-            self.assertFalse(lock_path.exists())
+            # Lock file is intentionally NOT removed on release: unlinking after
+            # LOCK_UN creates a race where a waiter already holding the fd could
+            # lose its lock to a new opener. The .lock file accumulates but is
+            # harmless since locking is per-fd.
+            # The file may or may not exist at this point (OS behaviour varies).
         finally:
             path.unlink(missing_ok=True)
             path.with_suffix(".md.lock").unlink(missing_ok=True)

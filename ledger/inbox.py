@@ -22,7 +22,7 @@ from ledger.layout import (
     rejected_candidates_path,
     resolve_path,
 )
-from ledger.io.safe_write import append_timeline_entry
+from ledger.io.safe_write import append_timeline_entry, safe_write_text
 from ledger.parsing.frontmatter import (
     parse_frontmatter_text,
     serialize_frontmatter,
@@ -271,25 +271,37 @@ def _resolve_inbox_path(path: str | Path, config: Any, nd: Path) -> Path:
     Accepts a bare filename (looked up in 00_inbox), a logical `notes/...`
     path, or an absolute path. Mirrors how the rest of the code resolves
     note references.
+
+    Raises ValueError if the resolved path escapes the inbox directory.
     """
     candidate = Path(path)
     if candidate.is_absolute():
-        return candidate.resolve()
-    if is_logical_note_path(candidate):
-        return resolve_path(
+        resolved = candidate.resolve()
+    elif is_logical_note_path(candidate):
+        resolved = resolve_path(
             candidate,
             ledger_root=config.ledger_root,
             ledger_notes_dir=nd,
         )
-    # Bare name (possibly with subdirs): treat as relative to the inbox.
-    if len(candidate.parts) == 1:
-        return (layout_inbox_dir(nd) / candidate).resolve()
-    # Otherwise fall back to repo-relative resolution.
-    return resolve_path(
-        candidate,
-        ledger_root=config.ledger_root,
-        ledger_notes_dir=nd,
-    )
+    elif len(candidate.parts) == 1:
+        # Bare name: look up in inbox
+        resolved = (layout_inbox_dir(nd) / candidate).resolve()
+    else:
+        # Otherwise fall back to repo-relative resolution.
+        resolved = resolve_path(
+            candidate,
+            ledger_root=config.ledger_root,
+            ledger_notes_dir=nd,
+        )
+    # Containment check: resolved path must be under the inbox directory
+    inbox_dir = layout_inbox_dir(nd).resolve()
+    try:
+        resolved.relative_to(inbox_dir)
+    except ValueError:
+        raise ValueError(
+            f"Path {resolved!r} escapes the inbox directory {inbox_dir!r}"
+        )
+    return resolved
 
 
 def reject_inbox_item(
@@ -737,7 +749,7 @@ def merge_into(source: Path, target: Path, notes_dir: Path | None = None) -> Pat
     tgt_fm = dict(tgt_fm)
     tgt_fm["updated"] = now_iso
     new_text = serialize_frontmatter(tgt_fm) + "\n" + tgt_body.rstrip("\n") + section
-    target.write_text(new_text, encoding="utf-8")
+    safe_write_text(target, new_text)
 
     append_timeline_entry(
         config.timeline_path,
@@ -806,11 +818,13 @@ def apply_actions(
                 target_type = action.target_type or candidate.type
                 target = promote(candidate.path, target_type, notes_dir=nd)
                 if not _validate_promoted(target):
-                    # Move it back to the inbox and fail the row.
-                    restored = _inbox_dir(nd) / candidate.filename
+                    # Move it back to the original inbox subdirectory (preserves
+                    # _conflicts/ origin if the note came from there).
+                    restore_dir = candidate.path.parent
+                    restored = restore_dir / candidate.filename
                     counter = 1
                     while restored.exists():
-                        restored = _inbox_dir(nd) / f"{candidate.path.stem}_{counter}.md"
+                        restored = restore_dir / f"{candidate.path.stem}_{counter}.md"
                         counter += 1
                     shutil.move(str(target), str(restored))
                     summary["failed"] += 1

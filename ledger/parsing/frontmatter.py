@@ -311,11 +311,19 @@ def to_parsed_frontmatter(raw: dict[str, Any]) -> ParsedFrontmatter:
     Returns:
         Structured ParsedFrontmatter dataclass.
     """
+    raw_conf = raw.get("confidence")
+    if raw_conf is not None and raw_conf != "":
+        try:
+            confidence = float(raw_conf)
+        except (TypeError, ValueError):
+            confidence = 0.5
+    else:
+        confidence = 0.5
     return ParsedFrontmatter(
         created=parse_timestamp(str(raw.get("created", ""))),
         updated=parse_timestamp(str(raw.get("updated", ""))),
         tags=normalize_tags(raw.get("tags")),
-        confidence=float(raw.get("confidence", 0.5)) if raw.get("confidence") else 0.5,
+        confidence=confidence,
         source=str(raw.get("source", "")).strip().lower(),
         scope=str(raw.get("scope", "")).strip().lower(),
         lang=str(raw.get("lang", "en")),

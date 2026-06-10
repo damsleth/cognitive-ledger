@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import warnings
 from dataclasses import asdict
+from datetime import datetime, timezone
 
 from ledger.io import safe_write_text
 from ledger.importers.state import relocate_legacy_file
@@ -40,7 +42,18 @@ def load_state(config: ObsidianLedgerConfig) -> ImportState:
 
     try:
         raw = json.loads(config.state_path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
+    except (json.JSONDecodeError, OSError) as exc:
+        ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        corrupt_path = config.state_path.with_name(f"{config.state_path.name}.corrupt-{ts}")
+        try:
+            config.state_path.rename(corrupt_path)
+        except OSError:
+            pass
+        warnings.warn(
+            f"Obsidian state file {config.state_path} was corrupt and has been reset "
+            f"(renamed to {corrupt_path.name}): {exc}",
+            stacklevel=2,
+        )
         return ImportState(
             version=1,
             vault_root=str(config.vault_root),
