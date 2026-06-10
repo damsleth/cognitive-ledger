@@ -759,14 +759,12 @@ def handle_signal_command(args):
         print(f"Signal summary written to {path}")
 
     elif sub == "stats":
-        from ledger import review
-
         stats = sig.signal_stats()
         print(f"Total signals: {stats['total']} (real: {stats.get('real_total', stats['total'])})")
-        activation = review.activation_status(
+        activation = sig.activation_status(
             stats["total"], real_signals=stats.get("real_total")
         )
-        print(f"Activation: [{activation['state']}] {activation['message']}")
+        print(f"Activation: [{activation.state.value}] {activation.message}")
         print(f"By type: {json.dumps(stats['by_type'], indent=2)}")
         if stats["top_notes"]:
             print("\nTop notes by hit count:")
@@ -928,6 +926,7 @@ def handle_init_command(args):
     try:
         # init_ledger runs `sheep index`, which prints progress to stdout.
         # In --json mode that would corrupt the envelope, so capture it.
+        _demo = bool(getattr(args, "demo", False))
         if as_json:
             import io as _io
             from contextlib import redirect_stdout
@@ -937,6 +936,7 @@ def handle_init_command(args):
                     voice_dna_path=args.voice_dna,
                     source_notes_dir=args.source_notes_dir,
                     ledger_notes_dir=args.ledger_notes_dir,
+                    demo=_demo,
                 )
         else:
             report = init_ledger(
@@ -944,6 +944,7 @@ def handle_init_command(args):
                 voice_dna_path=args.voice_dna,
                 source_notes_dir=args.source_notes_dir,
                 ledger_notes_dir=args.ledger_notes_dir,
+                demo=_demo,
             )
     except Exception as exc:
         _maybe_print_traceback()
@@ -993,6 +994,13 @@ def handle_init_command(args):
         print("Errors:")
         for item in report["errors"]:
             print(f"  ! {item}")
+
+    demo_created = [i for i in report.get("created", []) if i.startswith("demo: ")]
+    if demo_created:
+        print("\nDemo notes created:")
+        for item in demo_created:
+            print(f"  + {item[6:]}")
+        print("  (Delete these once you have created your own notes.)")
 
     print("\nNext steps:")
     print("  1. Run: ledger paths")
@@ -1884,6 +1892,8 @@ def main(argv=None) -> int:
     init_parser.add_argument("--voice-dna", default=None, help="Path to voice-dna JSON file")
     init_parser.add_argument("--source-notes-dir", dest="source_notes_dir", default=None)
     init_parser.add_argument("--ledger-notes-dir", dest="ledger_notes_dir", default=None)
+    init_parser.add_argument("--demo", action="store_true", dest="demo", default=False,
+                             help="Write 5 sample notes to illustrate ledger structure.")
     init_parser.add_argument("--json", action="store_true", dest="json", help="Emit action envelope on stdout.")
 
     ingest_parser = subparsers.add_parser("ingest", help="Source ingest pipeline")

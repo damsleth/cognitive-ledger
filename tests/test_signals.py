@@ -11,11 +11,15 @@ import pytest
 
 from ledger.signals import (
     SIGNAL_TYPES,
+    ActivationState,
+    ActivationStatus,
+    activation_status,
     append_signal,
     get_signal_score,
     load_signal_summary,
     read_signals,
     signal_stats,
+    signal_summary_if_active,
     summarize_signals,
     write_summary,
 )
@@ -245,3 +249,109 @@ class TestSignalStats:
         monkeypatch.setattr("ledger.signals.read_signals", counting_read)
         signal_stats(signals_path=signals_path)
         assert call_count == 1, f"read_signals called {call_count} times, expected 1"
+
+
+class TestActivationStatus:
+    """Tests for signals.activation_status() and ActivationStatus."""
+
+    def _make_config(self, weight: float = 0.0, threshold: int = 20):
+        from ledger.config import LedgerConfig
+        import tempfile
+        tmpdir = tempfile.mkdtemp()
+        cfg = LedgerConfig(ledger_root=tmpdir)
+        cfg.score_weight_signal = weight
+        cfg.signal_min_entries = threshold
+        return cfg
+
+    def test_active_state_when_weight_positive(self):
+        cfg = self._make_config(weight=0.3)
+        result = activation_status(5, config=cfg, real_signals=5)
+        assert result.state == ActivationState.ACTIVE
+        assert "0.3" in result.message
+
+    def test_ready_state_when_gate_count_at_threshold(self):
+        cfg = self._make_config(weight=0.0, threshold=20)
+        result = activation_status(100, config=cfg, real_signals=20)
+        assert result.state == ActivationState.READY
+        assert "score_weight_signal" in result.message
+
+    def test_accruing_state_when_below_threshold(self):
+        cfg = self._make_config(weight=0.0, threshold=20)
+        result = activation_status(5, config=cfg, real_signals=5)
+        assert result.state == ActivationState.ACCRUING
+        assert "5/20" in result.message
+
+    def test_real_signals_fallback_to_total(self):
+        """When real_signals not given, falls back to total_signals."""
+        cfg = self._make_config(weight=0.0, threshold=20)
+        result = activation_status(25, config=cfg)
+        assert result.state == ActivationState.READY
+
+    def test_as_dict_shape(self):
+        cfg = self._make_config(weight=0.3)
+        result = activation_status(5, config=cfg)
+        d = result.as_dict()
+        assert set(d.keys()) == {"state", "message"}
+        assert d["state"] == "active"
+        assert isinstance(d["message"], str)
+
+    def test_threshold_boundary_below(self):
+        cfg = self._make_config(weight=0.0, threshold=20)
+        result = activation_status(19, config=cfg, real_signals=19)
+        assert result.state == ActivationState.ACCRUING
+
+    def test_threshold_boundary_at(self):
+        cfg = self._make_config(weight=0.0, threshold=20)
+        result = activation_status(20, config=cfg, real_signals=20)
+        assert result.state == ActivationState.READY
+
+    def test_weight_zero_short_circuit_even_above_threshold(self):
+        """weight=0 never returns ACTIVE regardless of signal count."""
+        cfg = self._make_config(weight=0.0, threshold=5)
+        result = activation_status(100, config=cfg, real_signals=100)
+        assert result.state != ActivationState.ACTIVE
+
+    def test_returns_activation_status_instance(self):
+        cfg = self._make_config(weight=0.0, threshold=20)
+        result = activation_status(1, config=cfg)
+        assert isinstance(result, ActivationStatus)
+
+
+class TestSignalSummaryIfActive:
+    """Tests for signals.signal_summary_if_active()."""
+
+    def _make_config(self, weight: float = 0.0, threshold: int = 20):
+        from ledger.config import LedgerConfig
+        import tempfile
+        tmpdir = tempfile.mkdtemp()
+        cfg = LedgerConfig(ledger_root=tmpdir)
+        cfg.score_weight_signal = weight
+        cfg.signal_min_entries = threshold
+        return cfg
+
+    def test_returns_none_when_weight_zero(self):
+        cfg = self._make_config(weight=0.0)
+        result = signal_summary_if_active(cfg)
+        assert result is None
+
+    def test_returns_none_when_weight_positive_but_below_threshold(self):
+        cfg = self._make_config(weight=0.3, threshold=20)
+        summary = {"_meta": {"real_signals": 5, "total_signals": 10}}
+        with patch("ledger.signals.load_signal_summary", return_value=summary):
+            result = signal_summary_if_active(cfg)
+        assert result is None
+
+    def test_returns_summary_when_weight_positive_and_at_threshold(self):
+        cfg = self._make_config(weight=0.3, threshold=20)
+        summary = {"_meta": {"real_signals": 20, "total_signals": 25}, "notes": {}}
+        with patch("ledger.signals.load_signal_summary", return_value=summary):
+            result = signal_summary_if_active(cfg)
+        assert result is summary
+
+    def test_missing_real_signals_key_falls_back_to_total_signals(self):
+        """If 'real_signals' is absent in _meta, falls back to total_signals."""
+        cfg = self._make_config(weight=0.3, threshold=5)
+        summary = {"_meta": {"total_signals": 10}, "notes": {}}
+        with patch("ledger.signals.load_signal_summary", return_value=summary):
+            result = signal_summary_if_active(cfg)
+        assert result is summary
