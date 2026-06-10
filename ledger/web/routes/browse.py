@@ -15,12 +15,12 @@ def _corpus(request: Request) -> Corpus:
 
 
 @router.get("/", include_in_schema=False)
-async def root() -> RedirectResponse:
+def root() -> RedirectResponse:
     return RedirectResponse(url="/browse", status_code=307)
 
 
 @router.get("/browse", response_class=HTMLResponse)
-async def browse_index(request: Request) -> HTMLResponse:
+def browse_index(request: Request) -> HTMLResponse:
     corpus = _corpus(request)
     templates = request.app.state.templates
     types = corpus.note_types()
@@ -39,7 +39,7 @@ async def browse_index(request: Request) -> HTMLResponse:
 
 
 @router.get("/browse/{type_key}", response_class=HTMLResponse)
-async def browse_type(
+def browse_type(
     request: Request,
     type_key: str,
     status: str | None = None,

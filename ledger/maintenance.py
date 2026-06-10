@@ -29,6 +29,7 @@ from ledger.parsing import (
     parse_timestamp,
     normalize_tags,
     extract_title,
+    strip_private_tags,
 )
 from ledger import retrieval as retrieval_lib
 from ledger import timeline as timeline_lib
@@ -769,6 +770,7 @@ def _generate_tags(indices_dir: Path) -> None:
     for path in _iter_note_files(include_indices=False):
         rel = _relative(path)
         frontmatter, body = parse_frontmatter_text(path.read_text(encoding="utf-8"))
+        body = strip_private_tags(body)
         tags = normalize_tags(frontmatter.get("tags"))
         for tag in tags:
             by_tag.setdefault(tag, set()).add(rel)
@@ -836,6 +838,7 @@ def _generate_alias_suggestions(indices_dir: Path) -> None:
 
     for path in _iter_note_files(include_indices=False):
         frontmatter, body = parse_frontmatter_text(path.read_text(encoding="utf-8"))
+        body = strip_private_tags(body)
         tags = normalize_tags(frontmatter.get("tags"))
         unique_tags = sorted(set(tags))
         for tag_a, tag_b in combinations(unique_tags, 2):
@@ -1394,6 +1397,24 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("index", help="Regenerate derived indices")
     subparsers.add_parser("sleep", help="Show consolidation checklist")
 
+    duplicates_parser = subparsers.add_parser(
+        "duplicates",
+        help="Scan for duplicate or near-duplicate notes",
+    )
+    duplicates_parser.add_argument(
+        "--threshold",
+        type=float,
+        default=0.65,
+        dest="threshold",
+        help="Jaccard similarity threshold for content duplicates (default: 0.65)",
+    )
+    duplicates_parser.add_argument(
+        "--json",
+        action="store_true",
+        dest="json",
+        help="Emit JSON output",
+    )
+
     sync_parser = subparsers.add_parser("sync", help="Compare notes against sync baseline")
     mode_group = sync_parser.add_mutually_exclusive_group()
     mode_group.add_argument("--check", action="store_true", help="Check drift (default)")
@@ -1448,9 +1469,56 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "contradictions":
         from ledger.contradiction import cmd_sleep_contradictions
         return cmd_sleep_contradictions(apply=bool(getattr(args, "apply", False)))
+    if args.command == "duplicates":
+        return _cmd_duplicates(
+            threshold=float(getattr(args, "threshold", 0.65)),
+            as_json=as_json,
+        )
 
     parser.print_help()
     return 1
+
+
+def _cmd_duplicates(threshold: float = 0.65, as_json: bool = False) -> int:
+    """Scan for duplicate or near-duplicate notes."""
+    import json as _json
+    from ledger.config import get_config
+    from ledger.duplicates import scan_duplicates
+
+    cfg = get_config()
+    notes_dir = getattr(cfg, "ledger_notes_dir", None)
+    if not notes_dir:
+        if as_json:
+            print(_json.dumps({"error": "ledger_notes_dir not configured"}, ensure_ascii=False))
+        else:
+            print("error: ledger_notes_dir not configured", flush=True)
+        return 1
+
+    findings = scan_duplicates(notes_dir, jaccard_threshold=threshold)
+
+    if as_json:
+        out = {
+            "notes_dir": str(notes_dir),
+            "threshold": threshold,
+            "count": len(findings),
+            "findings": [f.to_dict() for f in findings],
+        }
+        print(_json.dumps(out, ensure_ascii=False))
+        return 0
+
+    print(f"duplicates scan: {len(findings)} finding(s) (threshold={threshold:.2f})")
+    if not findings:
+        print("  No duplicates found.")
+        return 0
+
+    for f in findings:
+        print(f"  [{f.reason}] score={f.score:.3f}")
+        print(f"    a: {f.path_a}")
+        print(f"    b: {f.path_b}")
+        if f.details:
+            for k, v in f.details.items():
+                print(f"    {k}: {v}")
+    return 0
 
 
 def _wrap_data_cmd(command: str, fn, as_json: bool) -> int:

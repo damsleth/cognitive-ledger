@@ -849,6 +849,7 @@ def apply_temporal_filter(
     from ledger.bitemporal import is_valid_at, parse_validity
 
     filtered: list[RetrievalCandidate] = []
+    _unmigrated_count = 0  # track notes with no valid_from for a single summary warning
     for c in candidates:
         vf_raw = c.valid_from
         vt_raw = c.valid_to
@@ -874,13 +875,8 @@ def apply_temporal_filter(
             # --as-of path: apply temporal filter strictly.
             if not vf_raw:
                 # Null valid_from = valid for all time (open left bound).
-                # Emit a per-note warning so the user knows migration would help.
-                _warnings.warn(
-                    f"Note {c.rel_path!r} has no valid_from; treating as valid "
-                    "for all time. Run `ledger migrate bitemporal --check` to "
-                    "see migration candidates.",
-                    stacklevel=4,
-                )
+                # Count rather than warn per-note to avoid spam.
+                _unmigrated_count += 1
                 # Still apply valid_to check if present.
                 fm_stub: dict[str, Any] = {}
                 if vt_raw:
@@ -895,6 +891,15 @@ def apply_temporal_filter(
                 fm_stub["valid_to"] = vt_raw
             if is_valid_at(fm_stub, as_of):
                 filtered.append(c)
+
+    # Emit at most one warning per call for all unmigrated notes.
+    if _unmigrated_count:
+        _warnings.warn(
+            f"{_unmigrated_count} note(s) have no valid_from; treating as valid "
+            "for all time. Run `ledger migrate bitemporal --check` to see "
+            "migration candidates.",
+            stacklevel=4,
+        )
     return filtered
 
 
