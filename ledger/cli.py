@@ -1311,8 +1311,67 @@ def handle_inbox_command(args):
                         if ids:
                             print(f"    source_ids: {', '.join(str(i) for i in ids)}")
 
+    elif sub == "conflicts":
+        import json as _json
+        from ledger.inbox import load_candidates_for_triage
+        from ledger.parsing.frontmatter import parse_frontmatter_text
+
+        do_json = getattr(args, "json", False)
+        candidates = load_candidates_for_triage()
+        conflicts = [c for c in candidates if c.conflict_classification == "contradict"]
+
+        def _extract_statement_section(body: str) -> str | None:
+            lines = body.splitlines()
+            in_section = False
+            section_lines: list[str] = []
+            for line in lines:
+                if line.strip() == "## Statement":
+                    in_section = True
+                    continue
+                if in_section:
+                    if line.startswith("## "):
+                        break
+                    section_lines.append(line)
+            if not section_lines:
+                return None
+            return "\n".join(section_lines).strip() or None
+
+        if do_json:
+            records = []
+            for c in conflicts:
+                statement = _extract_statement_section(c.body) or c.body.strip()
+                records.append({
+                    "filename": c.filename,
+                    "merge_with": c.merge_with,
+                    "conflict_classification": c.conflict_classification,
+                    "conflict_confidence": c.conflict_confidence,
+                    "conflict_reason": c.conflict_reason,
+                    "statement": statement,
+                })
+            print(_json.dumps({
+                "tool": "ledger",
+                "command": "inbox conflicts",
+                "ok": True,
+                "conflicts": records,
+            }, ensure_ascii=False))
+        else:
+            if not conflicts:
+                print("No conflict candidates.")
+                return
+            print(f"Conflict candidates ({len(conflicts)}):")
+            for c in conflicts:
+                statement = _extract_statement_section(c.body) or c.body.strip()
+                print(f"\n  {c.filename}")
+                print(f"    classification: {c.conflict_classification}")
+                if c.conflict_confidence is not None:
+                    print(f"    confidence:     {c.conflict_confidence:.2f}")
+                if c.conflict_reason:
+                    print(f"    reason:         {c.conflict_reason}")
+                print(f"    conflicts with: {c.merge_with or '(unknown)'}")
+                print(f"    statement:      {statement[:200]}")
+
     else:
-        print("Usage: ledger inbox {list|triage|cleanup|reject|rejected}")
+        print("Usage: ledger inbox {list|triage|cleanup|reject|rejected|conflicts}")
         raise SystemExit(1)
 
 
@@ -1915,6 +1974,17 @@ def main(argv=None) -> int:
         action="store_true",
         dest="json",
         help="Emit action envelope on stdout.",
+    )
+
+    conflicts_parser = inbox_subparsers.add_parser(
+        "conflicts",
+        help="List inbox candidates classified as contradictions",
+    )
+    conflicts_parser.add_argument(
+        "--json",
+        action="store_true",
+        dest="json",
+        help="Emit JSON envelope: {tool, command, ok, conflicts:[...]}",
     )
 
     import_cm_parser = subparsers.add_parser(

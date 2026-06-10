@@ -585,6 +585,10 @@ class InboxCandidate:
     body: str
     created: str
     promoted_by: str | None = None
+    dedup_similarity: float | None = None
+    conflict_classification: str | None = None
+    conflict_confidence: float | None = None
+    conflict_reason: str | None = None
 
 
 @dataclass
@@ -633,6 +637,14 @@ def _load_one_candidate(path: Path) -> InboxCandidate:
     except (TypeError, ValueError):
         confidence = 0.6
 
+    def _coerce_float(val: object) -> float | None:
+        if val is None or val == "":
+            return None
+        try:
+            return float(val)
+        except (TypeError, ValueError):
+            return None
+
     return InboxCandidate(
         path=path,
         filename=path.name,
@@ -645,6 +657,10 @@ def _load_one_candidate(path: Path) -> InboxCandidate:
         body=body,
         created=str(fm.get("created", "") or ""),
         promoted_by=str(fm.get("promoted_by", "") or "") or None,
+        dedup_similarity=_coerce_float(fm.get("dedup_similarity")),
+        conflict_classification=str(fm.get("conflict_classification", "") or "") or None,
+        conflict_confidence=_coerce_float(fm.get("conflict_confidence")),
+        conflict_reason=str(fm.get("conflict_reason", "") or "") or None,
     )
 
 
