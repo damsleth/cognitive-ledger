@@ -80,6 +80,42 @@ def create_app(
     app.state.corpus = corpus or Corpus(cfg)
     app.state.templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
 
+    # Inject statusbar data as Jinja2 globals so base.html can render without
+    # each route having to pass it explicitly.  The corpus reference is captured
+    # by closure so the lambda always reads the *current* corpus state.
+    _the_corpus = app.state.corpus
+
+    def _statusbar_notes() -> int:
+        return sum(t.count for t in _the_corpus.note_types())
+
+    def _statusbar_index_built_at() -> str:
+        try:
+            from ledger.retrieval import load_note_index
+
+            idx = load_note_index()
+            return str(idx.get("built", ""))
+        except Exception:
+            return ""
+
+    def _statusbar_embeddings() -> bool:
+        try:
+            semantic_root = _the_corpus.config.semantic_root
+            if not semantic_root.is_dir():
+                return False
+            for target_dir in semantic_root.iterdir():
+                if not target_dir.is_dir():
+                    continue
+                for backend_dir in target_dir.iterdir():
+                    if (backend_dir / "index.json").is_file():
+                        return True
+            return False
+        except Exception:
+            return False
+
+    app.state.templates.env.globals["statusbar_notes"] = _statusbar_notes
+    app.state.templates.env.globals["statusbar_index_built_at"] = _statusbar_index_built_at
+    app.state.templates.env.globals["statusbar_embeddings"] = _statusbar_embeddings
+
     # Singular type labels for the .note-type-pill chips: "facts" -> "fact",
     # "loops" -> "loop". Search hits already carry the singular label, but
     # BrowseItem.type holds the plural key, so we normalize in one place.
@@ -96,12 +132,14 @@ def create_app(
     # Local imports keep FastAPI optional at module import time.
     from ledger.web.routes import admin as admin_routes
     from ledger.web.routes import browse as browse_routes
+    from ledger.web.routes import graph as graph_routes
     from ledger.web.routes import note as note_routes
     from ledger.web.routes import search as search_routes
     from ledger.web.routes import signals as signals_routes
 
     app.include_router(admin_routes.router)
     app.include_router(browse_routes.router)
+    app.include_router(graph_routes.router)
     app.include_router(note_routes.router)
     app.include_router(search_routes.router)
     app.include_router(signals_routes.router)
