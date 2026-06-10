@@ -40,6 +40,16 @@ from ledger.retrieval_types import (
     ScoredResult,
     TimingInfo,
 )
+from ledger.scoring import (
+    COARSE_LADDER,
+    FINE_LADDER,
+    canonical_scope,
+    clamp01,
+    intent_adjustments,
+    overlap_components,
+    scope_component as _scope_component,
+    scope_matches,
+)
 
 try:
     from rank_bm25 import BM25Okapi
@@ -177,19 +187,10 @@ def parse_ts(value: str) -> dt.datetime | None:
         return None
 
 
-def canonical_scope(scope: str | None) -> str:
-    """Normalize scope value."""
-    lowered = str(scope or "").strip().lower()
-    if lowered == "life":
-        return "personal"
-    return lowered
-
-
-def scope_matches(note_scope: str, query_scope: str) -> bool:
-    """Check if note scope matches query scope."""
-    if query_scope == "all":
-        return True
-    return canonical_scope(note_scope) == query_scope
+# canonical_scope and scope_matches are imported from ledger.scoring above.
+# The names are re-exported here for back-compat with existing callers and
+# tests that do ``from ledger.retrieval import scope_matches``.
+__all__ = [*globals().get("__all__", []), "canonical_scope", "scope_matches"]
 
 
 def resolve_retrieval_mode(retrieval_mode: str | None) -> str:
@@ -1003,35 +1004,29 @@ def coarse_candidate_score(
     candidate_type = str(_candidate_value(candidate, "type", "") or "")
     status = str(_candidate_value(candidate, "status", "") or "")
 
-    if query_tokens:
-        lexical_overlap_count = len(note_tokens & query_tokens)
-        lexical_match = lexical_overlap_count / len(query_tokens)
-        tag_overlap_count = len(tag_tokens & query_tokens)
-        tag_overlap = tag_overlap_count / len(query_tokens)
-    else:
-        lexical_overlap_count = 0
-        lexical_match = 0.0
-        tag_overlap_count = 0
-        tag_overlap = 0.0
+    lexical_match, tag_overlap, lexical_overlap_count, tag_overlap_count = overlap_components(
+        note_tokens, tag_tokens, query_tokens
+    )
+    sm = _scope_component(str(_candidate_value(candidate, "scope", "") or ""), query_scope)
+    score = (0.70 * lexical_match) + (0.20 * tag_overlap) + (0.10 * sm)
 
-    scope_match = 1.0 if scope_matches(str(_candidate_value(candidate, "scope", "") or ""), query_scope) else 0.0
-    score = (0.70 * lexical_match) + (0.20 * tag_overlap) + (0.10 * scope_match)
-
-    if query_scope != "all":
-        score += 0.03 if scope_match >= 1.0 else -0.03
-    if candidate_type == "loop" and status == "closed" and not history_mode:
-        score -= 0.05
-    if history_mode and candidate_type == "loop" and status == "closed":
-        score += 0.05
-    if loop_mode and candidate_type == "loop" and status == "open":
-        score += 0.04
-    if preference_mode and candidate_type == "pref":
-        score += 0.04
+    delta, _ = intent_adjustments(
+        COARSE_LADDER,
+        candidate_type=candidate_type,
+        status=status,
+        query_scope=query_scope,
+        sm=sm,
+        history_mode=history_mode,
+        loop_mode=loop_mode,
+        preference_mode=preference_mode,
+        include_reasons=False,
+    )
+    score += delta
 
     return score, {
         "lexical_overlap_count": lexical_overlap_count,
         "tag_overlap_count": tag_overlap_count,
-        "scope_match": scope_match,
+        "scope_match": sm,
     }
 
 
@@ -1203,18 +1198,11 @@ def score_candidate(
     candidate_type = str(_candidate_value(candidate, "type", "") or "")
     status = str(_candidate_value(candidate, "status", "") or "")
 
-    if query_tokens:
-        lexical_overlap_count = len(note_tokens & query_tokens)
-        lexical_match = lexical_overlap_count / len(query_tokens)
-        tag_overlap_count = len(tag_tokens & query_tokens)
-        tag_overlap = tag_overlap_count / len(query_tokens)
-    else:
-        lexical_overlap_count = 0
-        lexical_match = 0.0
-        tag_overlap_count = 0
-        tag_overlap = 0.0
-
-    scope_match = 1.0 if scope_matches(str(_candidate_value(candidate, "scope", "") or ""), query_scope) else 0.0
+    lexical_match, tag_overlap, lexical_overlap_count, tag_overlap_count = overlap_components(
+        note_tokens, tag_tokens, query_tokens
+    )
+    sm = _scope_component(str(_candidate_value(candidate, "scope", "") or ""), query_scope)
+    scope_match = sm  # alias used in ScoreComponents below
     recency = compute_recency_component(_candidate_value(candidate, "updated_ts"), now_dt)
     confidence = float(_candidate_value(candidate, "confidence", 0.0) or 0.0)
 
@@ -1223,7 +1211,7 @@ def score_candidate(
         (config.score_weight_bm25 * bm25_score)
         + (config.score_weight_lexical * lexical_match)
         + (config.score_weight_tag * tag_overlap)
-        + (config.score_weight_scope * scope_match)
+        + (config.score_weight_scope * sm)
         + (config.score_weight_recency * recency)
         + (config.score_weight_confidence * confidence)
     )
@@ -1270,40 +1258,20 @@ def score_candidate(
         reasons.append(f"lexical_overlap={lexical_overlap_count}")
     if include_reasons and tag_overlap_count > 0:
         reasons.append(f"tag_overlap={tag_overlap_count}")
-    if query_scope != "all":
-        if scope_match >= 1.0:
-            score += 0.05
-            if include_reasons:
-                reasons.append("scope_boost")
-        else:
-            score -= 0.05
-            if include_reasons:
-                reasons.append("scope_demote")
-    if candidate_type == "loop" and status == "closed" and not history_mode:
-        score -= 0.20
-        if include_reasons:
-            reasons.append("closed_loop_penalty")
-    if history_mode and candidate_type == "loop":
-        if status == "closed":
-            score += 0.12
-            if include_reasons:
-                reasons.append("history_closed_loop_boost")
-        elif status == "open":
-            score -= 0.05
-            if include_reasons:
-                reasons.append("history_open_loop_demote")
-    if loop_mode and candidate_type == "loop" and status == "open":
-        score += 0.07
-        if include_reasons:
-            reasons.append("open_loop_intent_boost")
-    if preference_mode and candidate_type == "pref":
-        score += 0.07
-        if include_reasons:
-            reasons.append("preference_intent_boost")
-    if preference_mode and candidate_type not in {"pref", "fact"}:
-        score -= 0.05
-        if include_reasons:
-            reasons.append("preference_non_pref_demote")
+
+    intent_delta, intent_reasons = intent_adjustments(
+        FINE_LADDER,
+        candidate_type=candidate_type,
+        status=status,
+        query_scope=query_scope,
+        sm=sm,
+        history_mode=history_mode,
+        loop_mode=loop_mode,
+        preference_mode=preference_mode,
+        include_reasons=include_reasons,
+    )
+    score += intent_delta
+    reasons.extend(intent_reasons)
 
     if include_reasons and expansion_events:
         alias_summary = ", ".join(sorted({f"{e['alias']}->{e['phrase']}" for e in expansion_events}))
@@ -1316,7 +1284,7 @@ def score_candidate(
     if include_reasons and prior > 0:
         reasons.append(f"prior={prior:.3f}")
 
-    score = max(0.0, min(1.0, score))
+    score = clamp01(score)
     return score, reasons, ScoreComponents(
         bm25_score=bm25_score,
         lexical_match=lexical_match,
@@ -1472,17 +1440,8 @@ def rank_lexical(
 
     # Load signal summary once if signal scoring is enabled
     config = _cfg()
-    _signal_summary: dict[str, Any] | None = None
-    if config.score_weight_signal > 0:
-        from ledger.signals import load_signal_summary
-        summary = load_signal_summary()
-        # Gate on REAL (non-synthetic) signals only — seeded events must not
-        # artificially unlock signal-aware ranking (spec: "seeded events do not
-        # artificially activate scoring").
-        _meta = summary.get("_meta", {})
-        real_total = _meta.get("real_signals", _meta.get("total_signals", 0))
-        if real_total >= config.signal_min_entries:
-            _signal_summary = summary
+    from ledger.signals import signal_summary_if_active
+    _signal_summary: dict[str, Any] | None = signal_summary_if_active(config)
     include_reasons = True if mode == "legacy" else (limit <= _cfg().detailed_reasons_limit)
     if progressive_disclosure_active:
         include_reasons = False

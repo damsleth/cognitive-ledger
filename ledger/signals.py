@@ -8,11 +8,28 @@ and consolidation.
 from __future__ import annotations
 
 import datetime as dt
+import enum
 import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from ledger.config import get_config
+
+
+class ActivationState(enum.Enum):
+    ACTIVE = "active"
+    READY = "ready"
+    ACCRUING = "accruing"
+
+
+@dataclass(frozen=True)
+class ActivationStatus:
+    state: ActivationState
+    message: str
+
+    def as_dict(self) -> dict[str, str]:
+        return {"state": self.state.value, "message": self.message}
 
 
 SIGNAL_TYPES = (
@@ -438,3 +455,73 @@ def signal_stats(signals_path: Path | None = None) -> dict[str, Any]:
         "corrections_pending": len(corrections_pending),
         "retrieval_misses": summary.get("retrieval_misses", {}),
     }
+
+
+def activation_status(
+    total_signals: int,
+    config=None,
+    real_signals: int | None = None,
+) -> ActivationStatus:
+    """Describe whether signal feedback is influencing retrieval ranking.
+
+    Three states:
+      - ``active``: ``score_weight_signal > 0`` — signals affect ranking.
+      - ``ready``: enough real signals accrued but the weight is still 0, so
+        they are ignored — nudge the user to validate and turn it on.
+      - ``accruing``: below ``signal_min_entries`` real signals — review more
+        notes first.
+
+    Args:
+        total_signals: All signal events (including synthetic).
+        config: LedgerConfig instance (uses global config if None).
+        real_signals: Non-synthetic signal count.  When provided, the
+            activation gate uses this count instead of ``total_signals``
+            so that LLM-seeded events do not artificially trigger activation.
+            Falls back to ``total_signals`` when absent (backward-compatible).
+    """
+    config = config or get_config()
+    weight = config.score_weight_signal
+    threshold = config.signal_min_entries
+
+    # Gate uses real signals only; seeded events bootstrap ranking but do not
+    # count towards the human-feedback threshold.
+    gate_count = real_signals if real_signals is not None else total_signals
+
+    if weight > 0:
+        return ActivationStatus(
+            state=ActivationState.ACTIVE,
+            message=f"Signal-aware ranking is ON (score_weight_signal={weight:g}).",
+        )
+    if gate_count >= threshold:
+        return ActivationStatus(
+            state=ActivationState.READY,
+            message=(
+                f"{gate_count} real signals (≥ {threshold}) but score_weight_signal "
+                "is 0.0, so ranking ignores them. Validate with `ledger ab run` "
+                "then raise the weight in config.yaml to activate."
+            ),
+        )
+    return ActivationStatus(
+        state=ActivationState.ACCRUING,
+        message=(
+            f"{gate_count}/{threshold} real signals — review more notes "
+            "(`ledger review`) to reach the activation threshold."
+        ),
+    )
+
+
+def signal_summary_if_active(config=None) -> dict[str, Any] | None:
+    """Return loaded signal summary when scoring is enabled and threshold met.
+
+    Returns the summary dict when ``score_weight_signal > 0`` AND the
+    ``_meta`` real-signal count is >= ``signal_min_entries``, else ``None``.
+    """
+    config = config or get_config()
+    if config.score_weight_signal <= 0:
+        return None
+    summary = load_signal_summary()
+    _meta = summary.get("_meta", {})
+    real_total = _meta.get("real_signals", _meta.get("total_signals", 0))
+    if real_total >= config.signal_min_entries:
+        return summary
+    return None
