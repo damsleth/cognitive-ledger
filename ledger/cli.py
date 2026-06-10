@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
+import traceback
 from pathlib import Path
 
 from ledger.config import get_config
@@ -37,6 +39,12 @@ def __getattr__(name):
     if field is not None:
         return getattr(get_config(), field)
     raise AttributeError(f"module 'ledger.cli' has no attribute {name!r}")
+
+
+def _maybe_print_traceback():
+    """Print the current exception traceback to stderr when LEDGER_DEBUG=1."""
+    if os.environ.get("LEDGER_DEBUG"):
+        print(traceback.format_exc(), file=sys.stderr)
 
 
 def load_embeddings_module():
@@ -338,6 +346,7 @@ def handle_embed_build_command(args):
             resolve_embed_model_fn=semantic_lib.resolve_embed_model,
         )
     except Exception as exc:
+        _maybe_print_traceback()
         if args.json:
             from ledger.conventions import (
                 EXIT_USER_ERROR, action_envelope, emit_action,
@@ -367,6 +376,7 @@ def handle_embed_status_command(args):
             load_embeddings_module_fn=lambda: load_embeddings_module(),
         )
     except Exception as exc:
+        _maybe_print_traceback()
         if args.json:
             from ledger.conventions import (
                 EXIT_USER_ERROR, data_error, emit_data_error,
@@ -415,6 +425,7 @@ def handle_embed_clean_command(args):
             load_embeddings_module_fn=lambda: load_embeddings_module(),
         )
     except Exception as exc:
+        _maybe_print_traceback()
         if args.json:
             from ledger.conventions import (
                 EXIT_USER_ERROR, action_envelope, emit_action,
@@ -589,6 +600,7 @@ def handle_context_command(args):
         try:
             write_context(output, notes_dir)
         except Exception as exc:
+            _maybe_print_traceback()
             if as_json:
                 from ledger.conventions import (
                     EXIT_USER_ERROR, action_envelope, emit_action,
@@ -617,6 +629,7 @@ def handle_context_command(args):
         try:
             write_context_profiles(output_dir, notes_dir)
         except Exception as exc:
+            _maybe_print_traceback()
             if as_json:
                 from ledger.conventions import (
                     EXIT_USER_ERROR, action_envelope, emit_action,
@@ -678,7 +691,7 @@ def handle_context_command(args):
                         print(f"- Top retrieval miss: \"{top_miss}\" ({misses[top_miss]}x)")
                     print()
             except Exception:
-                pass
+                _maybe_print_traceback()
     elif fmt == "identity":
         identity = get_notes("identity", notes_dir=notes_dir)
         if not identity:
@@ -933,6 +946,7 @@ def handle_init_command(args):
                 ledger_notes_dir=args.ledger_notes_dir,
             )
     except Exception as exc:
+        _maybe_print_traceback()
         if as_json:
             from ledger.conventions import (
                 EXIT_USER_ERROR, action_envelope, emit_action,
@@ -1031,6 +1045,7 @@ def handle_ingest_command(args):
         try:
             record_ingest(args.source, args.notes, source_root=args.source_notes_dir)
         except Exception as exc:
+            _maybe_print_traceback()
             if as_json:
                 from ledger.conventions import (
                     EXIT_USER_ERROR, action_envelope, emit_action,
