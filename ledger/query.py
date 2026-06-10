@@ -195,6 +195,25 @@ _VIEW_FORMATTERS = {
 }
 
 
+def _tier1_result_to_json(item: dict[str, Any]) -> dict[str, Any]:
+    """Serialise a single tier-1 result for JSON output.
+
+    Metadata is deliberately omitted (privacy). Content is capped at 280 chars.
+    """
+    content = item.get("content", "") or ""
+    return {
+        "_tier": 1,
+        "id": item.get("id", ""),
+        "kind": item.get("kind", ""),
+        "source": item.get("source", ""),
+        "timestamp": item.get("timestamp", ""),
+        "subject": item.get("subject", ""),
+        "content": content[:280],
+        "score": round(float(item.get("score", 0.0)), 6),
+        "rrf": round(float(item.get("rrf", 0.0)), 8),
+    }
+
+
 def query_result_to_json(
     payload: RetrievalResult | dict[str, Any],
     *,
@@ -202,6 +221,23 @@ def query_result_to_json(
     bundle_word_budget: int = 1200,
     view: str = "context",
 ) -> dict[str, Any]:
+    # Handle fused payload (contains "fusion" key) — already a dict.
+    if isinstance(payload, dict) and "fusion" in payload:
+        out = dict(payload)
+        # Re-serialise results with tier-aware routing.
+        formatter = _VIEW_FORMATTERS.get(view, _result_context_fields)
+        serialised: list[dict[str, Any]] = []
+        for item in payload.get("results", []):
+            if item.get("_tier") == 1:
+                serialised.append(_tier1_result_to_json(item))
+            else:
+                # Tier-2: use the standard formatter on the dict.
+                serialised.append(formatter(item))
+        out["results"] = serialised
+        # Copy fusion block verbatim.
+        out["fusion"] = payload["fusion"]
+        return out
+
     formatter = _VIEW_FORMATTERS.get(view, _result_context_fields)
     out = {
         "query": payload_get(payload, "query"),
@@ -917,11 +953,72 @@ def bundle_results(results: list[ScoredResult | dict[str, Any]], word_budget: in
     return bundle
 
 
+def _format_fused(payload: dict[str, Any], view: str = "context") -> str:
+    """Format a fused (tier-1 + tier-2) result payload as human-readable text."""
+    fusion = payload.get("fusion", {})
+    tier2_count = fusion.get("tier2_count", 0)
+    tier1_count = fusion.get("tier1_count", 0)
+    boost = fusion.get("tier2_boost", 0.0)
+    unavailable = fusion.get("unavailable_reason")
+
+    results = payload.get("results", [])
+    tier2_results = [r for r in results if r.get("_tier") == 2]
+    tier1_results_list = [r for r in results if r.get("_tier") == 1]
+
+    lines = [
+        f"query: {payload.get('query', '')}",
+        f"scope: {payload.get('scope', 'all')}",
+        f"retrieval_mode: {payload.get('retrieval_mode', 'legacy')}",
+        f"fusion: tier2={tier2_count} tier1={tier1_count} boost={boost}",
+    ]
+    if unavailable:
+        lines.append(f"tier1_warning: {unavailable}")
+
+    lines.append(f"\nTier 2 results ({len(tier2_results)}):")
+    for item in tier2_results:
+        wc = item.get("word_count", 0) or 0
+        cost_hint = f" ~{wc}w" if wc else ""
+        rrf = item.get("rrf", 0.0)
+        rationale = ", ".join((item.get("reasons") or [])[:3])
+        level = item.get("disclosure_level", "")
+        level_segment = f"{level} | " if level else ""
+        lines.append(
+            f"- {rrf:.4f} | {item.get('type', '')} | "
+            f"{item.get('rel_path', '') or item.get('path', '')}{cost_hint} | "
+            f"{level_segment}{rationale}"
+        )
+
+    lines.append(f"\nTier 1 results ({len(tier1_results_list)}):")
+    for item in tier1_results_list:
+        # Display: rrf | kind | display_id | timestamp
+        # build display_id from id
+        raw_id = item.get("id", "")
+        display_id = f"yaams:{raw_id[:24]}" if raw_id else "yaams:?"
+        ts = item.get("timestamp", "")[:10] if item.get("timestamp") else ""
+        rrf = item.get("rrf", 0.0)
+        subject = item.get("subject", "")
+        content = item.get("content", "")
+        preview = shorten(content, 80) if content else ""
+        lines.append(
+            f"- {rrf:.4f} | {item.get('kind', '')} | {display_id} | {ts}"
+        )
+        if subject:
+            lines.append(f"  subject: {subject}")
+        if preview:
+            lines.append(f"  \"{preview}\"")
+
+    return "\n".join(lines)
+
+
 def format_query_results_human(
     payload: RetrievalResult | dict[str, Any],
     include_bundle: bool = False,
     view: str = "context",
 ) -> str:
+    # Check for fused payload (contains "fusion" key).
+    if isinstance(payload, dict) and "fusion" in payload:
+        return _format_fused(payload, view=view)
+
     results = payload_results(payload)
     lines = [
         f"query: {_payload_get(payload, 'query', '')}",
