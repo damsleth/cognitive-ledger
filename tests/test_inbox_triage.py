@@ -78,14 +78,29 @@ class TriageTestBase(unittest.TestCase):
                entity: str = "E", title: str = "Title",
                promoted_by: str = "yaams", dest: Path | None = None,
                created: str = "2026-06-01T10:00:00Z",
-               merge_with: str | None = None) -> Path:
+               merge_with: str | None = None,
+               conflict_classification: str | None = None,
+               conflict_confidence: float | None = None,
+               conflict_reason: str | None = None,
+               dedup_similarity: float | None = None) -> Path:
         dest = dest or self.inbox
         text = _VALID_NOTE.format(sig=sig, entity=entity, title=title)
         if promoted_by != "yaams":
             text = text.replace("promoted_by: yaams\n", f"promoted_by: {promoted_by}\n")
         text = text.replace("created: 2026-06-01T10:00:00Z", f"created: {created}")
+        extra_fm = ""
         if merge_with:
-            text = text.replace("---\n\n# ", f"merge_with: {merge_with}\n---\n\n# ", 1)
+            extra_fm += f"merge_with: {merge_with}\n"
+        if dedup_similarity is not None:
+            extra_fm += f"dedup_similarity: {dedup_similarity}\n"
+        if conflict_classification is not None:
+            extra_fm += f"conflict_classification: {conflict_classification}\n"
+        if conflict_confidence is not None:
+            extra_fm += f"conflict_confidence: {conflict_confidence}\n"
+        if conflict_reason is not None:
+            extra_fm += f"conflict_reason: {conflict_reason}\n"
+        if extra_fm:
+            text = text.replace("---\n\n# ", f"{extra_fm}---\n\n# ", 1)
         path = dest / name
         path.write_text(text, encoding="utf-8")
         return path
@@ -422,6 +437,104 @@ class InteractiveLoopTests(TriageTestBase):
         rc, out = self._run(["m 1", "q", "y"])
         self.assertIn("merged:   1", out)
         self.assertIn("## Added from inbox candidate", target.read_text(encoding="utf-8"))
+
+
+class TestConflictMetadata(TriageTestBase):
+    """E7: conflict frontmatter parsed into InboxCandidate."""
+
+    def test_load_candidates_reads_conflict_metadata(self):
+        self._write(
+            "fact__conflict_one.md",
+            sig="aabb1122",
+            title="Conflict One",
+            merge_with="notes/02_facts/fact__existing.md",
+            dedup_similarity=0.84,
+            conflict_classification="contradict",
+            conflict_confidence=0.91,
+            conflict_reason="candidate contradicts existing date",
+        )
+        from ledger.inbox import load_candidates_for_triage
+        candidates = load_candidates_for_triage(self.cfg.ledger_notes_dir)
+        self.assertEqual(len(candidates), 1)
+        c = candidates[0]
+        self.assertEqual(c.merge_with, "notes/02_facts/fact__existing.md")
+        self.assertAlmostEqual(c.dedup_similarity, 0.84)
+        self.assertEqual(c.conflict_classification, "contradict")
+        self.assertAlmostEqual(c.conflict_confidence, 0.91)
+        self.assertEqual(c.conflict_reason, "candidate contradicts existing date")
+
+    def test_load_candidates_conflict_fields_default_none(self):
+        self._write("fact__plain.md", sig="11223344", title="Plain")
+        from ledger.inbox import load_candidates_for_triage
+        candidates = load_candidates_for_triage(self.cfg.ledger_notes_dir)
+        c = candidates[0]
+        self.assertIsNone(c.conflict_classification)
+        self.assertIsNone(c.conflict_confidence)
+        self.assertIsNone(c.conflict_reason)
+        self.assertIsNone(c.dedup_similarity)
+
+
+class TestRenderTableConflictColumn(TriageTestBase):
+    """E8: conflict? column in table render."""
+
+    def test_render_table_shows_conflict_column(self):
+        self._write(
+            "fact__contradict.md",
+            sig="aabbccdd",
+            title="Contradict One",
+            merge_with="notes/02_facts/fact__existing.md",
+            conflict_classification="contradict",
+        )
+        self._write("fact__supplement.md", sig="11223344", title="Supplement One",
+                    conflict_classification="supplement")
+        self._write("fact__plain.md", sig="deadbeef", title="Plain")
+
+        from ledger.inbox import load_candidates_for_triage
+        from ledger.inbox_triage import _render_table
+        import io, unittest.mock as mock
+        candidates = load_candidates_for_triage(self.cfg.ledger_notes_dir)
+        output = io.StringIO()
+        with mock.patch("sys.stdout", output):
+            _render_table(candidates, {})
+        text = output.getvalue()
+        self.assertIn("conflict?", text)
+        self.assertIn("CONTRADICT", text)
+        self.assertIn("SUPPLEMENT", text)
+        self.assertIn("-", text)
+
+
+class TestRangeAcceptSkipsContradict(InteractiveLoopTests):
+    """E7: range-accept drops contradict rows and single-index still works."""
+
+    def test_range_accept_skips_contradict_rows(self):
+        self._write("fact__aa.md", sig="0001", title="AA",
+                    conflict_classification="contradict",
+                    merge_with="notes/02_facts/fact__x.md")
+        self._write("fact__bb.md", sig="0002", title="BB")
+        self._write("fact__cc.md", sig="0003", title="CC",
+                    conflict_classification="contradict",
+                    merge_with="notes/02_facts/fact__y.md")
+
+        import io, unittest.mock as mock
+        buf = io.StringIO()
+        with mock.patch("sys.stdout", buf):
+            rc, out = self._run(["a 1-3", "q", "y"])
+        combined = buf.getvalue() + out
+        self.assertIn("skipping", combined.lower())
+        # fact__bb.md should be accepted; contradicts should remain
+        self.assertTrue((self.inbox / "fact__aa.md").exists() or
+                        (self.inbox / "fact__cc.md").exists(),
+                        "At least one contradict file should remain")
+
+    def test_single_accept_allows_contradict_row(self):
+        self._write("fact__contra.md", sig="aaaa", title="Contra",
+                    conflict_classification="contradict",
+                    merge_with="notes/02_facts/fact__x.md")
+
+        rc, out = self._run(["a 1", "q", "y"])
+        # Single-index accept does NOT filter contradicts
+        self.assertNotIn("skipping", out.lower())
+        self.assertIn("accepted:", out)
 
 
 if __name__ == "__main__":
