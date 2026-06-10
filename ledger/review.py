@@ -254,52 +254,8 @@ def activation_status(
     config=None,
     real_signals: int | None = None,
 ) -> dict[str, Any]:
-    """Describe whether signal feedback is influencing retrieval ranking.
-
-    Three states:
-      - ``active``: ``score_weight_signal > 0`` — signals affect ranking.
-      - ``ready``: enough real signals accrued but the weight is still 0, so
-        they are ignored — nudge the user to validate and turn it on.
-      - ``accruing``: below ``signal_min_entries`` real signals — review more
-        notes first.
-
-    Args:
-        total_signals: All signal events (including synthetic).
-        config: LedgerConfig instance (uses global config if None).
-        real_signals: Non-synthetic signal count.  When provided, the
-            activation gate uses this count instead of ``total_signals``
-            so that LLM-seeded events do not artificially trigger activation.
-            Falls back to ``total_signals`` when absent (backward-compatible).
-    """
-    config = config or get_config()
-    weight = config.score_weight_signal
-    threshold = config.signal_min_entries
-
-    # Gate uses real signals only; seeded events bootstrap ranking but do not
-    # count towards the human-feedback threshold.
-    gate_count = real_signals if real_signals is not None else total_signals
-
-    if weight > 0:
-        return {
-            "state": "active",
-            "message": f"Signal-aware ranking is ON (score_weight_signal={weight:g}).",
-        }
-    if gate_count >= threshold:
-        return {
-            "state": "ready",
-            "message": (
-                f"{gate_count} real signals (≥ {threshold}) but score_weight_signal "
-                "is 0.0, so ranking ignores them. Validate with `ledger ab run` "
-                "then raise the weight in config.yaml to activate."
-            ),
-        }
-    return {
-        "state": "accruing",
-        "message": (
-            f"{gate_count}/{threshold} real signals — review more notes "
-            "(`ledger review`) to reach the activation threshold."
-        ),
-    }
+    """Delegation shim — logic lives in :func:`ledger.signals.activation_status`."""
+    return signals.activation_status(total_signals, config=config, real_signals=real_signals).as_dict()
 
 
 def dashboard_data() -> dict[str, Any]:
