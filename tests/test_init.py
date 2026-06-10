@@ -88,5 +88,82 @@ class InitTests(unittest.TestCase):
             self.assertEqual(stdout.getvalue().strip(), str(config.ledger_notes_dir))
 
 
+    def test_init_demo_creates_sample_notes(self):
+        """--demo flag writes 5 sample notes into the ledger."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            tmp = Path(temp_dir)
+            repo_root = tmp / "repo"
+            ledger_notes_dir = tmp / "ledger-notes"
+            source_notes_dir = tmp / "notes"
+            repo_root.mkdir()
+            os.environ["XDG_CONFIG_HOME"] = str(tmp / "xdg")
+
+            report = init_ledger(
+                root=repo_root,
+                ledger_notes_dir=ledger_notes_dir,
+                source_notes_dir=source_notes_dir,
+                demo=True,
+            )
+
+            demo_created = [i for i in report["created"] if i.startswith("demo: ")]
+            self.assertEqual(len(demo_created), 5)
+            # All 5 demo files should exist on disk.
+            from ledger.init import DEMO_NOTES
+            for rel_path, _ in DEMO_NOTES:
+                self.assertTrue((ledger_notes_dir / rel_path).is_file(), rel_path)
+
+    def test_init_demo_false_creates_no_demo_notes(self):
+        """Without --demo, no demo notes are written."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            tmp = Path(temp_dir)
+            repo_root = tmp / "repo"
+            ledger_notes_dir = tmp / "ledger-notes"
+            source_notes_dir = tmp / "notes"
+            repo_root.mkdir()
+            os.environ["XDG_CONFIG_HOME"] = str(tmp / "xdg")
+
+            report = init_ledger(
+                root=repo_root,
+                ledger_notes_dir=ledger_notes_dir,
+                source_notes_dir=source_notes_dir,
+                demo=False,
+            )
+
+            demo_items = [i for i in report["created"] + report["skipped"] if "demo" in i]
+            self.assertEqual(demo_items, [])
+
+    def test_init_demo_idempotent(self):
+        """Running init with --demo twice skips already-existing demo notes."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            tmp = Path(temp_dir)
+            repo_root = tmp / "repo"
+            ledger_notes_dir = tmp / "ledger-notes"
+            source_notes_dir = tmp / "notes"
+            repo_root.mkdir()
+            os.environ["XDG_CONFIG_HOME"] = str(tmp / "xdg")
+
+            # First run creates them.
+            report1 = init_ledger(
+                root=repo_root,
+                ledger_notes_dir=ledger_notes_dir,
+                source_notes_dir=source_notes_dir,
+                demo=True,
+            )
+            created1 = [i for i in report1["created"] if i.startswith("demo: ")]
+            self.assertEqual(len(created1), 5)
+
+            # Second run skips them.
+            report2 = init_ledger(
+                root=repo_root,
+                ledger_notes_dir=ledger_notes_dir,
+                source_notes_dir=source_notes_dir,
+                demo=True,
+            )
+            skipped2 = [i for i in report2["skipped"] if i.startswith("demo: ")]
+            created2 = [i for i in report2["created"] if i.startswith("demo: ")]
+            self.assertEqual(len(skipped2), 5)
+            self.assertEqual(created2, [])
+
+
 if __name__ == "__main__":
     unittest.main()

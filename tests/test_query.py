@@ -457,3 +457,47 @@ def test_query_result_to_json_builds_cli_shape(tmp_path):
     finally:
         reset_config()
         importlib.reload(query)
+
+
+# ---------------------------------------------------------------------------
+# Profile resolution in handle_query_command
+# ---------------------------------------------------------------------------
+
+def test_resolve_query_args_no_profile():
+    """Without a profile, defaults apply: scope=all, limit=8."""
+    from types import SimpleNamespace
+    from ledger.cli import _resolve_query_args_from_profile
+    args = SimpleNamespace(profile=None, scope=None, limit=None, retrieval_mode=None)
+    scope, limit, mode = _resolve_query_args_from_profile(args)
+    assert scope == "all"
+    assert limit == 8
+
+
+def test_resolve_query_args_profile_work():
+    """With --profile work, scope and limit come from the profile."""
+    from types import SimpleNamespace
+    from ledger.cli import _resolve_query_args_from_profile
+    args = SimpleNamespace(profile="work", scope=None, limit=None, retrieval_mode=None)
+    scope, limit, mode = _resolve_query_args_from_profile(args)
+    assert scope == "work"
+    assert isinstance(limit, int)
+    assert limit > 0
+
+
+def test_resolve_query_args_explicit_overrides_profile():
+    """Explicit --scope/--limit flags override profile defaults."""
+    from types import SimpleNamespace
+    from ledger.cli import _resolve_query_args_from_profile
+    args = SimpleNamespace(profile="work", scope="all", limit=3, retrieval_mode=None)
+    scope, limit, mode = _resolve_query_args_from_profile(args)
+    assert scope == "all"
+    assert limit == 3
+
+
+def test_resolve_query_args_zero_limit_not_replaced_by_profile():
+    """Explicit limit=0 must NOT be silently replaced by the profile default."""
+    from types import SimpleNamespace
+    from ledger.cli import _resolve_query_args_from_profile
+    args = SimpleNamespace(profile="work", scope=None, limit=0, retrieval_mode=None)
+    scope, limit, mode = _resolve_query_args_from_profile(args)
+    assert limit == 0  # validate_limit will catch this as invalid

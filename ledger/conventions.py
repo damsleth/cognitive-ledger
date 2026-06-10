@@ -204,6 +204,9 @@ class DoctorFinding:
   severity: str
   message: str
   hint: str | None = None
+  fixable: bool = False
+  fixed: bool = False
+  fix_detail: str | None = None
 
   def to_dict(self) -> dict[str, Any]:
     out: dict[str, Any] = {
@@ -213,6 +216,12 @@ class DoctorFinding:
     }
     if self.hint:
       out["hint"] = self.hint
+    if self.fixable:
+      out["fixable"] = self.fixable
+    if self.fixed:
+      out["fixed"] = self.fixed
+    if self.fix_detail:
+      out["fix_detail"] = self.fix_detail
     return out
 
 

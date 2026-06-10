@@ -162,11 +162,155 @@ def _ensure_notes_gitignore(notes_dir: Path) -> bool:
     return True
 
 
+DEMO_NOTES: list[tuple[str, str]] = [
+    (
+        "02_facts/fact__cognitive_ledger_demo.md",
+        """\
+---
+created: {ts}
+updated: {ts}
+tags: [demo, cognitive-ledger]
+confidence: 0.9
+source: user
+scope: meta
+lang: en
+---
+
+# Cognitive Ledger Demo Note
+
+## Statement
+This is a demo fact note created by `ledger init --demo`.
+
+## Context
+Demonstrates the fact note type: stable truths sourced from the user.
+
+## Implications
+- Delete this note once you have created your own.
+
+## Links
+""",
+    ),
+    (
+        "03_preferences/pref__demo_preference.md",
+        """\
+---
+created: {ts}
+updated: {ts}
+tags: [demo, preferences]
+confidence: 0.8
+source: user
+scope: meta
+lang: en
+---
+
+# Demo Preference
+
+## Statement
+Prefer concise, atomic notes over long summaries.
+
+## Context
+Demo preference created by `ledger init --demo`.
+
+## Links
+""",
+    ),
+    (
+        "04_goals/goal__demo_goal.md",
+        """\
+---
+created: {ts}
+updated: {ts}
+tags: [demo, goals]
+confidence: 0.8
+source: user
+scope: meta
+lang: en
+---
+
+# Demo Goal
+
+## Statement
+Build a rich cognitive ledger of durable, searchable knowledge.
+
+## Context
+Demo goal created by `ledger init --demo`.
+
+## Links
+""",
+    ),
+    (
+        "05_open_loops/loop__demo_loop.md",
+        """\
+---
+created: {ts}
+updated: {ts}
+tags: [demo, open-loop]
+confidence: 0.8
+source: user
+status: open
+scope: meta
+lang: en
+---
+
+# Demo Open Loop: Review demo notes
+
+## Question
+Have you reviewed and replaced the demo notes with your own content?
+
+## Why it matters
+Demo notes are placeholders; real notes make retrieval useful.
+
+## Next actions
+- [ ] Delete demo notes after reviewing them.
+""",
+    ),
+    (
+        "06_concepts/concept__cognitive_ledger.md",
+        """\
+---
+created: {ts}
+updated: {ts}
+tags: [demo, concept, cognitive-ledger]
+confidence: 0.9
+source: user
+scope: meta
+lang: en
+---
+
+# Concept: Cognitive Ledger
+
+## Definition
+A persistent, file-based memory system that extends the temporal reach of
+language models and their users by storing atomic, structured notes.
+
+## Context
+Demo concept note created by `ledger init --demo`.
+
+## Links
+""",
+    ),
+]
+
+
+def _write_demo_notes(notes_dir: Path, report: dict[str, Any]) -> None:
+    """Write 5 sample notes to demonstrate ledger structure."""
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    for rel_path, content in DEMO_NOTES:
+        target = notes_dir / rel_path
+        if target.is_file():
+            report["skipped"].append(f"demo: {rel_path}")
+        else:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            safe_write_text(target, content.format(ts=ts))
+            report["created"].append(f"demo: {rel_path}")
+
+
 def init_ledger(
     root: str | Path | None = None,
     voice_dna_path: str | Path | None = None,
     source_notes_dir: str | Path | None = None,
     ledger_notes_dir: str | Path | None = None,
+    demo: bool = False,
 ) -> dict[str, Any]:
     """Initialize a cognitive ledger structure.
 
@@ -178,6 +322,7 @@ def init_ledger(
         voice_dna_path: Optional path to voice-dna JSON for import.
         source_notes_dir: Optional source notes root for config.
         ledger_notes_dir: Optional notes directory override.
+        demo: If True, write 5 sample notes to illustrate the structure.
 
     Returns:
         Dict with created, skipped, and errors lists.
@@ -277,7 +422,11 @@ def init_ledger(
     else:
         report["skipped"].append("notes/08_indices/timeline.jsonl")
 
-    # 6. Run initial index generation
+    # 6. Optionally write demo notes
+    if demo:
+        _write_demo_notes(nd, report)
+
+    # 7. Run initial index generation
     try:
         from ledger.maintenance import cmd_index
         previous_config = get_config()

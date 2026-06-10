@@ -156,6 +156,26 @@ def build_context(notes_dir: Path) -> str:
         "Rule: if about to guess or assume something about the user, search first.",
         "",
     ])
+
+    # Append Write Policy section from config.
+    try:
+        wp = get_config().write_policy
+        if wp:
+            mode = wp.get("mode", "auto-write")
+            report_level = wp.get("report_level", "summary")
+            output.extend([
+                "## Write Policy",
+                "",
+                f"- mode: `{mode}` (persist high-confidence artifacts without confirmation)",
+                f"- report_level: `{report_level}`",
+                "",
+                "Modes: `auto-write` (persist without asking), `silent-write` (no diff shown),",
+                "`ask-to-write` (ask before any write). See `AGENTS.md` for full semantics.",
+                "",
+            ])
+    except Exception:
+        pass
+
     return "\n".join(output)
 
 
