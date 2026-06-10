@@ -65,6 +65,8 @@ frontmatter:
     origin:      # locator for the upstream artifact (file path / URI)
     external_id: # stable upstream key, e.g. "<project>/<name>" — enables
                  # idempotent re-import (match-and-update, not duplicate)
+    things_uuid: # Things3 task UUID written by `ledger loops sync`; used as
+                 # the primary key for round-trip sync (slug is the fallback)
 
   # Valid-time (bitemporal) fields — when the fact was true in the world.
   # Distinct from transaction time (created/updated = when it was recorded).
