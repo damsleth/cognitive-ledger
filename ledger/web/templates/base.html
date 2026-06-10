@@ -6,6 +6,7 @@
   <title>{% block title %}{{ active_label or "Cognitive Ledger" }} - cogled{% endblock %}</title>
   <link rel="stylesheet" href="/static/style.css" />
   <script src="/static/htmx.min.js" defer></script>
+  <script src="/static/shortcuts.js" defer></script>
   {% block head_extra %}{% endblock %}
 </head>
 <body>
@@ -47,6 +48,12 @@
           </a>
         </li>
         <li>
+          <a href="/graph"
+             class="type-link{% if active_type == 'graph' %} active{% endif %}">
+            <span class="type-label">graph</span>
+          </a>
+        </li>
+        <li>
           <a href="/signals"
              class="type-link{% if active_type == 'signals' %} active{% endif %}">
             <span class="type-label">signals</span>
@@ -70,7 +77,16 @@
   </div>
 
   <footer class="statusbar">
-    <span class="status-cell">cognitive-ledger 0.3.1 web (phase 3)</span>
+    <span class="status-cell">{{ statusbar_notes() }} notes</span>
+    {% set _idx_built = statusbar_index_built_at() %}
+    {% if _idx_built %}
+    <span class="status-cell">index: {{ _idx_built }}</span>
+    {% endif %}
+    <span class="status-cell">embeddings: {{ "on" if statusbar_embeddings() else "off" }}</span>
+    <button class="status-cell status-reload"
+            hx-post="/admin/reload"
+            hx-swap="none"
+            title="Reload corpus from disk">reload</button>
   </footer>
 </body>
 </html>

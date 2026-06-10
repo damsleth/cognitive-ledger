@@ -13,9 +13,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import re
+
 from ledger import browse as browse_lib
 from ledger.config import LedgerConfig, get_config
-from ledger.parsing import parse_frontmatter_text
+from ledger.parsing import parse_frontmatter_text, strip_private_tags
 from ledger.parsing.links import extract_links
 
 
@@ -52,6 +54,8 @@ class Corpus:
         self._outgoing: dict[str, list[str]] = {}
         self._incoming: dict[str, list[str]] = {}
         self._broken_outgoing: dict[str, list[str]] = {}
+        self._titles: dict[str, str] = {}
+        self._meta: dict[str, dict[str, str]] = {}
         self._refresh_stem_index()
         self._rebuild_link_maps()
 
@@ -184,6 +188,36 @@ class Corpus:
     # Internal helpers
     # ------------------------------------------------------------------
 
+    def graph(self) -> dict:
+        """Return graph payload for the /graph/data.json endpoint.
+
+        Returns a dict with ``nodes`` and ``links`` lists suitable for
+        d3 force-graph rendering. Only resolved links appear in ``links``;
+        broken links and private-fenced content are excluded.
+        """
+        incoming_counts: dict[str, int] = {
+            stem: len(sources) for stem, sources in self._incoming.items()
+        }
+        nodes = []
+        for stem in sorted(self._stem_index):
+            meta = self._meta.get(stem, {})
+            nodes.append(
+                {
+                    "id": stem,
+                    "title": self._titles.get(stem, stem),
+                    "type": self._infer_type(self._stem_index[stem]),
+                    "scope": meta.get("scope", ""),
+                    "status": meta.get("status", ""),
+                    "incoming": incoming_counts.get(stem, 0),
+                }
+            )
+        links = [
+            {"source": src, "target": dst}
+            for src in sorted(self._outgoing)
+            for dst in self._outgoing[src]
+        ]
+        return {"nodes": nodes, "links": links}
+
     def _rebuild_link_maps(self) -> None:
         """Walk every note body once to derive outgoing + reverse link maps.
 
@@ -191,17 +225,38 @@ class Corpus:
         wikilink parser with the rest of the codebase. Unresolved
         targets land in ``_broken_outgoing`` so the note detail view can
         warn about them without re-parsing.
+
+        Also populates ``_titles`` and ``_meta`` for the graph view.
+        Private-fenced content is stripped before link extraction.
         """
         outgoing: dict[str, list[str]] = {}
         incoming: dict[str, list[str]] = {}
         broken: dict[str, list[str]] = {}
+        titles: dict[str, str] = {}
+        meta: dict[str, dict[str, str]] = {}
+
+        _h1_re = re.compile(r"^#\s+(.+)$", re.MULTILINE)
 
         for stem, path in self._stem_index.items():
             try:
                 text = path.read_text(encoding="utf-8")
             except OSError:
                 continue
-            _frontmatter, body = parse_frontmatter_text(text)
+            frontmatter, body = parse_frontmatter_text(text)
+            body = strip_private_tags(body)
+
+            # Populate title: prefer H1, fallback to stem.
+            h1_match = _h1_re.search(body)
+            titles[stem] = h1_match.group(1).strip() if h1_match else stem
+
+            # Populate meta: scope and status from frontmatter.
+            note_meta: dict[str, str] = {}
+            if isinstance(frontmatter, dict):
+                if "scope" in frontmatter:
+                    note_meta["scope"] = str(frontmatter["scope"])
+                if "status" in frontmatter:
+                    note_meta["status"] = str(frontmatter["status"])
+            meta[stem] = note_meta
 
             out_resolved: list[str] = []
             out_broken: list[str] = []
@@ -247,6 +302,8 @@ class Corpus:
         self._outgoing = outgoing
         self._incoming = incoming
         self._broken_outgoing = broken
+        self._titles = titles
+        self._meta = meta
 
     @staticmethod
     def _normalize_link_target(target: str) -> str:
