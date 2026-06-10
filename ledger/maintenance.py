@@ -529,6 +529,8 @@ def _lint_bitemporal(
 
 
 def _lint_note(path: Path, counters: LintCounters) -> None:
+    from ledger.validation import validate_frontmatter_fields, validate_note_body
+
     text = path.read_text(encoding="utf-8")
     lines = text.splitlines()
     if not lines or lines[0].strip() != "---":
@@ -564,112 +566,41 @@ def _lint_note(path: Path, counters: LintCounters) -> None:
             return value
         return ""
 
-    required_fields = ["created", "updated", "tags", "confidence", "source", "scope", "lang"]
-    for field in required_fields:
-        if not fm_raw_value(field) and field not in frontmatter:
-            _lint_error(path, f"missing '{field}'")
-            counters.errors += 1
+    # Build a raw-preferred frontmatter view for the pure validation helpers.
+    # Scalar fields that YAML may coerce (e.g. lang: no -> False) are overridden
+    # with the verbatim string read from the source lines.
+    _scalar_fields = ["created", "updated", "source", "scope", "lang", "status", "via", "confidence"]
+    fm_for_validation: dict[str, Any] = dict(frontmatter)
+    for _f in _scalar_fields:
+        raw = fm_raw_value(_f)
+        if raw:
+            fm_for_validation[_f] = raw
 
     rel = _relative(path)
-    is_loop = "/05_open_loops/" in f"/{rel}"
-    if is_loop and "status" not in frontmatter:
-        _lint_error(path, "open loop missing 'status'")
-        counters.errors += 1
 
-    created = fm_raw_value("created") or str(frontmatter.get("created", "")).strip()
-    if created and not TIMESTAMP_PATTERN.match(created):
-        _lint_error(path, f"invalid created timestamp: {created}")
-        counters.errors += 1
-
-    updated = fm_raw_value("updated") or str(frontmatter.get("updated", "")).strip()
-    if updated and not TIMESTAMP_PATTERN.match(updated):
-        _lint_error(path, f"invalid updated timestamp: {updated}")
-        counters.errors += 1
-
-    source = (fm_raw_value("source") or str(frontmatter.get("source", ""))).strip().lower()
-    if source and source not in SOURCE_VALUES:
-        _lint_error(path, f"invalid source: {source}")
-        counters.errors += 1
-
-    scope = (fm_raw_value("scope") or str(frontmatter.get("scope", ""))).strip().lower()
-    if scope and scope not in SCOPE_VALUES:
-        _lint_error(path, f"invalid scope: {scope}")
-        counters.errors += 1
-
-    lang = (fm_raw_value("lang") or str(frontmatter.get("lang", ""))).strip().lower()
-    if lang and lang not in LANG_VALUES:
-        _lint_error(path, f"invalid lang: {lang}")
-        counters.errors += 1
-
-    status = (fm_raw_value("status") or str(frontmatter.get("status", ""))).strip().lower()
-    if is_loop and status and status not in STATUS_VALUES:
-        _lint_error(path, f"invalid status: {status}")
-        counters.errors += 1
-
-    # Optional provenance channel (see schema_values.VIA_VALUES). Validated
-    # only when present, like source/scope; absence is fine.
-    via = (fm_raw_value("via") or str(frontmatter.get("via", ""))).strip().lower()
-    if via and via not in VIA_VALUES:
-        _lint_error(path, f"invalid via: {via}")
-        counters.errors += 1
-
-    tags = normalize_tags(frontmatter.get("tags"))
-    for tag in tags:
-        if not TAG_PATTERN.match(tag):
-            _lint_error(path, f"invalid tag: {tag}")
-            counters.errors += 1
-
-    confidence_raw = fm_raw_value("confidence") or frontmatter.get("confidence", "")
-    try:
-        confidence = float(confidence_raw)
-    except (TypeError, ValueError):
-        confidence = None
-    if confidence is not None:
-        if confidence < 0 or confidence > 1:
-            _lint_error(path, f"confidence out of range: {confidence_raw}")
-            counters.errors += 1
-        if source == "inferred" and confidence > 0.8:
-            _lint_warn(path, f"inferred note has high confidence ({confidence} > 0.8)")
+    # --- Delegate field validation to validation.py ---
+    for issue in validate_frontmatter_fields(fm_for_validation, rel):
+        if "[warning]" in issue:
+            _lint_warn(path, issue.replace(" [warning]", ""))
             counters.warnings += 1
-            counters.warn_inferred_confidence += 1
-
-    words = len(text.split())
-    if words > LARGE_FILE_WORD_THRESHOLD:
-        _lint_warn(path, f"large file ({words} words)")
-        counters.warnings += 1
-        counters.warn_large_files += 1
-
-    sections = parse_sections(body)
-    if _is_open_loop(path, frontmatter):
-        next_action_lines = sections.get("next action")
-        if not next_action_lines:
-            _lint_warn(path, "open loop missing '## Next action' section")
-            counters.warnings += 1
-            counters.warn_loop_missing_next_action += 1
+            if "inferred" in issue and "confidence" in issue:
+                counters.warn_inferred_confidence += 1
         else:
-            has_checkbox = any(
-                re.match(r"^\s*-\s*\[[ xX]\]\s+", line or "") is not None
-                for line in next_action_lines
-            )
-            if not has_checkbox:
-                _lint_warn(path, "open loop has no checkbox action in Next action section")
-                counters.warnings += 1
-                counters.warn_loop_missing_checkbox += 1
+            _lint_error(path, issue)
+            counters.errors += 1
 
-    links_lines = sections.get("links", [])
-    placeholder_link = any(re.match(r"^\s*-\s*$", line or "") for line in links_lines)
-    if placeholder_link:
-        _lint_warn(path, "placeholder bullet found in Links section")
+    # --- Delegate body validation to validation.py ---
+    for issue in validate_note_body(body, fm_for_validation, rel, LARGE_FILE_WORD_THRESHOLD):
+        _lint_warn(path, issue.replace(" [warning]", ""))
         counters.warnings += 1
-        counters.warn_placeholder_links += 1
-
-    # Synthesized notes must have at least 1 outgoing link
-    if "synthesized" in tags:
-        from ledger.parsing.links import extract_links
-        note_links = extract_links(body)
-        if not note_links:
-            _lint_warn(path, "synthesized note has no outgoing links (should reference sources)")
-            counters.warnings += 1
+        if "large file" in issue:
+            counters.warn_large_files += 1
+        elif "Next action" in issue and "missing" in issue:
+            counters.warn_loop_missing_next_action += 1
+        elif "checkbox" in issue:
+            counters.warn_loop_missing_checkbox += 1
+        elif "placeholder" in issue:
+            counters.warn_placeholder_links += 1
 
     # --- Bitemporal (valid-time) field validation ---
     # Applicable to fact-like types (01_identity, 02_facts, 03_preferences,
