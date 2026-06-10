@@ -612,10 +612,29 @@ preferences throughout.
 ## Write modes (interaction policy)
 
 Different environments may prefer different degrees of visibility.
+The active policy is available at runtime via `ledger context --format boot`.
 
-- **Auto-write:** persist high-confidence durable artifacts without asking.
-- **Silent write:** do not show diffs by default; rely on git for reversibility.
-- **Ask-to-write:** ask before persisting when uncertain or sensitive.
+| Mode | Config value | Behaviour |
+|------|-------------|-----------|
+| Auto-write | `auto-write` | Persist high-confidence durable artifacts without asking. |
+| Silent write | `silent-write` | Do not show diffs by default; rely on git for reversibility. |
+| Ask-to-write | `ask-to-write` | Ask before persisting when uncertain or sensitive. |
+
+**Report levels** (controls how verbose post-write reports are):
+
+| Level | Config value | Output |
+|-------|-------------|--------|
+| Summary | `summary` | One-line per change (default). |
+| Verbose | `verbose` | Full diff shown after each write. |
+| Silent | `silent` | No write report; minimal feedback. |
+
+Configure in `~/.config/ledger/config.yaml`:
+
+```yaml
+write_policy:
+  mode: auto-write
+  report_level: summary
+```
 
 Default preference (unless the user requests otherwise): **Auto-write + Silent write**,
 asking only for genuinely ambiguous items.
