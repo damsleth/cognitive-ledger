@@ -424,6 +424,31 @@ def handle_embed_clean_command(args):
     print(semantic_lib.format_embed_clean_human(payload))
 
 
+def handle_embed_search_command(args):
+    try:
+        validated_query = validate_query(args.query)
+        validated_limit = validate_limit(args.limit, min_val=1, max_val=100)
+    except QueryValidationError:
+        raise SystemExit(2)
+    except ValueError:
+        raise SystemExit(2)
+    backend = resolve_embed_backend(args.embed_backend)
+    payload = semantic_lib.semantic_search_target(
+        validated_query,
+        target=args.target,
+        limit=validated_limit,
+        embed_backend=backend,
+        embed_model=args.embed_model,
+        allow_api_on_source=args.allow_api_on_source,
+        load_embeddings_module_fn=lambda: load_embeddings_module(),
+        resolve_embed_model_fn=semantic_lib.resolve_embed_model,
+    )
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return
+    print(semantic_lib.format_embed_search_human(payload))
+
+
 def handle_discover_source_command(args):
     try:
         validated_query = validate_query(args.text)
@@ -1655,6 +1680,15 @@ def main(argv=None) -> int:
         help="Skip confirmation. Required when stdin is not a TTY (destructive).",
     )
 
+    embed_search_parser = embed_subparsers.add_parser("search", help="Semantic search over a built index")
+    embed_search_parser.add_argument("--target", choices=("ledger", "source"), default="ledger")
+    embed_search_parser.add_argument("--query", required=True)
+    embed_search_parser.add_argument("--limit", type=int, default=5)
+    embed_search_parser.add_argument("--embed-backend", dest="embed_backend", choices=cfg.embed_backends, default=None)
+    embed_search_parser.add_argument("--embed-model", dest="embed_model", default=None)
+    embed_search_parser.add_argument("--allow-api-on-source", action="store_true", dest="allow_api_on_source")
+    embed_search_parser.add_argument("--json", action="store_true", dest="json")
+
     eval_parser = subparsers.add_parser("eval", help="Evaluate retrieval quality against benchmark cases")
     eval_parser.add_argument("--cases", required=True, help="Path to retrieval_eval_cases.yaml")
     eval_parser.add_argument("--k", type=int, default=3)
@@ -2040,6 +2074,7 @@ def main(argv=None) -> int:
         "build": handle_embed_build_command,
         "status": handle_embed_status_command,
         "clean": handle_embed_clean_command,
+        "search": handle_embed_search_command,
     }
 
     try:
