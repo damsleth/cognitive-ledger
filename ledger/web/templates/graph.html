@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block title %}Graph — cogled{% endblock %}
+
+{% block head_extra %}
+  <script src="/static/d3.v7.min.js"></script>
+  <script src="/static/graph.js" defer></script>
+{% endblock %}
+
+{% block crumbs %}
+  <span class="crumb-sep">/</span>
+  <span>graph</span>
+{% endblock %}
+
+{% block content %}
+  <div class="page-header">
+    <h1>Knowledge Graph</h1>
+  </div>
+  <div class="graph-toolbar">
+    <button class="chip chip-active" data-type="all">all</button>
+    <button class="chip" data-type="open-loops">open loops only</button>
+  </div>
+  <canvas id="graph-canvas" data-source="/graph/data.json"></canvas>
+  <div class="graph-hint">Scroll to zoom &middot; drag to pan &middot; click a node to open the note</div>
+{% endblock %}
