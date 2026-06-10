@@ -89,6 +89,8 @@ ledger context --format boot # session boot payload
 ledger context --format identity  # identity notes only
 ```
 
+**`LEDGER_EMBEDDINGS_OFFLINE`** — set to `1` or `true` to skip model downloads and use only locally cached sentence-transformer weights (`local_files_only=True`). Useful in air-gapped environments or to avoid accidental downloads during `ledger embed build`. Accepted values: `1`, `true`, `yes`, `on`.
+
 ### Bitemporal validity
 
 ```bash
