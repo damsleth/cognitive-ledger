@@ -739,7 +739,7 @@ class LedgerConfig:
     # Contradiction Detection (Gap B — NLI-based sleep scan)
     # =========================================================================
 
-    contradiction_enabled: bool = False
+    contradiction_enabled: bool = False  # off until NLI model downloaded + validated on corpus
     """Master switch for the NLI-based contradiction scan.
 
     Off by default: a machine without the model/deps behaves exactly as today.
@@ -797,7 +797,7 @@ class LedgerConfig:
     # Fusion Mode (semantic_hybrid)
     # =========================================================================
 
-    fusion: str = "weighted_sum"
+    fusion: str = "weighted_sum"  # keep default until A/B run shows an alternative beats this
     """Fusion strategy for combining lexical and semantic candidate lists.
 
     Allowed values:
@@ -822,7 +822,7 @@ class LedgerConfig:
     # Pseudo-Relevance Feedback (PRF — Mechanism 2, dense-vector only)
     # =========================================================================
 
-    prf_enabled: bool = False
+    prf_enabled: bool = False  # enable only after A/B shows recall improvement on real corpus
     """Whether to apply pseudo-relevance feedback to expand the query vector.
 
     Default off. Only active on the semantic_hybrid / semantic_rerank dense
