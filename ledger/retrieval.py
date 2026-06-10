@@ -486,7 +486,7 @@ def _candidate_from_parts(
     # Capture bitemporal validity fields (optional; absent on legacy notes).
     def _str_or_empty(val: Any) -> str:
         s = str(val or "").strip()
-        return "" if s in ("null", "~", "None") else s
+        return "" if s in ("null", "~", "None", "[]") else s
 
     valid_from = _str_or_empty(frontmatter.get("valid_from", ""))
     valid_to = _str_or_empty(frontmatter.get("valid_to", ""))
