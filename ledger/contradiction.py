@@ -46,6 +46,7 @@ from typing import Any, Callable
 from ledger.config import get_config
 from ledger.layout import NOTE_LAYOUTS
 from ledger.parsing.frontmatter import parse_frontmatter_text, serialize_frontmatter
+from ledger.parsing.privacy import strip_private_tags
 from ledger.io import safe_write_text
 
 
@@ -596,6 +597,7 @@ def run_contradiction_scan(
             h = _content_hash(text)
             rel = f"notes/{layout.subdir}/{path.name}"
             fm, body = parse_frontmatter_text(text)
+            body = strip_private_tags(body)
             if _is_superseded(fm):
                 # Already superseded notes are skipped as candidates
                 continue
@@ -640,6 +642,23 @@ def run_contradiction_scan(
     from ledger.nli import contradiction_score as nli_score
 
     neighbor_fn = _neighbor_fn or _get_semantic_neighbors
+
+    # Pre-scan conflict notes once; avoids O(pairs × conflict_files) I/O.
+    # Key: frozenset of the two rel_paths embedded in the pair_key; value: path.
+    _conflict_note_texts: dict[str, str] = {}
+    if inbox_dir.is_dir():
+        for _cp in inbox_dir.glob("conflict__*.md"):
+            try:
+                _conflict_note_texts[str(_cp)] = _cp.read_text(encoding="utf-8")
+            except OSError:
+                pass
+
+    def _cached_existing_conflict_note(pair_key: str) -> Path | None:
+        parts = pair_key.split("|")
+        for _cp_str, _ct in _conflict_note_texts.items():
+            if all(p in _ct for p in parts):
+                return Path(_cp_str)
+        return None
 
     for candidate_ref, candidate_abs, content_h, cand_fm, cand_body in candidates:
         cand_type = _note_type_from_path(candidate_abs)
@@ -815,7 +834,7 @@ def run_contradiction_scan(
                     ))
                     # Degrade: write a conflict note to 00_inbox so the pair
                     # surfaces for human review rather than being silently dropped.
-                    existing_fb = _existing_conflict_note(pk, inbox_dir)
+                    existing_fb = _cached_existing_conflict_note(pk)
                     if existing_fb is None:
                         now_fb = _now_utc()
                         filename_fb = _make_conflict_note_filename(
@@ -857,7 +876,7 @@ def run_contradiction_scan(
                 continue
 
             # Check idempotency: is there already a conflict note for this pair?
-            existing = _existing_conflict_note(pk, inbox_dir)
+            existing = _cached_existing_conflict_note(pk)
             if existing is not None:
                 state.resolved_pairs[pk] = Decision.REVIEW.value
                 scan_result.pair_results.append(PairResult(
@@ -883,6 +902,8 @@ def run_contradiction_scan(
                 now,
             )
             safe_write_text(conflict_path, conflict_content)
+            # Update in-memory cache so subsequent pairs in this run see it.
+            _conflict_note_texts[str(conflict_path)] = conflict_content
             _append_conflict_timeline(
                 f"notes/00_inbox/{filename}",
                 candidate_ref,

@@ -1,4 +1,4 @@
-"""Search service - small wrapper over ``ledger.cli.rank_query``.
+"""Search service - small wrapper over ``ledger.query.rank_query``.
 
 Surfaces two retrieval modes to the UI ("lexical" -> ``legacy``,
 "semantic" -> ``semantic_hybrid``) and caches results for 60 s by
@@ -13,10 +13,9 @@ from dataclasses import dataclass
 from threading import Lock
 from typing import Any
 
-from ledger.cli import rank_query as cli_rank_query
 from ledger.config import get_config
 from ledger.parsing import shorten
-from ledger.query import payload_results, result_get
+from ledger.query import rank_query as cli_rank_query, payload_results, result_get
 
 
 UI_MODES: dict[str, str] = {

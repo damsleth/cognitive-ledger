@@ -116,8 +116,10 @@ def sync_queue(config: ObsidianLedgerConfig) -> dict[str, int]:
             "kind": "promoted",
         }
         promoted += 1
+        # Persist state after each successful promotion so a mid-loop crash
+        # does not cause duplicate promotions on the next run.
+        save_state(config, state)
 
-    save_state(config, state)
     return {
         "promoted": promoted,
         "rejected": rejected,

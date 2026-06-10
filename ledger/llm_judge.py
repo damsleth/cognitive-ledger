@@ -23,6 +23,8 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from ledger.parsing import parse_frontmatter_text, strip_private_tags
+
 
 # ---------------------------------------------------------------------------
 # Verdict type
@@ -168,18 +170,27 @@ def _subprocess_judge(
         )
 
     # Parse the verdict from stdout — be lenient about surrounding whitespace
+    # and prose prefixes. Iterate all brace-delimited matches, returning
+    # the first one that parses cleanly AND contains the ``relevant`` key.
     raw = result.stdout.strip()
-    # If the output contains a JSON block, extract it
-    json_match = re.search(r"\{[^{}]*\}", raw, re.DOTALL)
-    if json_match:
-        raw = json_match.group(0)
+    verdict_dict: dict | None = None
+    for json_match in re.finditer(r"\{[^{}]*\}", raw, re.DOTALL):
+        try:
+            candidate = json.loads(json_match.group(0))
+            if isinstance(candidate, dict) and "relevant" in candidate:
+                verdict_dict = candidate
+                break
+        except json.JSONDecodeError:
+            continue
 
-    try:
-        verdict_dict = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        raise RuntimeError(
-            f"Judge subprocess returned non-JSON output: {result.stdout[:200]!r}"
-        ) from exc
+    if verdict_dict is None:
+        # Last resort: try parsing the full output
+        try:
+            verdict_dict = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(
+                f"Judge subprocess returned non-JSON output: {result.stdout[:200]!r}"
+            ) from exc
 
     relevant = bool(verdict_dict.get("relevant", False))
     rating_raw = verdict_dict.get("rating")
@@ -272,9 +283,11 @@ def seed_from_queries(
         for rel_path in candidates:
             abs_path = notes_dir / rel_path
             try:
-                body = abs_path.read_text(encoding="utf-8", errors="replace")
+                raw_text = abs_path.read_text(encoding="utf-8", errors="replace")
             except OSError:
                 continue
+            _fm, body = parse_frontmatter_text(raw_text)
+            body = strip_private_tags(body)
             verdict = judge(
                 query=query,
                 note_path=rel_path,

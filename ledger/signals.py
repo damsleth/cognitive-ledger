@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from ledger.config import get_config
+from ledger.io.safe_write import safe_append_line, FileLock
 
 
 class ActivationState(enum.Enum):
@@ -60,6 +61,7 @@ def append_signal(
     session: str = "",
     synthetic: bool = False,
     source: str = "",
+    channel: str = "",
 ) -> dict[str, Any]:
     """Append a signal entry to signals.jsonl.
 
@@ -105,14 +107,15 @@ def append_signal(
         entry["synthetic"] = True
     if source:
         entry["source"] = source
+    if channel:
+        entry["channel"] = channel
 
     config = get_config()
     signals_path = config.signals_path
     signals_path.parent.mkdir(parents=True, exist_ok=True)
 
     line = json.dumps(entry, ensure_ascii=False)
-    with open(signals_path, "a", encoding="utf-8") as f:
-        f.write(line + "\n")
+    safe_append_line(signals_path, line)
 
     return entry
 
@@ -130,8 +133,7 @@ def append_signal_raw(entry: dict[str, Any], signals_path: Path) -> None:
     """
     signals_path.parent.mkdir(parents=True, exist_ok=True)
     line = json.dumps(entry, ensure_ascii=False)
-    with open(signals_path, "a", encoding="utf-8") as f:
-        f.write(line + "\n")
+    safe_append_line(signals_path, line)
 
 
 def read_signals(
@@ -338,28 +340,28 @@ def purge_synthetic_signals(
 
     kept: list[str] = []
     removed = 0
-    for line in path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            entry = json.loads(line)
-        except json.JSONDecodeError:
-            # Preserve unparseable lines as-is
-            kept.append(line)
-            continue
-        if entry.get("synthetic", False):
-            removed += 1
-        else:
-            kept.append(line)
+    with FileLock(path):
+        for line in path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entry = json.loads(line)
+            except json.JSONDecodeError:
+                # Preserve unparseable lines as-is
+                kept.append(line)
+                continue
+            if entry.get("synthetic", False):
+                removed += 1
+            else:
+                kept.append(line)
 
-    # Rewrite atomically: write to .tmp then rename
-    tmp_path = path.with_suffix(".jsonl.tmp")
-    tmp_path.write_text(
-        "\n".join(kept) + ("\n" if kept else ""),
-        encoding="utf-8",
-    )
-    tmp_path.replace(path)
+        # Rewrite atomically: write to .tmp then rename
+        from ledger.io.safe_write import atomic_write
+        tmp_path = path.with_suffix(".jsonl.tmp")
+        with atomic_write(tmp_path) as f:
+            f.write("\n".join(kept) + ("\n" if kept else ""))
+        tmp_path.replace(path)
     return removed
 
 

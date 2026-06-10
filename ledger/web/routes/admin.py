@@ -51,7 +51,7 @@ def _embeddings_enabled(corpus: Corpus) -> bool:
 
 
 @router.get("/healthz")
-async def healthz(request: Request) -> JSONResponse:
+def healthz(request: Request) -> JSONResponse:
     corpus = _corpus(request)
     types = corpus.note_types()
     notes_loaded = sum(t.count for t in types)
@@ -70,7 +70,7 @@ _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost", "testclient"})
 
 
 @router.post("/admin/reload")
-async def admin_reload(request: Request) -> JSONResponse:
+def admin_reload(request: Request) -> JSONResponse:
     client_host = request.client.host if request.client else ""
     if client_host not in _LOOPBACK_HOSTS:
         return JSONResponse(
