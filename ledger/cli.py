@@ -243,19 +243,52 @@ def handle_query_command(args):
     results = query_lib.payload_results(payload)
     _capture_retrieval_miss(validated_query, results)
 
-    if args.json:
-        print(
-            json.dumps(
-                query_lib.query_result_to_json(payload, include_bundle=args.bundle, view=view),
-                indent=2,
-                ensure_ascii=False,
-            )
+    # --- Tier-1 fusion (opt-in: --include-tier1) ---
+    # CRITICAL: this block must not be reached unless --include-tier1 is set.
+    # No tier1 module import at module level; import happens here lazily.
+    if getattr(args, "include_tier1", False):
+        from ledger.tier1 import fetch_yaams_results, fuse_results  # noqa: PLC0415
+
+        tier1_results, unavailable = fetch_yaams_results(
+            validated_query,
+            limit=getattr(args, "tier1_limit", 10),
+            min_score=getattr(args, "tier1_min_score", None),
         )
+        if unavailable:
+            print(
+                f"warning: tier-1 unavailable ({unavailable}); showing tier-2 only",
+                file=sys.stderr,
+            )
+        # Convert payload to dict before fusion so fuse_results can operate on it.
+        payload = query_lib.query_result_to_json(payload, include_bundle=False, view=view)
+        payload = fuse_results(
+            payload,
+            tier1_results,
+            tier2_boost=getattr(args, "tier1_boost", 0.0),
+            unavailable_reason=unavailable,
+        )
+        # Tier-1 entries must never reach --pick / signal capture.
+        # results (tier-2 only) was already captured above for _capture_retrieval_miss.
+    # --- end tier-1 fusion ---
+
+    if args.json:
+        if getattr(args, "include_tier1", False):
+            # payload is already a dict (converted above)
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+        else:
+            print(
+                json.dumps(
+                    query_lib.query_result_to_json(payload, include_bundle=args.bundle, view=view),
+                    indent=2,
+                    ensure_ascii=False,
+                )
+            )
         return
 
     print(query_lib.format_query_results_human(payload, include_bundle=args.bundle, view=view))
 
     if getattr(args, "pick", False):
+        # Pass only tier-2 results so tier-1 entries cannot be picked.
         _capture_retrieval_hit_pick(validated_query, results)
 
 
@@ -1474,6 +1507,44 @@ def main(argv=None) -> int:
             "using the top pseudo-positive and bottom pseudo-negative results. "
             "Default off; enable persistently via prf_enabled: true in config.yaml."
         ),
+    )
+    query_parser.add_argument(
+        "--include-tier1",
+        action="store_true",
+        default=False,
+        dest="include_tier1",
+        help=(
+            "Fuse YAAMS tier-1 results (iMessage, mail, calendar, …) into the "
+            "ranked list via Reciprocal Rank Fusion.  Requires yaams on PATH. "
+            "Degrades to tier-2-only with a stderr warning when YAAMS is unavailable."
+        ),
+    )
+    query_parser.add_argument(
+        "--tier1-limit",
+        type=int,
+        default=10,
+        dest="tier1_limit",
+        metavar="N",
+        help="Number of tier-1 (YAAMS) results to fetch (default: 10).",
+    )
+    query_parser.add_argument(
+        "--tier1-boost",
+        type=float,
+        default=0.0,
+        dest="tier1_boost",
+        metavar="BOOST",
+        help=(
+            "Extra RRF score added to every tier-2 result after fusion to "
+            "favour tier-2 over tier-1 entries (default: 0.0)."
+        ),
+    )
+    query_parser.add_argument(
+        "--tier1-min-score",
+        type=float,
+        default=None,
+        dest="tier1_min_score",
+        metavar="SCORE",
+        help="Discard tier-1 results whose score is below this threshold.",
     )
 
     discover_parser = subparsers.add_parser(
