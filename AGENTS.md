@@ -240,6 +240,39 @@ The scan is off by default (`contradiction_enabled: false`). Enable in `~/.confi
 | `contradiction_auto_threshold_lang_no` | `0.95` | `LEDGER_CONTRADICTION_AUTO_THRESHOLD_LANG_NO` |
 | `contradiction_protect_higher_confidence` | `true` | `LEDGER_CONTRADICTION_PROTECT_HIGHER_CONFIDENCE` |
 
+### Things3 ⇄ Open Loops Sync
+
+Bidirectional sync between `notes/05_open_loops/` and Things3 tasks. Each loop gets a Things task; task completion/cancellation propagates back to the loop's `status` field.
+
+```bash
+ledger loops sync             # one-shot sync (reads config, applies deltas)
+ledger loops sync --dry-run   # preview without writing anything
+```
+
+**How it works:**
+
+1. For each open loop not yet in Things: creates a task with title = loop title, notes = `ledger:<slug> status:<status>`.
+2. For each loop already in Things (matched by `things_uuid` frontmatter key, or `ledger:<slug>` marker): updates task title/notes if they drifted.
+3. For each completed/cancelled Things task: sets the loop's `status` to `things3_completed_maps_to` / `things3_canceled_maps_to` and writes `things_uuid` back to frontmatter.
+4. Tasks with a `ledger:` marker whose loop no longer exists: handled per `things3_orphan_action` (flag / cancel / ignore).
+
+**Config keys** (`~/.config/ledger/config.yaml`):
+
+| Key | Default | Env override |
+|---|---|---|
+| `things3_sync_enabled` | `false` | `LEDGER_THINGS3_SYNC_ENABLED` |
+| `things3_default_project` | `""` (Inbox) | `LEDGER_THINGS3_DEFAULT_PROJECT` |
+| `things3_blocked_project` | `""` (same as default) | `LEDGER_THINGS3_BLOCKED_PROJECT` |
+| `things3_scope_routing` | `{}` | — (YAML only) |
+| `things3_marker_prefix` | `"ledger:"` | `LEDGER_THINGS3_MARKER_PREFIX` |
+| `things3_completed_maps_to` | `"closed"` | `LEDGER_THINGS3_COMPLETED_MAPS_TO` |
+| `things3_canceled_maps_to` | `"snoozed"` | `LEDGER_THINGS3_CANCELED_MAPS_TO` |
+| `things3_orphan_action` | `"flag"` | `LEDGER_THINGS3_ORPHAN_ACTION` |
+
+**Prerequisites:** Things3 app + Things CLI on PATH. Install the CLI from Things → Settings → General → "Enable Things URLs" is NOT required; the CLI is a separate tool: https://culturedcode.com/things/support/articles/2803573/
+
+**Frontmatter key:** `things_uuid` — written by sync, used as primary key on re-sync. Do not edit manually.
+
 ### Folder map
 
 ```

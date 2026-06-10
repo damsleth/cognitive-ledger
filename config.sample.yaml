@@ -76,6 +76,21 @@ first_run: true
 # prf_beta: 0.75
 # prf_gamma: 0.15
 
+# Things3 ⇄ open-loops sync
+# Requires: Things3 app + Things CLI on PATH (https://culturedcode.com/things/support/articles/2803573/)
+# Run: ledger loops sync           — one-shot sync (dry-run: --dry-run)
+# things3_sync_enabled: false
+# things3_default_project: ""      # Things project for new tasks; empty = Inbox
+# things3_blocked_project: ""      # Project for status:blocked loops; empty = same as default
+# things3_scope_routing:            # per-scope project override
+#   work: "Work Tasks"
+#   dev: "Dev"
+#   home: "Home"
+# things3_marker_prefix: "ledger:"  # embedded in task Notes to link back; don't change after first sync
+# things3_completed_maps_to: "closed"   # ledger status when Things task completed
+# things3_canceled_maps_to: "snoozed"  # ledger status when Things task cancelled
+# things3_orphan_action: "flag"     # flag | cancel | ignore orphaned tasks
+
 # LLM-judged signal seeding (Mechanism 3 — bootstrap the signal gate)
 # Run: ledger signal seed --from-history  (or --queries-file <path>)
 # Seeded events carry synthetic:true and are down-weighted by synthetic_weight.
