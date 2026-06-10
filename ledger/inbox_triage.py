@@ -36,11 +36,12 @@ _ACTION_MARKERS: dict[str, str] = {
 _HELP_TEXT = """\
 Commands:
   a <range>[:type]  accept (promote). Optional type override, e.g. a 1:preferences
+                    Note: range accept skips contradict rows (use single-index to override)
   r <range>         reject (logs rejection signature + deletes)
   m <idx>           merge into the candidate's merge_with: target
   d <idx>           defer (leave in inbox)
   s <idx>           skip (no-op, leave in inbox)
-  i <idx>           inspect: print the candidate body
+  i <idx>           inspect: print candidate body; shows side-by-side diff for conflict rows
   p <idx>           inspect (alias for i)
   u <range>         unset a queued action
   ?                 show this help
@@ -48,7 +49,8 @@ Commands:
   Q                 quit, discarding queued actions
 
 Range syntax: 5-12 (inclusive), 5- (5 to end), comma-mixed (1,3-5,8).
-Latest decision per row wins."""
+Latest decision per row wins.
+conflict? column shows SUPPLEMENT, CONTRADICT, DUPLICATE, UNRELATED, or - for no classification."""
 
 
 # ---------------------------------------------------------------------------
@@ -132,6 +134,22 @@ def _parse_command(line: str, candidates: list[InboxCandidate]) -> list[TriageAc
         if type_override.strip():
             target_type = validate_note_type(type_override.strip())
         rows = _parse_range(spec, count)
+        if len(rows) > 1:
+            skipped = []
+            filtered_rows = []
+            for r in rows:
+                c = candidates[r - 1]
+                if c.conflict_classification == "contradict":
+                    skipped.append(r)
+                else:
+                    filtered_rows.append(r)
+            if skipped:
+                print(
+                    f"warning: skipping {len(skipped)} contradict row(s) from range accept: "
+                    + ", ".join(f"#{r}" for r in skipped)
+                    + " (use single-index accept to accept a contradict row)"
+                )
+            rows = filtered_rows
         return [
             TriageAction(row=r, action="accept", target_type=target_type)
             for r in rows
@@ -178,13 +196,14 @@ def _render_table(
     print(f"\nInbox ({n_yaams} candidates from yaams + {n_manual} manual):")
 
     width = shutil.get_terminal_size((100, 24)).columns
-    # Fixed columns: idx(3) act(3) type(12) conf(4) sig(8) + separators.
-    fixed = 3 + 3 + 12 + 4 + 8 + 5 * 3
+    # Fixed columns: idx(3) act(3) type(12) conf(4) sig(8) conflict(12) + separators.
+    conflict_w = 12
+    fixed = 3 + 3 + 12 + 4 + 8 + conflict_w + 6 * 3
     title_w = max(12, width - fixed)
 
     header = (
         f"{'#':>3} | {'act':<3} | {'type':<12} | "
-        f"{'title':<{title_w}} | {'conf':<4} | {'sig':<8}"
+        f"{'title':<{title_w}} | {'conf':<4} | {'conflict?':<{conflict_w}} | {'sig':<8}"
     )
     print(header)
     print("-" * min(width, len(header)))
@@ -198,9 +217,11 @@ def _render_table(
         if len(title) > title_w:
             title = title[: title_w - 1] + "…"
         sig = (c.signature or "")[:8]
+        conflict_label = (c.conflict_classification or "").upper() or "-"
         print(
             f"{idx:>3} | {marker:<3} | {c.type:<12} | "
-            f"{title:<{title_w}} | {c.confidence:<4.1f} | {sig:<8}"
+            f"{title:<{title_w}} | {c.confidence:<4.1f} | "
+            f"{conflict_label:<{conflict_w}} | {sig:<8}"
         )
 
 
@@ -319,6 +340,66 @@ def run_interactive_triage(notes_dir: Path | None = None) -> int:
             actions[action.row] = action  # latest decision wins
 
 
+def _extract_statement_section(body: str) -> str | None:
+    """Return the text of the ## Statement section from a note body, or None."""
+    lines = body.splitlines()
+    in_section = False
+    section_lines: list[str] = []
+    for line in lines:
+        if line.strip() == "## Statement":
+            in_section = True
+            continue
+        if in_section:
+            if line.startswith("## "):
+                break
+            section_lines.append(line)
+    if not section_lines:
+        return None
+    return "\n".join(section_lines).strip() or None
+
+
+def _render_side_by_side(candidate: InboxCandidate) -> None:
+    """Print a side-by-side conflict view for a candidate with merge_with set."""
+    config = get_config()
+    merge_path_str = candidate.merge_with or ""
+    try:
+        target_path = resolve_path(
+            merge_path_str,
+            ledger_root=config.ledger_root,
+            ledger_notes_dir=config.ledger_notes_dir,
+        )
+        target_text = target_path.read_text(encoding="utf-8")
+        from ledger.parsing.frontmatter import parse_frontmatter_text
+        _, existing_body = parse_frontmatter_text(target_text)
+        existing_statement = _extract_statement_section(existing_body) or existing_body.strip()
+    except Exception as exc:
+        print(f"warning: could not read merge target {merge_path_str!r}: {exc}")
+        return
+
+    candidate_statement = _extract_statement_section(candidate.body) or candidate.body.strip()
+
+    print(f"\n--- existing ({merge_path_str}) ---")
+    print(existing_statement)
+    print(f"\n--- candidate ({candidate.filename}) ---")
+    print(candidate_statement)
+
+    if candidate.conflict_classification:
+        verdict = candidate.conflict_classification.upper()
+        confidence = (
+            f" (confidence: {candidate.conflict_confidence:.2f})"
+            if candidate.conflict_confidence is not None
+            else ""
+        )
+        reason = f" — {candidate.conflict_reason}" if candidate.conflict_reason else ""
+        print(f"\nVerdict: {verdict}{confidence}{reason}")
+
+    if candidate.conflict_classification == "contradict":
+        print("Merge hint: review both statements; use 'a <idx>' to accept and manually reconcile,")
+        print("  or 'r <idx>' to discard this candidate.")
+    elif candidate.merge_with:
+        print("Merge hint: use 'm <idx>' to merge candidate body into existing note.")
+
+
 def _handle_inspect(line: str, candidates: list[InboxCandidate]) -> None:
     parts = line.split(None, 1)
     arg = parts[1].strip() if len(parts) > 1 else ""
@@ -330,7 +411,10 @@ def _handle_inspect(line: str, candidates: list[InboxCandidate]) -> None:
     for row in rows:
         candidate = candidates[row - 1]
         print(f"\n--- #{row}: {candidate.filename} ---")
-        print(candidate.body.strip())
+        if candidate.merge_with and candidate.conflict_classification:
+            _render_side_by_side(candidate)
+        else:
+            print(candidate.body.strip())
 
 
 def _handle_unset(
