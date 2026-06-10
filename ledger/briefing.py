@@ -159,7 +159,10 @@ def daily_briefing() -> str:
     if shutil.which("things"):
         lines.append("## Things3")
         lines.append("")
-        lines.append("Run `things today` for today's tasks.")
+        if config.things3_sync_enabled:
+            lines.append("Run `ledger loops sync` to sync open loops with Things3.")
+        else:
+            lines.append("Run `things today` for today's tasks.")
         lines.append("")
 
     # Maintenance check
