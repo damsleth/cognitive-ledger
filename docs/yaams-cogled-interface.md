@@ -18,13 +18,14 @@ through the three artifacts below. Either tool must still work standalone.
 
 ---
 
-## The three seam artifacts
+## The four seam artifacts
 
 | # | Artifact | Direction | Producer | Consumer | Status |
 |---|----------|-----------|----------|----------|--------|
 | 1 | `note_index.json` | cogled → YAAMS | `ledger sleep index` | YAAMS dedup + `tier2_ledger` ingest | exists |
 | 2 | Inbox candidate `.md` | YAAMS → cogled | `yaams promote review` | cogled inbox triage | exists, **under-specified** |
-| 3 | `rejected_candidates.jsonl` | cogled → YAAMS | cogled reject (Phase A) | YAAMS `promote generate` | **does not exist yet** |
+| 3 | `rejected_candidates.jsonl` | cogled → YAAMS | cogled reject (Phase A) | YAAMS `promote generate` | exists |
+| 4 | `ledger embed search --json` | cogled → YAAMS | cogled CLI | YAAMS promote dedup | new in Phase C |
 
 ---
 
@@ -211,6 +212,65 @@ review item 2):
 ```bash
 ledger sleep lint && ledger sleep index && yaams ingest --source tier2_ledger
 ```
+
+## 4. `ledger embed search --json` (cogled → YAAMS)
+
+Added in Phase C. YAAMS calls cogled as a subprocess to check whether a candidate
+statement already exists in the tier-2 ledger before writing an inbox file.
+
+### Invocation
+
+```
+ledger embed search --target ledger --query "<candidate_statement>" --limit 3 --json
+```
+
+YAAMS reads stdout as JSON. Exit code is always 0 (missing index is not an error);
+the `available` field signals whether the index was reachable.
+
+### JSON shape
+
+```json
+{
+  "target": "ledger",
+  "backend": "local",
+  "model": "BAAI/bge-m3",
+  "available": true,
+  "reason": "",
+  "index_built_at": "2026-06-09T10:00:00Z",
+  "index_item_count": 142,
+  "results": [
+    {
+      "rel_path": "02_facts/fact__example.md",
+      "type": "fact",
+      "scope": "work",
+      "status": "active",
+      "lang": "en",
+      "updated": "2026-05-12T00:00:00Z",
+      "cosine_similarity": 0.94
+    }
+  ]
+}
+```
+
+**No `title` field** — ledger index items have none. YAAMS keys on `rel_path` +
+`cosine_similarity` only.
+
+When `available` is false, `reason` is one of `missing_index | empty_query_vector`
+and `results` is `[]`.
+
+### Threshold semantics (contract v1 defaults, live in YAAMS config)
+
+| cosine_similarity | decision | action |
+|---|---|---|
+| `>= 0.92` | `duplicate` | skip candidate entirely |
+| `>= 0.80 and < 0.92` | `merge` | keep candidate, set `merge_with` + `dedup_similarity` |
+| `< 0.80` | `new` | keep candidate unchanged |
+
+Defaults live in `promote.semantic_dedup` in YAAMS config; tune without code changes.
+Defensive failure mode: subprocess error, timeout, missing index, or bad JSON →
+verdict is `new`. Promotion is never blocked on tooling.
+
+---
 
 ## Failure posture (degrade open)
 
