@@ -1,4 +1,16 @@
-"""Shared ledger note layout and path helpers."""
+"""Shared ledger note layout and path helpers.
+
+This module is the canonical source of truth for index and artifact path
+layout across the ledger package.  All path construction for note-type
+directories, index files, artifact directories, and the rejected-candidates
+log is centralised here so that callers never hard-code raw path strings.
+
+Modules that depend on this layout:
+  - ledger/maintenance.py  (rebuild, prune, migrate operations)
+  - ledger/retrieval.py    (index loading and hybrid-search paths)
+  - ledger/web/            (API route helpers and static-asset paths)
+  - ledger/obsidian/       (vault importer path resolution)
+"""
 
 from __future__ import annotations
 
