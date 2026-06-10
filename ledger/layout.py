@@ -24,6 +24,7 @@ INDICES_SUBDIR = "08_indices"
 TIMELINE_FILENAME = "timeline.md"
 TIMELINE_JSONL_FILENAME = "timeline.jsonl"
 REJECTED_CANDIDATES_FILENAME = "rejected_candidates.jsonl"
+NOTE_INDEX_FILENAME = "note_index.json"
 
 
 @dataclass(frozen=True)
@@ -109,6 +110,10 @@ def timeline_jsonl_path(ledger_notes_dir: Path) -> Path:
 
 def rejected_candidates_path(ledger_notes_dir: Path) -> Path:
     return indices_dir(ledger_notes_dir) / REJECTED_CANDIDATES_FILENAME
+
+
+def note_index_path(ledger_notes_dir: Path) -> Path:
+    return indices_dir(ledger_notes_dir) / NOTE_INDEX_FILENAME
 
 
 def is_logical_note_path(path: str | Path) -> bool:
