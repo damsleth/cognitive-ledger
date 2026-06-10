@@ -21,6 +21,7 @@ from ledger.retrieval import (
     scope_matches,
     tokenize,
 )
+from ledger.scoring import overlap_components as _overlap_components
 from ledger.retrieval_types import (
     RetrievalCandidate,
     RetrievalResult,
@@ -313,19 +314,17 @@ def rank_query_lexical(*args: Any, **kwargs: Any) -> RetrievalResult:
 
 
 def lexical_score_component(candidate: ScoredResult | dict[str, Any], query_tokens: set[str]) -> tuple[float, int, int]:
+    """Compute a blended lexical score and raw overlap counts for *candidate*.
+
+    Delegates overlap computation to ``scoring.overlap_components`` and applies
+    the query.py-specific 0.70/0.30 blend (note vs tag weights differ from the
+    0.70/0.20/0.10 blend used in the retrieval-pass coarse scorer).
+    """
     note_tokens = set(result_get(candidate, "note_tokens", set()) or set())
     tag_tokens = set(result_get(candidate, "tag_tokens", set()) or set())
-    if query_tokens:
-        lexical_overlap_count = len(note_tokens & query_tokens)
-        lexical_match = lexical_overlap_count / len(query_tokens)
-        tag_overlap_count = len(tag_tokens & query_tokens)
-        tag_overlap = tag_overlap_count / len(query_tokens)
-    else:
-        lexical_overlap_count = 0
-        lexical_match = 0.0
-        tag_overlap_count = 0
-        tag_overlap = 0.0
-
+    lexical_match, tag_overlap, lexical_overlap_count, tag_overlap_count = _overlap_components(
+        note_tokens, tag_tokens, query_tokens
+    )
     lexical_score = (0.70 * lexical_match) + (0.30 * tag_overlap)
     lexical_score = max(0.0, min(1.0, lexical_score))
     return lexical_score, lexical_overlap_count, tag_overlap_count
@@ -456,13 +455,8 @@ def rank_query_semantic_hybrid(
     _use_prf = config.prf_enabled if prf_enabled is None else bool(prf_enabled)
 
     # Load signal summary once if signal scoring is enabled (same gate as lexical path)
-    _signal_summary: dict[str, Any] | None = None
-    if config.score_weight_signal > 0:
-        from ledger.signals import load_signal_summary
-        _sig_summary_raw = load_signal_summary()
-        _real_signals = _sig_summary_raw.get("_meta", {}).get("real_signals", 0)
-        if _real_signals >= config.signal_min_entries:
-            _signal_summary = _sig_summary_raw
+    from ledger.signals import signal_summary_if_active
+    _signal_summary: dict[str, Any] | None = signal_summary_if_active(config)
 
     candidates_started = time.perf_counter()
     if as_of is not None:
