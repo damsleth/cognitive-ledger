@@ -1154,8 +1154,107 @@ def handle_inbox_command(args):
             print(f"{verb} {result['filename']} (reason: {result['reason']})")
             print(f"  logged to {result['rejected_to']}")
 
+    elif sub == "rejected":
+        import sys
+        from datetime import datetime, timezone
+        from ledger.inbox import list_rejections, clear_rejections
+
+        # Parse --since
+        since_days: int | None = None
+        since_raw = getattr(args, "since", None)
+        if since_raw is not None:
+            val = since_raw.rstrip("d")
+            try:
+                since_days = int(val)
+            except ValueError:
+                print(
+                    f"ledger inbox rejected: invalid --since: {since_raw}",
+                    file=sys.stderr,
+                )
+                raise SystemExit(1)
+
+        do_clear = getattr(args, "clear", False)
+        before_raw = getattr(args, "before", None)
+        do_json = getattr(args, "json", False)
+        do_yes = getattr(args, "yes", False)
+        do_verbose = getattr(args, "verbose", False)
+
+        if before_raw is not None and not do_clear:
+            print(
+                "ledger inbox rejected: --before requires --clear",
+                file=sys.stderr,
+            )
+            raise SystemExit(1)
+
+        # Parse --before
+        before_dt = None
+        if before_raw is not None:
+            try:
+                before_dt = datetime.strptime(before_raw, "%Y-%m-%d").replace(
+                    tzinfo=timezone.utc
+                )
+            except ValueError:
+                print(
+                    f"ledger inbox rejected: invalid --before date: {before_raw}",
+                    file=sys.stderr,
+                )
+                raise SystemExit(1)
+
+        if do_clear:
+            # Confirmation prompt unless --yes or --json.
+            if not do_yes and not do_json:
+                prompt = "Proceed? [y/N] "
+                try:
+                    answer = input(prompt).strip().lower()
+                except (EOFError, KeyboardInterrupt):
+                    answer = ""
+                if answer not in ("y", "yes"):
+                    print("Aborted.")
+                    return
+
+            count = clear_rejections(before=before_dt)
+            if do_json:
+                print(json.dumps({
+                    "tool": "ledger",
+                    "command": "inbox rejected",
+                    "ok": True,
+                    "count": count,
+                    "records": [],
+                }, ensure_ascii=False))
+            else:
+                print(f"Removed {count} rejection record(s).")
+        else:
+            records = list_rejections(since_days=since_days)
+            if do_json:
+                print(json.dumps({
+                    "tool": "ledger",
+                    "command": "inbox rejected",
+                    "ok": True,
+                    "count": len(records),
+                    "records": records,
+                }, ensure_ascii=False))
+            else:
+                if not records:
+                    print("No rejection records found.")
+                    return
+                print(f"Rejected candidates ({len(records)}):")
+                for rec in records:
+                    # Format timestamp as YYYY-MM-DD HH:MM
+                    ts_raw = rec.get("rejected_at", "")
+                    try:
+                        ts_dt = datetime.strptime(ts_raw, "%Y-%m-%dT%H:%M:%SZ")
+                        ts_display = ts_dt.strftime("%Y-%m-%d %H:%M")
+                    except ValueError:
+                        ts_display = ts_raw
+                    print(f"  {ts_display} {rec.get('filename', '')}")
+                    print(f"    id: {rec.get('yaams_candidate_id', '')}  entity: {rec.get('yaams_entity', '')}  reason: {rec.get('reason', '')}")
+                    if do_verbose:
+                        ids = rec.get("yaams_source_item_ids", [])
+                        if ids:
+                            print(f"    source_ids: {', '.join(str(i) for i in ids)}")
+
     else:
-        print("Usage: ledger inbox {list|triage|cleanup|reject}")
+        print("Usage: ledger inbox {list|triage|cleanup|reject|rejected}")
         raise SystemExit(1)
 
 
@@ -1678,6 +1777,40 @@ def main(argv=None) -> int:
         help="Log the rejection but do not delete the inbox file",
     )
     reject_parser.add_argument("--json", action="store_true", dest="json", help="Emit action envelope on stdout.")
+    rejected_parser = inbox_subparsers.add_parser("rejected", help="List or clear rejection log")
+    rejected_parser.add_argument(
+        "--since",
+        default=None,
+        metavar="DAYS",
+        help='Filter to last N days, e.g. "30" or "30d"',
+    )
+    rejected_parser.add_argument(
+        "--clear",
+        action="store_true",
+        help="Remove records from the rejection log",
+    )
+    rejected_parser.add_argument(
+        "--before",
+        default=None,
+        metavar="YYYY-MM-DD",
+        help="With --clear: remove records before this date",
+    )
+    rejected_parser.add_argument(
+        "--yes", "-y",
+        action="store_true",
+        help="Skip confirmation prompt for --clear",
+    )
+    rejected_parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Include full yaams_source_item_ids in output",
+    )
+    rejected_parser.add_argument(
+        "--json",
+        action="store_true",
+        dest="json",
+        help="Emit action envelope on stdout.",
+    )
 
     import_cm_parser = subparsers.add_parser(
         "import-claude-memory",
