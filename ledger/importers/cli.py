@@ -199,7 +199,12 @@ def _dispatch_obsidian(args: argparse.Namespace) -> int:
         return 2
 
     if subcommand == "doctor":
-        return ObsidianBackend(root).run_doctor()
+        result = ObsidianBackend(root).run_doctor()
+        for line in result.checks.get("lines", []):
+            print(line)
+        for e in result.errors:
+            print(f"error: {e}")
+        return 0 if result.ok else 2
 
     if subcommand == "queue":
         if root is None:
@@ -207,7 +212,13 @@ def _dispatch_obsidian(args: argparse.Namespace) -> int:
             return 2
         queue_sub = getattr(args, "queue_subcommand", None)
         if queue_sub == "sync":
-            return ObsidianBackend(root).queue_sync()
+            result = ObsidianBackend(root).queue_sync()
+            if result is None:
+                print("error: --vault or --root is required", file=sys.stderr)
+                return 2
+            import json as _json
+            print(_json.dumps({"promoted": result.promoted, "rejected": result.rejected, "pending": result.pending}, indent=2))
+            return 0
         print("error: queue requires sync", file=sys.stderr)
         return 2
 

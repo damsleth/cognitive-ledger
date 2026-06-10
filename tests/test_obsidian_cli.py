@@ -40,10 +40,16 @@ class TestCLIExitCodes(unittest.TestCase):
       rc = ledger_main(["import", "obsidian", "doctor", "--vault", str(vault)])
       self.assertNotEqual(rc, 0)
 
-  def test_queue_sync_without_root_returns_two(self):
-    """queue sync with no root should return exit code 2."""
-    rc = ObsidianBackend(None).queue_sync()
-    self.assertEqual(rc, 2)
+  def test_queue_sync_without_root_returns_none(self):
+    """queue sync with no root should return None (no root sentinel)."""
+    result = ObsidianBackend(None).queue_sync()
+    self.assertIsNone(result)
+
+  def test_queue_sync_without_root_cli_exits_two(self):
+    """CLI queue sync with no root should produce exit code 2."""
+    with self.assertRaises(SystemExit) as ctx:
+      ledger_main(["import", "obsidian", "queue", "sync"])
+    self.assertEqual(ctx.exception.code, 2)
 
   def test_daemon_without_root_returns_two(self):
     """daemon start with no root should return exit code 2."""
