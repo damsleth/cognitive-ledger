@@ -1113,9 +1113,15 @@ def handle_links_command(args):
 
 
 def handle_briefing_command(args):
-    from ledger.briefing import daily_briefing, weekly_review
+    import json as _json
+    from ledger.briefing import daily_briefing, daily_briefing_data, weekly_review
 
-    if args.weekly:
+    if getattr(args, "json", False):
+        if args.weekly:
+            print(_json.dumps({"error": "--json is not supported for --weekly"}, indent=2))
+        else:
+            print(_json.dumps(daily_briefing_data(), indent=2, ensure_ascii=False))
+    elif args.weekly:
         print(weekly_review())
     else:
         print(daily_briefing())
@@ -1902,6 +1908,7 @@ def main(argv=None) -> int:
 
     briefing_parser = subparsers.add_parser("briefing", help="Daily or weekly briefing")
     briefing_parser.add_argument("--weekly", action="store_true")
+    briefing_parser.add_argument("--json", action="store_true", dest="json", help="Output as JSON")
 
     inbox_parser = subparsers.add_parser("inbox", help="Manage inbox captures")
     inbox_subparsers = inbox_parser.add_subparsers(dest="inbox_command")
