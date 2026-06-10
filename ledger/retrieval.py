@@ -23,7 +23,7 @@ from typing import Any, Union
 
 from ledger.config import get_config
 from ledger.io import safe_write_text
-from ledger.layout import NOTE_LAYOUTS, indices_dir, logical_path, note_type_dir, resolve_path
+from ledger.layout import NOTE_LAYOUTS, indices_dir, logical_path, note_index_path, note_type_dir, resolve_path
 from ledger.parsing import (
     extract_link_tokens,
     extract_title,
@@ -66,7 +66,7 @@ def _cfg():
 
 
 def _note_index_path() -> Path:
-    return indices_dir(_cfg().ledger_notes_dir) / "note_index.json"
+    return note_index_path(_cfg().ledger_notes_dir)
 
 
 def _note_types() -> dict[str, dict[str, Any]]:
