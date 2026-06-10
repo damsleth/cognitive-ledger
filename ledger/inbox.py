@@ -130,21 +130,27 @@ def cleanup_inbox(
     than stale_days days. These are produced by the ledger pipeline itself and
     accumulate when sessions end without cleanup.
 
+    YAAMS candidates (files with ``yaams_candidate_id`` frontmatter or
+    ``promoted_by: yaams``) are logged to rejected_candidates.jsonl via
+    ``reject_inbox_item`` instead of plain unlink when ``apply`` is True.
+
     Args:
         notes_dir: Optional notes directory override.
         stale_days: Age threshold in days for auto-generated items.
         apply: If False, only report what would be removed (dry-run).
 
     Returns:
-        Dict with keys "orphaned_locks", "stale_items", each a list of filenames.
+        Dict with keys "orphaned_locks", "stale_items", and
+        "logged_rejections" (list of filenames logged as rejections).
     """
     inbox = _inbox_dir(notes_dir)
     if not inbox.is_dir():
-        return {"orphaned_locks": [], "stale_items": []}
+        return {"orphaned_locks": [], "stale_items": [], "logged_rejections": []}
 
     now = datetime.now(timezone.utc)
     orphaned_locks: list[str] = []
     stale_items: list[str] = []
+    logged_rejections: list[str] = []
 
     _AUTO_PREFIXES = ("session__", "session_notes__", "uncommitted_note_changes")
 
@@ -166,12 +172,30 @@ def cleanup_inbox(
             continue
         stale_items.append(md_file.name)
         if apply:
-            md_file.unlink()
-            lock_file = md_file.with_suffix(".md.lock")
-            if lock_file.exists():
-                lock_file.unlink()
+            # Check if this is a YAAMS candidate before removing.
+            is_yaams = False
+            try:
+                text = md_file.read_text(encoding="utf-8")
+                fm, _ = parse_frontmatter_text(text)
+                if fm.get("yaams_candidate_id") or fm.get("promoted_by") == "yaams":
+                    is_yaams = True
+            except Exception:
+                pass
 
-    return {"orphaned_locks": orphaned_locks, "stale_items": stale_items}
+            if is_yaams:
+                try:
+                    reject_inbox_item(md_file, reason="discarded", notes_dir=notes_dir, remove=True)
+                    logged_rejections.append(md_file.name)
+                except Exception:
+                    # Fallback to plain unlink if rejection logging fails.
+                    md_file.unlink()
+            else:
+                md_file.unlink()
+                lock_file = md_file.with_suffix(".md.lock")
+                if lock_file.exists():
+                    lock_file.unlink()
+
+    return {"orphaned_locks": orphaned_locks, "stale_items": stale_items, "logged_rejections": logged_rejections}
 
 
 def promote(
@@ -348,6 +372,195 @@ def reject_inbox_item(
         "reason": reason,
         "removed": removed,
     }
+
+
+def list_rejections(
+    notes_dir: Path | None = None,
+    since_days: int | None = None,
+) -> list[dict[str, Any]]:
+    """Return rejection records from rejected_candidates.jsonl, newest first.
+
+    Missing file returns [].
+    Malformed JSONL lines are silently skipped (file is never rewritten).
+
+    Args:
+        notes_dir: Optional notes directory override.
+        since_days: Keep records whose ``rejected_at`` is within the last N
+            days.  Parses ISO-Z timestamps via strptime; records with
+            unparseable timestamps are excluded when a filter is active.
+
+    Returns:
+        List of record dicts sorted by ``rejected_at`` descending.
+    """
+    config = get_config()
+    nd = notes_dir or config.ledger_notes_dir
+    rpath = rejected_candidates_path(nd)
+
+    if not rpath.exists():
+        return []
+
+    records: list[dict[str, Any]] = []
+    for line in rpath.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            rec = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        records.append(rec)
+
+    if since_days is not None:
+        cutoff = datetime.now(timezone.utc).timestamp() - since_days * 86400
+        filtered: list[dict[str, Any]] = []
+        for rec in records:
+            try:
+                ts = datetime.strptime(rec["rejected_at"], "%Y-%m-%dT%H:%M:%SZ").replace(
+                    tzinfo=timezone.utc
+                )
+                if ts.timestamp() >= cutoff:
+                    filtered.append(rec)
+            except (KeyError, ValueError):
+                pass
+        records = filtered
+
+    records.sort(
+        key=lambda r: r.get("rejected_at", ""),
+        reverse=True,
+    )
+    return records
+
+
+def clear_rejections(
+    notes_dir: Path | None = None,
+    before: datetime | None = None,
+) -> int:
+    """Remove rejection records; return number removed.
+
+    - ``before`` is None: truncate the whole file; returns previous
+      good-line count.
+    - ``before`` set (UTC-aware datetime): rewrite keeping records with
+      ``rejected_at >= before``.  Malformed lines are preserved verbatim.
+    - Missing file returns 0.
+    - Write is atomic via a temp file + os.replace.
+
+    Args:
+        notes_dir: Optional notes directory override.
+        before: Optional upper bound (exclusive) for removal; records
+            *before* this timestamp are removed.
+
+    Returns:
+        Number of well-formed records that were removed.
+    """
+    import os
+    import tempfile
+
+    config = get_config()
+    nd = notes_dir or config.ledger_notes_dir
+    rpath = rejected_candidates_path(nd)
+
+    if not rpath.exists():
+        return 0
+
+    raw_lines = rpath.read_text(encoding="utf-8").splitlines(keepends=True)
+
+    if before is None:
+        # Count valid lines then truncate.
+        removed = 0
+        for line in raw_lines:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            try:
+                json.loads(stripped)
+                removed += 1
+            except json.JSONDecodeError:
+                pass
+        rpath.write_text("", encoding="utf-8")
+        return removed
+
+    # Selective rewrite: keep records with rejected_at >= before; preserve
+    # malformed lines verbatim.
+    keep_lines: list[str] = []
+    removed = 0
+    for line in raw_lines:
+        stripped = line.strip()
+        if not stripped:
+            keep_lines.append(line)
+            continue
+        try:
+            rec = json.loads(stripped)
+        except json.JSONDecodeError:
+            # Preserve malformed line as-is.
+            keep_lines.append(line)
+            continue
+        try:
+            ts = datetime.strptime(rec["rejected_at"], "%Y-%m-%dT%H:%M:%SZ").replace(
+                tzinfo=timezone.utc
+            )
+        except (KeyError, ValueError):
+            keep_lines.append(line)
+            continue
+        if ts >= before:
+            keep_lines.append(line)
+        else:
+            removed += 1
+
+    # Atomic write.
+    dir_ = rpath.parent
+    fd, tmp_path = tempfile.mkstemp(dir=dir_, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.writelines(keep_lines)
+        os.replace(tmp_path, rpath)
+    except Exception:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
+
+    return removed
+
+
+def is_rejected(
+    yaams_candidate_id: str,
+    notes_dir: Path | None = None,
+) -> bool:
+    """Return True if ``yaams_candidate_id`` appears in the rejection log.
+
+    Empty/None id returns False immediately (no I/O).
+    Performs an exact-match linear scan; no caching.
+
+    Args:
+        yaams_candidate_id: The candidate id to look up.
+        notes_dir: Optional notes directory override.
+
+    Returns:
+        True if a matching record exists, False otherwise.
+    """
+    if not yaams_candidate_id:
+        return False
+
+    config = get_config()
+    nd = notes_dir or config.ledger_notes_dir
+    rpath = rejected_candidates_path(nd)
+
+    if not rpath.exists():
+        return False
+
+    for line in rpath.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            rec = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if rec.get("yaams_candidate_id") == yaams_candidate_id:
+            return True
+
+    return False
 
 
 # ---------------------------------------------------------------------------
