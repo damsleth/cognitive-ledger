@@ -7,7 +7,7 @@ import platform
 import sys
 from pathlib import Path
 
-from ledger.importers.types import DoctorResult, ImportOptions, ImportResult
+from ledger.importers.types import DoctorResult, ImportOptions, ImportResult, QueueSyncResult
 
 from .bases import write_bases
 from .config import (
@@ -175,26 +175,26 @@ class ObsidianBackend:
         print(detail)
         return 0 if running else 1
 
-    def run_doctor(self) -> int:
+    def run_doctor(self) -> DoctorResult:
         try:
             config = self._load_config()
         except Exception as exc:
-            print(f"error: {exc}")
-            return 2
+            return DoctorResult(backend=self.name, ok=False, errors=(str(exc),))
         code, lines = _run_doctor(config)
-        for line in lines:
-            print(line)
-        return code
+        return DoctorResult(backend=self.name, ok=(code == 0), checks={"lines": lines})
 
-    def queue_sync(self) -> int:
+    def queue_sync(self) -> QueueSyncResult | None:
+        """Promote approved candidate notes. Returns None if root is missing."""
         if self.root is None:
-            print("error: --vault or --root is required", file=sys.stderr)
-            return 2
+            return None
         config = self._load_config()
         validate_config(config)
-        result = sync_queue(config)
-        print(json.dumps(result, indent=2))
-        return 0
+        raw = sync_queue(config)
+        return QueueSyncResult(
+            promoted=raw.get("promoted", 0),
+            rejected=raw.get("rejected", 0),
+            pending=raw.get("pending", 0),
+        )
 
     def related(self, text: str, top_k: int = 5, json_output: bool = False) -> int:
         from ledger.retrieval import related_to_text
