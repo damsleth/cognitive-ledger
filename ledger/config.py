@@ -127,6 +127,9 @@ def _coerce_value(key: str, value: Any, current: Any) -> Any:
         return Path(str(value)).expanduser()
     if isinstance(current, (tuple, frozenset)):
         return current
+    if isinstance(current, dict):
+        # Pass dict values (e.g. things3_scope_routing) through unchanged
+        return value if isinstance(value, dict) else current
     return value
 
 
@@ -252,6 +255,7 @@ def _apply_env_overrides(config: "LedgerConfig") -> "LedgerConfig":
         "LEDGER_CONTRADICTION_PROTECT_HIGHER_CONFIDENCE": "contradiction_protect_higher_confidence",
         "LEDGER_PRIOR_ENABLED": "prior_enabled",
         "LEDGER_PRF_ENABLED": "prf_enabled",
+        "LEDGER_THINGS3_SYNC_ENABLED": "things3_sync_enabled",
     }
     for env_var, attr in bool_mappings.items():
         if (value := os.getenv(env_var)) is None:
@@ -267,6 +271,13 @@ def _apply_env_overrides(config: "LedgerConfig") -> "LedgerConfig":
         "LEDGER_FUSION": "fusion",
         "LEDGER_JUDGE_BACKEND": "judge_backend",
         "LEDGER_JUDGE_COMMAND": "judge_subprocess_command",
+        "LEDGER_THINGS3_DB_PATH": "things3_db_path",
+        "LEDGER_THINGS3_DEFAULT_PROJECT": "things3_default_project",
+        "LEDGER_THINGS3_BLOCKED_PROJECT": "things3_blocked_project",
+        "LEDGER_THINGS3_MARKER_PREFIX": "things3_marker_prefix",
+        "LEDGER_THINGS3_COMPLETED_MAPS_TO": "things3_completed_maps_to",
+        "LEDGER_THINGS3_CANCELED_MAPS_TO": "things3_canceled_maps_to",
+        "LEDGER_THINGS3_ORPHAN_ACTION": "things3_orphan_action",
     }
     for env_var, attr in string_mappings.items():
         if (value := os.getenv(env_var)) is None:
@@ -441,6 +452,17 @@ class LedgerConfig:
     Rationale: Disabled by default until signals.jsonl has enough
     entries to be meaningful. Enable via config.yaml once the
     feedback loop has accumulated data.
+    """
+
+    negative_eval_max_score: float = 0.5
+    """Score threshold for negative eval cases (expected_none: true).
+
+    A negative eval case passes if the top-1 retrieval result has a score
+    at or below this threshold (indicating the retrieval correctly abstained).
+    A result above this threshold is counted as a false positive.
+
+    Rationale: 0.5 is a reasonable mid-point for the lexical retrieval
+    score range; tune if using semantic or hybrid retrieval modes.
     """
 
     # =========================================================================
@@ -875,6 +897,79 @@ class LedgerConfig:
 
     default_openai_model: str = "text-embedding-3-small"
     """Default model for OpenAI embedding backend."""
+
+    # =========================================================================
+    # Things3 Sync Integration
+    # =========================================================================
+
+    things3_sync_enabled: bool = False
+    """Master switch for the Things3 ⇄ open-loops sync.
+
+    Off by default: no subprocess calls are made when this is False.
+    Enable in config.yaml once Things3 is installed and the Things CLI
+    (https://culturedcode.com/things/support/articles/2803573/) is on PATH.
+    """
+
+    things3_db_path: str = ""
+    """Path to Things3 SQLite database (leave empty to use CLI reads only).
+
+    Usually ~/Library/Group Containers/JLMPQHK86H.com.culturedcode.ThingsMac/
+    ThingsData-xxx/Things Database.thingsdatabase/main.sqlite
+    Leave empty — the Things CLI handles DB access.
+    """
+
+    things3_default_project: str = ""
+    """Things project name (or UUID) for new loop tasks (scope: any not mapped).
+
+    Leave empty to create tasks in the Things Inbox.
+    """
+
+    things3_blocked_project: str = ""
+    """Things project name (or UUID) for loops with status:blocked.
+
+    Leave empty to use things3_default_project for blocked loops too.
+    """
+
+    things3_scope_routing: dict = field(default_factory=dict)
+    """Map of ledger scope → Things project name for new task creation.
+
+    Example YAML::
+
+        things3_scope_routing:
+          work: "Work Tasks"
+          dev:  "Dev"
+          home: "Home"
+
+    Scopes not listed fall back to things3_default_project.
+    """
+
+    things3_marker_prefix: str = "ledger:"
+    """Prefix embedded in Things task Notes field to link back to a loop.
+
+    Format: ``ledger:<slug> status:<status>``
+    Do not change after first sync — existing tasks use this prefix.
+    """
+
+    things3_completed_maps_to: str = "closed"
+    """Ledger loop status to set when a Things task is marked completed.
+
+    Allowed values: closed | snoozed (or any value in loop_statuses).
+    """
+
+    things3_canceled_maps_to: str = "snoozed"
+    """Ledger loop status to set when a Things task is marked cancelled.
+
+    Allowed values: closed | snoozed (or any value in loop_statuses).
+    """
+
+    things3_orphan_action: str = "flag"
+    """What to do with Things tasks whose ledger loop has been deleted.
+
+    Allowed values:
+      - ``flag``: add "[orphan]" tag to the Things task (default, safe)
+      - ``cancel``: cancel the orphaned task in Things
+      - ``ignore``: leave orphans untouched
+    """
 
     # =========================================================================
     # Methods
