@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2026-06-10 (0.8.0)
 
 ### Added
 - **`ledger init --demo`**: writes 5 sample notes (fact, preference, goal, open loop, concept)
@@ -27,9 +27,21 @@
 - **`docs/trust-boundaries.md`**: documents principal tiers, write/read policy, index
   trust, external service boundaries, and threat model.
 - **`scripts/check-doc-links.py`**: validates Markdown links in `docs/` and `README.md`.
+- **`ledger briefing --json`**: machine-readable JSON output for the briefing command, enabling programmatic consumption.
+- **`sheep lint --json` / `sheep sleep --json`**: structured JSON fields (`issues` list and `items` checklist) consistent with the existing `sheep status --json` payload.
+- **Things3 ↔ open-loops bidirectional sync**: ledger open-loop notes can be synced to and from Things 3 tasks via the new sync command.
+- **`LEDGER_DEBUG=1` full traceback**: CLI top-level except handlers and `emit_action` now print the full Python traceback to stderr when `LEDGER_DEBUG=1` is set, replacing the swallowed-exception behaviour.
 
 ### Changed
 - **Shared adapter-state root for import backends (plan 42, phase 4).** All import-backend state now lives under `<notes_dir>/08_indices/importers/<backend>/` instead of loose prefixed files in `08_indices`. The Obsidian adapter's `obsidian_import_state.json` / `obsidian_import_log.md` / `obsidian_scan.md` become `importers/obsidian/{state.json,import_log.md,scan.md}`; existing files are relocated automatically on the next import, queue sync, or init (one-time, no data loss). The folder backend records a run summary in `importers/folder/state.json`. Shared helpers (`backend_state_dir`, `load_json_state`, `save_json_state`, `relocate_legacy_file`) live in the new `ledger/importers/state.py`.
+- **`ledger/scoring.py` — composable scoring primitives**: lexical overlap, tag overlap, scope match, recency, confidence, and intent boost/penalty components have been extracted from duplicate implementations across `retrieval.py` and `query.py` into a shared, independently-testable module. Scores are identical before/after.
+- **Signal activation unified in `signals.py`**: `review.py` now delegates activation decisions to `signals.py` instead of duplicating the activation logic; single implementation, consistent behaviour.
+- **`_note_index_path` moved to `ledger/layout.py`**: index path construction consolidated in the canonical path-layout module; `retrieval.py` imports from `layout`.
+- **`_lint_note` heuristics extracted to `ledger/validation.py`**: frontmatter type-inference and field-validation logic are now standalone pure functions reusable outside the maintenance context (e.g. the web `/admin` endpoint).
+- **`claude-memory` importer state path normalized**: `claude_memory_import_state.json` now lives at `08_indices/importers/claude_memory/state.json` via `importer_state_dir()`, consistent with all other backends.
+- **`ObsidianBackend` CLI I/O partially decoupled**: `init` and `bootstrap` methods return typed results; rendering delegated to `ledger/importers/cli.py`. Remaining methods tracked for future passes.
+- **Test-compat re-exports removed from `ledger/cli.py`**: the `# Re-exports for test compatibility` block (lines 63–81) is gone; callers import directly from `ledger.retrieval`, `ledger.eval`, and `ledger.query`.
+- **Codebase review R1–R8**: batch of correctness, efficiency, and style fixes surfaced by the 2026-06-10 review pass.
 
 ## 2026-06-05 (0.7.0)
 
