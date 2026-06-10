@@ -42,6 +42,7 @@ from typing import Any
 from ledger.config import LedgerConfig, get_config
 from ledger.io import safe_write_text
 from ledger.io.safe_write import append_timeline_entry
+from ledger.importers.state import backend_state_dir, relocate_legacy_file
 from ledger.layout import (
     NOTE_LAYOUTS,
     indices_dir,
@@ -53,7 +54,9 @@ from ledger.text import infer_lang, sha1_file, sha1_text, slugify, write_markdow
 
 
 DEFAULT_MEMORY_ROOT = Path.home() / ".claude" / "projects"
-STATE_FILENAME = "claude_memory_import_state.json"
+_BACKEND = "claude_memory"
+# Legacy filename kept for backward-compat migration (see _state_path).
+_LEGACY_STATE_FILENAME = "claude_memory_import_state.json"
 
 # Provenance channel recorded in frontmatter (see schema proposal in
 # docs/claude-memory-import.md). Distinct from the epistemic ``source``
@@ -388,8 +391,17 @@ def _stat_iso(ts: float) -> str:
     return datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _state_path(cfg: LedgerConfig) -> Path:
+    """Return the canonical state-file path, migrating legacy location if needed."""
+    notes_dir = Path(cfg.ledger_notes_dir)
+    new_path = backend_state_dir(notes_dir, _BACKEND) / "state.json"
+    legacy_path = indices_dir(cfg.ledger_notes_dir) / _LEGACY_STATE_FILENAME
+    relocate_legacy_file(legacy_path, new_path)
+    return new_path
+
+
 def _load_state(cfg: LedgerConfig) -> dict[str, Any]:
-    path = indices_dir(cfg.ledger_notes_dir) / STATE_FILENAME
+    path = _state_path(cfg)
     if not path.is_file():
         return {"entries": {}}
     try:
@@ -402,7 +414,8 @@ def _load_state(cfg: LedgerConfig) -> dict[str, Any]:
 
 
 def _save_state(cfg: LedgerConfig, state: dict[str, Any]) -> None:
-    path = indices_dir(cfg.ledger_notes_dir) / STATE_FILENAME
+    path = _state_path(cfg)
+    path.parent.mkdir(parents=True, exist_ok=True)
     safe_write_text(path, json.dumps(state, indent=2, ensure_ascii=False) + "\n")
 
 
