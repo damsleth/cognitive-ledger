@@ -237,6 +237,7 @@ def handle_query_command(args):
 
     try:
         as_of = _parse_as_of(getattr(args, "as_of", None))
+        changed_since = _parse_as_of(getattr(args, "changed_since", None))
     except ValueError as e:
         print(f"error: {e}", file=sys.stderr)
         raise SystemExit(2)
@@ -250,6 +251,7 @@ def handle_query_command(args):
         embed_backend=args.embed_backend,
         embed_model=args.embed_model,
         as_of=as_of,
+        changed_since=changed_since,
         prf_enabled=True if getattr(args, "prf", False) else None,
     )
 
@@ -304,6 +306,49 @@ def handle_query_command(args):
     if getattr(args, "pick", False):
         # Pass only tier-2 results so tier-1 entries cannot be picked.
         _capture_retrieval_hit_pick(validated_query, results)
+
+
+def handle_answer_command(args):
+    """`ledger answer "<question>"` — grounded synthesis with note citations."""
+    import json as _json
+    from ledger.synthesize import answer as synth_answer
+
+    try:
+        validated_query = validate_query(args.text)
+        validated_scope = validate_scope(getattr(args, "scope", None) or "all")
+        validated_limit = validate_limit(getattr(args, "limit", 5) or 5, min_val=1, max_val=50)
+        as_of = _parse_as_of(getattr(args, "as_of", None))
+    except (QueryValidationError, ScopeValidationError) as e:
+        print(f"error: {e.message}", file=sys.stderr)
+        raise SystemExit(2)
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        raise SystemExit(2)
+
+    result = synth_answer(
+        validated_query,
+        scope=validated_scope,
+        limit=validated_limit,
+        as_of=as_of,
+        backend=getattr(args, "backend", None),
+        use_voice=not getattr(args, "no_voice", False),
+    )
+
+    if getattr(args, "json", False):
+        print(_json.dumps(result.to_dict(), indent=2, ensure_ascii=False))
+        return
+
+    print(result.answer_body or "(no answer)")
+    print(f"\nconfidence: {result.confidence}" + (f" — {result.confidence_reason}" if result.confidence_reason else ""))
+    if result.gaps:
+        print("gaps:")
+        for gap in result.gaps:
+            print(f"  - {gap}")
+    if result.cited_paths:
+        print("sources:")
+        for rank, path in zip(result.cited_ranks, result.cited_paths):
+            print(f"  [{rank}] {path}")
+    print(f"\n(backend: {result.backend}" + (f"/{result.model}" if result.model else "") + ")")
 
 
 def _capture_retrieval_miss(query, results):
@@ -1161,6 +1206,49 @@ def handle_briefing_command(args):
         print(daily_briefing())
 
 
+def handle_changed_command(args):
+    """`ledger changed --since DATE [--type T]` — timeline digest of changes."""
+    import json as _json
+    from ledger.timeline import timeline_since
+
+    try:
+        since = _parse_as_of(getattr(args, "since", None))
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        raise SystemExit(2)
+    if since is None:
+        print("error: --since DATE is required", file=sys.stderr)
+        raise SystemExit(2)
+
+    raw_types = getattr(args, "type", None)
+    types = None
+    if raw_types:
+        types = [t.strip() for t in raw_types.split(",") if t.strip()]
+
+    cfg = get_config()
+    events = timeline_since(cfg.timeline_jsonl_path, since, types=types)
+
+    if getattr(args, "json", False):
+        print(_json.dumps(events, indent=2, ensure_ascii=False))
+        return
+
+    if not events:
+        print(f"No changes since {getattr(args, 'since')}.")
+        return
+
+    grouped: dict[str, list[dict]] = {}
+    for ev in events:
+        grouped.setdefault(str(ev.get("action", "other")), []).append(ev)
+    print(f"Changes since {getattr(args, 'since')} ({len(events)} events):")
+    for action in sorted(grouped):
+        rows = grouped[action]
+        print(f"\n{action} ({len(rows)}):")
+        for ev in sorted(rows, key=lambda e: str(e.get("ts", ""))):
+            desc = str(ev.get("desc", "")).strip()
+            suffix = f" — {desc}" if desc else ""
+            print(f"  {ev.get('ts', '')} | {ev.get('path', '')}{suffix}")
+
+
 def handle_inbox_command(args):
     import json
     from ledger.inbox import list_inbox, triage_suggestions
@@ -1721,6 +1809,23 @@ def handle_sleep_command(args):
     raise SystemExit(maint.main(subargs))
 
 
+def handle_mcp_command(args):
+    """Launch the Model Context Protocol server over stdio (plan 44)."""
+    try:
+        from ledger import mcp as mcp_pkg
+    except (ImportError, RuntimeError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        raise SystemExit(2)
+    try:
+        mcp_pkg.run(
+            allow_write=getattr(args, "allow_write", False),
+            with_yaams=getattr(args, "with_yaams", False),
+        )
+    except RuntimeError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        raise SystemExit(2)
+
+
 def handle_web_command(args):
     try:
         from ledger import web as web_pkg
@@ -1912,6 +2017,16 @@ def main(argv=None) -> int:
         ),
     )
     query_parser.add_argument(
+        "--changed-since",
+        dest="changed_since",
+        default=None,
+        metavar="DATE",
+        help=(
+            "Only return notes created or updated on/after DATE "
+            "(YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ). Composes with --as-of."
+        ),
+    )
+    query_parser.add_argument(
         "--pick",
         action="store_true",
         help="After results, ask which one helped and log a retrieval_hit signal",
@@ -1966,6 +2081,20 @@ def main(argv=None) -> int:
         metavar="SCORE",
         help="Discard tier-1 results whose score is below this threshold.",
     )
+
+    answer_parser = subparsers.add_parser(
+        "answer", help="Synthesize a grounded, cited answer to a question"
+    )
+    answer_parser.add_argument("text", help="question text")
+    answer_parser.add_argument("--scope", default=None, help="Scope filter (default: all)")
+    answer_parser.add_argument("--limit", type=int, default=5, help="Sources to retrieve (default: 5)")
+    answer_parser.add_argument("--as-of", dest="as_of", default=None, metavar="DATE",
+                               help="Answer as of DATE (YYYY-MM-DD or full ISO)")
+    answer_parser.add_argument("--backend", default=None,
+                               help="Override synth backend (dummy|claude|ollama|subprocess)")
+    answer_parser.add_argument("--no-voice", action="store_true", dest="no_voice",
+                               help="Do not inject the Voice DNA profile into the prompt")
+    answer_parser.add_argument("--json", action="store_true", dest="json")
 
     discover_parser = subparsers.add_parser(
         "discover-source", help="Semantic discovery on source notes (source_only output)"
@@ -2156,6 +2285,15 @@ def main(argv=None) -> int:
     briefing_parser = subparsers.add_parser("briefing", help="Daily or weekly briefing")
     briefing_parser.add_argument("--weekly", action="store_true")
     briefing_parser.add_argument("--json", action="store_true", dest="json", help="Output as JSON")
+
+    changed_parser = subparsers.add_parser(
+        "changed", help="List notes changed since a date (from the timeline log)"
+    )
+    changed_parser.add_argument("--since", required=True, metavar="DATE",
+                                help="YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ")
+    changed_parser.add_argument("--type", default=None, metavar="TYPES",
+                                help="Comma-separated note types to include (e.g. loops,facts)")
+    changed_parser.add_argument("--json", action="store_true", dest="json", help="Output as JSON")
 
     inbox_parser = subparsers.add_parser("inbox", help="Manage inbox captures")
     inbox_subparsers = inbox_parser.add_subparsers(dest="inbox_command")
@@ -2432,6 +2570,12 @@ def main(argv=None) -> int:
         help="uvicorn log level (default: info)",
     )
 
+    mcp_parser = subparsers.add_parser("mcp", help="Launch the Model Context Protocol server (stdio)")
+    mcp_parser.add_argument("--allow-write", action="store_true", dest="allow_write",
+                            help="Enable the ledger_remember tool (captures to inbox; default off)")
+    mcp_parser.add_argument("--with-yaams", action="store_true", dest="with_yaams",
+                            help="Expose a yaams_query tool (requires yaams on PATH)")
+
     args = parser.parse_args(argv)
 
     def handle_listing_command(command_args):
@@ -2458,6 +2602,7 @@ def main(argv=None) -> int:
 
     command_handlers = {
         "query": handle_query_command,
+        "answer": handle_answer_command,
         "discover-source": handle_discover_source_command,
         "eval": handle_eval_command,
         "context": handle_context_command,
@@ -2510,6 +2655,10 @@ def main(argv=None) -> int:
             handle_briefing_command(args)
             return 0
 
+        if args.command == "changed":
+            handle_changed_command(args)
+            return 0
+
         if args.command == "inbox":
             handle_inbox_command(args)
             return 0
@@ -2532,6 +2681,10 @@ def main(argv=None) -> int:
 
         if args.command == "ab":
             handle_ab_command(args, ab_parser)
+            return 0
+
+        if args.command == "mcp":
+            handle_mcp_command(args)
             return 0
 
         if args.command == "web":

@@ -233,6 +233,184 @@ def clamp01(value: float) -> float:
 
 
 # ---------------------------------------------------------------------------
+# Provenance-weighted confidence (plan 42)
+# ---------------------------------------------------------------------------
+
+# Trustworthiness of the *origin act* that created a note, independent of the
+# `source`/`via` channel fields (which answer "who/what channel"). Absent on
+# legacy notes — `derive_provenance` supplies a default from source/via.
+PROVENANCE_WEIGHTS: dict[str, float] = {
+    "explicit_statement": 1.00,   # user stated it directly
+    "validated": 0.95,            # confirmed against another source
+    "corrected": 0.90,            # written as a correction of a prior note
+    "observed": 0.85,             # inferred from observed behaviour
+    "imported": 0.80,             # bulk-imported (obsidian/folder/claude-memory)
+    "inferred": 0.70,             # model-inferred, unconfirmed
+}
+
+# Weight applied to a note whose provenance is unknown/unrecognised. Equal to
+# the most conservative known weight ("inferred") so an unrecognised value never
+# scores a note *higher* than an explicit low-trust provenance.
+PROVENANCE_WEIGHT_FLOOR: float = 0.70
+
+
+def derive_provenance(source: str, via: str, provenance: str) -> str:
+    """Resolve a note's provenance class.
+
+    An explicit, recognised ``provenance`` value always wins. Otherwise derive a
+    default from the existing ``source``/``via`` frontmatter so legacy notes
+    (which predate the field) keep sensible weights:
+
+    - ``source == "user"``      → ``explicit_statement``
+    - ``source == "inferred"``  → ``inferred``
+    - ``via in {obsidian, claude-memory, folder}`` → ``imported``
+    - otherwise                 → ``observed``
+
+    Pure; no I/O.
+    """
+    explicit = (provenance or "").strip().lower()
+    if explicit in PROVENANCE_WEIGHTS:
+        return explicit
+    s = (source or "").strip().lower()
+    if s == "user":
+        return "explicit_statement"
+    if s == "inferred":
+        return "inferred"
+    v = (via or "").strip().lower()
+    if v in {"obsidian", "claude-memory", "folder"}:
+        return "imported"
+    return "observed"
+
+
+# Canonicalise note-type labels so per-type config accepts either the folder
+# name (``preferences``) or the candidate label (``pref``).
+_TYPE_ALIASES: dict[str, str] = {
+    "facts": "fact",
+    "fact": "fact",
+    "preferences": "pref",
+    "preference": "pref",
+    "pref": "pref",
+    "loops": "loop",
+    "open_loops": "loop",
+    "loop": "loop",
+    "goals": "goal",
+    "goal": "goal",
+    "concepts": "concept",
+    "concept": "concept",
+    "identity": "id",
+    "id": "id",
+}
+
+
+def canonical_note_type(note_type: Any) -> str:
+    """Normalise a note-type label to its canonical short form (pure)."""
+    key = str(note_type or "").strip().lower()
+    return _TYPE_ALIASES.get(key, key)
+
+
+def half_life_for_type(
+    note_type: str,
+    *,
+    by_type: dict[str, float],
+    default_days: float,
+) -> float:
+    """Resolve the recency half-life (days) for *note_type* (plan 43).
+
+    Looks up *by_type* (keys may be folder names or short labels) and falls back
+    to *default_days* when the type is absent or the value is malformed. Result
+    is always >= 1.0 to keep the decay math (``ln(2)/half_life``) well-defined.
+    Pure; no I/O.
+    """
+    if by_type:
+        nt = canonical_note_type(note_type)
+        for key, val in by_type.items():
+            if canonical_note_type(key) == nt:
+                try:
+                    return max(1.0, float(val))
+                except (TypeError, ValueError):
+                    break
+    return max(1.0, float(default_days))
+
+
+def effective_confidence(
+    base_confidence: float,
+    provenance: str,
+    validation_count: float,
+    *,
+    boost_per_signal: float = 0.03,
+    boost_cap: float = 0.15,
+) -> float:
+    """Derive an effective confidence from base confidence, provenance and validations.
+
+    ``effective = base × provenance_weight + min(boost_per·validations, boost_cap)``
+
+    where ``provenance_weight`` comes from ``PROVENANCE_WEIGHTS`` (falling back to
+    ``PROVENANCE_WEIGHT_FLOOR`` for unrecognised values). ``validation_count`` is
+    the per-note affirmation count (corrections are *not* counted — they flip a
+    note's provenance toward ``corrected`` elsewhere, they do not boost it).
+
+    Result is clamped to [0.0, 1.0]. Pure; no I/O.
+    """
+    base = clamp01(base_confidence)
+    weight = PROVENANCE_WEIGHTS.get((provenance or "").strip().lower(), PROVENANCE_WEIGHT_FLOOR)
+    boost = min(max(0.0, boost_per_signal) * max(0.0, validation_count), max(0.0, boost_cap))
+    return clamp01(base * weight + boost)
+
+
+# ---------------------------------------------------------------------------
+# Trust verdict (plan 46)
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class TrustVerdict:
+    """A human-readable trust assessment for a retrieval result.
+
+    ``level`` is one of ``high`` | ``medium`` | ``low``. ``reason`` is a short
+    sentence explaining the level. ``score`` is a continuous [0,1] proxy for
+    sorting/debugging only — it never feeds ranking.
+    """
+
+    level: str
+    reason: str
+    score: float = 0.0
+
+
+def trust_verdict(
+    *,
+    effective_confidence: float,
+    validation_count: float,
+    contradicted: bool,
+    superseded: bool,
+    recency: float,
+    high_confidence: float = 0.85,
+    medium_confidence: float = 0.60,
+) -> TrustVerdict:
+    """Collapse trust signals into a verdict. Pure, deterministic, display-only.
+
+    Precedence:
+    1. superseded or contradicted → ``low`` (names the issue)
+    2. high confidence and at least one affirmation → ``high``
+    3. moderate confidence → ``medium``
+    4. otherwise → ``low`` (``stale`` when recency is very low)
+    """
+    conf = clamp01(effective_confidence)
+    if superseded:
+        return TrustVerdict("low", "superseded by a newer note", conf * 0.5)
+    if contradicted:
+        return TrustVerdict("low", "contradicted by another note", conf * 0.5)
+    if conf >= high_confidence and validation_count >= 1:
+        n = int(validation_count) if validation_count == int(validation_count) else round(validation_count, 1)
+        return TrustVerdict("high", f"high-confidence, affirmed {n}×", conf)
+    if conf >= high_confidence:
+        return TrustVerdict("high", "high-confidence", conf)
+    if conf >= medium_confidence:
+        return TrustVerdict("medium", "moderate confidence, unaffirmed", conf)
+    if recency < 0.15:
+        return TrustVerdict("low", "low confidence and stale", conf)
+    return TrustVerdict("low", "low confidence", conf)
+
+
+# ---------------------------------------------------------------------------
 # Scorer protocol (for future A/B wrapping)
 # ---------------------------------------------------------------------------
 
