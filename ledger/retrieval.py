@@ -973,6 +973,31 @@ def apply_temporal_filter(
     return filtered
 
 
+def apply_changed_since_filter(
+    candidates: list[RetrievalCandidate],
+    *,
+    since: dt.datetime | None,
+) -> list[RetrievalCandidate]:
+    """Keep candidates recorded on/after *since* (plan 47).
+
+    Filters on **record time** (``created_ts`` or ``updated_ts`` — either
+    qualifies), distinct from ``apply_temporal_filter`` which filters on
+    valid-time. ``since=None`` is a no-op (returns the list unchanged), so this
+    is behaviour-neutral unless a ``--changed-since`` bound is supplied. Composes
+    with the valid-time filter: call both to get "valid at X AND changed since Y".
+    """
+    if since is None:
+        return candidates
+    kept: list[RetrievalCandidate] = []
+    for c in candidates:
+        created = _candidate_value(c, "created_ts")
+        updated = _candidate_value(c, "updated_ts")
+        newest = max((t for t in (created, updated) if t is not None), default=None)
+        if newest is not None and newest >= since:
+            kept.append(c)
+    return kept
+
+
 def candidate_index_tokens(candidate: CandidateLike) -> set[str]:
     """Return all tokens that should index a candidate."""
     return (
@@ -1528,6 +1553,7 @@ def rank_lexical(
     now_dt: dt.datetime | None = None,
     retrieval_mode: str = "legacy",
     as_of: dt.datetime | None = None,
+    changed_since: dt.datetime | None = None,
 ) -> RetrievalResult:
     """Rank notes using lexical retrieval modes.
 
@@ -1592,6 +1618,12 @@ def rank_lexical(
     candidates = apply_temporal_filter(candidates, as_of=as_of, now_dt=now_dt)
     prefiltered_candidates = apply_temporal_filter(
         prefiltered_candidates, as_of=as_of, now_dt=now_dt
+    )
+
+    # Record-time window filter (--changed-since); no-op when None.
+    candidates = apply_changed_since_filter(candidates, since=changed_since)
+    prefiltered_candidates = apply_changed_since_filter(
+        prefiltered_candidates, since=changed_since
     )
 
     t_candidates = time.perf_counter()

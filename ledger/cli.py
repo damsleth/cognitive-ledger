@@ -237,6 +237,7 @@ def handle_query_command(args):
 
     try:
         as_of = _parse_as_of(getattr(args, "as_of", None))
+        changed_since = _parse_as_of(getattr(args, "changed_since", None))
     except ValueError as e:
         print(f"error: {e}", file=sys.stderr)
         raise SystemExit(2)
@@ -250,6 +251,7 @@ def handle_query_command(args):
         embed_backend=args.embed_backend,
         embed_model=args.embed_model,
         as_of=as_of,
+        changed_since=changed_since,
         prf_enabled=True if getattr(args, "prf", False) else None,
     )
 
@@ -1161,6 +1163,49 @@ def handle_briefing_command(args):
         print(daily_briefing())
 
 
+def handle_changed_command(args):
+    """`ledger changed --since DATE [--type T]` — timeline digest of changes."""
+    import json as _json
+    from ledger.timeline import timeline_since
+
+    try:
+        since = _parse_as_of(getattr(args, "since", None))
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        raise SystemExit(2)
+    if since is None:
+        print("error: --since DATE is required", file=sys.stderr)
+        raise SystemExit(2)
+
+    raw_types = getattr(args, "type", None)
+    types = None
+    if raw_types:
+        types = [t.strip() for t in raw_types.split(",") if t.strip()]
+
+    cfg = get_config()
+    events = timeline_since(cfg.timeline_jsonl_path, since, types=types)
+
+    if getattr(args, "json", False):
+        print(_json.dumps(events, indent=2, ensure_ascii=False))
+        return
+
+    if not events:
+        print(f"No changes since {getattr(args, 'since')}.")
+        return
+
+    grouped: dict[str, list[dict]] = {}
+    for ev in events:
+        grouped.setdefault(str(ev.get("action", "other")), []).append(ev)
+    print(f"Changes since {getattr(args, 'since')} ({len(events)} events):")
+    for action in sorted(grouped):
+        rows = grouped[action]
+        print(f"\n{action} ({len(rows)}):")
+        for ev in sorted(rows, key=lambda e: str(e.get("ts", ""))):
+            desc = str(ev.get("desc", "")).strip()
+            suffix = f" — {desc}" if desc else ""
+            print(f"  {ev.get('ts', '')} | {ev.get('path', '')}{suffix}")
+
+
 def handle_inbox_command(args):
     import json
     from ledger.inbox import list_inbox, triage_suggestions
@@ -1912,6 +1957,16 @@ def main(argv=None) -> int:
         ),
     )
     query_parser.add_argument(
+        "--changed-since",
+        dest="changed_since",
+        default=None,
+        metavar="DATE",
+        help=(
+            "Only return notes created or updated on/after DATE "
+            "(YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ). Composes with --as-of."
+        ),
+    )
+    query_parser.add_argument(
         "--pick",
         action="store_true",
         help="After results, ask which one helped and log a retrieval_hit signal",
@@ -2156,6 +2211,15 @@ def main(argv=None) -> int:
     briefing_parser = subparsers.add_parser("briefing", help="Daily or weekly briefing")
     briefing_parser.add_argument("--weekly", action="store_true")
     briefing_parser.add_argument("--json", action="store_true", dest="json", help="Output as JSON")
+
+    changed_parser = subparsers.add_parser(
+        "changed", help="List notes changed since a date (from the timeline log)"
+    )
+    changed_parser.add_argument("--since", required=True, metavar="DATE",
+                                help="YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ")
+    changed_parser.add_argument("--type", default=None, metavar="TYPES",
+                                help="Comma-separated note types to include (e.g. loops,facts)")
+    changed_parser.add_argument("--json", action="store_true", dest="json", help="Output as JSON")
 
     inbox_parser = subparsers.add_parser("inbox", help="Manage inbox captures")
     inbox_subparsers = inbox_parser.add_subparsers(dest="inbox_command")
@@ -2508,6 +2572,10 @@ def main(argv=None) -> int:
 
         if args.command == "briefing":
             handle_briefing_command(args)
+            return 0
+
+        if args.command == "changed":
+            handle_changed_command(args)
             return 0
 
         if args.command == "inbox":
