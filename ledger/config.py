@@ -265,6 +265,7 @@ def _apply_env_overrides(config: "LedgerConfig") -> "LedgerConfig":
         "LEDGER_CONTRADICTION_PROTECT_HIGHER_CONFIDENCE": "contradiction_protect_higher_confidence",
         "LEDGER_PRIOR_ENABLED": "prior_enabled",
         "LEDGER_PROVENANCE_WEIGHTING": "provenance_weighting_enabled",
+        "LEDGER_SHOW_TRUST_VERDICT": "show_trust_verdict",
         "LEDGER_PRF_ENABLED": "prf_enabled",
         "LEDGER_THINGS3_SYNC_ENABLED": "things3_sync_enabled",
     }
@@ -515,6 +516,14 @@ class LedgerConfig:
 
     validation_boost_cap: float = 0.15
     """Maximum total validation boost (caps ``per_signal × count``)."""
+
+    show_trust_verdict: bool = True
+    """Whether to attach a high/medium/low trust verdict to results (plan 46).
+
+    Display-only: the verdict appears in ``--view detail`` and the JSON envelope
+    but never feeds ranking (result order is identical with it on or off). When
+    provenance weighting is off, the verdict is computed from raw confidence.
+    """
 
     # =========================================================================
     # Prior Score (Mechanism 1 — cold-start ranking)
