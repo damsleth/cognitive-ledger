@@ -45,6 +45,8 @@ from ledger.scoring import (
     FINE_LADDER,
     canonical_scope,
     clamp01,
+    derive_provenance,
+    effective_confidence,
     intent_adjustments,
     overlap_components,
     scope_component as _scope_component,
@@ -132,6 +134,9 @@ def _copy_candidate(candidate: CandidateLike) -> RetrievalCandidate:
         valid_to=str(_candidate_value(candidate, "valid_to", "") or ""),
         superseded_by=str(_candidate_value(candidate, "superseded_by", "") or ""),
         created_ts=_candidate_value(candidate, "created_ts"),
+        provenance=str(_candidate_value(candidate, "provenance", "") or ""),
+        via=str(_candidate_value(candidate, "via", "") or ""),
+        validation_count=float(_candidate_value(candidate, "validation_count", 0.0) or 0.0),
     )
 
 
@@ -224,6 +229,52 @@ def confidence_value(frontmatter: dict[str, Any]) -> float:
     return max(0.0, min(1.0, value))
 
 
+def resolve_confidence(
+    candidate: "CandidateLike",
+    signal_summary: dict[str, Any] | None = None,
+) -> float:
+    """Confidence value to use in ranking, honouring provenance weighting.
+
+    With ``provenance_weighting_enabled`` False (default) this returns the raw,
+    clamped ``confidence`` — bit-identical to pre-plan-42 behaviour. With it
+    enabled, confidence is replaced by ``scoring.effective_confidence``, derived
+    from the note's provenance (explicit or derived from source/via) and its
+    affirmation count.
+
+    Validation count is read from the live ``signal_summary`` when one is in
+    scope (authoritative), otherwise falls back to the candidate's
+    ``validation_count`` snapshot. This is the single place both the weighted-sum
+    confidence term and the prior's importance term resolve confidence, so they
+    never diverge.
+    """
+    raw = float(_candidate_value(candidate, "confidence", 0.0) or 0.0)
+    raw = max(0.0, min(1.0, raw))
+    config = _cfg()
+    if not config.provenance_weighting_enabled:
+        return raw
+
+    resolved_prov = derive_provenance(
+        str(_candidate_value(candidate, "source", "") or ""),
+        str(_candidate_value(candidate, "via", "") or ""),
+        str(_candidate_value(candidate, "provenance", "") or ""),
+    )
+
+    rel_path = str(_candidate_value(candidate, "rel_path", "") or "")
+    if signal_summary is not None and rel_path:
+        from ledger.signals import get_validation_count
+        validations = get_validation_count(rel_path, summary=signal_summary)
+    else:
+        validations = float(_candidate_value(candidate, "validation_count", 0.0) or 0.0)
+
+    return effective_confidence(
+        raw,
+        resolved_prov,
+        validations,
+        boost_per_signal=config.validation_boost_per_signal,
+        boost_cap=config.validation_boost_cap,
+    )
+
+
 def compute_recency_component(updated_ts: dt.datetime | None, now_dt: dt.datetime) -> float:
     """Compute recency score (0.0-1.0) based on age."""
     if not updated_ts:
@@ -236,6 +287,7 @@ def compute_prior_score(
     candidate: "CandidateLike",
     now_dt: dt.datetime,
     query_lexical_relevance: float = 0.0,
+    signal_summary: dict[str, Any] | None = None,
 ) -> float:
     """Compute the prior score for a candidate (0.0-1.0).
 
@@ -258,8 +310,8 @@ def compute_prior_score(
 
     config = _cfg()
 
-    confidence = float(_candidate_value(candidate, "confidence", 0.0) or 0.0)
-    confidence = max(0.0, min(1.0, confidence))
+    # Importance term — provenance-weighted when enabled, else raw confidence.
+    confidence = resolve_confidence(candidate, signal_summary)
 
     # Prefer created_ts for age; fall back to updated_ts if absent.
     age_ts: dt.datetime | None = (
@@ -451,6 +503,8 @@ def _candidate_from_parts(
     created_ts = parse_ts(created_str) if created_str else None
     confidence = confidence_value(frontmatter)
     source = str(frontmatter.get("source", "")).strip().lower()
+    provenance = str(frontmatter.get("provenance", "")).strip().lower()
+    via = str(frontmatter.get("via", "")).strip().lower()
 
     cfg = _cfg()
     resolved = path.resolve()
@@ -516,6 +570,8 @@ def _candidate_from_parts(
         valid_to=valid_to,
         superseded_by=superseded_by,
         created_ts=created_ts,
+        provenance=provenance,
+        via=via,
     )
 
 
@@ -559,6 +615,11 @@ def _candidate_to_json(candidate: RetrievalCandidate) -> dict[str, Any]:
         payload["valid_to"] = candidate.valid_to
     if candidate.superseded_by:
         payload["superseded_by"] = candidate.superseded_by
+    # Provenance inputs — persist only when set (keeps index lean for legacy notes).
+    if candidate.provenance:
+        payload["provenance"] = candidate.provenance
+    if candidate.via:
+        payload["via"] = candidate.via
     # Persist created ISO string when available (created_ts is derived from it,
     # mirroring the pattern used for updated / updated_ts).
     if candidate.created_ts is not None:
@@ -620,6 +681,9 @@ def _candidate_from_json(candidate_json: dict[str, Any]) -> RetrievalCandidate:
         # created_ts is recomputed from the persisted "created" ISO string,
         # mirroring the updated / updated_ts pattern.
         created_ts=parse_ts(created) if created else None,
+        # Provenance inputs — absent in older indexes; default to empty string.
+        provenance=str(candidate_json.get("provenance", "") or ""),
+        via=str(candidate_json.get("via", "") or ""),
     )
 
 
@@ -1209,7 +1273,8 @@ def score_candidate(
     sm = _scope_component(str(_candidate_value(candidate, "scope", "") or ""), query_scope)
     scope_match = sm  # alias used in ScoreComponents below
     recency = compute_recency_component(_candidate_value(candidate, "updated_ts"), now_dt)
-    confidence = float(_candidate_value(candidate, "confidence", 0.0) or 0.0)
+    # Provenance-weighted when enabled (plan 42); raw confidence otherwise.
+    confidence = resolve_confidence(candidate, signal_summary)
 
     config = _cfg()
     score = (
@@ -1233,6 +1298,7 @@ def score_candidate(
             candidate,
             now_dt=now_dt,
             query_lexical_relevance=lexical_match,
+            signal_summary=signal_summary,
         )
 
     # Identity note boost — kept as a separate additive term so it is
