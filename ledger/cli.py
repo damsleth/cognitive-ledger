@@ -1809,6 +1809,23 @@ def handle_sleep_command(args):
     raise SystemExit(maint.main(subargs))
 
 
+def handle_mcp_command(args):
+    """Launch the Model Context Protocol server over stdio (plan 44)."""
+    try:
+        from ledger import mcp as mcp_pkg
+    except (ImportError, RuntimeError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        raise SystemExit(2)
+    try:
+        mcp_pkg.run(
+            allow_write=getattr(args, "allow_write", False),
+            with_yaams=getattr(args, "with_yaams", False),
+        )
+    except RuntimeError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        raise SystemExit(2)
+
+
 def handle_web_command(args):
     try:
         from ledger import web as web_pkg
@@ -2553,6 +2570,12 @@ def main(argv=None) -> int:
         help="uvicorn log level (default: info)",
     )
 
+    mcp_parser = subparsers.add_parser("mcp", help="Launch the Model Context Protocol server (stdio)")
+    mcp_parser.add_argument("--allow-write", action="store_true", dest="allow_write",
+                            help="Enable the ledger_remember tool (captures to inbox; default off)")
+    mcp_parser.add_argument("--with-yaams", action="store_true", dest="with_yaams",
+                            help="Expose a yaams_query tool (requires yaams on PATH)")
+
     args = parser.parse_args(argv)
 
     def handle_listing_command(command_args):
@@ -2658,6 +2681,10 @@ def main(argv=None) -> int:
 
         if args.command == "ab":
             handle_ab_command(args, ab_parser)
+            return 0
+
+        if args.command == "mcp":
+            handle_mcp_command(args)
             return 0
 
         if args.command == "web":
