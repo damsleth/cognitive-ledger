@@ -13,9 +13,10 @@ from .retrieval_types import (
     TimingInfo,
 )
 
-__version__ = "0.7.0"
+__version__ = "0.9.0"
 
 from .cli import main  # noqa: E402
+from .synthesize import answer, AnswerResult  # noqa: E402
 
 __all__ = [
     "main",
@@ -27,5 +28,7 @@ __all__ = [
     "ScoredResult",
     "ScoreComponents",
     "TimingInfo",
+    "answer",
+    "AnswerResult",
     "__version__",
 ]
