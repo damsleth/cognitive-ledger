@@ -1373,6 +1373,45 @@ def score_candidate(
     )
 
 
+def attach_trust_verdicts(
+    results: list["ScoredResult"],
+    signal_summary: dict[str, Any] | None = None,
+) -> list["ScoredResult"]:
+    """Attach a display-only trust verdict to each result (plan 46).
+
+    Sets ``ScoredResult.trust`` in place and returns the same list. This NEVER
+    reorders results — it only annotates them — so it is safe to call after the
+    final ranking is fixed. Confidence is resolved via ``resolve_confidence`` so
+    it reflects provenance weighting when enabled and falls back to raw
+    confidence otherwise. Validation/contradiction counts come from the signal
+    summary when one is in scope; ``superseded_by`` is read off the candidate.
+    """
+    config = _cfg()
+    if not config.show_trust_verdict:
+        return results
+    from ledger.scoring import trust_verdict
+    for result in results:
+        conf = resolve_confidence(result, signal_summary)
+        components = getattr(result, "components", None)
+        recency = float(getattr(components, "recency", 0.0) or 0.0)
+        rel_path = str(_candidate_value(result, "rel_path", "") or "")
+        validations = 0.0
+        contradicted = False
+        if signal_summary is not None and rel_path:
+            from ledger.signals import get_contradiction_count, get_validation_count
+            validations = get_validation_count(rel_path, summary=signal_summary)
+            contradicted = get_contradiction_count(rel_path, summary=signal_summary) > 0
+        superseded = bool(str(_candidate_value(result, "superseded_by", "") or ""))
+        result.trust = trust_verdict(
+            effective_confidence=conf,
+            validation_count=validations,
+            contradicted=contradicted,
+            superseded=superseded,
+            recency=recency,
+        )
+    return results
+
+
 def apply_prior_tiebreak(ranked: list["ScoredResult"]) -> list["ScoredResult"]:
     """Blend the prior into base scores as a TIE-BREAKER, then re-sort.
 

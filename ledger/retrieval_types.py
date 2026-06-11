@@ -73,6 +73,9 @@ class ScoredResult(RetrievalCandidate):
     reasons: list[str] = field(default_factory=list)
     components: ScoreComponents = field(default_factory=ScoreComponents)
     disclosure_level: str = ""
+    # Display-only trust verdict (plan 46); never feeds ranking. None until
+    # populated post-scoring. Typed loosely to avoid importing scoring here.
+    trust: object | None = None
 
 
 @dataclass
