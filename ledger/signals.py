@@ -418,6 +418,22 @@ def get_signal_score(note_rel_path: str, summary: dict[str, Any] | None = None) 
     return float(stats.get("signal_score", 0.0))
 
 
+def get_validation_count(note_rel_path: str, summary: dict[str, Any] | None = None) -> float:
+    """Get the per-note validation count (affirmations) from the summary.
+
+    Used by provenance-weighted confidence (plan 42) to boost a note's effective
+    confidence. Returns the ``affirmations`` weight — synthetic affirmations are
+    already down-weighted by ``synthetic_weight`` inside the summary, so the
+    stored float is the correct validation signal as-is. Corrections are *not*
+    counted (they reduce trust, not increase it). Returns 0.0 if not found.
+    """
+    if summary is None:
+        summary = load_signal_summary()
+    notes = summary.get("notes", {})
+    stats = notes.get(note_rel_path, {})
+    return float(stats.get("affirmations", 0.0))
+
+
 def signal_stats(signals_path: Path | None = None) -> dict[str, Any]:
     """Compute aggregate stats for display.
 

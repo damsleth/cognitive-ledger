@@ -243,6 +243,8 @@ def _apply_env_overrides(config: "LedgerConfig") -> "LedgerConfig":
         "LEDGER_PRF_BETA": "prf_beta",
         "LEDGER_PRF_GAMMA": "prf_gamma",
         "LEDGER_SYNTHETIC_WEIGHT": "synthetic_weight",
+        "LEDGER_VALIDATION_BOOST_PER": "validation_boost_per_signal",
+        "LEDGER_VALIDATION_BOOST_CAP": "validation_boost_cap",
     }
     for env_var, attr in float_mappings.items():
         if (value := os.getenv(env_var)) is None:
@@ -262,6 +264,7 @@ def _apply_env_overrides(config: "LedgerConfig") -> "LedgerConfig":
         "LEDGER_CONTRADICTION_ENABLED": "contradiction_enabled",
         "LEDGER_CONTRADICTION_PROTECT_HIGHER_CONFIDENCE": "contradiction_protect_higher_confidence",
         "LEDGER_PRIOR_ENABLED": "prior_enabled",
+        "LEDGER_PROVENANCE_WEIGHTING": "provenance_weighting_enabled",
         "LEDGER_PRF_ENABLED": "prf_enabled",
         "LEDGER_THINGS3_SYNC_ENABLED": "things3_sync_enabled",
     }
@@ -472,6 +475,27 @@ class LedgerConfig:
     Rationale: 0.5 is a reasonable mid-point for the lexical retrieval
     score range; tune if using semantic or hybrid retrieval modes.
     """
+
+    # =========================================================================
+    # Provenance-weighted confidence (plan 42)
+    # =========================================================================
+
+    provenance_weighting_enabled: bool = False
+    """Whether to derive effective confidence from provenance + validation count.
+
+    When False (default), ranking uses the raw ``confidence`` frontmatter value
+    exactly as before — this plan is behaviour-neutral until enabled. When True,
+    confidence is replaced by ``scoring.effective_confidence`` everywhere it feeds
+    ranking (the weighted-sum confidence term and the prior's importance term).
+
+    Flip to True only after ``ledger ab run`` proves a recall@k improvement.
+    """
+
+    validation_boost_per_signal: float = 0.03
+    """Effective-confidence boost added per affirmation signal on a note."""
+
+    validation_boost_cap: float = 0.15
+    """Maximum total validation boost (caps ``per_signal × count``)."""
 
     # =========================================================================
     # Prior Score (Mechanism 1 — cold-start ranking)
