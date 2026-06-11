@@ -47,6 +47,7 @@ from ledger.scoring import (
     clamp01,
     derive_provenance,
     effective_confidence,
+    half_life_for_type,
     intent_adjustments,
     overlap_components,
     scope_component as _scope_component,
@@ -320,7 +321,12 @@ def compute_prior_score(
     )
     if age_ts is not None:
         age_days = max(0.0, (now_dt - age_ts).total_seconds() / 86400.0)
-        half_life = max(1.0, config.prior_recency_half_life_days)
+        # Per-type half-life (plan 43); empty map → global default, unchanged.
+        half_life = half_life_for_type(
+            str(_candidate_value(candidate, "type", "") or ""),
+            by_type=config.recency_half_life_by_type,
+            default_days=config.prior_recency_half_life_days,
+        )
         lam = math.log(2.0) / half_life
         prior_recency = math.exp(-lam * age_days)
     else:
