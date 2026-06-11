@@ -27,6 +27,17 @@ first_run: true
 # score_weight_recency: 0.15
 # score_weight_confidence: 0.10
 
+# Provenance-weighted confidence (plan 42 — off by default, A/B-gate before enabling)
+# When enabled, ranking replaces raw `confidence` with an effective value:
+#   effective = confidence × provenance_weight + min(boost_per × affirmations, cap)
+# provenance_weight comes from the note's `provenance` frontmatter field
+# (explicit_statement 1.0 > validated 0.95 > corrected 0.9 > observed 0.85 >
+# imported 0.8 > inferred 0.7); absent values are derived from source/via.
+# Leave false to reproduce pre-plan-42 scores exactly.
+# provenance_weighting_enabled: false
+# validation_boost_per_signal: 0.03
+# validation_boost_cap: 0.15
+
 # Shortlisting
 # shortlist_min_candidates: 24
 # shortlist_max_candidates: 36
