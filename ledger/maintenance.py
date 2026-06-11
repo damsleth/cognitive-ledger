@@ -1317,6 +1317,12 @@ def cmd_sleep(as_json: bool = False) -> int:
             "guidance": "Requires contradiction_enabled=true in config. Use --apply to execute.",
         },
         {
+            "step": "5c",
+            "title": "Provenance stamp",
+            "command": "ledger sleep provenance --check",
+            "guidance": "Stamp provenance:corrected on corrected notes. Use --apply to write.",
+        },
+        {
             "step": 6,
             "title": "Mark sleep complete",
             "command": (
@@ -1367,6 +1373,10 @@ def cmd_sleep(as_json: bool = False) -> int:
     print("    ledger sleep contradictions --check   # dry run, see what would be done")
     print("    ledger sleep contradictions --apply   # execute supersessions + inbox flags")
     print("")
+    print("5c. Provenance stamp (mark corrected notes so confidence weighting can use it)")
+    print("    ledger sleep provenance --check   # dry run, see what would be stamped")
+    print("    ledger sleep provenance --apply   # write provenance:corrected")
+    print("")
     print("6. Mark sleep complete")
     print("   # timeline.jsonl is the source of truth; appending to timeline.md is")
     print("   # silently wiped on the next `sheep index`. Use the canonical helper:")
@@ -1379,6 +1389,71 @@ def cmd_sleep(as_json: bool = False) -> int:
     print("7. Commit")
     print('   git add -A && git commit -m "sleep: weekly consolidation"')
     print("")
+    return 0
+
+
+def cmd_provenance(apply: bool = False, as_json: bool = False) -> int:
+    """Stamp ``provenance: corrected`` on notes with real correction signals (plan 42).
+
+    A note that has been corrected (an affirmed correction signal) should carry
+    the ``corrected`` provenance class so provenance-weighted confidence values
+    it at 0.90 rather than its derived default. Only notes whose ``provenance``
+    is currently absent are stamped — an explicit value the user set is left
+    alone. Dry-run by default; pass ``apply=True`` to write.
+    """
+    import json as _json
+
+    from ledger.config import get_config
+    from ledger.layout import resolve_path
+    from ledger.parsing.frontmatter import parse_frontmatter_text, serialize_frontmatter
+    from ledger.io import safe_write_text
+    from ledger.signals import summarize_signals
+
+    cfg = get_config()
+    summary = summarize_signals(signals_path=cfg.signals_path)
+    notes = summary.get("notes", {})
+
+    changed: list[str] = []
+    skipped_explicit: list[str] = []
+    for rel_path, stats in notes.items():
+        # Real (non-synthetic) corrections only.
+        real_corrections = float(stats.get("corrections", 0.0)) - float(
+            stats.get("synthetic_corrections", 0.0)
+        )
+        if real_corrections <= 0:
+            continue
+        abs_path = Path(
+            resolve_path(rel_path, ledger_root=cfg.ledger_root, ledger_notes_dir=cfg.ledger_notes_dir)
+        )
+        if not abs_path.is_file():
+            continue
+        text = abs_path.read_text(encoding="utf-8")
+        fm, body = parse_frontmatter_text(text)
+        current = str(fm.get("provenance", "") or "").strip().lower()
+        if current == "corrected":
+            continue
+        if current:
+            skipped_explicit.append(rel_path)
+            continue
+        if apply:
+            fm["provenance"] = "corrected"
+            safe_write_text(abs_path, serialize_frontmatter(fm) + "\n" + body.lstrip("\n"))
+        changed.append(rel_path)
+
+    if as_json:
+        print(_json.dumps(
+            {"apply": apply, "changed": changed, "skipped_explicit": skipped_explicit,
+             "count": len(changed)}, ensure_ascii=False))
+        return 0
+
+    verb = "Stamped" if apply else "Would stamp"
+    print(f"provenance: {verb} {len(changed)} note(s) as 'corrected'.")
+    for rel_path in changed:
+        print(f"  {rel_path}")
+    if skipped_explicit:
+        print(f"  (left {len(skipped_explicit)} note(s) with explicit provenance unchanged)")
+    if not apply and changed:
+        print("\nRun with --apply to write these changes.")
     return 0
 
 
@@ -1436,6 +1511,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="Execute supersessions and write conflict inbox notes",
     )
 
+    provenance_parser = subparsers.add_parser(
+        "provenance",
+        help="Stamp provenance:corrected on notes with correction signals (check | apply)",
+    )
+    prov_mode = provenance_parser.add_mutually_exclusive_group()
+    prov_mode.add_argument("--check", action="store_true",
+                           help="Dry run: report what would be stamped (default)")
+    prov_mode.add_argument("--apply", action="store_true",
+                           help="Write provenance:corrected to the affected notes")
+
     return parser
 
 
@@ -1469,6 +1554,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "contradictions":
         from ledger.contradiction import cmd_sleep_contradictions
         return cmd_sleep_contradictions(apply=bool(getattr(args, "apply", False)))
+    if args.command == "provenance":
+        return cmd_provenance(apply=bool(getattr(args, "apply", False)), as_json=as_json)
     if args.command == "duplicates":
         return _cmd_duplicates(
             threshold=float(getattr(args, "threshold", 0.65)),

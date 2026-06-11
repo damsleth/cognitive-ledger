@@ -42,6 +42,48 @@ def _save_nudge_log(log: dict[str, Any]) -> None:
     safe_write_text(_nudge_log_path(), json.dumps(log, indent=2, ensure_ascii=False) + "\n")
 
 
+BRIEFING_STATE_FILENAME = "briefing_state.json"
+
+
+def _briefing_state_path() -> Path:
+    return indices_dir(get_config().ledger_notes_dir) / BRIEFING_STATE_FILENAME
+
+
+def _load_briefing_state() -> dict[str, Any]:
+    path = _briefing_state_path()
+    if not path.is_file():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def _save_briefing_state(state: dict[str, Any]) -> None:
+    from ledger.io.safe_write import safe_write_text
+    safe_write_text(
+        _briefing_state_path(), json.dumps(state, indent=2, ensure_ascii=False) + "\n"
+    )
+
+
+def _changes_window_start(now: datetime) -> tuple[datetime, str]:
+    """Return (since, label) for the 'changed since last briefing' window (plan 47).
+
+    Uses the persisted last-briefing timestamp; falls back to a 24h window the
+    first time (or on a corrupt/missing state file).
+    """
+    last = str(_load_briefing_state().get("last_briefing_ts", "") or "")
+    if last:
+        try:
+            since = datetime.strptime(last, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+            days = max(0, (now - since).days)
+            label = "since last briefing (~24h)" if days == 0 else f"since last briefing ({days}d)"
+            return since, label
+        except ValueError:
+            pass
+    return now - timedelta(hours=24), "last 24h"
+
+
 def _days_since(ts_str: str, now: datetime) -> int:
     ts = parse_timestamp(ts_str)
     if ts is None:
@@ -145,11 +187,11 @@ def daily_briefing() -> str:
         lines.append("No open loops. Nice work!")
         lines.append("")
 
-    # Recent changes (last 24h)
-    since = now - timedelta(hours=24)
+    # Recent changes (since the last briefing run; 24h fallback on first run).
+    since, window_label = _changes_window_start(now)
     recent = timeline_lib.timeline_since(config.timeline_jsonl_path, since)
     if recent:
-        lines.append(f"## Recent Changes ({len(recent)} in last 24h)")
+        lines.append(f"## Recent Changes ({len(recent)} {window_label})")
         lines.append("")
         for event in recent[-10:]:
             lines.append(f"- {event.get('action', '?')} `{event.get('path', '?')}` - {event.get('desc', '')}")
@@ -194,6 +236,11 @@ def daily_briefing() -> str:
     if closed_recent:
         lines.append(f"You've closed {closed_recent} loop(s) recently. Keep it up!")
         lines.append("")
+
+    # Record this run so the next briefing's window starts here.
+    state = _load_briefing_state()
+    state["last_briefing_ts"] = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+    _save_briefing_state(state)
 
     return "\n".join(lines)
 

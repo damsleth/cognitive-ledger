@@ -149,10 +149,47 @@ ledger query "calendar constraints" --bundle
 # Temporal query - notes valid on a given date (widens to include 09_archive)
 ledger query "deployment policy" --as-of 2025-06-01
 
+# Change window - notes created/updated since a date (composes with --as-of)
+ledger query "deployment policy" --changed-since 2026-06-01
+
 # Other
 ledger loops                                    # list open loops
 ledger context --format boot                    # session boot payload
+ledger changed --since 2026-06-01 --type loops  # timeline digest of changes
 ```
+
+`--view detail` and the `--json` envelope also include a **trust verdict**
+(`high`/`medium`/`low` + reason) per result, derived from confidence,
+affirmations, supersession, and contradiction flags. It is display-only and
+never changes result order (toggle with `show_trust_verdict`).
+
+### Ask a question (grounded synthesis)
+
+`ledger answer` retrieves the most relevant notes and synthesizes a cited prose
+answer (citations are note paths). The default backend is `dummy` (offline,
+deterministic); configure `synth_backend` (`claude`/`ollama`/`subprocess`) for
+real synthesis. Source bodies are private-scrubbed before they reach the model.
+
+```bash
+ledger answer "what did I decide about the scoring weights?"
+ledger answer "open questions on deployment" --limit 5 --backend claude --json
+```
+
+### Use the ledger from an MCP client (Claude Desktop, Cursor, …)
+
+`ledger mcp` runs a stdio Model Context Protocol server exposing the ledger's
+read verbs (query, recall-as-of, changed-since, context, answer). Install the
+extra and point your client at it:
+
+```bash
+pip install 'cognitive-ledger[mcp]'
+# client config: command = "ledger", args = ["mcp"]
+ledger mcp --allow-write    # also expose ledger_remember (captures to inbox)
+ledger mcp --with-yaams     # also expose a yaams_query tool (tier-1 search)
+```
+
+Every tool response passes a private-content egress gate; writes (when enabled)
+land in the inbox for human triage, never directly in typed folders.
 
 ### Semantic search (recommended)
 

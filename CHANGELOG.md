@@ -1,5 +1,52 @@
 # Changelog
 
+## 2026-06-11 (0.9.0)
+
+Six Memanto-inspired improvements (see `.plans/memanto-inspired-index.md`). The
+two ranking-affecting features ship **off by default** and were A/B-validated for
+no regression (`.plans/memanto-inspired-performance.md`); the rest are new
+surfaces or display-only.
+
+### Added
+- **`ledger answer "<question>"`** (plan 45): grounded RAG synthesis over your
+  notes with `[n]` citations mapped to note paths, an ANSWER/CONFIDENCE/GAPS
+  structure, and Voice DNA injection. Pluggable backend (`dummy` default, plus
+  `claude`/`ollama`/`subprocess`); source bodies are private-scrubbed before the
+  prompt. New `synth_*` config keys. `answer`/`AnswerResult` exported from the
+  package.
+- **`ledger mcp`** (plan 44): a Model Context Protocol server (stdio) exposing
+  `ledger_query`, `ledger_recall_as_of`, `ledger_changed_since`,
+  `ledger_context`, and `ledger_answer`. Optional `ledger_remember` (write to
+  inbox, `--allow-write`) and `yaams_query` (`--with-yaams`). Every response
+  passes a private-content egress gate. Optional dependency: `pip install
+  'cognitive-ledger[mcp]'`.
+- **`ledger query --changed-since DATE`** (plan 47): filter results to notes
+  created/updated on or after DATE; composes with `--as-of`. Plus **`ledger
+  changed --since DATE [--type T]`**, a timeline-driven digest of what changed.
+- **Trust verdict** (plan 46): each result gets a high/medium/low trust verdict
+  with a reason, shown in `ledger query --view detail` and the JSON envelope.
+  Display-only — never changes result order. Config: `show_trust_verdict`
+  (default true). Per-note contradiction counts added to the signal summary.
+- **Provenance-weighted confidence** (plan 42, **off by default**): an optional
+  `provenance` frontmatter field (`explicit_statement`/`validated`/`corrected`/
+  `observed`/`imported`/`inferred`) weights the confidence used in ranking,
+  plus an affirmation-count boost. Config: `provenance_weighting_enabled`,
+  `validation_boost_per_signal`, `validation_boost_cap`. Absent provenance is
+  derived from `source`/`via`, so legacy notes are unaffected. New
+  **`ledger sleep provenance --check/--apply`** stamps `provenance: corrected`
+  on notes with correction signals (sleep checklist step 5c).
+- **Per-type recency half-life** (plan 43, **off by default**): optional
+  `recency_half_life_by_type` config so preferences/loops can decay faster than
+  facts/concepts/identity. Env: `LEDGER_HALF_LIFE_BY_TYPE="preferences:90,facts:365"`.
+- **`ledger briefing`** "Recent Changes" now spans since the last briefing run
+  (persisted in `08_indices/briefing_state.json`), with a 24h fallback.
+
+### Fixed
+- `rank_query`'s default embed-model resolver referenced a stale
+  `ledger.semantic.resolve_model` symbol; now uses `resolve_embed_model`,
+  unblocking direct `rank_query` callers (the answer verb, the MCP server).
+- Package `__version__` now matches the pyproject version.
+
 ## 2026-06-10 (0.8.0)
 
 ### Added

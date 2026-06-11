@@ -53,6 +53,18 @@ class RetrievalCandidate:
     derive note age from creation rather than last-update date.
     Notes without this field fall back to ``updated_ts`` for age estimation.
     """
+    # Provenance-weighted confidence inputs (plan 42; optional/back-compatible).
+    provenance: str = ""
+    """Origin-act trust class (explicit_statement|validated|corrected|observed|
+    imported|inferred). Empty on legacy notes — derived from source/via at score
+    time via ``ledger.scoring.derive_provenance``."""
+    via: str = ""
+    """Ingest channel (claude-memory|obsidian|yaams|folder|manual). Used to derive
+    a default provenance for legacy notes; empty when unknown."""
+    validation_count: float = 0.0
+    """Per-note affirmation count snapshot. Forward-compatible field; the live
+    score path reads the authoritative count from the signal summary and only
+    falls back to this when no summary is in scope."""
 
 
 @dataclass
@@ -61,6 +73,9 @@ class ScoredResult(RetrievalCandidate):
     reasons: list[str] = field(default_factory=list)
     components: ScoreComponents = field(default_factory=ScoreComponents)
     disclosure_level: str = ""
+    # Display-only trust verdict (plan 46); never feeds ranking. None until
+    # populated post-scoring. Typed loosely to avoid importing scoring here.
+    trust: object | None = None
 
 
 @dataclass

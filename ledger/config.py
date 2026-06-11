@@ -243,6 +243,8 @@ def _apply_env_overrides(config: "LedgerConfig") -> "LedgerConfig":
         "LEDGER_PRF_BETA": "prf_beta",
         "LEDGER_PRF_GAMMA": "prf_gamma",
         "LEDGER_SYNTHETIC_WEIGHT": "synthetic_weight",
+        "LEDGER_VALIDATION_BOOST_PER": "validation_boost_per_signal",
+        "LEDGER_VALIDATION_BOOST_CAP": "validation_boost_cap",
     }
     for env_var, attr in float_mappings.items():
         if (value := os.getenv(env_var)) is None:
@@ -262,6 +264,8 @@ def _apply_env_overrides(config: "LedgerConfig") -> "LedgerConfig":
         "LEDGER_CONTRADICTION_ENABLED": "contradiction_enabled",
         "LEDGER_CONTRADICTION_PROTECT_HIGHER_CONFIDENCE": "contradiction_protect_higher_confidence",
         "LEDGER_PRIOR_ENABLED": "prior_enabled",
+        "LEDGER_PROVENANCE_WEIGHTING": "provenance_weighting_enabled",
+        "LEDGER_SHOW_TRUST_VERDICT": "show_trust_verdict",
         "LEDGER_PRF_ENABLED": "prf_enabled",
         "LEDGER_THINGS3_SYNC_ENABLED": "things3_sync_enabled",
     }
@@ -269,6 +273,25 @@ def _apply_env_overrides(config: "LedgerConfig") -> "LedgerConfig":
         if (value := os.getenv(env_var)) is None:
             continue
         setattr(config, attr, value.strip().lower() in ("1", "true", "yes", "on"))
+
+    # Dict override (plan 43): LEDGER_HALF_LIFE_BY_TYPE="preferences:90,facts:365"
+    if (value := os.getenv("LEDGER_HALF_LIFE_BY_TYPE")) is not None:
+        parsed: dict[str, float] = {}
+        for pair in value.split(","):
+            pair = pair.strip()
+            if not pair or ":" not in pair:
+                continue
+            key, _, raw = pair.partition(":")
+            try:
+                parsed[key.strip()] = float(raw.strip())
+            except ValueError:
+                import warnings
+                warnings.warn(
+                    f"Ignoring invalid half-life pair {pair!r} in LEDGER_HALF_LIFE_BY_TYPE",
+                    stacklevel=3,
+                )
+        if parsed:
+            config.recency_half_life_by_type = parsed
 
     string_mappings = {
         "LEDGER_RETRIEVAL_MODE": "retrieval_mode",
@@ -279,6 +302,10 @@ def _apply_env_overrides(config: "LedgerConfig") -> "LedgerConfig":
         "LEDGER_FUSION": "fusion",
         "LEDGER_JUDGE_BACKEND": "judge_backend",
         "LEDGER_JUDGE_COMMAND": "judge_subprocess_command",
+        "LEDGER_SYNTH_BACKEND": "synth_backend",
+        "LEDGER_SYNTH_COMMAND": "synth_command",
+        "LEDGER_SYNTH_MODEL": "synth_model",
+        "LEDGER_SYNTH_HOST": "synth_host",
         "LEDGER_THINGS3_DB_PATH": "things3_db_path",
         "LEDGER_THINGS3_DEFAULT_PROJECT": "things3_default_project",
         "LEDGER_THINGS3_BLOCKED_PROJECT": "things3_blocked_project",
@@ -474,6 +501,35 @@ class LedgerConfig:
     """
 
     # =========================================================================
+    # Provenance-weighted confidence (plan 42)
+    # =========================================================================
+
+    provenance_weighting_enabled: bool = False
+    """Whether to derive effective confidence from provenance + validation count.
+
+    When False (default), ranking uses the raw ``confidence`` frontmatter value
+    exactly as before — this plan is behaviour-neutral until enabled. When True,
+    confidence is replaced by ``scoring.effective_confidence`` everywhere it feeds
+    ranking (the weighted-sum confidence term and the prior's importance term).
+
+    Flip to True only after ``ledger ab run`` proves a recall@k improvement.
+    """
+
+    validation_boost_per_signal: float = 0.03
+    """Effective-confidence boost added per affirmation signal on a note."""
+
+    validation_boost_cap: float = 0.15
+    """Maximum total validation boost (caps ``per_signal × count``)."""
+
+    show_trust_verdict: bool = True
+    """Whether to attach a high/medium/low trust verdict to results (plan 46).
+
+    Display-only: the verdict appears in ``--view detail`` and the JSON envelope
+    but never feeds ranking (result order is identical with it on or off). When
+    provenance weighting is off, the verdict is computed from raw confidence.
+    """
+
+    # =========================================================================
     # Prior Score (Mechanism 1 — cold-start ranking)
     # =========================================================================
 
@@ -554,6 +610,21 @@ class LedgerConfig:
     keep older but high-quality notes competitive.
     """
 
+    recency_half_life_by_type: dict[str, float] = field(default_factory=dict)
+    """Per-note-type override for the prior recency half-life (plan 43).
+
+    Maps a note type label (``fact``, ``pref``, ``loop``, ``id``, ``goal``,
+    ``concept``) to its half-life in days. Types absent from the map fall back
+    to ``prior_recency_half_life_days``. Empty by default → every type uses the
+    global half-life, i.e. behaviour-neutral until configured.
+
+    Rationale (Memanto): freshness matters more for some types than others — a
+    two-year-old preference is likely stale, a fact is not. Suggested tuning:
+    ``{preferences: 90, loops: 60, goals: 180, facts: 365, concepts: 365,
+    identity: 540}``. A/B-validate before flipping defaults. Env override:
+    ``LEDGER_HALF_LIFE_BY_TYPE="preferences:90,facts:365"``.
+    """
+
     auto_file_synthesis: bool = False
     """Whether to automatically file synthesized answers as notes.
 
@@ -629,6 +700,31 @@ class LedgerConfig:
     Keep low (3–5) for the dummy backend; can raise to 10+ with a fast
     subprocess backend once quality is validated.
     """
+
+    # =========================================================================
+    # Answer synthesis (plan 45 — `ledger answer`)
+    # =========================================================================
+
+    synth_backend: str = "dummy"
+    """LLM backend for `ledger answer` grounded synthesis.
+
+    ``dummy`` (offline/test-safe, default), ``claude`` (claude CLI),
+    ``ollama`` (local server), or ``subprocess`` (pipe prompt to ``synth_command``).
+    Distinct from ``judge_backend`` because synthesis is plaintext-in/plaintext-out
+    while the judge uses a JSON protocol.
+    """
+
+    synth_command: str = ""
+    """Shell command for ``synth_backend = subprocess`` (shlex-split; prompt on stdin)."""
+
+    synth_model: str = ""
+    """Optional model name passed to the synth backend (e.g. a claude/ollama model)."""
+
+    synth_host: str = "http://localhost:11434"
+    """Ollama host for ``synth_backend = ollama``."""
+
+    synth_timeout: float = 120.0
+    """Timeout (seconds) for synth backend calls."""
 
     # =========================================================================
     # Semantic Scoring Weights (Hybrid Mode)
