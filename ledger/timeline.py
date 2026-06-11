@@ -170,12 +170,26 @@ def regenerate_timeline_markdown(
     safe_write_text(md_path, render_timeline_markdown(jsonl_events))
 
 
-def timeline_since(timeline_jsonl_path: Path | str, since: datetime | str) -> list[dict[str, Any]]:
-    """Get events at or after a timestamp."""
+def timeline_since(
+    timeline_jsonl_path: Path | str,
+    since: datetime | str,
+    *,
+    types: "set[str] | list[str] | None" = None,
+) -> list[dict[str, Any]]:
+    """Get events at or after a timestamp, optionally filtered by note type.
+
+    *types* accepts note-type labels (``fact``, ``loop``, …) or folder names;
+    both forms are matched (plan 47). None → no type filter.
+    """
     if isinstance(since, str):
         since_dt = datetime.strptime(since, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
     else:
         since_dt = since
+
+    type_filter: set[str] | None = None
+    if types:
+        from ledger.scoring import canonical_note_type
+        type_filter = {canonical_note_type(t) for t in types}
 
     out = []
     for event in load_timeline_jsonl(timeline_jsonl_path):
@@ -184,8 +198,13 @@ def timeline_since(timeline_jsonl_path: Path | str, since: datetime | str) -> li
             event_dt = datetime.strptime(ts, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
         except ValueError:
             continue
-        if event_dt >= since_dt:
-            out.append(event)
+        if event_dt < since_dt:
+            continue
+        if type_filter is not None:
+            from ledger.scoring import canonical_note_type
+            if canonical_note_type(event.get("type", "")) not in type_filter:
+                continue
+        out.append(event)
     return out
 
 
