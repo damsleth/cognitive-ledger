@@ -900,7 +900,7 @@ def _default_load_embeddings_module():
 
 def _default_resolve_embed_model(backend: str, model: str | None) -> str:
     """Resolve embed model using the semantic module (default for rank_query)."""
-    from ledger.semantic import resolve_model as _resolve
+    from ledger.semantic import resolve_embed_model as _resolve
     return _resolve(backend, model)
 
 
