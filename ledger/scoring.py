@@ -282,6 +282,56 @@ def derive_provenance(source: str, via: str, provenance: str) -> str:
     return "observed"
 
 
+# Canonicalise note-type labels so per-type config accepts either the folder
+# name (``preferences``) or the candidate label (``pref``).
+_TYPE_ALIASES: dict[str, str] = {
+    "facts": "fact",
+    "fact": "fact",
+    "preferences": "pref",
+    "preference": "pref",
+    "pref": "pref",
+    "loops": "loop",
+    "open_loops": "loop",
+    "loop": "loop",
+    "goals": "goal",
+    "goal": "goal",
+    "concepts": "concept",
+    "concept": "concept",
+    "identity": "id",
+    "id": "id",
+}
+
+
+def canonical_note_type(note_type: Any) -> str:
+    """Normalise a note-type label to its canonical short form (pure)."""
+    key = str(note_type or "").strip().lower()
+    return _TYPE_ALIASES.get(key, key)
+
+
+def half_life_for_type(
+    note_type: str,
+    *,
+    by_type: dict[str, float],
+    default_days: float,
+) -> float:
+    """Resolve the recency half-life (days) for *note_type* (plan 43).
+
+    Looks up *by_type* (keys may be folder names or short labels) and falls back
+    to *default_days* when the type is absent or the value is malformed. Result
+    is always >= 1.0 to keep the decay math (``ln(2)/half_life``) well-defined.
+    Pure; no I/O.
+    """
+    if by_type:
+        nt = canonical_note_type(note_type)
+        for key, val in by_type.items():
+            if canonical_note_type(key) == nt:
+                try:
+                    return max(1.0, float(val))
+                except (TypeError, ValueError):
+                    break
+    return max(1.0, float(default_days))
+
+
 def effective_confidence(
     base_confidence: float,
     provenance: str,

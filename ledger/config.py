@@ -273,6 +273,25 @@ def _apply_env_overrides(config: "LedgerConfig") -> "LedgerConfig":
             continue
         setattr(config, attr, value.strip().lower() in ("1", "true", "yes", "on"))
 
+    # Dict override (plan 43): LEDGER_HALF_LIFE_BY_TYPE="preferences:90,facts:365"
+    if (value := os.getenv("LEDGER_HALF_LIFE_BY_TYPE")) is not None:
+        parsed: dict[str, float] = {}
+        for pair in value.split(","):
+            pair = pair.strip()
+            if not pair or ":" not in pair:
+                continue
+            key, _, raw = pair.partition(":")
+            try:
+                parsed[key.strip()] = float(raw.strip())
+            except ValueError:
+                import warnings
+                warnings.warn(
+                    f"Ignoring invalid half-life pair {pair!r} in LEDGER_HALF_LIFE_BY_TYPE",
+                    stacklevel=3,
+                )
+        if parsed:
+            config.recency_half_life_by_type = parsed
+
     string_mappings = {
         "LEDGER_RETRIEVAL_MODE": "retrieval_mode",
         "LEDGER_EMBED_BACKEND": "embed_backend",
@@ -576,6 +595,21 @@ class LedgerConfig:
     favouring fresh content and preserving durable long-term knowledge.
     Use a longer half-life than the existing 90-day linear decay to
     keep older but high-quality notes competitive.
+    """
+
+    recency_half_life_by_type: dict[str, float] = field(default_factory=dict)
+    """Per-note-type override for the prior recency half-life (plan 43).
+
+    Maps a note type label (``fact``, ``pref``, ``loop``, ``id``, ``goal``,
+    ``concept``) to its half-life in days. Types absent from the map fall back
+    to ``prior_recency_half_life_days``. Empty by default → every type uses the
+    global half-life, i.e. behaviour-neutral until configured.
+
+    Rationale (Memanto): freshness matters more for some types than others — a
+    two-year-old preference is likely stale, a fact is not. Suggested tuning:
+    ``{preferences: 90, loops: 60, goals: 180, facts: 365, concepts: 365,
+    identity: 540}``. A/B-validate before flipping defaults. Env override:
+    ``LEDGER_HALF_LIFE_BY_TYPE="preferences:90,facts:365"``.
     """
 
     auto_file_synthesis: bool = False
