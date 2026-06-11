@@ -62,6 +62,20 @@ def result_get(result: RetrievalCandidate | ScoredResult | dict[str, Any], key: 
 _payload_get = payload_get
 
 
+def _trust_to_dict(item: Any) -> dict[str, Any] | None:
+    """Serialize a result's trust verdict (plan 46) to {level, reason, score}."""
+    verdict = result_get(item, "trust", None) if isinstance(item, dict) else getattr(item, "trust", None)
+    if verdict is None:
+        return None
+    if isinstance(verdict, dict):
+        return verdict
+    return {
+        "level": str(getattr(verdict, "level", "") or ""),
+        "reason": str(getattr(verdict, "reason", "") or ""),
+        "score": round(float(getattr(verdict, "score", 0.0) or 0.0), 4),
+    }
+
+
 def scored_result_to_dict(item: RetrievalCandidate | ScoredResult | dict[str, Any]) -> dict[str, Any]:
     if isinstance(item, dict):
         return item
@@ -102,6 +116,7 @@ def scored_result_to_dict(item: RetrievalCandidate | ScoredResult | dict[str, An
             "prior_score": float(getattr(components, "prior_score", 0.0) or 0.0),
         },
         "disclosure_level": str(getattr(item, "disclosure_level", "") or ""),
+        "trust": _trust_to_dict(item),
     }
 
 
@@ -160,6 +175,9 @@ def _result_context_fields(item: ScoredResult | dict[str, Any]) -> dict[str, Any
     data["reasons"] = result_get(item, "reasons", [])
     if result_get(item, "disclosure_level"):
         data["disclosure_level"] = result_get(item, "disclosure_level")
+    trust = _trust_to_dict(item)
+    if trust is not None:
+        data["trust"] = trust
     return data
 
 
@@ -895,7 +913,7 @@ def rank_query(
 ) -> RetrievalResult:
     mode = resolve_retrieval_mode(retrieval_mode)
     if mode == "semantic_hybrid":
-        return rank_query_semantic_hybrid(
+        result = rank_query_semantic_hybrid(
             query=query,
             scope=scope,
             limit=limit,
@@ -908,9 +926,8 @@ def rank_query(
             resolve_embed_model=resolve_embed_model,
             as_of=as_of,
         )
-
-    if mode == "semantic_rerank":
-        return rank_query_semantic_rerank(
+    elif mode == "semantic_rerank":
+        result = rank_query_semantic_rerank(
             query=query,
             scope=scope,
             limit=limit,
@@ -923,16 +940,24 @@ def rank_query(
             resolve_embed_model=resolve_embed_model,
             as_of=as_of,
         )
+    else:
+        result = rank_query_lexical(
+            query=query,
+            scope=scope,
+            limit=limit,
+            aliases_path=_aliases_path(aliases_path),
+            now_dt=now_dt,
+            retrieval_mode=mode,
+            as_of=as_of,
+        )
 
-    return rank_query_lexical(
-        query=query,
-        scope=scope,
-        limit=limit,
-        aliases_path=_aliases_path(aliases_path),
-        now_dt=now_dt,
-        retrieval_mode=mode,
-        as_of=as_of,
-    )
+    # Plan 46: annotate results with a display-only trust verdict. Never
+    # reorders. Uses the active signal summary for validation/contradiction
+    # counts when available (None when signal scoring is inactive).
+    from ledger.retrieval import attach_trust_verdicts
+    from ledger.signals import signal_summary_if_active
+    attach_trust_verdicts(result.results, signal_summary_if_active(get_config()))
+    return result
 
 
 def bundle_results(results: list[ScoredResult | dict[str, Any]], word_budget: int = 1200) -> list[dict[str, Any]]:
@@ -1067,6 +1092,9 @@ def format_query_results_human(
                 f"{result_get(item, 'rel_path', '')}{cost_hint} | "
                 f"{rationale}"
             )
+            trust = _trust_to_dict(item)
+            if trust is not None:
+                lines.append(f"  trust: {trust['level']} — {trust['reason']}")
             statement = result_get(item, "statement", "")
             if statement:
                 lines.append(f"  statement: {shorten(statement, 200)}")
