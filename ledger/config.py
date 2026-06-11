@@ -302,6 +302,10 @@ def _apply_env_overrides(config: "LedgerConfig") -> "LedgerConfig":
         "LEDGER_FUSION": "fusion",
         "LEDGER_JUDGE_BACKEND": "judge_backend",
         "LEDGER_JUDGE_COMMAND": "judge_subprocess_command",
+        "LEDGER_SYNTH_BACKEND": "synth_backend",
+        "LEDGER_SYNTH_COMMAND": "synth_command",
+        "LEDGER_SYNTH_MODEL": "synth_model",
+        "LEDGER_SYNTH_HOST": "synth_host",
         "LEDGER_THINGS3_DB_PATH": "things3_db_path",
         "LEDGER_THINGS3_DEFAULT_PROJECT": "things3_default_project",
         "LEDGER_THINGS3_BLOCKED_PROJECT": "things3_blocked_project",
@@ -696,6 +700,31 @@ class LedgerConfig:
     Keep low (3–5) for the dummy backend; can raise to 10+ with a fast
     subprocess backend once quality is validated.
     """
+
+    # =========================================================================
+    # Answer synthesis (plan 45 — `ledger answer`)
+    # =========================================================================
+
+    synth_backend: str = "dummy"
+    """LLM backend for `ledger answer` grounded synthesis.
+
+    ``dummy`` (offline/test-safe, default), ``claude`` (claude CLI),
+    ``ollama`` (local server), or ``subprocess`` (pipe prompt to ``synth_command``).
+    Distinct from ``judge_backend`` because synthesis is plaintext-in/plaintext-out
+    while the judge uses a JSON protocol.
+    """
+
+    synth_command: str = ""
+    """Shell command for ``synth_backend = subprocess`` (shlex-split; prompt on stdin)."""
+
+    synth_model: str = ""
+    """Optional model name passed to the synth backend (e.g. a claude/ollama model)."""
+
+    synth_host: str = "http://localhost:11434"
+    """Ollama host for ``synth_backend = ollama``."""
+
+    synth_timeout: float = 120.0
+    """Timeout (seconds) for synth backend calls."""
 
     # =========================================================================
     # Semantic Scoring Weights (Hybrid Mode)
