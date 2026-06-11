@@ -258,18 +258,6 @@ def answer(
     from ledger.synthesize.llm import adapter_from_ledger_config
 
     cfg = get_config()
-    # Inject the working embedding resolvers (the query.py defaults reference a
-    # stale ledger.semantic.resolve_model symbol; the CLI injects these too).
-    from ledger import semantic as semantic_lib
-
-    def _load_embeddings_module():
-        return semantic_lib.load_embeddings_module()
-
-    def _resolve_embed_model(backend, embed_model):
-        return semantic_lib.resolve_embed_model(
-            backend, embed_model, load_embeddings_module_fn=_load_embeddings_module
-        )
-
     payload = rank_query(
         query=question,
         scope=scope,
@@ -278,8 +266,6 @@ def answer(
         retrieval_mode=cfg.retrieval_mode,
         now_dt=now_dt,
         as_of=as_of,
-        load_embeddings_module=_load_embeddings_module,
-        resolve_embed_model=_resolve_embed_model,
     )
     results = list(getattr(payload, "results", []))
 
