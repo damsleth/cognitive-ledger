@@ -237,6 +237,7 @@ def summarize_signals(
                 "rating_max": None,
                 "stale_flags": 0,
                 "preference_applied": 0,
+                "contradictions": 0,
                 # Synthetic-specific counters (not used in signal_score formula
                 # directly, but available for diagnostics)
                 "synthetic_hits": 0,
@@ -265,6 +266,8 @@ def summarize_signals(
             stats["stale_flags"] += weight
         elif sig_type == "preference_applied":
             stats["preference_applied"] += weight
+        elif sig_type == "contradiction_flagged":
+            stats["contradictions"] += weight
         elif sig_type == "rating":
             if "rating" in entry:
                 r = entry["rating"]
@@ -432,6 +435,20 @@ def get_validation_count(note_rel_path: str, summary: dict[str, Any] | None = No
     notes = summary.get("notes", {})
     stats = notes.get(note_rel_path, {})
     return float(stats.get("affirmations", 0.0))
+
+
+def get_contradiction_count(note_rel_path: str, summary: dict[str, Any] | None = None) -> float:
+    """Get the per-note contradiction count from the summary (plan 46).
+
+    Counts ``contradiction_flagged`` signals recorded by the sleep contradiction
+    scan. Used by the trust verdict to mark a note low-trust. Returns 0.0 if not
+    found.
+    """
+    if summary is None:
+        summary = load_signal_summary()
+    notes = summary.get("notes", {})
+    stats = notes.get(note_rel_path, {})
+    return float(stats.get("contradictions", 0.0))
 
 
 def signal_stats(signals_path: Path | None = None) -> dict[str, Any]:
