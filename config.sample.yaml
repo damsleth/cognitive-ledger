@@ -123,3 +123,13 @@ first_run: true
 # judge_backend: dummy          # "dummy" (lexical heuristic) or "subprocess"
 # judge_subprocess_command: ""  # e.g. "claude -p" for the subprocess backend
 # judge_seed_top_k: 5           # notes retrieved per query during seeding
+
+# Answer synthesis (plan 45 — `ledger answer "<question>"`)
+# Plaintext-in/plaintext-out backend (distinct from the JSON judge backend).
+# dummy = offline/test-safe default; claude/ollama/subprocess send the prompt out
+# (source bodies are private-scrubbed first).
+# synth_backend: dummy          # dummy | claude | ollama | subprocess
+# synth_command: ""             # shlex-split command for subprocess (prompt on stdin)
+# synth_model: ""               # optional model name for claude/ollama
+# synth_host: http://localhost:11434   # ollama host
+# synth_timeout: 120.0

@@ -308,6 +308,49 @@ def handle_query_command(args):
         _capture_retrieval_hit_pick(validated_query, results)
 
 
+def handle_answer_command(args):
+    """`ledger answer "<question>"` — grounded synthesis with note citations."""
+    import json as _json
+    from ledger.synthesize import answer as synth_answer
+
+    try:
+        validated_query = validate_query(args.text)
+        validated_scope = validate_scope(getattr(args, "scope", None) or "all")
+        validated_limit = validate_limit(getattr(args, "limit", 5) or 5, min_val=1, max_val=50)
+        as_of = _parse_as_of(getattr(args, "as_of", None))
+    except (QueryValidationError, ScopeValidationError) as e:
+        print(f"error: {e.message}", file=sys.stderr)
+        raise SystemExit(2)
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        raise SystemExit(2)
+
+    result = synth_answer(
+        validated_query,
+        scope=validated_scope,
+        limit=validated_limit,
+        as_of=as_of,
+        backend=getattr(args, "backend", None),
+        use_voice=not getattr(args, "no_voice", False),
+    )
+
+    if getattr(args, "json", False):
+        print(_json.dumps(result.to_dict(), indent=2, ensure_ascii=False))
+        return
+
+    print(result.answer_body or "(no answer)")
+    print(f"\nconfidence: {result.confidence}" + (f" — {result.confidence_reason}" if result.confidence_reason else ""))
+    if result.gaps:
+        print("gaps:")
+        for gap in result.gaps:
+            print(f"  - {gap}")
+    if result.cited_paths:
+        print("sources:")
+        for rank, path in zip(result.cited_ranks, result.cited_paths):
+            print(f"  [{rank}] {path}")
+    print(f"\n(backend: {result.backend}" + (f"/{result.model}" if result.model else "") + ")")
+
+
 def _capture_retrieval_miss(query, results):
     """Auto-log a retrieval_miss when a query finds nothing useful.
 
@@ -2022,6 +2065,20 @@ def main(argv=None) -> int:
         help="Discard tier-1 results whose score is below this threshold.",
     )
 
+    answer_parser = subparsers.add_parser(
+        "answer", help="Synthesize a grounded, cited answer to a question"
+    )
+    answer_parser.add_argument("text", help="question text")
+    answer_parser.add_argument("--scope", default=None, help="Scope filter (default: all)")
+    answer_parser.add_argument("--limit", type=int, default=5, help="Sources to retrieve (default: 5)")
+    answer_parser.add_argument("--as-of", dest="as_of", default=None, metavar="DATE",
+                               help="Answer as of DATE (YYYY-MM-DD or full ISO)")
+    answer_parser.add_argument("--backend", default=None,
+                               help="Override synth backend (dummy|claude|ollama|subprocess)")
+    answer_parser.add_argument("--no-voice", action="store_true", dest="no_voice",
+                               help="Do not inject the Voice DNA profile into the prompt")
+    answer_parser.add_argument("--json", action="store_true", dest="json")
+
     discover_parser = subparsers.add_parser(
         "discover-source", help="Semantic discovery on source notes (source_only output)"
     )
@@ -2522,6 +2579,7 @@ def main(argv=None) -> int:
 
     command_handlers = {
         "query": handle_query_command,
+        "answer": handle_answer_command,
         "discover-source": handle_discover_source_command,
         "eval": handle_eval_command,
         "context": handle_context_command,
