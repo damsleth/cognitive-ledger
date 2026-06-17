@@ -6,7 +6,6 @@ dist/
 .obsidian/
 .misc/
 .tmp/
-.plans/
 .serena/
 # Claude worktrees
 .claude/
@@ -30,3 +29,6 @@ config.yaml
 .coverage
 # uxl artifacts (screenshots, reports, logs)
 .uxl/
+.plans/ab_results/
+.plans/done/
+.plans/DONE.md
