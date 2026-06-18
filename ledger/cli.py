@@ -1265,12 +1265,6 @@ def handle_inbox_command(args):
             print(f"  {item['filename']} - {item['title']}")
 
     elif sub == "triage":
-        if getattr(args, "fzf", False):
-            from ledger.inbox_triage import run_fzf_triage
-            raise SystemExit(run_fzf_triage())
-        if getattr(args, "interactive", False):
-            from ledger.inbox_triage import run_interactive_triage
-            raise SystemExit(run_interactive_triage())
         suggestions = triage_suggestions()
         if not suggestions:
             print("Inbox is empty.")
@@ -2298,18 +2292,8 @@ def main(argv=None) -> int:
     inbox_parser = subparsers.add_parser("inbox", help="Manage inbox captures")
     inbox_subparsers = inbox_parser.add_subparsers(dest="inbox_command")
     inbox_subparsers.add_parser("list", help="List inbox items")
-    inbox_triage_parser = inbox_subparsers.add_parser(
-        "triage", help="Suggest target types or run interactive batch triage"
-    )
-    inbox_triage_parser.add_argument(
-        "--interactive",
-        action="store_true",
-        help="Run an interactive batch triage UI instead of printing suggestions",
-    )
-    inbox_triage_parser.add_argument(
-        "--fzf",
-        action="store_true",
-        help="Use fzf for selection (requires fzf on PATH)",
+    inbox_subparsers.add_parser(
+        "triage", help="Suggest target types for inbox items"
     )
     cleanup_parser = inbox_subparsers.add_parser("cleanup", help="Remove orphaned locks and stale auto-generated items")
     cleanup_parser.add_argument("--days", type=int, default=14, help="Age threshold for stale items (default: 14)")
