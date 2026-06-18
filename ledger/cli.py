@@ -1265,6 +1265,9 @@ def handle_inbox_command(args):
             print(f"  {item['filename']} - {item['title']}")
 
     elif sub == "triage":
+        if not getattr(args, "plain", False):
+            from ledger.inbox_triage import run_interactive_triage
+            raise SystemExit(run_interactive_triage())
         suggestions = triage_suggestions()
         if not suggestions:
             print("Inbox is empty.")
@@ -2292,8 +2295,13 @@ def main(argv=None) -> int:
     inbox_parser = subparsers.add_parser("inbox", help="Manage inbox captures")
     inbox_subparsers = inbox_parser.add_subparsers(dest="inbox_command")
     inbox_subparsers.add_parser("list", help="List inbox items")
-    inbox_subparsers.add_parser(
-        "triage", help="Suggest target types for inbox items"
+    inbox_triage_parser = inbox_subparsers.add_parser(
+        "triage", help="Review the inbox in a subtraction-model TUI (accept-all by default)"
+    )
+    inbox_triage_parser.add_argument(
+        "--plain",
+        action="store_true",
+        help="Print type suggestions to stdout instead of launching the TUI",
     )
     cleanup_parser = inbox_subparsers.add_parser("cleanup", help="Remove orphaned locks and stale auto-generated items")
     cleanup_parser.add_argument("--days", type=int, default=14, help="Age threshold for stale items (default: 14)")
