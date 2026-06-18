@@ -419,14 +419,15 @@ class CLIHandlerCoverageTests(unittest.TestCase):
         self.assertIn("Sample", out)
 
     def test_inbox_triage_empty(self):
-        args = SimpleNamespace(inbox_command="triage")
+        # bare `triage` launches the TUI; --plain keeps the printable path.
+        args = SimpleNamespace(inbox_command="triage", plain=True)
         _, out, _ = _capture(self.cli.handle_inbox_command, args)
         self.assertIn("Inbox is empty", out)
 
     def test_inbox_triage_with_items(self):
         inbox_item = self.cfg.ledger_notes_dir / "00_inbox" / "pref_thing.md"
         inbox_item.write_text("---\n---\n\n# Pref\n\nI prefer two-space indent\n", encoding="utf-8")
-        args = SimpleNamespace(inbox_command="triage")
+        args = SimpleNamespace(inbox_command="triage", plain=True)
         _, out, _ = _capture(self.cli.handle_inbox_command, args)
         self.assertIn("preferences", out)
 
