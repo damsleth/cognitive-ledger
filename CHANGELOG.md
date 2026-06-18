@@ -1,5 +1,31 @@
 # Changelog
 
+## 2026-06-18 (0.10.0)
+
+Inbox triage overhaul.
+
+### Added
+- **Subtraction-model triage TUI** (`ledger inbox triage`): a Textual two-pane
+  UI — candidate table on the left, full note preview on the right, so you read
+  each note rather than just filenames. Accept-all by default; `space` excludes a
+  note, `t` cycles its target type, `A` commits behind a confirmation summary
+  (excluded notes are rejected/deleted), `q`/Esc quits with no changes. A banner
+  pins the subtraction model to the top of the screen. `--plain` prints the old
+  suggestion list; non-TTY invocations fall back to it automatically.
+
+### Changed
+- Triage type inference now scopes to a note's title + `## Statement` and matches
+  whole words, so incidental words in detail bullets (e.g. "Modell", "pattern")
+  no longer misroute facts into other types.
+
+### Removed
+- The previous `--interactive` and `--fzf` triage modes. Both were unusable:
+  `--interactive` exposed no affordances, and `--fzf` auto-accepted every
+  unselected item with no confirmation — a data-loss footgun.
+
+### Dependencies
+- Added `textual>=0.60` (triage TUI).
+
 ## 2026-06-11 (0.9.0)
 
 Six Memanto-inspired improvements (see `.plans/memanto-inspired-index.md`). The
