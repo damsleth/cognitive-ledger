@@ -82,6 +82,47 @@ def list_inbox(notes_dir: Path | None = None) -> list[dict[str, Any]]:
     return items
 
 
+def _triage_text(raw: str) -> str:
+    """Return the lowercased text used for type inference.
+
+    The note *type* should reflect its core claim, so we scope inference to the
+    title plus the ``## Statement`` section when one is present (the standard
+    note shape). Incidental words in ``## Detail`` / ``## Sources`` — e.g. a
+    "Modell:" line or a prose "pattern" — must not hijack the bucket. Notes
+    without a Statement section fall back to the whole body.
+    """
+    body = raw
+    if body.startswith("---"):
+        parts = body.split("---", 2)
+        if len(parts) == 3:
+            body = parts[2]
+
+    title = ""
+    statement: list[str] = []
+    in_statement = False
+    for line in body.splitlines():
+        stripped = line.strip()
+        if not title and stripped.startswith("# "):
+            title = stripped[2:]
+        if stripped.lower().startswith("## statement"):
+            in_statement = True
+            continue
+        if stripped.startswith("## "):
+            in_statement = False
+            continue
+        if in_statement:
+            statement.append(line)
+
+    scoped = f"{title}\n{chr(10).join(statement)}" if statement else body
+    return scoped.lower()
+
+
+def _signal_matches(signal: str, text: str) -> bool:
+    """Whole-word match so 'model' does not match 'Modell', 'is a' is a real
+    phrase rather than an incidental substring, etc."""
+    return re.search(rf"\b{re.escape(signal)}\b", text) is not None
+
+
 def triage_suggestions(notes_dir: Path | None = None) -> list[dict[str, Any]]:
     """Suggest target types for inbox items based on content analysis.
 
@@ -93,14 +134,14 @@ def triage_suggestions(notes_dir: Path | None = None) -> list[dict[str, Any]]:
 
     for item in items:
         path = Path(item["path"])
-        text = path.read_text(encoding="utf-8").lower()
+        text = _triage_text(path.read_text(encoding="utf-8"))
 
         suggested = "facts"  # default fallback
         reason = "no strong signal detected, defaulting to fact"
 
         for note_type, signals in _TYPE_SIGNALS:
             for signal in signals:
-                if signal in text:
+                if _signal_matches(signal, text):
                     suggested = note_type
                     reason = f"content contains '{signal}'"
                     break
