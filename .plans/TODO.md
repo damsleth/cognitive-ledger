@@ -70,3 +70,6 @@ All deferred follow-ups also done in `bd70d3c` + `9e5bcce`:
 - Strip private fenced content from every index, prompt, JSON output, and web/search snippet.
 - Update README/CHANGELOG only for shipped user-facing behavior, not for plan edits.
 - Preserve existing uncommitted work unless the active task explicitly owns it.
+- [ ] import-claude-memory leaks a 0-byte <note>.md.lock per note; importer should remove its own locks, and 'ledger inbox cleanup' should reap fresh import locks (currently says 'nothing to clean up' with 40 orphaned)
+- [ ] import-claude-memory mis-types notes via title heuristic: 'nocos_jan_naming_convention' (a disambiguation fact) classified as concept off the word 'naming convention'. Tighten the concept-marker rule
+- [ ] import-claude-memory + inbox triage don't rebuild the semantic index, so newly promoted notes are invisible to semantic_hybrid retrieval until the next manual 'embed build' (or sleep). Triage should trigger/queue an embed rebuild or at least warn. Proven 2026-06-19: Jan naming note absent from top-5 until 'embed build --target ledger --backend local' (387->425), then ranked #1
