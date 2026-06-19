@@ -1,0 +1,2 @@
+round	key	quality	delta	hit_rate	mrr	p95	regressions	status	verdict	note
+1	consolidation_boost_resweep	0.5406	0.5406	0.6034	0.3939	151.5	0	keep	discard	consolidation_boost default (1.1) re-sweep now that temporal is gated separately — the global value may now move freely without the temporal regression that blocked it before
