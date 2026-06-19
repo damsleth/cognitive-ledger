@@ -384,3 +384,60 @@ Append to `static/style.css`:
 signals dashboard, `/healthz`, `/admin/reload`, **graph view with filters**,
 status bar, and keyboard shortcuts — with `pytest tests/web/ -q` green and the
 manual acceptance checks above passing against the real corpus.
+
+---
+
+## Workflow decomposition (Sonnet subagents)
+
+**Single repo:** cogled = `/Users/damsleth/code/cognitive-ledger`
+(`.venv/bin/pytest tests/web/ -q`). Web deps live under the
+`cognitive-ledger[web]` extra. Every subagent: read this plan + `AGENTS.md`
+first; edit only its listed files; never share a file with a parallel sibling.
+All tasks here mutate one working tree, so **any two tasks run concurrently must
+use `isolation: worktree`** — otherwise run them serially.
+
+### Task graph — Phase 4 (graph view)
+
+| ID | Steps | Files (exclusive) | Depends on | Verify |
+|----|-------|-------------------|-----------|--------|
+| P4-1 | 4.1 (`Corpus.graph()` + `_titles`/`_meta` + private-strip in `_rebuild_link_maps`) | `ledger/web/services/corpus.py` | — | `.venv/bin/pytest tests/web/test_backlinks.py -q` (no regress) |
+| P4-2 | 4.2 routes + server registration | `ledger/web/routes/graph.py` (new), `ledger/web/server.py` | P4-1 | `GET /graph/data.json` → 200 |
+| P4-3 | 4.3, 4.4 (sidebar + template) | `ledger/web/templates/base.html`, `ledger/web/templates/graph.html` (new) | P4-2 | `GET /graph` → 200, has `graph-canvas` |
+| P4-4 | 4.5 vendored d3 + `graph.js` + CSS + README provenance | `ledger/web/static/d3.v7.min.js` (new), `ledger/web/static/graph.js` (new), `ledger/web/static/style.css`, `ledger/web/static/README.md` | — (parallel with P4-1/2) | files present; README records d3 7.9.0 ISC |
+| P4-5 | 4.6 tests | `tests/web/test_graph.py` (new) | P4-1..P4-4 | `.venv/bin/pytest tests/web/test_graph.py -q` |
+
+> d3 fetch (4.5): download `https://unpkg.com/d3@7.9.0/dist/d3.min.js` and check
+> it in — this is a one-time network step the asset agent performs, not a
+> runtime dependency. Record version/license in `static/README.md`.
+
+### Task graph — Phase 5 (polish; after Phase 4)
+
+| ID | Steps | Files (exclusive) | Depends on | Verify |
+|----|-------|-------------------|-----------|--------|
+| P5-1 | 5.1 status bar (Jinja global + footer) | `ledger/web/server.py`, `ledger/web/templates/base.html` | P4 done | `tests/web/test_routes.py -q` |
+| P5-2 | 5.2 keyboard shortcuts | `ledger/web/static/shortcuts.js` (new), `ledger/web/templates/base.html` | P4 done | manual: `/`, `g`, `j/k`, `Esc` |
+| P5-3 | 5.3 print stylesheet | `ledger/web/static/style.css` | — | print preview = body only |
+| P5-4 | 5.4 statusbar test | `tests/web/test_routes.py` | P5-1 | `tests/web/test_routes.py -q` |
+| P5-5 | 5.5 docs | `README.md`, `CHANGELOG.md` | P4 + P5 code done | manual review |
+
+> P5-1 and P5-2 both edit `base.html` → **sequential, not parallel.** Same for
+> P4-3 and P5-1/P5-2 (all touch `base.html`). P4-4, P5-3 both edit `style.css` →
+> sequential.
+
+### Parallelism
+
+- **Round 1:** P4-1 ∥ P4-4 (disjoint: corpus service vs static assets).
+- **Round 2:** P4-2 (after P4-1).
+- **Round 3:** P4-3 (after P4-2 + P4-4).
+- **Round 4:** P4-5 tests (after all P4 code). → run 4.7 acceptance.
+- **Phase 5** starts only after Phase 4 acceptance green. Within it, the
+  base.html / style.css sharing forces: P5-3 ∥ (P5-1 → P5-2 chain) → P5-4 →
+  P5-5.
+
+### Gate discipline
+
+Invariants in §Invariants are non-negotiable per task: no parallel logic (read
+via `Corpus` only), privacy strip on everything served, no writes outside
+`/admin/reload`, no runtime CDN/npm, fixture corpus in tests, `[web]` extra +
+`pytest.importorskip` guard intact. A task that violates an invariant fails
+review regardless of its Verify cell.

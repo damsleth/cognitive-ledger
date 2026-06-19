@@ -345,3 +345,49 @@ Set `promote.semantic_dedup.enabled: false` in yaams config → reverts to today
 - Thresholds wrong → legitimate candidates suppressed. Mitigation: every decision logged with score + path (Step 2.2); retune in config without code changes.
 - Stale ledger index → dedup misses recent notes. Mitigation: staleness warning (Step 2.5) naming the rebuild commands.
 - Subprocess overhead per candidate. Mitigation: `DedupChecker` cache; typical promote runs draft <20 candidates.
+
+---
+
+## Workflow decomposition (Sonnet subagents)
+
+**Two repos.** cogled = `/Users/damsleth/code/cognitive-ledger` (`.venv/bin/pytest`).
+yaams = `/Users/damsleth/code/yaams` (`.venv/bin/python -m pytest` — no pytest shim).
+Every subagent: read this plan + `AGENTS.md` in its repo first; edit only the
+files listed in its task; never touch a file owned by a sibling task running in
+parallel.
+
+**Hard ordering:** Part 1 (cogled `embed search`) ships the contract Part 2
+consumes, but Part 2 tests mock `subprocess.run`, so B-tasks can be authored in
+parallel against the pinned JSON shape in §"Contract shape". The only true
+serialization is the end-to-end gate (G), which needs both parts merged.
+
+### Task graph
+
+| ID | Repo | Steps | Files (exclusive) | Depends on | Verify |
+|----|------|-------|-------------------|-----------|--------|
+| A1 | cogled | 1.1, 1.2 | `ledger/embeddings.py`, `ledger/semantic.py` | — | `.venv/bin/pytest tests/test_ledger_embeddings.py -q` |
+| A2 | cogled | 1.3 (CLI handler + parser) | `ledger/cli.py` | A1 | `.venv/bin/pytest -q -k embed_search` |
+| A3 | cogled | 1.4 (contract doc) | `docs/yaams-cogled-interface.md` | A1 (shape frozen) | doc lists `embed search` + JSON shape |
+| A4 | cogled | 1.5, 1.6 (tests) | `tests/test_ledger_cli_embed_search.py`, `tests/test_ledger_embeddings.py` | A1, A2 | `.venv/bin/pytest tests/ -q -k embed` |
+| B1 | yaams | 2.1 (`dedup.py` + `DedupChecker`) | `yaams/promote/dedup.py` | — (mock contract) | `.venv/bin/python -m pytest tests/test_promote_dedup.py -q` |
+| B2 | yaams | 2.2 (candidate fields + wiring) | `yaams/promote/candidates.py` | B1 | import + `--dry-run` smoke |
+| B3 | yaams | 2.3, 2.4 (schema/frontmatter + review render) | `yaams/promote/schema.py`, `yaams/promote/review.py` | B1 | unit render test |
+| B4 | yaams | 2.5 (config plumbing) | `yaams/cli/promote.py`, `config.yaml.example`, `yaams/_default_config.yaml` | B1 | config loads, defaults applied |
+| B5 | yaams | 2.6 (tests) | `tests/test_promote_dedup.py` (+ extends) | B1–B4 | `.venv/bin/python -m pytest tests/test_promote_dedup.py tests/test_promote_rejection.py tests/test_promote_contract.py -q` |
+| G | both | acceptance 1–8 | — (no edits) | A*, B* merged | full §Acceptance checklist |
+
+### Parallelism
+
+- **Round 1 (parallel):** A1 ∥ B1 — disjoint repos and files.
+- **Round 2 (parallel within repo):** A2, A3 (cogled) ∥ B2, B3, B4 (yaams) —
+  each task owns distinct files. A2 waits on A1; A3 only needs the frozen shape.
+- **Round 3:** A4 ∥ B5 (test tasks, after their code tasks).
+- **Round 4 (serial):** G end-to-end, single agent, after merge.
+
+If running A2/A3 or B2/B3/B4 as true parallel agents, use `isolation: worktree`
+per agent (they share a repo working tree otherwise). Round-1 cross-repo agents
+need no isolation.
+
+### Per-task acceptance = its Verify cell must pass before the task is "done".
+The orchestrator must not start a dependent task until its dependency's Verify
+has gone green. Rollback knob unchanged: `promote.semantic_dedup.enabled: false`.
