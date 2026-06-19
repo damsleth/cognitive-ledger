@@ -417,3 +417,59 @@ tests):
 6. Prompt iteration on real Norwegian/English pairs + end-to-end run
    (0.5–1 day; gate flipping `enabled: true` on this, same discipline as the
    NLI `contradiction_enabled` gate).
+
+---
+
+## Workflow decomposition (Sonnet subagents)
+
+**Two repos.** yaams = `/Users/damsleth/code/yaams` (`.venv/bin/python -m pytest`).
+cogled = `/Users/damsleth/code/cognitive-ledger` (`.venv/bin/pytest`).
+Every subagent: read this plan + the repo's `AGENTS.md` first; edit only its
+listed files; never share a file with a parallel sibling.
+
+**Prereq gate:** Phase C (plan 38) ships `yaams/promote/dedup.py` + `merge_with`.
+Phase E code is authored against the pinned `DedupVerdict` interface (§"Hard
+dependency"); E-tasks stub Phase C in tests, so they need plan 38 *merged* only
+for the end-to-end gate (Y-G), not for unit work. The **cogled side (E7–E10) is
+fully fixture-driven and independent of both plan 38 and the yaams side** — it
+is the safe place to start if anything upstream is blocked.
+
+### Task graph
+
+| ID | Repo | Steps | Files (exclusive) | Depends on | Verify |
+|----|------|-------|-------------------|-----------|--------|
+| Y1 | yaams | E1 (`conflict.py`: strip/prompt/parse/classify) | `yaams/promote/conflict.py` | — (stub adapter) | `.venv/bin/python -m pytest tests/test_promote_conflict.py -q -k "classify or parse"` |
+| Y2 | yaams | E3 (schema migration + store_candidates INSERT) | `yaams/yaams/schema.py` | — | migration unit test |
+| Y3 | yaams | E2 (PromotionCandidate fields + generate wiring) | `yaams/promote/candidates.py` | Y1, Y2 | `tests/test_promote_conflict.py -q -k generate` |
+| Y4 | yaams | E4 (format_note conflict block + _conflicts routing) | `yaams/promote/review.py` | Y1 | `-k "write_to_inbox or format_note"` |
+| Y5 | yaams | E5 (config + CLI + --json stats) | `yaams/cli/promote.py`, `yaams/yaams/_default_config.yaml`, `config.yaml.example` | Y3 | config loads; `--json` envelope has new stats |
+| Y6 | yaams | E6 (full test file) | `tests/test_promote_conflict.py` | Y1–Y5 | `.venv/bin/python -m pytest tests/test_promote_conflict.py -q` (no network) |
+| C1 | cogled | E7 (InboxCandidate fields + parse + range-accept guard) | `ledger/inbox.py`, `ledger/inbox_triage.py` (parse only) | — | `.venv/bin/pytest tests/test_inbox_triage.py -q -k "metadata or range_accept"` |
+| C2 | cogled | E8 (triage UI: column + side-by-side) | `ledger/inbox_triage.py` (render) | C1 | `tests/test_inbox_triage.py -q` |
+| C3 | cogled | E9 (`ledger inbox conflicts` subcommand) | `ledger/cli.py` | C1 | `tests/test_cli_inbox_conflicts.py -q` |
+| C4 | cogled | E10 (test files) | `tests/test_inbox_triage.py`, `tests/test_cli_inbox_conflicts.py` | C1–C3 | both test files green |
+| Y-G | both | acceptance 1–9 | — | Y*, C*, plan 38 merged | full §Acceptance criteria |
+
+> Note: C1 and C2 both touch `ledger/inbox_triage.py` — they are **sequential,
+> not parallel** (C1 = parse + range-accept guard, C2 = render table +
+> side-by-side). Do not assign them to concurrent agents.
+
+### Parallelism
+
+- **Round 1 (parallel, disjoint files/repos):** Y1 ∥ Y2 ∥ C1.
+- **Round 2:** Y3 (after Y1+Y2) ∥ Y4 (after Y1) ∥ C2→C3 chain (after C1; C2 then
+  C3, since C3 reuses C2's `_render_side_by_side`).
+- **Round 3:** Y5 (after Y3) ∥ continue cogled.
+- **Round 4:** Y6 ∥ C4 (test tasks).
+- **Round 5 (serial):** Y-G end-to-end after plan 38 + both sides merged.
+
+Parallel agents inside one repo (e.g. Y3 ∥ Y4) must use `isolation: worktree`.
+The cogled chain and yaams chain are separate repos → no isolation needed
+between them.
+
+### Gate discipline
+
+Default config keeps the feature inert (`conflict_detection.enabled: false`),
+so any task can land on `main` without behaviour change. Flipping `enabled:
+true` is **out of scope for the workflow** — it's the manual prompt-tuning gate
+in build-order step 6, same discipline as the NLI `contradiction_enabled` gate.
