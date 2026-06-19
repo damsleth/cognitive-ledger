@@ -269,6 +269,80 @@ class ApplyActionsTests(TriageTestBase):
         self.assertEqual(len(list(self.inbox.glob("*.md"))), 1)
 
 
+class ParseCommandTests(TriageTestBase):
+    def _candidates(self, n: int = 12):
+        from ledger.inbox import load_candidates_for_triage
+
+        for i in range(1, n + 1):
+            self._write(f"fact__{i:02d}.md", sig=f"{i:016d}", title=f"Note {i}")
+        return load_candidates_for_triage()
+
+    def test_accept_range(self):
+        from ledger.inbox_triage import _parse_command
+
+        cands = self._candidates()
+        actions = _parse_command("a 1,3,5-7", cands)
+        self.assertEqual([a.row for a in actions], [1, 3, 5, 6, 7])
+        self.assertTrue(all(a.action == "accept" for a in actions))
+
+    def test_accept_open_range(self):
+        from ledger.inbox_triage import _parse_command
+
+        cands = self._candidates()
+        actions = _parse_command("a 10-", cands)
+        self.assertEqual([a.row for a in actions], [10, 11, 12])
+
+    def test_reject_list(self):
+        from ledger.inbox_triage import _parse_command
+
+        cands = self._candidates()
+        actions = _parse_command("r 2,4", cands)
+        self.assertEqual([a.row for a in actions], [2, 4])
+        self.assertTrue(all(a.action == "reject" for a in actions))
+
+    def test_type_override(self):
+        from ledger.inbox_triage import _parse_command
+
+        cands = self._candidates()
+        actions = _parse_command("a 1:preferences", cands)
+        self.assertEqual(actions[0].target_type, "preferences")
+
+    def test_invalid_type_override_raises(self):
+        from ledger.inbox_triage import _parse_command
+
+        cands = self._candidates()
+        with self.assertRaises(ValueError):
+            _parse_command("a 1:bogus", cands)
+
+    def test_invalid_index_raises(self):
+        from ledger.inbox_triage import _parse_command
+
+        cands = self._candidates()
+        with self.assertRaises(ValueError):
+            _parse_command("a 1,2,abc", cands)
+
+    def test_out_of_range_raises(self):
+        from ledger.inbox_triage import _parse_command
+
+        cands = self._candidates(3)
+        with self.assertRaises(ValueError):
+            _parse_command("a 5", cands)
+
+    def test_unknown_command_raises(self):
+        from ledger.inbox_triage import _parse_command
+
+        cands = self._candidates(3)
+        with self.assertRaises(ValueError):
+            _parse_command("x 1", cands)
+
+    def test_merge_without_hint_raises(self):
+        from ledger.inbox_triage import _parse_command
+
+        cands = self._candidates(3)
+        with self.assertRaises(ValueError):
+            _parse_command("m 1", cands)
+
+
 class TestConflictMetadata(TriageTestBase):
     """E7: conflict frontmatter parsed into InboxCandidate."""
 
@@ -302,6 +376,111 @@ class TestConflictMetadata(TriageTestBase):
         self.assertIsNone(c.conflict_confidence)
         self.assertIsNone(c.conflict_reason)
         self.assertIsNone(c.dedup_similarity)
+
+
+class TestConflictColumnAndGuard(TriageTestBase):
+    """E8/E10: _render_table shows conflict? column; range-accept guard; side-by-side."""
+
+    def test_render_table_shows_conflict_column(self):
+        """_render_table must include 'conflict?' header and classification value."""
+        from ledger.inbox import load_candidates_for_triage
+        from ledger.inbox_triage import _render_table
+
+        self._write(
+            "fact__contra.md",
+            sig="aabb0011",
+            title="Contra",
+            conflict_classification="contradict",
+        )
+        self._write("fact__plain.md", sig="ccdd0022", title="Plain")
+        cands = load_candidates_for_triage(self.cfg.ledger_notes_dir)
+
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            _render_table(cands, {})
+        out = buf.getvalue()
+        self.assertIn("conflict?", out)
+        self.assertIn("CONTRADICT", out)
+        # Plain note should show dash for missing classification
+        self.assertIn("-", out)
+
+    def test_range_accept_skips_contradict_rows(self):
+        """a 1-2 where row 1 is 'contradict' must drop it and print a note."""
+        from ledger.inbox import load_candidates_for_triage
+        from ledger.inbox_triage import _parse_command
+
+        self._write(
+            "fact__01_contra.md",
+            sig="aabb0011",
+            title="Contra One",
+            conflict_classification="contradict",
+        )
+        self._write("fact__02_normal.md", sig="ccdd0022", title="Normal Two")
+        cands = load_candidates_for_triage(self.cfg.ledger_notes_dir)
+
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            actions = _parse_command("a 1-2", cands)
+        out = buf.getvalue()
+
+        # Only 1 action returned (the non-contradict row)
+        self.assertEqual(len(actions), 1)
+        self.assertEqual(actions[0].action, "accept")
+        # Note printed about the skipped row
+        self.assertIn("contradiction", out)
+        self.assertIn("accept it explicitly", out)
+
+    def test_single_accept_allows_contradict_row(self):
+        """a <n> on a single contradict row must still produce an accept action."""
+        from ledger.inbox import load_candidates_for_triage
+        from ledger.inbox_triage import _parse_command
+
+        self._write(
+            "fact__contra.md",
+            sig="aabb0011",
+            title="Contra",
+            conflict_classification="contradict",
+        )
+        cands = load_candidates_for_triage(self.cfg.ledger_notes_dir)
+
+        actions = _parse_command("a 1", cands)
+        self.assertEqual(len(actions), 1)
+        self.assertEqual(actions[0].action, "accept")
+        self.assertEqual(actions[0].row, 1)
+
+    def test_inspect_renders_side_by_side_for_conflict(self):
+        """_handle_inspect shows '--- existing ---' / '--- candidate ---' for conflict rows."""
+        from ledger.inbox import load_candidates_for_triage
+        from ledger.inbox_triage import _handle_inspect
+
+        # Write the "existing" target note
+        target = self.cfg.ledger_notes_dir / "02_facts" / "fact__existing.md"
+        target.write_text(
+            "---\ncreated: 2026-06-01T10:00:00Z\nupdated: 2026-06-01T10:00:00Z\n"
+            "tags: [fact]\nconfidence: 0.8\nsource: user\nscope: work\nlang: en\n---\n\n"
+            "# Existing\n\n## Statement\n\nThe existing statement text.\n",
+            encoding="utf-8",
+        )
+
+        self._write(
+            "fact__contra.md",
+            sig="aabb0011",
+            title="Contra",
+            merge_with="notes/02_facts/fact__existing.md",
+            conflict_classification="contradict",
+            conflict_confidence=0.88,
+            conflict_reason="contradicts existing date",
+        )
+        cands = load_candidates_for_triage(self.cfg.ledger_notes_dir)
+
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            _handle_inspect("i 1", cands)
+        out = buf.getvalue()
+
+        self.assertIn("--- existing", out)
+        self.assertIn("--- candidate", out)
+        self.assertIn("existing statement text", out)
 
 
 # ---------------------------------------------------------------------------
