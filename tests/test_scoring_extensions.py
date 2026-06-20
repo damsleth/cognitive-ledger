@@ -14,8 +14,8 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from ledger.config import LedgerConfig, set_config, reset_config
-from ledger.retrieval import score_candidate
-from ledger.retrieval_types import ScoreComponents
+from ledger.retrieval import score_candidate, apply_prior_tiebreak
+from ledger.retrieval_types import ScoreComponents, ScoredResult
 
 
 @pytest.fixture(autouse=True)
@@ -61,6 +61,32 @@ FACT_CANDIDATE = {
     "note_tokens": {"k8s", "deploy", "mission"},
     "tag_tokens": {"deploy", "k8s"},
 }
+
+
+def _scored(rel_path: str, base: float, signal_score: float) -> ScoredResult:
+    """Minimal ScoredResult for apply_prior_tiebreak (signal tie-break tests)."""
+    return ScoredResult(
+        path="/tmp/" + rel_path,
+        rel_path=rel_path,
+        type="fact",
+        title=rel_path,
+        statement="",
+        body="",
+        updated="2026-04-01T10:00:00Z",
+        updated_ts=NOW,
+        confidence=0.5,
+        source="user",
+        scope="all",
+        status="",
+        tags=[],
+        note_tokens=set(),
+        tag_tokens=set(),
+        attention_tokens=set(),
+        snippet="",
+        has_next_action_checkbox=False,
+        score=base,
+        components=ScoreComponents(signal_score=signal_score),
+    )
 
 
 class TestIdentityBoost:
@@ -113,8 +139,9 @@ class TestIdentityBoost:
 
 
 class TestSignalScoring:
-    def test_signal_score_applied_when_enabled(self):
-        """Signal score should be blended when weight > 0 and summary provided."""
+    def test_signal_carried_in_components_not_base_score(self):
+        """Signal is excluded from the base score (so it can't displace a clear
+        winner) and carried in ScoreComponents.signal_score for the tie-break."""
         config = LedgerConfig()
         config.score_weight_signal = 0.10
         set_config(config)
@@ -126,7 +153,7 @@ class TestSignalScoring:
             },
         }
 
-        score_with, reasons_with, _ = score_candidate(
+        score_with, reasons_with, comp_with = score_candidate(
             FACT_CANDIDATE, {"deploy"}, "all",
             history_mode=False, loop_mode=False, preference_mode=False,
             now_dt=NOW, expansion_events=[], bm25_score=0.5,
@@ -139,8 +166,29 @@ class TestSignalScoring:
             signal_summary=None,
         )
 
-        assert score_with > score_without
+        # Base score unchanged; signal lives in components, applied by tiebreak.
+        assert score_with == score_without
+        assert comp_with.signal_score == 0.8
         assert any("signal=" in r for r in reasons_with)
+
+    def test_positive_signal_breaks_tie_via_tiebreak(self):
+        """A near-tied affirmed candidate is promoted by apply_prior_tiebreak,
+        but cannot leapfrog a clear leader."""
+        config = LedgerConfig()
+        config.score_weight_signal = 0.5
+        set_config(config)
+        # leader 0.80, affirmed follower 0.795 (within the ~0.02 relative tie
+        # band) -> should overtake; far-trailing affirmed note 0.40 (well
+        # outside the band) -> must NOT leapfrog the leader.
+        ranked = [
+            _scored("notes/leader.md", 0.80, 0.0),
+            _scored("notes/affirmed_near.md", 0.795, 0.8),
+            _scored("notes/affirmed_far.md", 0.40, 0.8),
+        ]
+        apply_prior_tiebreak(ranked)
+        order = [r.rel_path for r in ranked]
+        assert order[0] == "notes/affirmed_near.md"
+        assert order.index("notes/affirmed_far.md") == 2
 
     def test_signal_score_not_applied_when_weight_zero(self):
         """Signal score should be ignored when weight is 0."""
@@ -171,33 +219,22 @@ class TestSignalScoring:
         assert score_with == score_without
         assert not any("signal=" in r for r in reasons)
 
-    def test_negative_signal_demotes(self):
-        """A note with negative signal score should score lower."""
+    def test_negative_signal_demotes_leader_via_tiebreak(self):
+        """A stale/corrected note (negative signal) is demoted even when it leads
+        on relevance: the leader has tie factor 1.0, so the penalty applies in
+        full and a clean follower overtakes it."""
         config = LedgerConfig()
-        config.score_weight_signal = 0.10
+        config.score_weight_signal = 0.5
         set_config(config)
-
-        signal_summary = {
-            "_meta": {"total_signals": 50},
-            "notes": {
-                "notes/02_facts/fact__k8s.md": {"signal_score": -0.75},
-            },
-        }
-
-        score_demoted, _, _ = score_candidate(
-            FACT_CANDIDATE, {"deploy"}, "all",
-            history_mode=False, loop_mode=False, preference_mode=False,
-            now_dt=NOW, expansion_events=[], bm25_score=0.5,
-            signal_summary=signal_summary,
-        )
-        score_neutral, _, _ = score_candidate(
-            FACT_CANDIDATE, {"deploy"}, "all",
-            history_mode=False, loop_mode=False, preference_mode=False,
-            now_dt=NOW, expansion_events=[], bm25_score=0.5,
-            signal_summary=None,
-        )
-
-        assert score_demoted < score_neutral
+        ranked = [
+            _scored("notes/stale_leader.md", 0.80, -0.75),
+            _scored("notes/clean_follower.md", 0.78, 0.0),
+        ]
+        apply_prior_tiebreak(ranked)
+        assert ranked[0].rel_path == "notes/clean_follower.md"
+        # the demoted note's final score dropped below its base
+        stale = next(r for r in ranked if r.rel_path == "notes/stale_leader.md")
+        assert stale.score < 0.80
 
 
 class TestContextProfileIdentity:

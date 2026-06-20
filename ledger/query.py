@@ -667,7 +667,14 @@ def rank_query_semantic_hybrid(
                 query_lexical_relevance=semantic_component,
             )
 
-        # Signal feedback score (requires real_signals gate to be met)
+        # Signal feedback score (requires real_signals gate to be met).
+        # The raw score is query-independent (a note is "good"/"stale" globally),
+        # so it is NOT added to the base here; it is carried in
+        # ScoreComponents.signal_score and folded in by apply_prior_tiebreak as a
+        # TIE-BREAKER (same mechanism as the prior). Adding it linearly let a
+        # high weight float signalled-but-irrelevant notes above correct ones on
+        # unrelated queries (measured: weight 0.3 dropped general hit@1
+        # 0.80->0.667; even relevance-gated, 0.4 dropped it to 0.711).
         sig_score = 0.0
         if config.score_weight_signal > 0 and _signal_summary is not None and rel_path:
             from ledger.signals import get_signal_score
@@ -685,25 +692,25 @@ def rank_query_semantic_hybrid(
             # rank — not recency noise — drives ordering.
             max_rrf = max(rrf_scores.values()) if rrf_scores else 0.0
             rrf_normalised = rrf_score / max_rrf if max_rrf > 0 else 0.0
-            # Prior is blended later as a tie-breaker (apply_prior_tiebreak).
+            # Prior AND signal are blended later as tie-breakers
+            # (apply_prior_tiebreak), not added to the base here.
             final_score = (
                 (config.semantic_weight_vector + config.semantic_weight_lexical) * rrf_normalised
                 + config.semantic_weight_scope * scope_component
                 + config.semantic_weight_recency * recency_component
-                + config.score_weight_signal * sig_score
             )
             final_score = max(0.0, min(1.0, final_score))
             if rrf_score == 0.0:
                 continue
         else:
-            # Default: weighted_sum formula. The prior is NOT added here; it is
-            # blended in afterwards as a tie-breaker by apply_prior_tiebreak.
+            # Default: weighted_sum formula. Prior and signal are NOT added
+            # here; both are blended in afterwards as tie-breakers by
+            # apply_prior_tiebreak.
             final_score = (
                 (config.semantic_weight_vector * semantic_component)
                 + (config.semantic_weight_lexical * lexical_score)
                 + (config.semantic_weight_scope * scope_component)
                 + (config.semantic_weight_recency * recency_component)
-                + config.score_weight_signal * sig_score
             )
             final_score = max(0.0, min(1.0, final_score))
             if semantic_component == 0.0 and lexical_score == 0.0:
@@ -747,6 +754,7 @@ def rank_query_semantic_hybrid(
                     recency_component=recency_component,
                     recency=recency_component,
                     prior_score=prior,
+                    signal_score=sig_score,
                 ),
             )
         )
