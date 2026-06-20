@@ -1849,6 +1849,11 @@ def handle_ab_command(args, ab_parser):
         subargs = getattr(args, "abargs", []) or []
         raise SystemExit(ab_main(subargs))
 
+    if ab_command == "loop":
+        from ledger.ab_loop import main_cli as loop_main
+        loopargs = getattr(args, "loopargs", []) or []
+        raise SystemExit(loop_main(loopargs))
+
     if ab_command == "charts":
         from ledger.ab_charts import main as charts_main
         charts_main()
@@ -1883,6 +1888,9 @@ def main(argv=None) -> int:
     if raw[:2] == ["ab", "run"]:
         from ledger.ab import main_cli as ab_main
         return ab_main(raw[2:])
+    if raw[:2] == ["ab", "loop"]:
+        from ledger.ab_loop import main_cli as loop_main
+        return loop_main(raw[2:])
     if raw[:1] == ["sleep"]:
         from ledger import maintenance as maint
         return maint.main(raw[1:])
@@ -2548,6 +2556,9 @@ def main(argv=None) -> int:
 
     ab_run_parser = ab_subparsers.add_parser("run", help="Run A/B retrieval quality harness")
     ab_run_parser.add_argument("abargs", nargs=argparse.REMAINDER, help=argparse.SUPPRESS)
+
+    ab_loop_parser = ab_subparsers.add_parser("loop", help="Autonomous A/B optimization loop")
+    ab_loop_parser.add_argument("loopargs", nargs=argparse.REMAINDER, help=argparse.SUPPRESS)
 
     ab_subparsers.add_parser("charts", help="Render A/B performance charts from performance_series.json")
 

@@ -30,6 +30,28 @@ RETRIEVAL_MODES: list[str] = get_config().retrieval_modes
 
 EPSILON = 1e-9
 QUALITY_KEYS = ("hit1", "hitk", "mrr")
+DEFAULT_OBJECTIVE_WEIGHTS: dict[str, float] = {"mrr": 0.6, "hitk": 0.4}
+
+
+def compute_objective(
+    quality: dict[str, float], weights: dict[str, float] | None = None
+) -> float:
+    """Collapse a quality dict (hit1/hitk/mrr) to one scalar to maximize.
+
+    Weights default to the ``ab_objective_weights`` config knob, falling back
+    to ``DEFAULT_OBJECTIVE_WEIGHTS`` (0.6*mrr + 0.4*hitk). Unknown weight keys
+    are ignored; missing metrics count as 0.0.
+    """
+    if weights is None:
+        try:
+            weights = dict(get_config().ab_objective_weights)
+        except Exception:
+            weights = dict(DEFAULT_OBJECTIVE_WEIGHTS)
+    return sum(
+        float(w) * float(quality.get(key, 0.0))
+        for key, w in weights.items()
+        if key in QUALITY_KEYS
+    )
 QUERY_METRIC_KEYS = (
     "query_latency_ms",
     "candidate_build_ms",
