@@ -19,6 +19,7 @@ class ScoreComponents:
     scope_component: float = 0.0
     recency_component: float = 0.0
     prior_score: float = 0.0
+    signal_score: float = 0.0
 
 
 @dataclass
