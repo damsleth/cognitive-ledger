@@ -1343,13 +1343,18 @@ def score_candidate(
     else:
         reasons_prefix = []
 
-    # Signal feedback score
+    # Signal feedback score. Query-independent (a note is "good"/"stale"
+    # globally), so it is NOT added to the base score here; it is carried in
+    # ScoreComponents.signal_score and folded in by apply_prior_tiebreak as a
+    # TIE-BREAKER (same mechanism as the prior), so it can rerank near-tied
+    # candidates without floating signalled-but-irrelevant notes above clear
+    # winners.
+    sig_score = 0.0
     if config.score_weight_signal > 0 and signal_summary is not None:
         rel_path = str(_candidate_value(candidate, "rel_path", "") or "")
         if rel_path:
             from ledger.signals import get_signal_score
             sig_score = get_signal_score(rel_path, summary=signal_summary)
-            score += config.score_weight_signal * sig_score
             if include_reasons and sig_score != 0:
                 reasons_prefix.append(f"signal={sig_score:.3f}")
 
@@ -1395,6 +1400,7 @@ def score_candidate(
         recency=recency,
         confidence=confidence,
         prior_score=prior,
+        signal_score=sig_score,
     )
 
 
@@ -1444,8 +1450,9 @@ def apply_prior_tiebreak(ranked: list["ScoredResult"]) -> list["ScoredResult"]:
     score for BOTH retrieval paths (lexical ``score_candidate`` and dense
     ``rank_query_semantic_hybrid``). Each input ``ScoredResult`` must carry:
 
-    - ``score``: the BASE score (relevance + boosts + signal), prior excluded.
+    - ``score``: the BASE score (relevance + boosts); prior AND signal excluded.
     - ``components.prior_score``: the raw prior in [0, 1] (0 when disabled).
+    - ``components.signal_score``: the raw signal in [-1, 1] (0 when disabled).
 
     Mechanism
     ---------
@@ -1456,7 +1463,8 @@ def apply_prior_tiebreak(ranked: list["ScoredResult"]) -> list["ScoredResult"]:
        the tie band). Candidates with a clear base-score lead over their
        followers keep their rank: a trailing candidate's prior is scaled to 0,
        so it cannot leapfrog a clear winner.
-    3. Final score = ``base + config.prior_weight * factor * prior_score``,
+    3. Final score = ``base + factor * (prior_weight*prior_score
+       + score_weight_signal*signal_score)``,
        clamped to [0, 1]. The list is re-sorted by (score, updated, path).
 
     When the prior is disabled (every ``prior_score`` is 0) or
@@ -1468,16 +1476,29 @@ def apply_prior_tiebreak(ranked: list["ScoredResult"]) -> list["ScoredResult"]:
         return ranked
     config = _cfg()
     weight = float(config.prior_weight)
+    signal_weight = float(config.score_weight_signal)
     tie_band = float(config.prior_tie_band)
     leader_base = max(item.score for item in ranked)
     for item in ranked:
         prior = float(getattr(item.components, "prior_score", 0.0) or 0.0)
-        if prior <= 0.0 or weight <= 0.0:
+        signal = float(getattr(item.components, "signal_score", 0.0) or 0.0)
+        prior_active = prior > 0.0 and weight > 0.0
+        signal_active = signal != 0.0 and signal_weight > 0.0
+        if not (prior_active or signal_active):
             continue
+        # Same tie factor gates BOTH the prior and the signal: a candidate with
+        # a clear base lead keeps its rank (trailing candidates' bonuses scale to
+        # 0), so neither can leapfrog a clear winner. The leader has factor 1.0,
+        # so a negative signal still demotes a stale/corrected #1 at full force.
         factor = prior_tiebreak_factor(item.score, leader_base, tie_band)
         if factor <= 0.0:
             continue
-        item.score = max(0.0, min(1.0, item.score + weight * factor * prior))
+        delta = 0.0
+        if prior_active:
+            delta += weight * factor * prior
+        if signal_active:
+            delta += signal_weight * factor * signal
+        item.score = max(0.0, min(1.0, item.score + delta))
     ranked.sort(key=lambda item: (item.score, item.updated or "", item.path), reverse=True)
     return ranked
 
