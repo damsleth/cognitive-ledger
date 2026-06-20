@@ -46,6 +46,11 @@ SIGNAL_TYPES = (
     "llm_judged",
 )
 
+# Floor for the positive-sentiment usage factor. Affirmations boost ranking even
+# with hit_count=0 (hit tracking is sparse); hits scale the boost from the floor
+# up to 1.0. Negative sentiment ignores this and always demotes at full strength.
+SIGNAL_USAGE_FLOOR = 0.5
+
 
 def _now_iso() -> str:
     return dt.datetime.now(tz=dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -286,10 +291,12 @@ def summarize_signals(
         hits = stats["hit_count"]
         negative = cor + stale
         sentiment = (aff - negative) / (aff + negative + 1)
-        # Usage factor: scales positive sentiment by hit frequency,
-        # but negative sentiment passes through even with zero hits
-        # so corrections/stale_flags always demote.
-        usage = min(hits / 10.0, 1.0)
+        # Usage factor: scales positive sentiment toward hit frequency, but with
+        # a 0.5 floor so an affirmation still boosts when hit_count is 0 (hit
+        # tracking is sparse; without the floor every affirmation scored 0 and
+        # the positive pathway was dead). Negative sentiment bypasses usage
+        # entirely so corrections/stale_flags always demote at full strength.
+        usage = SIGNAL_USAGE_FLOOR + (1.0 - SIGNAL_USAGE_FLOOR) * min(hits / 10.0, 1.0)
         if sentiment >= 0:
             stats["signal_score"] = round(sentiment * usage, 4)
         else:
