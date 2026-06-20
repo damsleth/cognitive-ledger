@@ -148,6 +148,23 @@ class TestSummarizeSignals:
         assert stats["affirmations"] == 1
         assert stats["signal_score"] > 0
 
+    def test_affirmation_without_hits_scores_positive(self, signals_path):
+        """Regression: an affirmation must boost even with hit_count=0.
+
+        Before the SIGNAL_USAGE_FLOOR fix, positive sentiment was multiplied by
+        usage=min(hits/10,1.0), so an affirmation-only note (hits=0) scored 0 and
+        the entire positive signal pathway was dead (0/126 live notes scored >0).
+        """
+        entries = [
+            {"ts": "2026-04-07T10:00:00Z", "type": "affirmation", "note": "good_note"},
+        ]
+        signals_path.write_text("\n".join(json.dumps(e) for e in entries) + "\n")
+        summary = summarize_signals(signals_path=signals_path)
+        stats = summary["notes"]["good_note"]
+        assert stats["hit_count"] == 0
+        assert stats["affirmations"] == 1
+        assert stats["signal_score"] > 0
+
     def test_negative_score_without_hits(self, signals_path):
         """Notes with only corrections/stale_flags should get a negative score."""
         entries = [
