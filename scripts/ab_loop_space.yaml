@@ -1,0 +1,23 @@
+# Example search space for `ledger ab loop --space scripts/ab_loop_space.yaml`.
+#
+# Each key is a config field name (same names `ledger ab run --candidate-env`
+# accepts). A param is either an explicit list of values or a {min, max, step}
+# inclusive range. The loop sweeps these one coordinate at a time, screening
+# each candidate against the screen shard and confirming winners on the holdout
+# shard before advancing the champion.
+#
+# Default target: validate the signal weight (live open thread — signal weight
+# is 0.0 awaiting A/B validation) plus the recency/confidence fusion knobs.
+params:
+  score_weight_signal:
+    min: 0.0
+    max: 0.20
+    step: 0.05
+  score_weight_recency:
+    min: 0.05
+    max: 0.25
+    step: 0.05
+  score_weight_confidence:
+    min: 0.05
+    max: 0.20
+    step: 0.05

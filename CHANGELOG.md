@@ -3,6 +3,16 @@
 ## Unreleased
 
 ### Added
+- **`ledger ab loop` — autonomous A/B optimization loop.** Ports the
+  autoresearch propose→screen→holdout→accept pattern onto the existing `ab`
+  probe infrastructure. Each trial proposes one bounded single-key mutation
+  (coordinate descent over a `--space` YAML), screens it against the screen
+  shard, and only advances the champion if it also survives a holdout re-probe
+  (overfit guard). Champion persists to `champion.json`; every trial appends to
+  `ab_loop_results.jsonl`. Supports `--resume`, SIGINT-safe shutdown, and a
+  final benchmark measurement. New scalar objective `ab.compute_objective`
+  (`0.6*mrr + 0.4*hitk`, weights via the `ab_objective_weights` config knob).
+  Example search space at `scripts/ab_loop_space.yaml`.
 - **Web UI Phase 4 — graph view (+ Phase 5 polish).** `ledger web` now serves
   `/graph`: a client-side force-directed graph (vendored d3 7.9.0, canvas
   render) of the whole corpus — nodes are notes, edges are resolved wikilinks,
