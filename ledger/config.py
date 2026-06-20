@@ -790,6 +790,12 @@ class LedgerConfig:
     embed_model: str | None = None
     """Optional default embedding model override for semantic_hybrid mode."""
 
+    ab_objective_weights: dict[str, float] = field(
+        default_factory=lambda: {"mrr": 0.6, "hitk": 0.4}
+    )
+    """Weights for the scalar A/B objective (``ledger ab loop``). Keys are
+    quality metric names (hit1/hitk/mrr); the objective is their weighted sum."""
+
     embed_devices: tuple[str, ...] = ("auto", "cpu", "mps", "cuda")
     """Valid values for embed_device / `embed build --device`."""
 
