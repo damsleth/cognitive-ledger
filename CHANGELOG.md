@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- **Web UI Phase 4 — graph view (+ Phase 5 polish).** `ledger web` now serves
+  `/graph`: a client-side force-directed graph (vendored d3 7.9.0, canvas
+  render) of the whole corpus — nodes are notes, edges are resolved wikilinks,
+  node size scales with incoming links. Type-filter chips and an "open loops
+  only" mode are pure client-side filtering; clicking a node opens the note.
+  `/graph/data.json` serves the `{nodes, links}` payload (built from `Corpus`
+  link maps — no parallel parsing). Wikilinks inside `<private>...</private>`
+  fences are stripped from both the graph and the backlinks panel. Phase 5
+  polish: data-driven status bar with a reload button, and keyboard shortcuts
+  (`/` search, `g` graph, `j`/`k` list navigation, `Esc` blur).
+
 ## 2026-06-18 (0.10.0)
 
 Inbox triage overhaul.
