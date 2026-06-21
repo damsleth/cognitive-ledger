@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2026-06-21 (0.11.0)
 
 ### Added
 - **`ledger ab loop` — autonomous A/B optimization loop.** Ports the
