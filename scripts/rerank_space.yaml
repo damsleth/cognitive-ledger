@@ -1,0 +1,26 @@
+# Search space for `ledger ab loop` — Plan 04 rerank tuning (T1 gate).
+#
+# Sweeps the candidate-pool size for semantic_rerank mode.
+# The plan (B1) found that reranking only 20 candidates is ineffective;
+# the literature shows gains when the pool reaches 50-100.
+#
+# LEDGER_SHORTLIST_MAX controls how many candidates semantic_hybrid assembles
+# before handing off to the cross-encoder. LEDGER_RERANK_INPUT_K controls
+# how many of those candidates the cross-encoder re-scores.
+#
+# Run with:
+#   ledger ab loop --space scripts/rerank_space.yaml \
+#     --mode semantic_rerank \
+#     --screen-cases tests/fixtures/retrieval_eval_screen.yaml \
+#     --holdout-cases tests/fixtures/retrieval_eval_holdout.yaml \
+#     --benchmark-cases tests/fixtures/retrieval_eval_cases.yaml
+params:
+  LEDGER_SHORTLIST_MAX:
+    - "36"
+    - "50"
+    - "60"
+  LEDGER_RERANK_INPUT_K:
+    - "20"
+    - "36"
+    - "50"
+    - "60"
