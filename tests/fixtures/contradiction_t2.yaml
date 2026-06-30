@@ -1,0 +1,623 @@
+# T2 — Explicit supersession pairs for contradiction detection
+#
+# Loader: tests/test_contradiction_fixtures.py
+# Consumed by: Plan 08 (contradiction detection eval)
+#
+# Schema per entry:
+#   note_a, note_b : short synthetic notes (no private content)
+#   relation       : contradiction | compatible
+#   attribute      : the shared attribute slot (residence, employer, diet, project_status, role)
+#   lang           : en | no
+#   expected_nli_fail (optional): true when mDeBERTa-mnli-xnli is expected to miss this pair
+#                                 (lang:no subset — see plan 08 golden invariant)
+#
+# Positive pairs  (relation: contradiction) — 33 entries, ≥30 required
+# Negative pairs  (relation: compatible)    — 51 entries, ≥50 required
+
+# ── Positive pairs — lang:en ──────────────────────────────────────────────────
+
+- id: t2_pos_01
+  note_a: "Alex lives in Seattle."
+  note_b: "Alex moved to Portland last month."
+  relation: contradiction
+  attribute: residence
+  lang: en
+
+- id: t2_pos_02
+  note_a: "Sam's home address is 12 Oak Street, Chicago."
+  note_b: "Sam has been living in Denver since January."
+  relation: contradiction
+  attribute: residence
+  lang: en
+
+- id: t2_pos_03
+  note_a: "Jordan works at Acme Corp."
+  note_b: "Jordan joined TechStart Inc. in March."
+  relation: contradiction
+  attribute: employer
+  lang: en
+
+- id: t2_pos_04
+  note_a: "Casey is employed at Global Bank."
+  note_b: "Casey started at FinTech LLC last quarter."
+  relation: contradiction
+  attribute: employer
+  lang: en
+
+- id: t2_pos_05
+  note_a: "Morgan follows a vegan diet."
+  note_b: "Morgan is pescatarian now."
+  relation: contradiction
+  attribute: diet
+  lang: en
+
+- id: t2_pos_06
+  note_a: "Pat is vegetarian."
+  note_b: "Pat started eating meat again."
+  relation: contradiction
+  attribute: diet
+  lang: en
+
+- id: t2_pos_07
+  note_a: "Project Alpha is in progress."
+  note_b: "Project Alpha was cancelled in Q2."
+  relation: contradiction
+  attribute: project_status
+  lang: en
+
+- id: t2_pos_08
+  note_a: "The refactor is still underway."
+  note_b: "The refactor was completed last week."
+  relation: contradiction
+  attribute: project_status
+  lang: en
+
+- id: t2_pos_09
+  note_a: "Riley lives in Austin, TX."
+  note_b: "Riley relocated to New York City."
+  relation: contradiction
+  attribute: residence
+  lang: en
+
+- id: t2_pos_10
+  note_a: "Drew works for Consulting Group."
+  note_b: "Drew is now self-employed as a freelancer."
+  relation: contradiction
+  attribute: employer
+  lang: en
+
+- id: t2_pos_11
+  note_a: "Kim is strictly gluten-free."
+  note_b: "Kim dropped the gluten-free diet."
+  relation: contradiction
+  attribute: diet
+  lang: en
+
+- id: t2_pos_12
+  note_a: "Feature X is blocked on design approval."
+  note_b: "Feature X shipped in the v2 release."
+  relation: contradiction
+  attribute: project_status
+  lang: en
+
+- id: t2_pos_13
+  note_a: "Lee's permanent address is in Boston."
+  note_b: "Lee bought a house in San Francisco."
+  relation: contradiction
+  attribute: residence
+  lang: en
+
+- id: t2_pos_14
+  note_a: "Avery is a contractor for MegaCorp."
+  note_b: "Avery became a full-time employee at StartupX."
+  relation: contradiction
+  attribute: employer
+  lang: en
+
+- id: t2_pos_15
+  note_a: "Chris is a junior developer."
+  note_b: "Chris was promoted to senior engineer."
+  relation: contradiction
+  attribute: role
+  lang: en
+
+- id: t2_pos_16
+  note_a: "Jamie eats meat regularly."
+  note_b: "Jamie became vegan six months ago."
+  relation: contradiction
+  attribute: diet
+  lang: en
+
+- id: t2_pos_17
+  note_a: "The API migration is on hold."
+  note_b: "The API migration resumed last sprint."
+  relation: contradiction
+  attribute: project_status
+  lang: en
+
+- id: t2_pos_18
+  note_a: "Quinn rents an apartment in downtown LA."
+  note_b: "Quinn bought a condo in Seattle."
+  relation: contradiction
+  attribute: residence
+  lang: en
+
+- id: t2_pos_19
+  note_a: "Reese works for the city government."
+  note_b: "Reese left the public sector and joined Amazon."
+  relation: contradiction
+  attribute: employer
+  lang: en
+
+- id: t2_pos_20
+  note_a: "Taylor is the team lead."
+  note_b: "Taylor stepped down and Alex took over as lead."
+  relation: contradiction
+  attribute: role
+  lang: en
+
+- id: t2_pos_21
+  note_a: "Logan is on a ketogenic diet."
+  note_b: "Logan switched to a balanced carb diet."
+  relation: contradiction
+  attribute: diet
+  lang: en
+
+- id: t2_pos_22
+  note_a: "River's primary residence is in Berlin."
+  note_b: "River has been based in London since the summer."
+  relation: contradiction
+  attribute: residence
+  lang: en
+
+- id: t2_pos_23
+  note_a: "Sage works at DataCorp."
+  note_b: "Sage is now at Analytics Inc."
+  relation: contradiction
+  attribute: employer
+  lang: en
+
+- id: t2_pos_24
+  note_a: "Module Z is currently in testing."
+  note_b: "Module Z is already in production."
+  relation: contradiction
+  attribute: project_status
+  lang: en
+
+- id: t2_pos_25
+  note_a: "Blake is the engineering manager."
+  note_b: "Blake transitioned to an individual contributor role."
+  relation: contradiction
+  attribute: role
+  lang: en
+
+# ── Positive pairs — lang:no  (expected_nli_fail: true) ──────────────────────
+# mDeBERTa-mnli-xnli has no Norwegian training data.
+# Plan 08 MUST treat these as advisory-only; never auto-resolve Norwegian notes.
+
+- id: t2_pos_26
+  note_a: "Bjørn bor i Oslo."
+  note_b: "Bjørn har nå bosatt seg i Bergen."
+  relation: contradiction
+  attribute: residence
+  lang: no
+  expected_nli_fail: true
+
+- id: t2_pos_27
+  note_a: "Kari jobber hos NorBank."
+  note_b: "Kari er nå ansatt i TechNor AS."
+  relation: contradiction
+  attribute: employer
+  lang: no
+  expected_nli_fail: true
+
+- id: t2_pos_28
+  note_a: "Ole er vegetarianer."
+  note_b: "Ole spiser nå kjøtt igjen."
+  relation: contradiction
+  attribute: diet
+  lang: no
+  expected_nli_fail: true
+
+- id: t2_pos_29
+  note_a: "Prosjektet er forsinket og ikke ferdig."
+  note_b: "Prosjektet ble ferdigstilt i april."
+  relation: contradiction
+  attribute: project_status
+  lang: no
+  expected_nli_fail: true
+
+- id: t2_pos_30
+  note_a: "Ingrid bor på Majorstua i Oslo."
+  note_b: "Ingrid har leid leilighet på Grünerløkka."
+  relation: contradiction
+  attribute: residence
+  lang: no
+  expected_nli_fail: true
+
+- id: t2_pos_31
+  note_a: "Tor er konsulent hos Accenture."
+  note_b: "Tor startet eget firma i januar."
+  relation: contradiction
+  attribute: employer
+  lang: no
+  expected_nli_fail: true
+
+- id: t2_pos_32
+  note_a: "Astrid er bosatt i Tromsø."
+  note_b: "Astrid har bosatt seg i Stavanger."
+  relation: contradiction
+  attribute: residence
+  lang: no
+  expected_nli_fail: true
+
+- id: t2_pos_33
+  note_a: "Lars er avdelingsleder."
+  note_b: "Lars ble degradert til teammedlem."
+  relation: contradiction
+  attribute: role
+  lang: no
+  expected_nli_fail: true
+
+# ── Negative pairs — lang:en  (relation: compatible, ≥50 required) ───────────
+# Near-duplicates and merely-related notes that are NOT contradictions.
+# These measure the false-positive rate — the risk that makes auto-resolution dangerous.
+
+- id: t2_neg_01
+  note_a: "Alex lives in Seattle."
+  note_b: "Alex is based in the Pacific Northwest."
+  relation: compatible
+  attribute: residence
+  lang: en
+
+- id: t2_neg_02
+  note_a: "Sam works at Acme Corp."
+  note_b: "Sam is a software engineer at Acme Corp."
+  relation: compatible
+  attribute: employer
+  lang: en
+
+- id: t2_neg_03
+  note_a: "Jordan has a dog."
+  note_b: "Jordan has a golden retriever named Max."
+  relation: compatible
+  attribute: lifestyle
+  lang: en
+
+- id: t2_neg_04
+  note_a: "Casey likes coffee."
+  note_b: "Casey drinks espresso every morning."
+  relation: compatible
+  attribute: diet
+  lang: en
+
+- id: t2_neg_05
+  note_a: "Morgan runs daily."
+  note_b: "Morgan exercises regularly."
+  relation: compatible
+  attribute: lifestyle
+  lang: en
+
+- id: t2_neg_06
+  note_a: "Pat studied in Boston."
+  note_b: "Pat attended a university in Massachusetts."
+  relation: compatible
+  attribute: education
+  lang: en
+
+- id: t2_neg_07
+  note_a: "Alex moved to Portland."
+  note_b: "Bob moved to Portland."
+  relation: compatible
+  attribute: residence
+  lang: en
+
+- id: t2_neg_08
+  note_a: "Riley lives in Austin."
+  note_b: "River lives in Austin."
+  relation: compatible
+  attribute: residence
+  lang: en
+
+- id: t2_neg_09
+  note_a: "The project milestone is targeted for Q3."
+  note_b: "The roadmap review is scheduled for Q3."
+  relation: compatible
+  attribute: project_status
+  lang: en
+
+- id: t2_neg_10
+  note_a: "Lee works remotely."
+  note_b: "Lee has a home office setup."
+  relation: compatible
+  attribute: work_location
+  lang: en
+
+- id: t2_neg_11
+  note_a: "Avery is a developer."
+  note_b: "Avery writes code professionally."
+  relation: compatible
+  attribute: role
+  lang: en
+
+- id: t2_neg_12
+  note_a: "Chris speaks French."
+  note_b: "Chris is bilingual."
+  relation: compatible
+  attribute: skills
+  lang: en
+
+- id: t2_neg_13
+  note_a: "Taylor joined the team last year."
+  note_b: "Taylor became a member of the engineering team."
+  relation: compatible
+  attribute: employer
+  lang: en
+
+- id: t2_neg_14
+  note_a: "Jamie's phone is a recent model."
+  note_b: "Jamie upgraded their phone last quarter."
+  relation: compatible
+  attribute: lifestyle
+  lang: en
+
+- id: t2_neg_15
+  note_a: "Quinn enjoys hiking."
+  note_b: "Quinn spends time outdoors on weekends."
+  relation: compatible
+  attribute: lifestyle
+  lang: en
+
+- id: t2_neg_16
+  note_a: "Reese has a car."
+  note_b: "Reese drives to work."
+  relation: compatible
+  attribute: transportation
+  lang: en
+
+- id: t2_neg_17
+  note_a: "Sam's contract ends in December."
+  note_b: "Sam's engagement wraps up at year-end."
+  relation: compatible
+  attribute: employer
+  lang: en
+
+- id: t2_neg_18
+  note_a: "Alex works in Seattle."
+  note_b: "Alex commutes from the Seattle area."
+  relation: compatible
+  attribute: work_location
+  lang: en
+
+- id: t2_neg_19
+  note_a: "The API is RESTful."
+  note_b: "The API communicates over HTTP."
+  relation: compatible
+  attribute: project_status
+  lang: en
+
+- id: t2_neg_20
+  note_a: "The database is PostgreSQL."
+  note_b: "The database supports SQL queries."
+  relation: compatible
+  attribute: project_status
+  lang: en
+
+- id: t2_neg_21
+  note_a: "The sprint includes feature X."
+  note_b: "Feature X is on the current roadmap."
+  relation: compatible
+  attribute: project_status
+  lang: en
+
+- id: t2_neg_22
+  note_a: "Jordan is vegan."
+  note_b: "Jordan avoids all animal products including dairy and eggs."
+  relation: compatible
+  attribute: diet
+  lang: en
+
+- id: t2_neg_23
+  note_a: "Casey graduated in 2018."
+  note_b: "Casey holds a bachelor's degree."
+  relation: compatible
+  attribute: education
+  lang: en
+
+- id: t2_neg_24
+  note_a: "Morgan lives downtown."
+  note_b: "Morgan is close to the city center."
+  relation: compatible
+  attribute: residence
+  lang: en
+
+- id: t2_neg_25
+  note_a: "Pat follows a strict diet."
+  note_b: "Pat is very careful about what they eat."
+  relation: compatible
+  attribute: diet
+  lang: en
+
+- id: t2_neg_26
+  note_a: "Lee is learning Spanish."
+  note_b: "Lee has been studying a foreign language."
+  relation: compatible
+  attribute: skills
+  lang: en
+
+- id: t2_neg_27
+  note_a: "Avery prefers remote work."
+  note_b: "Avery works from home most days."
+  relation: compatible
+  attribute: work_location
+  lang: en
+
+- id: t2_neg_28
+  note_a: "Chris's project is ongoing."
+  note_b: "Chris is actively developing the project."
+  relation: compatible
+  attribute: project_status
+  lang: en
+
+- id: t2_neg_29
+  note_a: "The refactor is large in scope."
+  note_b: "The refactor touches many files across the codebase."
+  relation: compatible
+  attribute: project_status
+  lang: en
+
+- id: t2_neg_30
+  note_a: "Quinn's team grew last quarter."
+  note_b: "Quinn's team has several new members."
+  relation: compatible
+  attribute: project_status
+  lang: en
+
+- id: t2_neg_31
+  note_a: "Taylor owns a MacBook."
+  note_b: "Taylor uses a laptop for work."
+  relation: compatible
+  attribute: lifestyle
+  lang: en
+
+- id: t2_neg_32
+  note_a: "Jamie runs marathons."
+  note_b: "Jamie is a long-distance runner."
+  relation: compatible
+  attribute: lifestyle
+  lang: en
+
+- id: t2_neg_33
+  note_a: "Reese is working on a new feature."
+  note_b: "Reese has an open task in the backlog."
+  relation: compatible
+  attribute: project_status
+  lang: en
+
+- id: t2_neg_34
+  note_a: "The team sync is on Tuesday."
+  note_b: "The meeting is scheduled for Tuesday afternoon."
+  relation: compatible
+  attribute: project_status
+  lang: en
+
+- id: t2_neg_35
+  note_a: "Alex's home is in Seattle."
+  note_b: "Alex has lived on the West Coast for several years."
+  relation: compatible
+  attribute: residence
+  lang: en
+
+- id: t2_neg_36
+  note_a: "Sam has two cats."
+  note_b: "Sam is a cat owner."
+  relation: compatible
+  attribute: lifestyle
+  lang: en
+
+- id: t2_neg_37
+  note_a: "Jordan uses Python for data work."
+  note_b: "Jordan is a data scientist who codes."
+  relation: compatible
+  attribute: role
+  lang: en
+
+- id: t2_neg_38
+  note_a: "Casey enjoys classical music."
+  note_b: "Casey has a large music collection."
+  relation: compatible
+  attribute: lifestyle
+  lang: en
+
+- id: t2_neg_39
+  note_a: "Morgan's startup is in stealth mode."
+  note_b: "Morgan is working on a confidential project."
+  relation: compatible
+  attribute: project_status
+  lang: en
+
+- id: t2_neg_40
+  note_a: "Pat's PR is awaiting review."
+  note_b: "Pat submitted code changes today."
+  relation: compatible
+  attribute: project_status
+  lang: en
+
+- id: t2_neg_41
+  note_a: "Lee bought a bicycle."
+  note_b: "Lee cycles to work sometimes."
+  relation: compatible
+  attribute: transportation
+  lang: en
+
+- id: t2_neg_42
+  note_a: "Avery is proficient in Go."
+  note_b: "Avery writes backend services."
+  relation: compatible
+  attribute: skills
+  lang: en
+
+- id: t2_neg_43
+  note_a: "Chris is organizing the workshop."
+  note_b: "Chris handles event logistics for the team."
+  relation: compatible
+  attribute: role
+  lang: en
+
+- id: t2_neg_44
+  note_a: "The design review is complete."
+  note_b: "The team approved the UI mockups."
+  relation: compatible
+  attribute: project_status
+  lang: en
+
+- id: t2_neg_45
+  note_a: "Quinn's flight is on Friday."
+  note_b: "Quinn is traveling this week."
+  relation: compatible
+  attribute: lifestyle
+  lang: en
+
+# ── Negative pairs — lang:no ─────────────────────────────────────────────────
+
+- id: t2_neg_46
+  note_a: "Bjørn jobber i Oslo sentrum."
+  note_b: "Bjørn er ansatt i Norges hovedstad."
+  relation: compatible
+  attribute: work_location
+  lang: no
+
+- id: t2_neg_47
+  note_a: "Kari er glad i friluftsliv."
+  note_b: "Kari er mye ute i naturen på fritiden."
+  relation: compatible
+  attribute: lifestyle
+  lang: no
+
+- id: t2_neg_48
+  note_a: "Ole studerte i Trondheim."
+  note_b: "Ole fullførte graden sin ved NTNU."
+  relation: compatible
+  attribute: education
+  lang: no
+
+- id: t2_neg_49
+  note_a: "Ingrid er prosjektleder."
+  note_b: "Ingrid leder et tverrfaglig prosjektteam."
+  relation: compatible
+  attribute: role
+  lang: no
+
+- id: t2_neg_50
+  note_a: "Tor har to barn."
+  note_b: "Tor er familiefar."
+  relation: compatible
+  attribute: lifestyle
+  lang: no
+
+- id: t2_neg_51
+  note_a: "Astrid holder på med Python-utvikling."
+  note_b: "Astrid er en erfaren programmerer."
+  relation: compatible
+  attribute: skills
+  lang: no

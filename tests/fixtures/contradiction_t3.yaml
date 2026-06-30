@@ -1,0 +1,243 @@
+# T3 — Implicit conflict pairs for attribute-slot model evaluation
+#
+# Loader: tests/test_contradiction_fixtures.py
+# Consumed by: Plan 09 (attribute-slot model, T3 gate)
+#
+# Schema per entry:
+#   note_a, note_b : short synthetic notes (no private content)
+#   relation       : contradiction  (all entries here are conflicts)
+#   attribute      : the shared attribute slot key that should trigger collision
+#   lang           : en | no
+#   type           : co_referential | propagated
+#   dependency (Type-II only): the reasoning chain that creates the conflict
+#
+# Pure NLI is expected to underperform (~55% ceiling) on these cases.
+# "NLI + attribute-slot keying" (Plan 09) is the intended resolver.
+#
+# Type I  (co_referential)  — no lexical overlap, same attribute slot: ≥10 required
+# Type II (propagated)      — conflict exists only via a dependency chain: ≥10 required
+
+# ── Type I — co-referential (no lexical overlap, same attribute slot) ─────────
+
+- id: t3_t1_01
+  note_a: "Alex lives in Seattle."
+  note_b: "Alex signed a one-year lease on an apartment in Portland."
+  relation: contradiction
+  attribute: residence
+  type: co_referential
+  lang: en
+
+- id: t3_t1_02
+  note_a: "Sam works at TechCorp."
+  note_b: "Sam picked up a new badge at DataSystems headquarters yesterday."
+  relation: contradiction
+  attribute: employer
+  type: co_referential
+  lang: en
+
+- id: t3_t1_03
+  note_a: "Jordan follows a vegan diet."
+  note_b: "Jordan had chicken breast for dinner last night."
+  relation: contradiction
+  attribute: diet
+  type: co_referential
+  lang: en
+
+- id: t3_t1_04
+  note_a: "Casey is the backend team lead."
+  note_b: "Casey handed off all her responsibilities to the incoming hire."
+  relation: contradiction
+  attribute: role
+  type: co_referential
+  lang: en
+
+- id: t3_t1_05
+  note_a: "Morgan uses Vim as her primary editor."
+  note_b: "Morgan has IntelliJ IDEA configured as her default IDE."
+  relation: contradiction
+  attribute: editor
+  type: co_referential
+  lang: en
+
+- id: t3_t1_06
+  note_a: "Lee has a valid driver's license."
+  note_b: "Lee commutes exclusively by public transit after losing driving privileges."
+  relation: contradiction
+  attribute: transportation
+  type: co_referential
+  lang: en
+
+- id: t3_t1_07
+  note_a: "Avery is single."
+  note_b: "Avery and their partner just moved into a shared flat."
+  relation: contradiction
+  attribute: relationship_status
+  type: co_referential
+  lang: en
+
+- id: t3_t1_08
+  note_a: "Chris is a full-time employee."
+  note_b: "Chris recently registered as a sole proprietor."
+  relation: contradiction
+  attribute: employment_type
+  type: co_referential
+  lang: en
+
+- id: t3_t1_09
+  note_a: "The project is in the planning phase."
+  note_b: "The launch party was announced for next Friday."
+  relation: contradiction
+  attribute: project_status
+  type: co_referential
+  lang: en
+
+- id: t3_t1_10
+  note_a: "Taylor lives alone."
+  note_b: "Taylor's flatmate mentioned the apartment needs a new coffee table."
+  relation: contradiction
+  attribute: living_situation
+  type: co_referential
+  lang: en
+
+- id: t3_t1_11
+  note_a: "Quinn works in San Francisco."
+  note_b: "Quinn now has a keycard for the Austin office."
+  relation: contradiction
+  attribute: work_location
+  type: co_referential
+  lang: en
+
+- id: t3_t1_12
+  note_a: "Reese is based in New York."
+  note_b: "Reese listed a Seattle address on the tax form."
+  relation: contradiction
+  attribute: residence
+  type: co_referential
+  lang: en
+
+- id: t3_t1_13
+  note_a: "Blake is the engineering manager."
+  note_b: "Blake moved back to an individual contributor track."
+  relation: contradiction
+  attribute: role
+  type: co_referential
+  lang: en
+
+# ── Type II — propagated (conflict exists only via a dependency chain) ────────
+
+- id: t3_t2_01
+  note_a: "Alex has a severe tree-nut allergy."
+  note_b: "Alex snacks on almonds and cashews daily."
+  relation: contradiction
+  attribute: diet
+  type: propagated
+  dependency: "nut_allergy → must_avoid_tree_nuts; almonds/cashews are tree nuts"
+  lang: en
+
+- id: t3_t2_02
+  note_a: "Sam is paralysed below the waist."
+  note_b: "Sam completed a 5K run at the charity event yesterday."
+  relation: contradiction
+  attribute: physical_capability
+  type: propagated
+  dependency: "lower_body_paralysis → cannot_run"
+  lang: en
+
+- id: t3_t2_03
+  note_a: "Jordan works fully remotely with no office."
+  note_b: "Jordan commutes to the downtown office every day."
+  relation: contradiction
+  attribute: work_location
+  type: propagated
+  dependency: "fully_remote → no_physical_commute"
+  lang: en
+
+- id: t3_t2_04
+  note_a: "Casey does not own a car."
+  note_b: "Casey drove her kids to school this morning."
+  relation: contradiction
+  attribute: transportation
+  type: propagated
+  dependency: "no_car → cannot_drive_own_vehicle"
+  lang: en
+
+- id: t3_t2_05
+  note_a: "Morgan has been sober for two years."
+  note_b: "Morgan ordered a glass of wine at the dinner."
+  relation: contradiction
+  attribute: diet
+  type: propagated
+  dependency: "sobriety → avoids_all_alcohol"
+  lang: en
+
+- id: t3_t2_06
+  note_a: "Pat is a strict ethical vegan."
+  note_b: "Pat is wearing new leather boots."
+  relation: contradiction
+  attribute: lifestyle
+  type: propagated
+  dependency: "ethical_vegan → avoids_animal_products_including_leather"
+  lang: en
+
+- id: t3_t2_07
+  note_a: "Lee is on a strict no-sugar diet due to Type 2 diabetes."
+  note_b: "Lee had a slice of birthday cake at the office party."
+  relation: contradiction
+  attribute: diet
+  type: propagated
+  dependency: "no_sugar_diet → avoids_cake_and_desserts"
+  lang: en
+
+- id: t3_t2_08
+  note_a: "Avery is legally blind."
+  note_b: "Avery just got their driver's licence renewed."
+  relation: contradiction
+  attribute: physical_capability
+  type: propagated
+  dependency: "legally_blind → ineligible_for_driving_licence"
+  lang: en
+
+- id: t3_t2_09
+  note_a: "Chris broke their dominant right hand."
+  note_b: "Chris is typing up the quarterly report manually."
+  relation: contradiction
+  attribute: physical_capability
+  type: propagated
+  dependency: "broken_dominant_hand → typing_severely_impaired"
+  lang: en
+
+- id: t3_t2_10
+  note_a: "The server room is at maximum capacity."
+  note_b: "A new rack of twenty servers is being installed next week."
+  relation: contradiction
+  attribute: infrastructure_capacity
+  type: propagated
+  dependency: "max_capacity → no_room_for_additional_hardware"
+  lang: en
+
+- id: t3_t2_11
+  note_a: "Taylor has a severe cat allergy."
+  note_b: "Taylor adopted a kitten from the shelter last weekend."
+  relation: contradiction
+  attribute: lifestyle
+  type: propagated
+  dependency: "cat_allergy → cannot_cohabit_with_cats"
+  lang: en
+
+- id: t3_t2_12
+  note_a: "Quinn has been on maternity leave since March."
+  note_b: "Quinn led the client presentation yesterday."
+  relation: contradiction
+  attribute: availability
+  type: propagated
+  dependency: "maternity_leave → not_at_work_during_leave_period"
+  lang: en
+
+- id: t3_t2_13
+  note_a: "Reese is enrolled in a full-time PhD programme."
+  note_b: "Reese works 40 hours a week at DataCorp."
+  relation: contradiction
+  attribute: availability
+  type: propagated
+  dependency: "full_time_phd → insufficient_hours_for_full_time_employment"
+  lang: en

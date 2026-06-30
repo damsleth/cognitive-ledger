@@ -1,14 +1,319 @@
-# Retrieval eval cases for A/B testing
+# Retrieval eval cases — full benchmark set
 #
-# Add cases that reference notes in your ledger (or external corpus).
-# Each case needs a query, an id, and expected_any paths:
+# Fixture corpus: tests/fixtures/corpus/
+# Run eval:       LEDGER_ROOT=tests/fixtures/corpus ledger eval --cases tests/fixtures/retrieval_eval_cases.yaml --k 3 --strict-cases
+# Run A/B:        LEDGER_ROOT=tests/fixtures/corpus ledger ab run --baseline-ref main --candidate-ref HEAD --cases tests/fixtures/retrieval_eval_cases.yaml --k 3
 #
-# - query: "What is the team's deployment process?"
-#   id: fact_deployment_process
-#   scope: "work"
-#   expected_any:
-#     - "notes/02_facts/fact__deployment_process.md"
-#
-# Run eval:   ledger eval --cases /absolute/path/to/retrieval_eval_cases.yaml --k 3
-# Run A/B:    ledger ab run --baseline-ref main --candidate-ref HEAD
-# External:   ledger ab run --corpus ~/Code/ledger-notes --baseline-ref main --candidate-ref HEAD
+# Case taxonomy:
+#   gen_*       General positive cases (~25) — straightforward query→note, covers all folder types.
+#               These protect the common retrieval path against regressions.
+#   hop_*       Multi-hop positive cases (~8) — answer requires linking 2+ notes across folders.
+#               expected_any lists either note; satisfying one is enough.
+#               These gate Plan 13 (associative PPR retrieval, T5).
+#   temporal_*  Temporal cases (~6) — queries about time-sensitive facts.
+#               temporal_1–4 (current state) should pass with baseline lexical mode.
+#               temporal_5–6 (as-of archive queries) are expected to fail with baseline;
+#               they gate Plan 06 (bitemporal event-time wiring, A1).
+#   neg_*       Negative cases (~8, expected_none: true) — queries with no relevant note.
+#               These gate admission control and guard false_positive_rate.
+#               These gate Plan 04 (rerank, B1) and Plan 08 (contradiction→open-loop, D3).
+
+# ── General cases ──────────────────────────────────────────────────────────────
+
+- query: "What programming language does Alex use?"
+  id: gen_1
+  scope: all
+  expected_any:
+    - notes/02_facts/fact__programming_language.md
+
+- query: "Where does Alex currently live?"
+  id: gen_2
+  scope: all
+  expected_any:
+    - notes/02_facts/fact__home_city.md
+
+- query: "What project is Alex working on right now?"
+  id: gen_3
+  scope: all
+  expected_any:
+    - notes/02_facts/fact__current_project.md
+
+- query: "Who is Alex's employer and what company does Alex work for?"
+  id: gen_4
+  scope: all
+  expected_any:
+    - notes/02_facts/fact__employer.md
+
+- query: "What does Alex's home office and desk setup look like?"
+  id: gen_5
+  scope: all
+  expected_any:
+    - notes/02_facts/fact__home_setup.md
+
+- query: "How does Alex take their coffee?"
+  id: gen_6
+  scope: all
+  expected_any:
+    - notes/02_facts/fact__coffee_preference.md
+
+- query: "What code editor does Alex use for development?"
+  id: gen_7
+  scope: all
+  expected_any:
+    - notes/02_facts/fact__editor.md
+
+- query: "What operating system does Alex run on their laptop?"
+  id: gen_8
+  scope: all
+  expected_any:
+    - notes/02_facts/fact__operating_system.md
+
+- query: "How often does Alex exercise and run each week?"
+  id: gen_9
+  scope: all
+  expected_any:
+    - notes/02_facts/fact__fitness_routine.md
+
+- query: "What is Alex's dietary approach and eating habits?"
+  id: gen_10
+  scope: all
+  expected_any:
+    - notes/02_facts/fact__diet.md
+
+- query: "What is Alex's preferred style for writing code?"
+  id: gen_11
+  scope: all
+  expected_any:
+    - notes/03_preferences/pref__code_style.md
+
+- query: "How does Alex prefer to run meetings and collaborate at work?"
+  id: gen_12
+  scope: all
+  expected_any:
+    - notes/03_preferences/pref__meeting_style.md
+
+- query: "What application does Alex use to take notes and manage knowledge?"
+  id: gen_13
+  scope: all
+  expected_any:
+    - notes/03_preferences/pref__note_taking_tool.md
+
+- query: "How does Alex prefer to communicate with colleagues?"
+  id: gen_14
+  scope: all
+  expected_any:
+    - notes/03_preferences/pref__communication_style.md
+
+- query: "How does Alex like to learn new skills and technologies?"
+  id: gen_15
+  scope: all
+  expected_any:
+    - notes/03_preferences/pref__learning_style.md
+
+- query: "What is Alex's main professional software project goal?"
+  id: gen_16
+  scope: all
+  expected_any:
+    - notes/04_goals/goal__ship_ledger_v1.md
+
+- query: "What programming language does Alex want to learn next?"
+  id: gen_17
+  scope: all
+  expected_any:
+    - notes/04_goals/goal__learn_rust.md
+
+- query: "What athletic or fitness goal is Alex working towards?"
+  id: gen_18
+  scope: all
+  expected_any:
+    - notes/04_goals/goal__run_marathon.md
+
+- query: "What open loop or task is pending around CI/CD and deployment automation?"
+  id: gen_19
+  scope: all
+  expected_any:
+    - notes/05_open_loops/loop__ci_cd_pipeline.md
+
+- query: "What dependency review or package audit needs to happen?"
+  id: gen_20
+  scope: all
+  expected_any:
+    - notes/05_open_loops/loop__dependency_audit.md
+
+- query: "What is spaced repetition and how does it help memory and learning?"
+  id: gen_21
+  scope: all
+  expected_any:
+    - notes/06_concepts/concept__spaced_repetition.md
+
+- query: "What is the Zettelkasten method for managing notes and knowledge?"
+  id: gen_22
+  scope: all
+  expected_any:
+    - notes/06_concepts/concept__zettelkasten.md
+
+- query: "What are Alex's core values and guiding principles?"
+  id: gen_23
+  scope: all
+  expected_any:
+    - notes/01_identity/id__core_values.md
+
+- query: "What is the cognitive ledger system and how does it work?"
+  id: gen_24
+  scope: all
+  expected_any:
+    - notes/06_concepts/concept__cognitive_ledger.md
+
+- query: "What monitors and standing desk does Alex have?"
+  id: gen_25
+  scope: all
+  expected_any:
+    - notes/02_facts/fact__home_setup.md
+
+# ── Multi-hop cases ────────────────────────────────────────────────────────────
+# expected_any lists multiple notes; at least one must rank ≤k.
+# These test whether the ranker can surface any of several relevant notes.
+
+- query: "What development tools does Alex use for software work?"
+  id: hop_1
+  scope: all
+  expected_any:
+    - notes/02_facts/fact__editor.md
+    - notes/02_facts/fact__operating_system.md
+    - notes/02_facts/fact__programming_language.md
+
+- query: "How does Alex's fitness routine connect to long-term athletic goals?"
+  id: hop_2
+  scope: all
+  expected_any:
+    - notes/04_goals/goal__run_marathon.md
+    - notes/02_facts/fact__fitness_routine.md
+
+- query: "What is Alex's approach to async communication and minimising meetings?"
+  id: hop_3
+  scope: all
+  expected_any:
+    - notes/03_preferences/pref__communication_style.md
+    - notes/03_preferences/pref__meeting_style.md
+
+- query: "How does Alex learn new programming languages?"
+  id: hop_4
+  scope: all
+  expected_any:
+    - notes/03_preferences/pref__learning_style.md
+    - notes/04_goals/goal__learn_rust.md
+
+- query: "What does Alex do to stay healthy day to day?"
+  id: hop_5
+  scope: all
+  expected_any:
+    - notes/02_facts/fact__fitness_routine.md
+    - notes/02_facts/fact__diet.md
+
+- query: "What is Alex's main technical project and its release goal?"
+  id: hop_6
+  scope: all
+  expected_any:
+    - notes/02_facts/fact__current_project.md
+    - notes/04_goals/goal__ship_ledger_v1.md
+    - notes/06_concepts/concept__cognitive_ledger.md
+
+- query: "Where does Alex work and what are they building there?"
+  id: hop_7
+  scope: all
+  expected_any:
+    - notes/02_facts/fact__employer.md
+    - notes/02_facts/fact__current_project.md
+
+- query: "How does Alex build a personal knowledge management system?"
+  id: hop_8
+  scope: all
+  expected_any:
+    - notes/03_preferences/pref__note_taking_tool.md
+    - notes/06_concepts/concept__zettelkasten.md
+    - notes/06_concepts/concept__cognitive_ledger.md
+
+# ── Temporal cases ─────────────────────────────────────────────────────────────
+# temporal_1–4: current-state queries — should PASS with baseline lexical mode.
+# temporal_5–6: as-of archive queries — EXPECTED TO FAIL with baseline;
+#               09_archive is not scanned by rank_lexical. Gate Plan 06 (A1).
+
+- query: "What city does Alex currently call home?"
+  id: temporal_1
+  scope: all
+  expected_any:
+    - notes/02_facts/fact__home_city.md
+
+- query: "Who does Alex work for right now?"
+  id: temporal_2
+  scope: all
+  expected_any:
+    - notes/02_facts/fact__employer.md
+
+- query: "What is Alex's current employer in 2025?"
+  id: temporal_3
+  scope: all
+  expected_any:
+    - notes/02_facts/fact__employer.md
+
+- query: "Where is Alex's home city at present?"
+  id: temporal_4
+  scope: all
+  expected_any:
+    - notes/02_facts/fact__home_city.md
+
+- query: "Where did Alex live before moving to Oslo?"
+  id: temporal_5
+  scope: all
+  expected_any:
+    - notes/09_archive/fact__home_city_2023.md
+
+- query: "What company did Alex work for before Crayon?"
+  id: temporal_6
+  scope: all
+  expected_any:
+    - notes/09_archive/fact__employer_2021.md
+
+# ── Negative cases ─────────────────────────────────────────────────────────────
+# These queries should NOT match any note above the score threshold.
+# They guard false_positive_rate and gate admission control (Plan 04, D3).
+
+- query: "What is the weather forecast for Oslo tomorrow?"
+  id: neg_1
+  scope: all
+  expected_none: true
+
+- query: "What are the current Bitcoin and Ethereum prices?"
+  id: neg_2
+  scope: all
+  expected_none: true
+
+- query: "What are recent breakthroughs in quantum computing hardware?"
+  id: neg_3
+  scope: all
+  expected_none: true
+
+- query: "Which football team won the Champions League last season?"
+  id: neg_4
+  scope: all
+  expected_none: true
+
+- query: "What is the recipe for a sourdough bread loaf?"
+  id: neg_5
+  scope: all
+  expected_none: true
+
+- query: "What films are showing at the cinema this week?"
+  id: neg_6
+  scope: all
+  expected_none: true
+
+- query: "What is the flight schedule from Oslo to Tokyo?"
+  id: neg_7
+  scope: all
+  expected_none: true
+
+- query: "What medications interact with ibuprofen and aspirin?"
+  id: neg_8
+  scope: all
+  expected_none: true
