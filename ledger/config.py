@@ -208,6 +208,7 @@ def _apply_env_overrides(config: "LedgerConfig") -> "LedgerConfig":
         "LEDGER_EMBED_BATCH_SIZE": "embed_batch_size",
         "LEDGER_CONTRADICTION_NEIGHBORS_K": "contradiction_neighbors_k",
         "LEDGER_JUDGE_SEED_TOP_K": "judge_seed_top_k",
+        "LEDGER_RERANK_INPUT_K": "rerank_input_k",
     }
     for env_var, attr in int_mappings.items():
         if (value := os.getenv(env_var)) is None:
