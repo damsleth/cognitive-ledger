@@ -1,0 +1,68 @@
+# Retrieval eval screen set — fast subset for ab loop screening
+#
+# Corpus: tests/fixtures/corpus/
+# Purpose: Quick first-pass filter in `ledger ab loop --screen-cases`.
+#          10 simple general cases; fast to run, good signal on regressions.
+#          Disjoint from retrieval_eval_holdout.yaml.
+#
+# These are gen_1–gen_10 from the full benchmark.
+
+- query: "What programming language does Alex use?"
+  id: gen_1
+  scope: all
+  expected_any:
+    - notes/02_facts/fact__programming_language.md
+
+- query: "Where does Alex currently live?"
+  id: gen_2
+  scope: all
+  expected_any:
+    - notes/02_facts/fact__home_city.md
+
+- query: "What project is Alex working on right now?"
+  id: gen_3
+  scope: all
+  expected_any:
+    - notes/02_facts/fact__current_project.md
+
+- query: "Who is Alex's employer and what company does Alex work for?"
+  id: gen_4
+  scope: all
+  expected_any:
+    - notes/02_facts/fact__employer.md
+
+- query: "What does Alex's home office and desk setup look like?"
+  id: gen_5
+  scope: all
+  expected_any:
+    - notes/02_facts/fact__home_setup.md
+
+- query: "How does Alex take their coffee?"
+  id: gen_6
+  scope: all
+  expected_any:
+    - notes/02_facts/fact__coffee_preference.md
+
+- query: "What code editor does Alex use for development?"
+  id: gen_7
+  scope: all
+  expected_any:
+    - notes/02_facts/fact__editor.md
+
+- query: "What operating system does Alex run on their laptop?"
+  id: gen_8
+  scope: all
+  expected_any:
+    - notes/02_facts/fact__operating_system.md
+
+- query: "How often does Alex exercise and run each week?"
+  id: gen_9
+  scope: all
+  expected_any:
+    - notes/02_facts/fact__fitness_routine.md
+
+- query: "What is Alex's dietary approach and eating habits?"
+  id: gen_10
+  scope: all
+  expected_any:
+    - notes/02_facts/fact__diet.md
