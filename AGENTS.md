@@ -191,7 +191,15 @@ latency regression.
 
 `<mode>`: `legacy`, `two_stage`, `scope_type_prefilter`, `precomputed_index`, `progressive_disclosure`, `semantic_hybrid`.
 
-### A/B Testing
+### A/B Testing — Mandatory Eval Gate
+
+**Retrieval-affecting PRs** (touching `ledger/retrieval.py`, `ledger/query.py`, `ledger/scoring.py`, `ledger/signals.py`, or `ledger/config.py`) **must** run `scripts/ab_gate.sh` and paste the output into the PR body. Exit code 2 is a hard stop — do not merge.
+
+```bash
+bash scripts/ab_gate.sh   # 0 = beneficial, 3 = neutral (ok if change is off-by-default), 2 = STOP
+```
+
+The same gate runs automatically on PRs via `.github/workflows/retrieval-gate.yml`.
 
 ```bash
 ledger ab run --baseline-ref main --candidate-ref HEAD   # uses ledger_notes_dir from config.yaml

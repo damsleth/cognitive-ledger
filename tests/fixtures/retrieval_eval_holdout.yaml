@@ -1,0 +1,66 @@
+# Retrieval eval holdout set — disjoint holdout for ab loop final validation
+#
+# Corpus: tests/fixtures/corpus/
+# Purpose: Final validation gate in `ledger ab loop --holdout-cases`.
+#          Disjoint from retrieval_eval_screen.yaml (no overlapping IDs).
+#          These are gen_11–gen_20 from the full benchmark.
+
+- query: "What is Alex's preferred style for writing code?"
+  id: gen_11
+  scope: all
+  expected_any:
+    - notes/03_preferences/pref__code_style.md
+
+- query: "How does Alex prefer to run meetings and collaborate at work?"
+  id: gen_12
+  scope: all
+  expected_any:
+    - notes/03_preferences/pref__meeting_style.md
+
+- query: "What application does Alex use to take notes and manage knowledge?"
+  id: gen_13
+  scope: all
+  expected_any:
+    - notes/03_preferences/pref__note_taking_tool.md
+
+- query: "How does Alex prefer to communicate with colleagues?"
+  id: gen_14
+  scope: all
+  expected_any:
+    - notes/03_preferences/pref__communication_style.md
+
+- query: "How does Alex like to learn new skills and technologies?"
+  id: gen_15
+  scope: all
+  expected_any:
+    - notes/03_preferences/pref__learning_style.md
+
+- query: "What is Alex's main professional software project goal?"
+  id: gen_16
+  scope: all
+  expected_any:
+    - notes/04_goals/goal__ship_ledger_v1.md
+
+- query: "What programming language does Alex want to learn next?"
+  id: gen_17
+  scope: all
+  expected_any:
+    - notes/04_goals/goal__learn_rust.md
+
+- query: "What athletic or fitness goal is Alex working towards?"
+  id: gen_18
+  scope: all
+  expected_any:
+    - notes/04_goals/goal__run_marathon.md
+
+- query: "What open loop or task is pending around CI/CD and deployment automation?"
+  id: gen_19
+  scope: all
+  expected_any:
+    - notes/05_open_loops/loop__ci_cd_pipeline.md
+
+- query: "What dependency review or package audit needs to happen?"
+  id: gen_20
+  scope: all
+  expected_any:
+    - notes/05_open_loops/loop__dependency_audit.md
