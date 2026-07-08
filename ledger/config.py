@@ -52,6 +52,35 @@ def _looks_like_install_location(path: Path) -> bool:
     return any(marker in s for marker in _INSTALL_LOCATION_MARKERS)
 
 
+def _is_code_tree(path: Path) -> bool:
+    """True if ``path`` is where this package itself lives — an installed
+    location (site-packages/.venv/...) or the source checkout we import from.
+    Notes must never be derived into the code tree: a stray ``notes/`` dir
+    inside the repo silently steals every ingested note (see the else-branch of
+    :meth:`LedgerConfig._finalize_paths`)."""
+    if _looks_like_install_location(path):
+        return True
+    return path == Path(__file__).resolve().parents[1]
+
+
+def _guard_notes_dir(config):
+    """Refuse a runtime config whose notes dir silently resolved into the code
+    tree. Fires only when ``ledger_notes_dir`` was never configured (config.yaml
+    key dropped, no ``LEDGER_NOTES_DIR`` override) *and* ``ledger_root`` is the
+    checkout or install location — the exact state that used to file every
+    ingested note inside the codebase instead of the ledger. Raising here (the
+    ``from_env`` runtime boundary) makes that misfiling structurally impossible
+    while leaving explicit constructions and reads untouched."""
+    if not config._ledger_notes_dir_explicit and _is_code_tree(config.ledger_root):
+        raise RuntimeError(
+            "ledger_notes_dir is not configured and ledger_root resolves to the "
+            f"code tree ({config.ledger_root}); refusing to file notes inside the "
+            "codebase. Set `ledger_notes_dir` in ~/.config/ledger/config.yaml or "
+            "the LEDGER_NOTES_DIR env var."
+        )
+    return config
+
+
 def _default_ledger_root() -> Path:
     """Determine the ledger root directory."""
     if env_root := os.getenv("LEDGER_ROOT"):
@@ -1233,7 +1262,7 @@ class LedgerConfig:
         config = cls()
         config = _apply_yaml_config(config, _legacy_xdg_config_path())
         config = _apply_yaml_config(config, _xdg_config_path())
-        return _apply_env_overrides(config)
+        return _guard_notes_dir(_apply_env_overrides(config))
 
     @classmethod
     def from_file(cls, path: Path) -> "LedgerConfig":

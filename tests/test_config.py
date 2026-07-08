@@ -264,11 +264,36 @@ class TestLedgerConfig(unittest.TestCase):
             legacy.write_text("retrieval_mode: legacy\n", encoding="utf-8")
             canonical = base / "ledger" / "config.yaml"
             canonical.parent.mkdir(parents=True, exist_ok=True)
-            canonical.write_text("retrieval_mode: two_stage\n", encoding="utf-8")
+            canonical.write_text(
+                f"retrieval_mode: two_stage\nledger_notes_dir: {base}\n",
+                encoding="utf-8",
+            )
 
             config = LedgerConfig.from_env()
 
             self.assertEqual(config.retrieval_mode, "two_stage")
+
+    def test_from_env_refuses_code_tree_notes_dir(self):
+        """Regression: if ledger_notes_dir is unconfigured (config.yaml key
+        dropped, no env override) and ledger_root falls back to the code tree,
+        from_env must raise instead of silently filing notes inside the repo.
+        This is the guard that makes the 00_inbox-in-the-codebase misfiling
+        structurally impossible."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Empty XDG => no config.yaml => ledger_notes_dir stays unset, and
+            # ledger_root defaults to the installed/checked-out package tree.
+            os.environ["XDG_CONFIG_HOME"] = str(Path(tmpdir) / "empty")
+            with self.assertRaises(RuntimeError) as ctx:
+                LedgerConfig.from_env()
+            self.assertIn("ledger_notes_dir", str(ctx.exception))
+
+    def test_from_env_allows_explicit_notes_dir_outside_code_tree(self):
+        """The guard must not fire once ledger_notes_dir is explicitly set."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            os.environ["XDG_CONFIG_HOME"] = str(Path(tmpdir) / "empty")
+            os.environ["LEDGER_NOTES_DIR"] = tmpdir
+            config = LedgerConfig.from_env()
+            self.assertEqual(config.ledger_notes_dir, Path(tmpdir).resolve())
 
 
 class TestConfigSingleton(unittest.TestCase):
@@ -326,6 +351,7 @@ class TestThings3Config(unittest.TestCase):
     def test_scope_routing_yaml_load(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             self._write_user_config(Path(tmpdir), (
+                f"ledger_notes_dir: {tmpdir}\n"
                 "things3_sync_enabled: true\n"
                 "things3_scope_routing:\n"
                 "  work: Work Tasks\n"
@@ -343,6 +369,7 @@ class TestThings3Config(unittest.TestCase):
         os.environ["LEDGER_THINGS3_COMPLETED_MAPS_TO"] = "snoozed"
         with tempfile.TemporaryDirectory() as tmpdir:
             os.environ["XDG_CONFIG_HOME"] = str(Path(tmpdir) / "empty")
+            os.environ["LEDGER_NOTES_DIR"] = tmpdir
             config = LedgerConfig.from_env()
         self.assertTrue(config.things3_sync_enabled)
         self.assertEqual(config.things3_default_project, "My Project")

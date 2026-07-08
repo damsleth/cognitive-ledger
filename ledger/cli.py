@@ -9,7 +9,7 @@ import sys
 import traceback
 from pathlib import Path
 
-from ledger.config import get_config
+from ledger.config import LedgerConfig, get_config
 from ledger.validation import validate_query, validate_scope, validate_limit
 from ledger.errors import QueryValidationError, ScopeValidationError
 from ledger import browse as browse_lib
@@ -1528,24 +1528,42 @@ def handle_loops_sync(args) -> None:
     notes_dir = cfg.ledger_notes_dir
     all_loops_raw = get_notes("loops", loop_status="all", notes_dir=notes_dir)
 
+    # status/scope frontmatter are enums (LoopStatus/Scope); coerce to their
+    # string value so comparisons and scope-routing lookups work.
+    def _enum_val(v, default=""):
+        return getattr(v, "value", v) if v is not None else default
+
     # Include only open + blocked loops in the desired set
     active_statuses = {"open", "blocked"}
     active_loops = [
         n for n in all_loops_raw
-        if getattr(n.frontmatter, "status", "open") in active_statuses
+        if _enum_val(getattr(n.frontmatter, "status", None), "open") in active_statuses
     ]
+
+    # The Frontmatter model only exposes known schema fields, so custom keys
+    # (things_uuid, things_list_id) must be read from the raw YAML.
+    from ledger.parsing.frontmatter import parse_frontmatter_text
+
+    def _raw_fm(path) -> dict:
+        try:
+            meta, _ = parse_frontmatter_text(Path(path).read_text(encoding="utf-8"))
+            return meta or {}
+        except OSError:
+            return {}
 
     loop_infos: list[LoopInfo] = []
     for ln in active_loops:
         fm = ln.frontmatter
+        raw = _raw_fm(ln.path)
         loop_infos.append(LoopInfo(
             slug=ln.path.stem,
             path=str(ln.path),
             title=ln.title or ln.path.stem,
-            status=getattr(fm, "status", "open"),
-            scope=getattr(fm, "scope", ""),
-            things_uuid=getattr(fm, "things_uuid", None) or None,
+            status=_enum_val(getattr(fm, "status", None), "open"),
+            scope=_enum_val(getattr(fm, "scope", None), ""),
+            things_uuid=(raw.get("things_uuid") or None),
             updated=str(getattr(fm, "updated", "")),
+            list_id=str(raw.get("things_list_id", "") or ""),
         ))
 
     # Read tasks from Things
@@ -1576,7 +1594,7 @@ def handle_loops_sync(args) -> None:
             elif action.kind == "create":
                 new_uuid = adapter.create_task(
                     title=action.things_title or "",
-                    notes=action.things_notes or "",
+                    notes=_build_task_notes(action.loop_path, action.things_notes or ""),
                     project=action.things_project or "",
                     dry_run=dry_run,
                     marker_prefix=cfg.things3_marker_prefix,
@@ -1644,6 +1662,29 @@ def handle_loops_sync(args) -> None:
     for key, count in stats.items():
         if count:
             print(f"  {key:12s}: {count}")
+
+
+def _build_task_notes(loop_path: str | None, marker: str) -> str:
+    """Compose human-readable Things task notes from a loop note.
+
+    The task notes become: the loop's markdown body (readable) + an absolute
+    link back to the loop file + the ``ledger:<slug> status:<status>`` marker
+    (kept as a machine reference / dedup key on its own trailing line so
+    ``_parse_marker`` still finds it).  Falls back to just the marker if the
+    file can't be read.
+    """
+    if not loop_path:
+        return marker
+    try:
+        from ledger.parsing.frontmatter import parse_frontmatter_text
+        text = Path(loop_path).read_text(encoding="utf-8")
+        _, body = parse_frontmatter_text(text)
+        body = (body or "").strip()
+        link = f"file://{loop_path}"
+        parts = [p for p in (body, f"🔗 {link}", marker) if p]
+        return "\n\n".join(parts)
+    except OSError:
+        return marker
 
 
 def _write_things_uuid_to_loop(loop_path: str, uuid: str) -> None:
@@ -1895,7 +1936,21 @@ def main(argv=None) -> int:
         from ledger import maintenance as maint
         return maint.main(raw[1:])
 
-    cfg = get_config()
+    # Config may be in the unsafe state guarded by config._guard_notes_dir
+    # (ledger_notes_dir unresolvable → would fall back into the code tree). If
+    # so, prime the singleton with an unguarded fallback so parser construction
+    # and meta commands (--version, --help) still work — parser building only
+    # reads scalar choices, never ledger_notes_dir. `_config_error` is then
+    # surfaced as a clean message *before* any subcommand handler runs, so no
+    # note is ever written with the poisoned config (see after parse_args).
+    _config_error: RuntimeError | None = None
+    try:
+        cfg = get_config()
+    except RuntimeError as exc:
+        _config_error = exc
+        from ledger.config import set_config
+        set_config(LedgerConfig())
+        cfg = get_config()
     from ledger import __version__
     parser = argparse.ArgumentParser(description="Cognitive Ledger retrieval helpers")
     parser.add_argument("-v", "--version", action="version", version=f"ledger {__version__}")
@@ -2580,6 +2635,17 @@ def main(argv=None) -> int:
                             help="Expose a yaams_query tool (requires yaams on PATH)")
 
     args = parser.parse_args(argv)
+
+    # If config was unsafe, --version/--help already ran during parse_args on
+    # the fallback. Any actual subcommand must not proceed on the poisoned
+    # config — refuse loudly here, before a single handler (and thus a single
+    # note write) can execute.
+    if _config_error is not None:
+        if args.command is None:
+            parser.print_help()
+            return 0
+        print(f"error: {_config_error}")
+        return 2
 
     def handle_listing_command(command_args):
         if command_args.command == "loops":

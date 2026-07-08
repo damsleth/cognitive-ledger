@@ -44,15 +44,39 @@ def things_available() -> bool:
     return shutil.which("things") is not None
 
 
+# Things CLI numeric status codes -> reconcile-friendly strings.
+# 0 = open/incomplete, 2 = cancelled, 3 = completed.
+_STATUS_MAP = {0: "open", 2: "cancelled", 3: "completed"}
+
+
+def _normalize_status(task: dict) -> dict:
+    """Coerce the numeric ``status`` field to the string reconcile expects."""
+    st = task.get("status")
+    if isinstance(st, int):
+        task = {**task, "status": _STATUS_MAP.get(st, "open")}
+    return task
+
+
 def read_tasks(*, marker_prefix: str = "ledger:") -> list[dict[str, Any]]:
     """Return all Things tasks whose notes contain *marker_prefix*.
 
-    Uses ``things tasks --json`` (returns all non-trashed tasks) and
-    filters client-side.
+    ``things tasks --json`` lists only *active* todos; completed live in
+    ``logbook`` and cancelled in ``canceled``.  Reverse-sync needs those too
+    (otherwise a task completed in Things is invisible → its loop never
+    closes and a duplicate is recreated each run), so union all three.
+    ``--limit=0`` disables the CLI's default 200-row cap.  Dedupe by uuid;
+    the numeric ``status`` is normalized to a string for reconcile.
     """
-    raw = _run(["things", "tasks", "--json"])
-    all_tasks: list[dict] = json.loads(raw or "[]")
-    return [t for t in all_tasks if marker_prefix in (t.get("notes") or "")]
+    by_uuid: dict[str, dict] = {}
+    for section in ("tasks", "logbook", "canceled"):
+        raw = _run(["things", section, "--json", "--limit=0"])
+        for t in json.loads(raw or "[]"):
+            if marker_prefix not in (t.get("notes") or ""):
+                continue
+            uuid = t.get("uuid") or t.get("id") or ""
+            # tasks (active) wins over logbook/canceled on uuid collision
+            by_uuid.setdefault(uuid, _normalize_status(t))
+    return list(by_uuid.values())
 
 
 def create_task(
@@ -68,18 +92,22 @@ def create_task(
     Args:
         title: Task title.
         notes: Notes field (should contain the ``ledger:<slug>`` marker).
-        project: Project name or UUID.  Empty = Inbox.
+        project: Project/area **UUID** for the ``--list-id`` flag (stable
+            across title renames).  Empty = Inbox.
         dry_run: If True, print the command and return None.
         marker_prefix: Prefix used to locate the new task for confirmation.
 
     Returns:
         UUID string on success, None on dry_run.
     """
-    cmd = ["things", "add", "--title", title]
+    # Installed `things` CLI: title is positional, notes via --notes=,
+    # project/area targeted by --list-id=ID.
+    cmd = ["things", "add"]
     if notes:
-        cmd += ["--notes", notes]
+        cmd += [f"--notes={notes}"]
     if project:
-        cmd += ["--project", project]
+        cmd += [f"--list-id={project}"]
+    cmd += ["--", title]
 
     if dry_run:
         print(f"[dry-run] things create: {' '.join(cmd)}")
@@ -96,12 +124,17 @@ def update_task(
     notes: str | None = None,
     dry_run: bool = False,
 ) -> None:
-    """Update task fields by UUID."""
-    cmd = ["things", "update", uuid]
-    if title is not None:
-        cmd += ["--title", title]
+    """Update task fields by UUID.
+
+    Installed `things` CLI: target by ``--id=UUID``, title is positional,
+    notes via ``--notes=``.  Modifying existing todos may require a Things
+    auth token (set via the THINGS_AUTH_TOKEN env / CLI config).
+    """
+    cmd = ["things", "update", "--yes", f"--id={uuid}"]
     if notes is not None:
-        cmd += ["--notes", notes]
+        cmd += [f"--notes={notes}"]
+    if title is not None:
+        cmd += ["--allow-unsafe-title", "--", title]
 
     if dry_run:
         print(f"[dry-run] things update {uuid}: {cmd}")
@@ -112,20 +145,20 @@ def update_task(
 
 
 def complete_task(uuid: str, *, dry_run: bool = False) -> None:
-    """Mark a Things task as completed."""
+    """Mark a Things task as completed (via ``things update --completed``)."""
     if dry_run:
-        print(f"[dry-run] things complete {uuid}")
+        print(f"[dry-run] things update --id={uuid} --completed")
         return
-    _run(["things", "complete", uuid])
+    _run(["things", "update", "--yes", f"--id={uuid}", "--completed"])
     _confirm_by_uuid(uuid, op="complete")
 
 
 def cancel_task(uuid: str, *, dry_run: bool = False) -> None:
-    """Mark a Things task as cancelled."""
+    """Mark a Things task as cancelled (via ``things update --canceled``)."""
     if dry_run:
-        print(f"[dry-run] things cancel {uuid}")
+        print(f"[dry-run] things update --id={uuid} --canceled")
         return
-    _run(["things", "cancel", uuid])
+    _run(["things", "update", "--yes", f"--id={uuid}", "--canceled"])
     _confirm_by_uuid(uuid, op="cancel")
 
 
@@ -135,9 +168,9 @@ def ensure_project(name: str, *, dry_run: bool = False) -> None:
     if any(p.get("title") == name for p in projects):
         return
     if dry_run:
-        print(f"[dry-run] things add-project --title {name!r}")
+        print(f"[dry-run] things add-project {name!r}")
         return
-    _run(["things", "add-project", "--title", name])
+    _run(["things", "add-project", "--", name])
 
 
 def list_projects() -> list[dict[str, Any]]:
@@ -147,13 +180,16 @@ def list_projects() -> list[dict[str, Any]]:
 
 
 def get_task_by_uuid(uuid: str) -> dict[str, Any] | None:
-    """Fetch a single task by UUID; returns None if not found."""
+    """Fetch a single active task by UUID; returns None if not found.
+
+    The installed CLI has no per-UUID fetch, so scan ``things tasks --json``.
+    """
     try:
-        raw = _run(["things", "task", uuid, "--json"])
-        data = json.loads(raw or "null")
-        if isinstance(data, list):
-            return data[0] if data else None
-        return data
+        raw = _run(["things", "tasks", "--json", "--limit=0"])
+        for t in json.loads(raw or "[]"):
+            if (t.get("uuid") or t.get("id")) == uuid:
+                return _normalize_status(t)
+        return None
     except (RuntimeError, json.JSONDecodeError):
         return None
 
@@ -173,12 +209,23 @@ def _confirm_created(
 
     Returns UUID on success or None if confirmation fails after retries.
     """
+    # Match on the parsed marker slug (robust to Things reformatting the notes
+    # body), falling back to raw-substring match if no marker is present.
+    from ledger.integrations.things3_sync import _parse_marker
+    want = _parse_marker(notes_snippet, prefix=marker_prefix)
+    want_slug = want[0] if want else None
+
     for attempt in range(retries + 1):
         if attempt:
             time.sleep(delay)
         tasks = read_tasks(marker_prefix=marker_prefix)
         for task in tasks:
-            if notes_snippet and notes_snippet in (task.get("notes") or ""):
+            task_notes = task.get("notes") or ""
+            if want_slug:
+                parsed = _parse_marker(task_notes, prefix=marker_prefix)
+                if parsed and parsed[0] == want_slug:
+                    return task.get("uuid") or task.get("id")
+            elif notes_snippet and notes_snippet in task_notes:
                 return task.get("uuid") or task.get("id")
     return None
 

@@ -34,6 +34,9 @@ class LoopInfo:
     scope: str                  # work | dev | home | personal | …
     things_uuid: str | None = None  # set if previously synced
     updated: str = ""           # ISO 8601 timestamp for conflict guard
+    list_id: str = ""           # explicit Things area/project UUID; overrides
+    #                             scope routing when set (frontmatter
+    #                             `things_list_id`) — content > scope routing.
 
 
 @dataclass
@@ -101,11 +104,18 @@ def _resolve_project(
     scope: str,
     status: str,
     *,
+    list_id: str = "",
     scope_routing: dict[str, str],
     default_project: str,
     blocked_project: str,
 ) -> str:
-    """Return the Things project name for a given loop."""
+    """Return the Things area/project id for a given loop.
+
+    An explicit per-loop ``list_id`` (frontmatter ``things_list_id``) wins over
+    scope routing — content-level routing beats coarse scope routing.
+    """
+    if list_id:
+        return list_id
     if status == "blocked" and blocked_project:
         return blocked_project
     return scope_routing.get(scope, "") or default_project
@@ -179,6 +189,7 @@ def reconcile(
         desired_project = _resolve_project(
             loop.scope,
             loop.status,
+            list_id=loop.list_id,
             scope_routing=scope_routing,
             default_project=default_project,
             blocked_project=blocked_project,
