@@ -97,7 +97,13 @@ class ContextProfileTests(unittest.TestCase):
                 str(out_dir),
             ]
             # Isolate from the developer's real ~/.config/ledger/config.yaml.
-            env = {**os.environ, "XDG_CONFIG_HOME": str(Path(tmp) / "xdg")}
+            # LEDGER_NOTES_DIR must be set so config loading does not trip the
+            # code-tree guard (config._guard_notes_dir) under the empty XDG.
+            env = {
+                **os.environ,
+                "XDG_CONFIG_HOME": str(Path(tmp) / "xdg"),
+                "LEDGER_NOTES_DIR": str(notes_dir),
+            }
             subprocess.check_call(cmd, cwd=str(ROOT), env=env)
 
             for scope in ("personal", "work", "dev"):

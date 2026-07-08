@@ -327,8 +327,17 @@ def init_ledger(
     Returns:
         Dict with created, skipped, and errors lists.
     """
-    config = get_config()
-    root_path = Path(root) if root else config.ledger_root
+    # init is the bootstrap/recovery command, so it must run even when config is
+    # in the unsafe state guarded by config._guard_notes_dir (ledger_notes_dir
+    # unresolvable). We only need ledger_root here for the default — fall back to
+    # the same source that get_config() would have used.
+    try:
+        default_root = get_config().ledger_root
+    except RuntimeError:
+        from ledger.config import _default_ledger_root
+
+        default_root = _default_ledger_root()
+    root_path = Path(root) if root else default_root
     root_path = root_path.expanduser().resolve()
     nd = Path(ledger_notes_dir) if ledger_notes_dir else root_path / "notes"
     nd = nd.expanduser().resolve()
