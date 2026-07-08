@@ -1,0 +1,5000 @@
+{
+  "version": 3,
+  "built": "2026-06-30T02:38:34Z",
+  "entries": {
+    "notes/01_identity/id__core_values.md": {
+      "mtime": 1782781745.4856422,
+      "content_hash": "sha256:a3795bd31cdb701816eb052ddfcfba76e5fb135e63ee381aeb9427715b01c71f",
+      "note_type": "identity",
+      "candidate": {
+        "path": "notes/01_identity/id__core_values.md",
+        "rel_path": "notes/01_identity/id__core_values.md",
+        "type": "id",
+        "title": "Identity: Core Values",
+        "statement": "Alex's core values are efficiency, honesty, and continuous learning. These values guide every decision.",
+        "body": "\n# Identity: Core Values\n\n## Statement\n\nAlex's core values are efficiency, honesty, and continuous learning. These values guide every decision.\n\n## Context\n\nEfficiency means doing more with less, avoiding waste, and choosing the simplest solution that works.\nHonesty means being direct and transparent in communication with colleagues and friends.\nContinuous learning means dedicating time each week to acquiring new skills and knowledge.\n\n## Links\n\n- [[pref__communication_style]]\n- [[pref__learning_style]]",
+        "updated": "2025-06-01T00:00:00Z",
+        "confidence": 0.95,
+        "source": "user",
+        "scope": "all",
+        "status": "",
+        "tags": [
+          "identity",
+          "values",
+          "principles"
+        ],
+        "note_tokens": [
+          "acquiring",
+          "alex",
+          "avoiding",
+          "being",
+          "choosing",
+          "colleagues",
+          "communication",
+          "context",
+          "continuous",
+          "core",
+          "decision",
+          "dedicating",
+          "direct",
+          "doing",
+          "each",
+          "efficiency",
+          "every",
+          "friends",
+          "guide",
+          "honesty",
+          "id",
+          "identity",
+          "knowledge",
+          "learning",
+          "less",
+          "links",
+          "means",
+          "more",
+          "new",
+          "pref",
+          "principles",
+          "s",
+          "simplest",
+          "skills",
+          "solution",
+          "statement",
+          "style",
+          "these",
+          "time",
+          "transparent",
+          "values",
+          "waste",
+          "week",
+          "works"
+        ],
+        "tag_tokens": [
+          "identity",
+          "principles",
+          "values"
+        ],
+        "attention_tokens": [
+          "alex",
+          "all",
+          "communication",
+          "continuous",
+          "core",
+          "decision",
+          "efficiency",
+          "every",
+          "guide",
+          "honesty",
+          "id",
+          "identity",
+          "learning",
+          "pref",
+          "principles",
+          "s",
+          "style",
+          "these",
+          "values"
+        ],
+        "snippet": "Alex's core values are efficiency, honesty, and continuous learning. These values guide every decision.",
+        "has_next_action_checkbox": false,
+        "word_count": 68,
+        "created": "2025-01-01T00:00:00Z"
+      }
+    },
+    "notes/02_facts/fact__coffee_preference.md": {
+      "mtime": 1782781771.1988957,
+      "content_hash": "sha256:cf1984e6f854eaa3410a37d3691046eb8e8fc13341d8a5686c15738944ba6ea5",
+      "note_type": "facts",
+      "candidate": {
+        "path": "notes/02_facts/fact__coffee_preference.md",
+        "rel_path": "notes/02_facts/fact__coffee_preference.md",
+        "type": "fact",
+        "title": "Fact: Coffee Preference",
+        "statement": "Alex drinks black coffee, no milk or sugar.",
+        "body": "\n# Fact: Coffee Preference\n\n## Statement\n\nAlex drinks black coffee, no milk or sugar.\n\n## Context\n\nAlex's morning routine starts with a cup of black coffee.\nThe preference is for filter coffee or Aeropress brewed at home.\nAlex avoids milk, cream, and sugar in coffee.\nOn average, Alex drinks two cups of black coffee per day.\n\n## Links\n\n- [[fact__diet]]",
+        "updated": "2025-06-01T00:00:00Z",
+        "confidence": 0.95,
+        "source": "user",
+        "scope": "all",
+        "status": "",
+        "tags": [
+          "coffee",
+          "drink",
+          "preference",
+          "black-coffee",
+          "morning"
+        ],
+        "note_tokens": [
+          "aeropress",
+          "alex",
+          "average",
+          "avoids",
+          "black",
+          "brewed",
+          "coffee",
+          "context",
+          "cream",
+          "cup",
+          "cups",
+          "day",
+          "diet",
+          "drink",
+          "drinks",
+          "fact",
+          "filter",
+          "home",
+          "links",
+          "milk",
+          "morning",
+          "no",
+          "per",
+          "preference",
+          "routine",
+          "s",
+          "starts",
+          "statement",
+          "sugar",
+          "two"
+        ],
+        "tag_tokens": [
+          "black",
+          "coffee",
+          "drink",
+          "morning",
+          "preference"
+        ],
+        "attention_tokens": [
+          "alex",
+          "all",
+          "black",
+          "coffee",
+          "diet",
+          "drink",
+          "drinks",
+          "fact",
+          "milk",
+          "morning",
+          "no",
+          "preference",
+          "sugar"
+        ],
+        "snippet": "Alex drinks black coffee, no milk or sugar.",
+        "has_next_action_checkbox": false,
+        "word_count": 60,
+        "created": "2025-01-01T00:00:00Z"
+      }
+    },
+    "notes/02_facts/fact__current_project.md": {
+      "mtime": 1782781758.3481016,
+      "content_hash": "sha256:e2116c17c62305cb1912797c5d478cd71dff182f0745caa6a50153d01e82275f",
+      "note_type": "facts",
+      "candidate": {
+        "path": "notes/02_facts/fact__current_project.md",
+        "rel_path": "notes/02_facts/fact__current_project.md",
+        "type": "fact",
+        "title": "Fact: Current Side Project",
+        "statement": "Alex is currently working on the cognitive-ledger project, a personal knowledge management system.",
+        "body": "\n# Fact: Current Side Project\n\n## Statement\n\nAlex is currently working on the cognitive-ledger project, a personal knowledge management system.\n\n## Context\n\nThe cognitive-ledger project is a tool for storing, retrieving, and connecting personal notes and facts.\nIt uses Python and runs locally. Alex is the primary developer and uses it daily.\nThe project is open source and stored on GitHub.\n\n## Links\n\n- [[fact__programming_language]]\n- [[goal__ship_ledger_v1]]\n- [[concept__cognitive_ledger]]",
+        "updated": "2025-06-01T00:00:00Z",
+        "confidence": 0.95,
+        "source": "user",
+        "scope": "all",
+        "status": "",
+        "tags": [
+          "project",
+          "cognitive-ledger",
+          "development",
+          "side-project"
+        ],
+        "note_tokens": [
+          "alex",
+          "cognitive",
+          "concept",
+          "connecting",
+          "context",
+          "current",
+          "currently",
+          "daily",
+          "developer",
+          "development",
+          "fact",
+          "facts",
+          "github",
+          "goal",
+          "knowledge",
+          "language",
+          "ledger",
+          "links",
+          "locally",
+          "management",
+          "notes",
+          "open",
+          "personal",
+          "primary",
+          "programming",
+          "project",
+          "python",
+          "retrieving",
+          "runs",
+          "ship",
+          "side",
+          "source",
+          "statement",
+          "stored",
+          "storing",
+          "system",
+          "tool",
+          "uses",
+          "v1",
+          "working"
+        ],
+        "tag_tokens": [
+          "cognitive",
+          "development",
+          "ledger",
+          "project",
+          "side"
+        ],
+        "attention_tokens": [
+          "alex",
+          "all",
+          "cognitive",
+          "concept",
+          "current",
+          "currently",
+          "development",
+          "fact",
+          "goal",
+          "knowledge",
+          "language",
+          "ledger",
+          "management",
+          "personal",
+          "programming",
+          "project",
+          "ship",
+          "side",
+          "system",
+          "v1",
+          "working"
+        ],
+        "snippet": "Alex is currently working on the cognitive-ledger project, a personal knowledge management system.",
+        "has_next_action_checkbox": false,
+        "word_count": 69,
+        "created": "2025-01-01T00:00:00Z"
+      }
+    },
+    "notes/02_facts/fact__diet.md": {
+      "mtime": 1782781798.389606,
+      "content_hash": "sha256:464625477e5601014a4ea498879c1f3525f9a5cb11d25693d109c72aea8bdbd7",
+      "note_type": "facts",
+      "candidate": {
+        "path": "notes/02_facts/fact__diet.md",
+        "rel_path": "notes/02_facts/fact__diet.md",
+        "type": "fact",
+        "title": "Fact: Dietary Approach",
+        "statement": "Alex follows a low-carb diet, limiting bread, pasta, and sugar.",
+        "body": "\n# Fact: Dietary Approach\n\n## Statement\n\nAlex follows a low-carb diet, limiting bread, pasta, and sugar.\n\n## Context\n\nThe low-carb dietary approach means eating mostly proteins, vegetables, and healthy fats.\nAlex avoids processed foods, sugary drinks, and refined carbohydrates.\nThis diet supports the fitness routine and energy levels throughout the day.\nExceptions are made occasionally for social meals.\n\n## Links\n\n- [[fact__fitness_routine]]\n- [[fact__coffee_preference]]",
+        "updated": "2025-06-01T00:00:00Z",
+        "confidence": 0.85,
+        "source": "user",
+        "scope": "all",
+        "status": "",
+        "tags": [
+          "diet",
+          "nutrition",
+          "food",
+          "low-carb",
+          "health"
+        ],
+        "note_tokens": [
+          "alex",
+          "approach",
+          "avoids",
+          "bread",
+          "carb",
+          "carbohydrates",
+          "coffee",
+          "context",
+          "day",
+          "diet",
+          "dietary",
+          "drinks",
+          "eating",
+          "energy",
+          "exceptions",
+          "fact",
+          "fats",
+          "fitness",
+          "follows",
+          "food",
+          "foods",
+          "health",
+          "healthy",
+          "levels",
+          "limiting",
+          "links",
+          "low",
+          "made",
+          "meals",
+          "means",
+          "mostly",
+          "nutrition",
+          "occasionally",
+          "pasta",
+          "preference",
+          "processed",
+          "proteins",
+          "refined",
+          "routine",
+          "social",
+          "statement",
+          "sugar",
+          "sugary",
+          "supports",
+          "this",
+          "throughout",
+          "vegetables"
+        ],
+        "tag_tokens": [
+          "carb",
+          "diet",
+          "food",
+          "health",
+          "low",
+          "nutrition"
+        ],
+        "attention_tokens": [
+          "alex",
+          "all",
+          "approach",
+          "bread",
+          "carb",
+          "coffee",
+          "diet",
+          "dietary",
+          "fact",
+          "fitness",
+          "follows",
+          "food",
+          "health",
+          "limiting",
+          "low",
+          "nutrition",
+          "pasta",
+          "preference",
+          "routine",
+          "sugar"
+        ],
+        "snippet": "Alex follows a low-carb diet, limiting bread, pasta, and sugar.",
+        "has_next_action_checkbox": false,
+        "word_count": 64,
+        "created": "2025-01-01T00:00:00Z"
+      }
+    },
+    "notes/02_facts/fact__editor.md": {
+      "mtime": 1782781774.576737,
+      "content_hash": "sha256:22f82f13052f6b2f29f20939e9f2784fdd77da1881320cef6b3b202f60d502e4",
+      "note_type": "facts",
+      "candidate": {
+        "path": "notes/02_facts/fact__editor.md",
+        "rel_path": "notes/02_facts/fact__editor.md",
+        "type": "fact",
+        "title": "Fact: Code Editor",
+        "statement": "Alex uses VS Code as the primary code editor and Neovim for quick terminal edits.",
+        "body": "\n# Fact: Code Editor\n\n## Statement\n\nAlex uses VS Code as the primary code editor and Neovim for quick terminal edits.\n\n## Context\n\nVS Code is Alex's main development environment with extensions for Python, TypeScript, and Git integration.\nNeovim is used directly in the terminal for quick file edits and configuration changes.\nBoth editors are configured with custom keybindings and themes.\nThe VS Code setup includes the Vim extension for modal editing.\n\n## Links\n\n- [[fact__programming_language]]\n- [[fact__operating_system]]",
+        "updated": "2025-06-01T00:00:00Z",
+        "confidence": 0.95,
+        "source": "user",
+        "scope": "all",
+        "status": "",
+        "tags": [
+          "editor",
+          "code-editor",
+          "vscode",
+          "neovim",
+          "development-tools"
+        ],
+        "note_tokens": [
+          "alex",
+          "both",
+          "changes",
+          "code",
+          "configuration",
+          "configured",
+          "context",
+          "custom",
+          "development",
+          "directly",
+          "editing",
+          "editor",
+          "editors",
+          "edits",
+          "environment",
+          "extension",
+          "extensions",
+          "fact",
+          "file",
+          "git",
+          "includes",
+          "integration",
+          "keybindings",
+          "language",
+          "links",
+          "main",
+          "modal",
+          "neovim",
+          "operating",
+          "primary",
+          "programming",
+          "python",
+          "quick",
+          "s",
+          "setup",
+          "statement",
+          "system",
+          "terminal",
+          "themes",
+          "tools",
+          "typescript",
+          "used",
+          "uses",
+          "vim",
+          "vs",
+          "vscode"
+        ],
+        "tag_tokens": [
+          "code",
+          "development",
+          "editor",
+          "neovim",
+          "tools",
+          "vscode"
+        ],
+        "attention_tokens": [
+          "alex",
+          "all",
+          "code",
+          "development",
+          "editor",
+          "edits",
+          "fact",
+          "language",
+          "neovim",
+          "operating",
+          "primary",
+          "programming",
+          "quick",
+          "system",
+          "terminal",
+          "tools",
+          "uses",
+          "vs",
+          "vscode"
+        ],
+        "snippet": "Alex uses VS Code as the primary code editor and Neovim for quick terminal edits.",
+        "has_next_action_checkbox": false,
+        "word_count": 78,
+        "created": "2025-01-01T00:00:00Z"
+      }
+    },
+    "notes/02_facts/fact__employer.md": {
+      "mtime": 1782781763.0260594,
+      "content_hash": "sha256:3e3831613e119b975ecda2dc4be1e04a554c9c59e07fefc8f68a5a4aa0d8fefe",
+      "note_type": "facts",
+      "candidate": {
+        "path": "notes/02_facts/fact__employer.md",
+        "rel_path": "notes/02_facts/fact__employer.md",
+        "type": "fact",
+        "title": "Fact: Current Employer",
+        "statement": "Alex works at Crayon, a cloud and IT services company.",
+        "body": "\n# Fact: Current Employer\n\n## Statement\n\nAlex works at Crayon, a cloud and IT services company.\n\n## Context\n\nAlex joined Crayon in August 2022 as a software developer.\nCrayon specialises in cloud infrastructure, software asset management, and digital transformation.\nAlex works primarily with internal tooling and automation projects.\n\n## Links\n\n- [[fact__current_project]]",
+        "updated": "2025-06-01T00:00:00Z",
+        "confidence": 0.98,
+        "source": "user",
+        "scope": "work",
+        "status": "",
+        "tags": [
+          "work",
+          "employer",
+          "company",
+          "crayon",
+          "job"
+        ],
+        "note_tokens": [
+          "2022",
+          "alex",
+          "asset",
+          "august",
+          "automation",
+          "cloud",
+          "company",
+          "context",
+          "crayon",
+          "current",
+          "developer",
+          "digital",
+          "employer",
+          "fact",
+          "infrastructure",
+          "internal",
+          "job",
+          "joined",
+          "links",
+          "management",
+          "primarily",
+          "project",
+          "projects",
+          "services",
+          "software",
+          "specialises",
+          "statement",
+          "tooling",
+          "transformation",
+          "work",
+          "works"
+        ],
+        "tag_tokens": [
+          "company",
+          "crayon",
+          "employer",
+          "job",
+          "work"
+        ],
+        "attention_tokens": [
+          "alex",
+          "cloud",
+          "company",
+          "crayon",
+          "current",
+          "employer",
+          "fact",
+          "job",
+          "project",
+          "services",
+          "work",
+          "works"
+        ],
+        "snippet": "Alex works at Crayon, a cloud and IT services company.",
+        "has_next_action_checkbox": false,
+        "word_count": 52,
+        "valid_from": "2022-08-01T00:00:00Z",
+        "created": "2022-08-01T00:00:00Z"
+      }
+    },
+    "notes/02_facts/fact__fitness_routine.md": {
+      "mtime": 1782781782.833838,
+      "content_hash": "sha256:ba5ce608f30c2408dd36687f3ff231c4603c23993ccb5ff1f63a6d19068336e3",
+      "note_type": "facts",
+      "candidate": {
+        "path": "notes/02_facts/fact__fitness_routine.md",
+        "rel_path": "notes/02_facts/fact__fitness_routine.md",
+        "type": "fact",
+        "title": "Fact: Fitness Routine",
+        "statement": "Alex runs three times per week as the main form of exercise.",
+        "body": "\n# Fact: Fitness Routine\n\n## Statement\n\nAlex runs three times per week as the main form of exercise.\n\n## Context\n\nAlex's running schedule is Monday, Wednesday, and Friday, typically in the morning.\nThe runs are between 5 and 10 kilometres in length.\nRunning is supplemented with occasional strength training on weekends.\nThe fitness routine supports the long-term goal of completing a marathon.\n\n## Links\n\n- [[goal__run_marathon]]\n- [[fact__diet]]",
+        "updated": "2025-06-01T00:00:00Z",
+        "confidence": 0.9,
+        "source": "user",
+        "scope": "all",
+        "status": "",
+        "tags": [
+          "fitness",
+          "running",
+          "exercise",
+          "health",
+          "routine"
+        ],
+        "note_tokens": [
+          "10",
+          "5",
+          "alex",
+          "between",
+          "completing",
+          "context",
+          "diet",
+          "exercise",
+          "fact",
+          "fitness",
+          "form",
+          "friday",
+          "goal",
+          "health",
+          "kilometres",
+          "length",
+          "links",
+          "long",
+          "main",
+          "marathon",
+          "monday",
+          "morning",
+          "occasional",
+          "per",
+          "routine",
+          "run",
+          "running",
+          "runs",
+          "s",
+          "schedule",
+          "statement",
+          "strength",
+          "supplemented",
+          "supports",
+          "term",
+          "three",
+          "times",
+          "training",
+          "typically",
+          "wednesday",
+          "week",
+          "weekends"
+        ],
+        "tag_tokens": [
+          "exercise",
+          "fitness",
+          "health",
+          "routine",
+          "running"
+        ],
+        "attention_tokens": [
+          "alex",
+          "all",
+          "diet",
+          "exercise",
+          "fact",
+          "fitness",
+          "form",
+          "goal",
+          "health",
+          "main",
+          "marathon",
+          "per",
+          "routine",
+          "run",
+          "running",
+          "runs",
+          "three",
+          "times",
+          "week"
+        ],
+        "snippet": "Alex runs three times per week as the main form of exercise.",
+        "has_next_action_checkbox": false,
+        "word_count": 68,
+        "created": "2025-01-01T00:00:00Z"
+      }
+    },
+    "notes/02_facts/fact__home_city.md": {
+      "mtime": 1782781754.918542,
+      "content_hash": "sha256:6403109897e13ba40640cb2458c9334d7366fc33357b484aa2010ad21c618a72",
+      "note_type": "facts",
+      "candidate": {
+        "path": "notes/02_facts/fact__home_city.md",
+        "rel_path": "notes/02_facts/fact__home_city.md",
+        "type": "fact",
+        "title": "Fact: Home City",
+        "statement": "Alex currently lives in Oslo, Norway.",
+        "body": "\n# Fact: Home City\n\n## Statement\n\nAlex currently lives in Oslo, Norway.\n\n## Context\n\nOslo is Alex's home city since February 2024.\nThe city is the capital of Norway and offers excellent public transport and a walkable city centre.\nAlex lives in the Grünerløkka neighbourhood.\n\n## Links\n\n- [[fact__home_setup]]",
+        "updated": "2025-06-01T00:00:00Z",
+        "confidence": 0.98,
+        "source": "user",
+        "scope": "all",
+        "status": "",
+        "tags": [
+          "location",
+          "city",
+          "home",
+          "oslo",
+          "norway"
+        ],
+        "note_tokens": [
+          "2024",
+          "alex",
+          "capital",
+          "centre",
+          "city",
+          "context",
+          "currently",
+          "excellent",
+          "fact",
+          "february",
+          "gr",
+          "home",
+          "kka",
+          "links",
+          "lives",
+          "location",
+          "neighbourhood",
+          "nerl",
+          "norway",
+          "offers",
+          "oslo",
+          "public",
+          "s",
+          "setup",
+          "since",
+          "statement",
+          "transport",
+          "walkable"
+        ],
+        "tag_tokens": [
+          "city",
+          "home",
+          "location",
+          "norway",
+          "oslo"
+        ],
+        "attention_tokens": [
+          "alex",
+          "all",
+          "city",
+          "currently",
+          "fact",
+          "home",
+          "lives",
+          "location",
+          "norway",
+          "oslo",
+          "setup"
+        ],
+        "snippet": "Alex currently lives in Oslo, Norway.",
+        "has_next_action_checkbox": false,
+        "word_count": 49,
+        "valid_from": "2024-02-01T00:00:00Z",
+        "created": "2024-02-01T00:00:00Z"
+      }
+    },
+    "notes/02_facts/fact__home_setup.md": {
+      "mtime": 1782781766.4841263,
+      "content_hash": "sha256:4f0b8a160ee6332633357df3b3990db07014daef6a4cf58531e7ae93b62dfcdb",
+      "note_type": "facts",
+      "candidate": {
+        "path": "notes/02_facts/fact__home_setup.md",
+        "rel_path": "notes/02_facts/fact__home_setup.md",
+        "type": "fact",
+        "title": "Fact: Home Office Setup",
+        "statement": "Alex has a standing desk with dual monitors in a dedicated home office space.",
+        "body": "\n# Fact: Home Office Setup\n\n## Statement\n\nAlex has a standing desk with dual monitors in a dedicated home office space.\n\n## Context\n\nThe standing desk allows alternating between sitting and standing throughout the workday.\nThe dual monitor setup consists of a 27-inch primary display and a 24-inch secondary display.\nThe home office also has good natural light from a north-facing window.\nAn ergonomic chair is used when sitting.\n\n## Links\n\n- [[fact__operating_system]]\n- [[fact__editor]]",
+        "updated": "2025-06-01T00:00:00Z",
+        "confidence": 0.9,
+        "source": "user",
+        "scope": "all",
+        "status": "",
+        "tags": [
+          "home-office",
+          "desk",
+          "monitors",
+          "hardware",
+          "setup"
+        ],
+        "note_tokens": [
+          "24",
+          "27",
+          "alex",
+          "allows",
+          "also",
+          "alternating",
+          "between",
+          "chair",
+          "consists",
+          "context",
+          "dedicated",
+          "desk",
+          "display",
+          "dual",
+          "editor",
+          "ergonomic",
+          "facing",
+          "fact",
+          "good",
+          "hardware",
+          "has",
+          "home",
+          "inch",
+          "light",
+          "links",
+          "monitor",
+          "monitors",
+          "natural",
+          "north",
+          "office",
+          "operating",
+          "primary",
+          "secondary",
+          "setup",
+          "sitting",
+          "space",
+          "standing",
+          "statement",
+          "system",
+          "throughout",
+          "used",
+          "window",
+          "workday"
+        ],
+        "tag_tokens": [
+          "desk",
+          "hardware",
+          "home",
+          "monitors",
+          "office",
+          "setup"
+        ],
+        "attention_tokens": [
+          "alex",
+          "all",
+          "dedicated",
+          "desk",
+          "dual",
+          "editor",
+          "fact",
+          "hardware",
+          "has",
+          "home",
+          "monitors",
+          "office",
+          "operating",
+          "setup",
+          "space",
+          "standing",
+          "system"
+        ],
+        "snippet": "Alex has a standing desk with dual monitors in a dedicated home office space.",
+        "has_next_action_checkbox": false,
+        "word_count": 75,
+        "created": "2025-03-01T00:00:00Z"
+      }
+    },
+    "notes/02_facts/fact__operating_system.md": {
+      "mtime": 1782781779.3886487,
+      "content_hash": "sha256:89e2bfa021f8bee789132c85107413a6ecd1f6bf6a8572e71524eedcb59a9089",
+      "note_type": "facts",
+      "candidate": {
+        "path": "notes/02_facts/fact__operating_system.md",
+        "rel_path": "notes/02_facts/fact__operating_system.md",
+        "type": "fact",
+        "title": "Fact: Operating System",
+        "statement": "Alex uses macOS as the primary operating system.",
+        "body": "\n# Fact: Operating System\n\n## Statement\n\nAlex uses macOS as the primary operating system.\n\n## Context\n\nAlex runs macOS on an Apple MacBook Pro for daily development work.\nThe Mac is configured with Homebrew for package management and uses zsh as the default shell.\nOccasionally a Linux VM is used for server-side testing.\n\n## Links\n\n- [[fact__editor]]\n- [[fact__home_setup]]",
+        "updated": "2025-06-01T00:00:00Z",
+        "confidence": 0.95,
+        "source": "user",
+        "scope": "all",
+        "status": "",
+        "tags": [
+          "macos",
+          "operating-system",
+          "apple",
+          "mac",
+          "computer"
+        ],
+        "note_tokens": [
+          "alex",
+          "apple",
+          "computer",
+          "configured",
+          "context",
+          "daily",
+          "default",
+          "development",
+          "editor",
+          "fact",
+          "home",
+          "homebrew",
+          "links",
+          "linux",
+          "mac",
+          "macbook",
+          "macos",
+          "management",
+          "occasionally",
+          "operating",
+          "package",
+          "primary",
+          "pro",
+          "runs",
+          "server",
+          "setup",
+          "shell",
+          "side",
+          "statement",
+          "system",
+          "testing",
+          "used",
+          "uses",
+          "vm",
+          "work",
+          "zsh"
+        ],
+        "tag_tokens": [
+          "apple",
+          "computer",
+          "mac",
+          "macos",
+          "operating",
+          "system"
+        ],
+        "attention_tokens": [
+          "alex",
+          "all",
+          "apple",
+          "computer",
+          "editor",
+          "fact",
+          "home",
+          "mac",
+          "macos",
+          "operating",
+          "primary",
+          "setup",
+          "system",
+          "uses"
+        ],
+        "snippet": "Alex uses macOS as the primary operating system.",
+        "has_next_action_checkbox": false,
+        "word_count": 59,
+        "created": "2025-01-01T00:00:00Z"
+      }
+    },
+    "notes/02_facts/fact__programming_language.md": {
+      "mtime": 1782781748.94014,
+      "content_hash": "sha256:60a77fa676e138644a9ef3755924d43d737713b9a2bcf4fde48a332e682b1c7d",
+      "note_type": "facts",
+      "candidate": {
+        "path": "notes/02_facts/fact__programming_language.md",
+        "rel_path": "notes/02_facts/fact__programming_language.md",
+        "type": "fact",
+        "title": "Fact: Primary Programming Language",
+        "statement": "Alex uses Python as the primary programming language for most software projects.",
+        "body": "\n# Fact: Primary Programming Language\n\n## Statement\n\nAlex uses Python as the primary programming language for most software projects.\n\n## Context\n\nPython is Alex's main language for backend development, scripting, data processing, and tooling.\nAlex has been writing Python professionally for several years and prefers it for its readability and ecosystem.\nSecondary languages include TypeScript for frontend work and shell scripting for automation.\n\n## Links\n\n- [[fact__editor]]\n- [[fact__current_project]]",
+        "updated": "2025-06-01T00:00:00Z",
+        "confidence": 0.95,
+        "source": "user",
+        "scope": "all",
+        "status": "",
+        "tags": [
+          "programming",
+          "python",
+          "language",
+          "development"
+        ],
+        "note_tokens": [
+          "alex",
+          "automation",
+          "backend",
+          "been",
+          "context",
+          "current",
+          "data",
+          "development",
+          "ecosystem",
+          "editor",
+          "fact",
+          "frontend",
+          "has",
+          "include",
+          "its",
+          "language",
+          "languages",
+          "links",
+          "main",
+          "most",
+          "prefers",
+          "primary",
+          "processing",
+          "professionally",
+          "programming",
+          "project",
+          "projects",
+          "python",
+          "readability",
+          "s",
+          "scripting",
+          "secondary",
+          "several",
+          "shell",
+          "software",
+          "statement",
+          "tooling",
+          "typescript",
+          "uses",
+          "work",
+          "writing",
+          "years"
+        ],
+        "tag_tokens": [
+          "development",
+          "language",
+          "programming",
+          "python"
+        ],
+        "attention_tokens": [
+          "alex",
+          "all",
+          "current",
+          "development",
+          "editor",
+          "fact",
+          "language",
+          "most",
+          "primary",
+          "programming",
+          "project",
+          "projects",
+          "python",
+          "software",
+          "uses"
+        ],
+        "snippet": "Alex uses Python as the primary programming language for most software projects.",
+        "has_next_action_checkbox": false,
+        "word_count": 69,
+        "created": "2025-01-15T10:00:00Z"
+      }
+    },
+    "notes/03_preferences/pref__code_style.md": {
+      "mtime": 1782781802.650198,
+      "content_hash": "sha256:a34c249440a5721ea8b904167b8af0fd9f29585211eb7d2222f876825f6127c2",
+      "note_type": "preferences",
+      "candidate": {
+        "path": "notes/03_preferences/pref__code_style.md",
+        "rel_path": "notes/03_preferences/pref__code_style.md",
+        "type": "pref",
+        "title": "Preference: Code Style",
+        "statement": "Alex prefers short, well-named functions with minimal comments. Code should be self-explanatory.",
+        "body": "\n# Preference: Code Style\n\n## Statement\n\nAlex prefers short, well-named functions with minimal comments. Code should be self-explanatory.\n\n## Context\n\nFunctions should do one thing and be short enough to read on one screen.\nComments are avoided unless the logic is non-obvious or there is a workaround.\nNaming should be explicit and descriptive rather than abbreviated.\nAlex follows the principle that good names make documentation unnecessary.\n\n## Links\n\n- [[id__core_values]]\n- [[fact__programming_language]]",
+        "updated": "2025-06-01T00:00:00Z",
+        "confidence": 0.9,
+        "source": "user",
+        "scope": "work",
+        "status": "",
+        "tags": [
+          "coding",
+          "code-style",
+          "functions",
+          "comments",
+          "development"
+        ],
+        "note_tokens": [
+          "abbreviated",
+          "alex",
+          "avoided",
+          "code",
+          "coding",
+          "comments",
+          "context",
+          "core",
+          "descriptive",
+          "development",
+          "do",
+          "documentation",
+          "enough",
+          "explanatory",
+          "explicit",
+          "fact",
+          "follows",
+          "functions",
+          "good",
+          "id",
+          "language",
+          "links",
+          "logic",
+          "make",
+          "minimal",
+          "named",
+          "names",
+          "naming",
+          "non",
+          "obvious",
+          "one",
+          "pref",
+          "preference",
+          "prefers",
+          "principle",
+          "programming",
+          "rather",
+          "read",
+          "screen",
+          "self",
+          "short",
+          "should",
+          "statement",
+          "style",
+          "than",
+          "there",
+          "thing",
+          "unless",
+          "unnecessary",
+          "values",
+          "well",
+          "workaround"
+        ],
+        "tag_tokens": [
+          "code",
+          "coding",
+          "comments",
+          "development",
+          "functions",
+          "style"
+        ],
+        "attention_tokens": [
+          "alex",
+          "code",
+          "coding",
+          "comments",
+          "core",
+          "development",
+          "explanatory",
+          "fact",
+          "functions",
+          "id",
+          "language",
+          "minimal",
+          "named",
+          "pref",
+          "preference",
+          "prefers",
+          "programming",
+          "self",
+          "short",
+          "should",
+          "style",
+          "values",
+          "well",
+          "work"
+        ],
+        "snippet": "Alex prefers short, well-named functions with minimal comments. Code should be self-explanatory.",
+        "has_next_action_checkbox": false,
+        "word_count": 72,
+        "created": "2025-01-01T00:00:00Z"
+      }
+    },
+    "notes/03_preferences/pref__communication_style.md": {
+      "mtime": 1782781817.503293,
+      "content_hash": "sha256:7d4a4393d99fb4352acae0106f89670d0e701cf283bee84c000b345cb3e5346a",
+      "note_type": "preferences",
+      "candidate": {
+        "path": "notes/03_preferences/pref__communication_style.md",
+        "rel_path": "notes/03_preferences/pref__communication_style.md",
+        "type": "pref",
+        "title": "Preference: Communication Style",
+        "statement": "Alex prefers direct and concise communication, avoiding filler and getting to the point quickly.",
+        "body": "\n# Preference: Communication Style\n\n## Statement\n\nAlex prefers direct and concise communication, avoiding filler and getting to the point quickly.\n\n## Context\n\nDirect communication means saying what needs to be said without excessive hedging or preamble.\nFeedback should be specific and actionable rather than vague or overly diplomatic.\nAlex values brevity in written messages and avoids long preambles.\nThis style applies in both professional and personal contexts.\n\n## Links\n\n- [[pref__meeting_style]]\n- [[id__core_values]]",
+        "updated": "2025-06-01T00:00:00Z",
+        "confidence": 0.9,
+        "source": "user",
+        "scope": "all",
+        "status": "",
+        "tags": [
+          "communication",
+          "direct",
+          "concise",
+          "style",
+          "feedback"
+        ],
+        "note_tokens": [
+          "actionable",
+          "alex",
+          "applies",
+          "avoiding",
+          "avoids",
+          "both",
+          "brevity",
+          "communication",
+          "concise",
+          "context",
+          "contexts",
+          "core",
+          "diplomatic",
+          "direct",
+          "excessive",
+          "feedback",
+          "filler",
+          "getting",
+          "hedging",
+          "id",
+          "links",
+          "long",
+          "means",
+          "meeting",
+          "messages",
+          "needs",
+          "overly",
+          "personal",
+          "point",
+          "preamble",
+          "preambles",
+          "pref",
+          "preference",
+          "prefers",
+          "professional",
+          "quickly",
+          "rather",
+          "said",
+          "saying",
+          "should",
+          "specific",
+          "statement",
+          "style",
+          "than",
+          "this",
+          "vague",
+          "values",
+          "without",
+          "written"
+        ],
+        "tag_tokens": [
+          "communication",
+          "concise",
+          "direct",
+          "feedback",
+          "style"
+        ],
+        "attention_tokens": [
+          "alex",
+          "all",
+          "avoiding",
+          "communication",
+          "concise",
+          "core",
+          "direct",
+          "feedback",
+          "filler",
+          "getting",
+          "id",
+          "meeting",
+          "point",
+          "pref",
+          "preference",
+          "prefers",
+          "quickly",
+          "style",
+          "values"
+        ],
+        "snippet": "Alex prefers direct and concise communication, avoiding filler and getting to the point quickly.",
+        "has_next_action_checkbox": false,
+        "word_count": 73,
+        "created": "2025-01-01T00:00:00Z"
+      }
+    },
+    "notes/03_preferences/pref__learning_style.md": {
+      "mtime": 1782781821.6531692,
+      "content_hash": "sha256:d61d4cb75b44cbf567ed29804a316186cd383251ff6f9eeaaec609db618e3ebb",
+      "note_type": "preferences",
+      "candidate": {
+        "path": "notes/03_preferences/pref__learning_style.md",
+        "rel_path": "notes/03_preferences/pref__learning_style.md",
+        "type": "pref",
+        "title": "Preference: Learning Style",
+        "statement": "Alex learns best by doing — building projects, writing code, and experimenting with real tools.",
+        "body": "\n# Preference: Learning Style\n\n## Statement\n\nAlex learns best by doing — building projects, writing code, and experimenting with real tools.\n\n## Context\n\nReading documentation is useful but learning solidifies when writing actual code.\nAlex prefers building small side projects to learn new technologies rather than following tutorials passively.\nSpaced repetition is used to retain facts and concepts over time.\nNew skills are usually learned by picking a real problem and solving it with the new tool.\n\n## Links\n\n- [[concept__spaced_repetition]]\n- [[id__core_values]]\n- [[goal__learn_rust]]",
+        "updated": "2025-06-01T00:00:00Z",
+        "confidence": 0.9,
+        "source": "user",
+        "scope": "all",
+        "status": "",
+        "tags": [
+          "learning",
+          "hands-on",
+          "practice",
+          "skill-acquisition",
+          "approach"
+        ],
+        "note_tokens": [
+          "acquisition",
+          "actual",
+          "alex",
+          "approach",
+          "best",
+          "building",
+          "but",
+          "code",
+          "concept",
+          "concepts",
+          "context",
+          "core",
+          "documentation",
+          "doing",
+          "experimenting",
+          "facts",
+          "following",
+          "goal",
+          "hands",
+          "id",
+          "learn",
+          "learned",
+          "learning",
+          "learns",
+          "links",
+          "new",
+          "over",
+          "passively",
+          "picking",
+          "practice",
+          "pref",
+          "preference",
+          "prefers",
+          "problem",
+          "projects",
+          "rather",
+          "reading",
+          "real",
+          "repetition",
+          "retain",
+          "rust",
+          "side",
+          "skill",
+          "skills",
+          "small",
+          "solidifies",
+          "solving",
+          "spaced",
+          "statement",
+          "style",
+          "technologies",
+          "than",
+          "time",
+          "tool",
+          "tools",
+          "tutorials",
+          "used",
+          "useful",
+          "usually",
+          "values",
+          "writing"
+        ],
+        "tag_tokens": [
+          "acquisition",
+          "approach",
+          "hands",
+          "learning",
+          "practice",
+          "skill"
+        ],
+        "attention_tokens": [
+          "acquisition",
+          "alex",
+          "all",
+          "approach",
+          "best",
+          "building",
+          "code",
+          "concept",
+          "core",
+          "doing",
+          "experimenting",
+          "goal",
+          "hands",
+          "id",
+          "learn",
+          "learning",
+          "learns",
+          "practice",
+          "pref",
+          "preference",
+          "projects",
+          "real",
+          "repetition",
+          "rust",
+          "skill",
+          "spaced",
+          "style",
+          "tools",
+          "values",
+          "writing"
+        ],
+        "snippet": "Alex learns best by doing — building projects, writing code, and experimenting with real tools.",
+        "has_next_action_checkbox": false,
+        "word_count": 85,
+        "created": "2025-01-01T00:00:00Z"
+      }
+    },
+    "notes/03_preferences/pref__meeting_style.md": {
+      "mtime": 1782781808.6216583,
+      "content_hash": "sha256:ff4b85584760c9add3118a9b6597d86b8dcefacba92b2d8c9302ac653a9e85fe",
+      "note_type": "preferences",
+      "candidate": {
+        "path": "notes/03_preferences/pref__meeting_style.md",
+        "rel_path": "notes/03_preferences/pref__meeting_style.md",
+        "type": "pref",
+        "title": "Preference: Meeting Style",
+        "statement": "Alex prefers asynchronous communication and minimal meetings, using async tools like chat or documents instead.",
+        "body": "\n# Preference: Meeting Style\n\n## Statement\n\nAlex prefers asynchronous communication and minimal meetings, using async tools like chat or documents instead.\n\n## Context\n\nSynchronous meetings interrupt flow state and should be reserved for complex discussions only.\nMost work questions can be resolved with a written message or a shared document.\nWhen meetings are necessary, they should have a clear agenda and end with recorded action items.\nAlex uses calendar blocking to protect focused work time.\n\n## Links\n\n- [[pref__communication_style]]\n- [[id__core_values]]",
+        "updated": "2025-06-01T00:00:00Z",
+        "confidence": 0.9,
+        "source": "user",
+        "scope": "work",
+        "status": "",
+        "tags": [
+          "meetings",
+          "async",
+          "communication",
+          "work-style",
+          "collaboration"
+        ],
+        "note_tokens": [
+          "action",
+          "agenda",
+          "alex",
+          "async",
+          "asynchronous",
+          "blocking",
+          "calendar",
+          "can",
+          "chat",
+          "clear",
+          "collaboration",
+          "communication",
+          "complex",
+          "context",
+          "core",
+          "discussions",
+          "document",
+          "documents",
+          "end",
+          "flow",
+          "focused",
+          "have",
+          "id",
+          "instead",
+          "interrupt",
+          "items",
+          "like",
+          "links",
+          "meeting",
+          "meetings",
+          "message",
+          "minimal",
+          "most",
+          "necessary",
+          "only",
+          "pref",
+          "preference",
+          "prefers",
+          "protect",
+          "questions",
+          "recorded",
+          "reserved",
+          "resolved",
+          "shared",
+          "should",
+          "state",
+          "statement",
+          "style",
+          "synchronous",
+          "they",
+          "time",
+          "tools",
+          "uses",
+          "using",
+          "values",
+          "work",
+          "written"
+        ],
+        "tag_tokens": [
+          "async",
+          "collaboration",
+          "communication",
+          "meetings",
+          "style",
+          "work"
+        ],
+        "attention_tokens": [
+          "alex",
+          "async",
+          "asynchronous",
+          "chat",
+          "collaboration",
+          "communication",
+          "core",
+          "documents",
+          "id",
+          "instead",
+          "like",
+          "meeting",
+          "meetings",
+          "minimal",
+          "pref",
+          "preference",
+          "prefers",
+          "style",
+          "tools",
+          "using",
+          "values",
+          "work"
+        ],
+        "snippet": "Alex prefers asynchronous communication and minimal meetings, using async tools like chat or documents instead.",
+        "has_next_action_checkbox": false,
+        "word_count": 81,
+        "created": "2025-01-01T00:00:00Z"
+      }
+    },
+    "notes/03_preferences/pref__note_taking_tool.md": {
+      "mtime": 1782781812.5918713,
+      "content_hash": "sha256:86ceb925d2e76fff9d2dda87ff6bda369829f38515b9054e7f9baacb5d2e1aa9",
+      "note_type": "preferences",
+      "candidate": {
+        "path": "notes/03_preferences/pref__note_taking_tool.md",
+        "rel_path": "notes/03_preferences/pref__note_taking_tool.md",
+        "type": "pref",
+        "title": "Preference: Note-Taking Tool",
+        "statement": "Alex uses Obsidian as the primary note-taking and knowledge management application.",
+        "body": "\n# Preference: Note-Taking Tool\n\n## Statement\n\nAlex uses Obsidian as the primary note-taking and knowledge management application.\n\n## Context\n\nObsidian stores notes as plain markdown files on disk, which Alex prefers over cloud-only tools.\nThe vault is synced via a local folder and backed up to a private repository.\nPlugins used include Daily Notes, Templater, and Dataview for querying notes.\nObsidian pairs well with the cognitive-ledger project for structured personal knowledge.\n\n## Links\n\n- [[concept__zettelkasten]]\n- [[fact__current_project]]",
+        "updated": "2025-06-01T00:00:00Z",
+        "confidence": 0.95,
+        "source": "user",
+        "scope": "all",
+        "status": "",
+        "tags": [
+          "obsidian",
+          "notes",
+          "note-taking",
+          "knowledge-management",
+          "tools"
+        ],
+        "note_tokens": [
+          "alex",
+          "application",
+          "backed",
+          "cloud",
+          "cognitive",
+          "concept",
+          "context",
+          "current",
+          "daily",
+          "dataview",
+          "disk",
+          "fact",
+          "files",
+          "folder",
+          "include",
+          "knowledge",
+          "ledger",
+          "links",
+          "local",
+          "management",
+          "markdown",
+          "note",
+          "notes",
+          "obsidian",
+          "only",
+          "over",
+          "pairs",
+          "personal",
+          "plain",
+          "plugins",
+          "pref",
+          "preference",
+          "prefers",
+          "primary",
+          "private",
+          "project",
+          "querying",
+          "repository",
+          "statement",
+          "stores",
+          "structured",
+          "synced",
+          "taking",
+          "templater",
+          "tool",
+          "tools",
+          "up",
+          "used",
+          "uses",
+          "vault",
+          "via",
+          "well",
+          "zettelkasten"
+        ],
+        "tag_tokens": [
+          "knowledge",
+          "management",
+          "note",
+          "notes",
+          "obsidian",
+          "taking",
+          "tools"
+        ],
+        "attention_tokens": [
+          "alex",
+          "all",
+          "application",
+          "concept",
+          "current",
+          "fact",
+          "knowledge",
+          "management",
+          "note",
+          "notes",
+          "obsidian",
+          "pref",
+          "preference",
+          "primary",
+          "project",
+          "taking",
+          "tool",
+          "tools",
+          "uses",
+          "zettelkasten"
+        ],
+        "snippet": "Alex uses Obsidian as the primary note-taking and knowledge management application.",
+        "has_next_action_checkbox": false,
+        "word_count": 77,
+        "created": "2025-01-01T00:00:00Z"
+      }
+    },
+    "notes/04_goals/goal__learn_rust.md": {
+      "mtime": 1782781832.2921321,
+      "content_hash": "sha256:2a9e2d5028ab5caf0453115dbfd6fc8156016a408576ad0d481833384cfd0744",
+      "note_type": "goals",
+      "candidate": {
+        "path": "notes/04_goals/goal__learn_rust.md",
+        "rel_path": "notes/04_goals/goal__learn_rust.md",
+        "type": "goal",
+        "title": "Goal: Learn Rust Programming Language",
+        "statement": "Alex wants to learn the Rust programming language to build fast, safe systems-level tools.",
+        "body": "\n# Goal: Learn Rust Programming Language\n\n## Statement\n\nAlex wants to learn the Rust programming language to build fast, safe systems-level tools.\n\n## Context\n\nRust is attractive for its memory safety guarantees and performance characteristics.\nThe plan is to build a small command-line tool in Rust as the learning vehicle.\nThis goal supports long-term programming versatility beyond Python and TypeScript.\n\n## Next Action\n\n- [ ] Complete the Rust Book (official learning resource)\n- [ ] Build a small CLI tool in Rust\n\n## Links\n\n- [[pref__learning_style]]\n- [[fact__programming_language]]",
+        "updated": "2025-06-01T00:00:00Z",
+        "confidence": 0.85,
+        "source": "user",
+        "scope": "all",
+        "status": "",
+        "tags": [
+          "goal",
+          "rust",
+          "programming-language",
+          "learning",
+          "systems"
+        ],
+        "note_tokens": [
+          "action",
+          "alex",
+          "attractive",
+          "beyond",
+          "book",
+          "build",
+          "characteristics",
+          "cli",
+          "command",
+          "complete",
+          "context",
+          "fact",
+          "fast",
+          "goal",
+          "guarantees",
+          "its",
+          "language",
+          "learn",
+          "learning",
+          "level",
+          "line",
+          "links",
+          "long",
+          "memory",
+          "next",
+          "official",
+          "performance",
+          "plan",
+          "pref",
+          "programming",
+          "python",
+          "resource",
+          "rust",
+          "safe",
+          "safety",
+          "small",
+          "statement",
+          "style",
+          "supports",
+          "systems",
+          "term",
+          "this",
+          "tool",
+          "tools",
+          "typescript",
+          "vehicle",
+          "versatility",
+          "wants"
+        ],
+        "tag_tokens": [
+          "goal",
+          "language",
+          "learning",
+          "programming",
+          "rust",
+          "systems"
+        ],
+        "attention_tokens": [
+          "alex",
+          "all",
+          "build",
+          "fact",
+          "fast",
+          "goal",
+          "language",
+          "learn",
+          "learning",
+          "level",
+          "pref",
+          "programming",
+          "rust",
+          "safe",
+          "style",
+          "systems",
+          "tools",
+          "wants"
+        ],
+        "snippet": "Alex wants to learn the Rust programming language to build fast, safe systems-level tools.",
+        "has_next_action_checkbox": false,
+        "word_count": 89,
+        "created": "2025-03-01T00:00:00Z"
+      }
+    },
+    "notes/04_goals/goal__run_marathon.md": {
+      "mtime": 1782781837.6720567,
+      "content_hash": "sha256:8a44a548015f8fb1eabe7427aac0cfebe4f32b0a08c20bf89c965a0ed5471169",
+      "note_type": "goals",
+      "candidate": {
+        "path": "notes/04_goals/goal__run_marathon.md",
+        "rel_path": "notes/04_goals/goal__run_marathon.md",
+        "type": "goal",
+        "title": "Goal: Complete a Marathon",
+        "statement": "Alex's athletic goal is to complete a full marathon race.",
+        "body": "\n# Goal: Complete a Marathon\n\n## Statement\n\nAlex's athletic goal is to complete a full marathon race.\n\n## Context\n\nA marathon is a 42.195 km foot race. Alex has been building a running base to prepare.\nThe target event is a marathon race within the next 18 months.\nTraining involves progressively longer runs each week following a structured plan.\n\n## Next Action\n\n- [ ] Register for a target marathon\n- [ ] Follow 16-week training programme\n\n## Links\n\n- [[fact__fitness_routine]]\n- [[fact__diet]]",
+        "updated": "2025-06-01T00:00:00Z",
+        "confidence": 0.8,
+        "source": "user",
+        "scope": "all",
+        "status": "",
+        "tags": [
+          "goal",
+          "marathon",
+          "running",
+          "fitness",
+          "race"
+        ],
+        "note_tokens": [
+          "16",
+          "18",
+          "195",
+          "42",
+          "action",
+          "alex",
+          "athletic",
+          "base",
+          "been",
+          "building",
+          "complete",
+          "context",
+          "diet",
+          "each",
+          "event",
+          "fact",
+          "fitness",
+          "follow",
+          "following",
+          "foot",
+          "full",
+          "goal",
+          "has",
+          "involves",
+          "km",
+          "links",
+          "longer",
+          "marathon",
+          "months",
+          "next",
+          "plan",
+          "prepare",
+          "programme",
+          "progressively",
+          "race",
+          "register",
+          "routine",
+          "run",
+          "running",
+          "runs",
+          "s",
+          "statement",
+          "structured",
+          "target",
+          "training",
+          "week",
+          "within"
+        ],
+        "tag_tokens": [
+          "fitness",
+          "goal",
+          "marathon",
+          "race",
+          "running"
+        ],
+        "attention_tokens": [
+          "alex",
+          "all",
+          "athletic",
+          "complete",
+          "diet",
+          "fact",
+          "fitness",
+          "full",
+          "goal",
+          "marathon",
+          "race",
+          "routine",
+          "run",
+          "running",
+          "s"
+        ],
+        "snippet": "Alex's athletic goal is to complete a full marathon race.",
+        "has_next_action_checkbox": false,
+        "word_count": 83,
+        "created": "2025-01-01T00:00:00Z"
+      }
+    },
+    "notes/04_goals/goal__ship_ledger_v1.md": {
+      "mtime": 1782781828.6498911,
+      "content_hash": "sha256:b69087b23abd93fed0714808c7c7e70310faa5109ed4fa9e9f3efdeafbcf40be",
+      "note_type": "goals",
+      "candidate": {
+        "path": "notes/04_goals/goal__ship_ledger_v1.md",
+        "rel_path": "notes/04_goals/goal__ship_ledger_v1.md",
+        "type": "goal",
+        "title": "Goal: Ship Cognitive Ledger v1.0",
+        "statement": "Alex aims to ship a stable v1.0 release of the cognitive-ledger project by end of 2026.",
+        "body": "\n# Goal: Ship Cognitive Ledger v1.0\n\n## Statement\n\nAlex aims to ship a stable v1.0 release of the cognitive-ledger project by end of 2026.\n\n## Context\n\nThe cognitive-ledger v1.0 milestone involves completing core retrieval features, improving eval coverage, and writing documentation.\nThis is the main personal software project goal for 2026.\nSuccess means a tagged release that is usable by others without requiring code changes.\n\n## Next Action\n\n- [ ] Complete retrieval eval suite (Plan 01)\n- [ ] Validate semantic retrieval modes\n- [ ] Write user-facing documentation\n\n## Links\n\n- [[fact__current_project]]\n- [[fact__programming_language]]",
+        "updated": "2025-06-01T00:00:00Z",
+        "confidence": 0.9,
+        "source": "user",
+        "scope": "all",
+        "status": "",
+        "tags": [
+          "goal",
+          "cognitive-ledger",
+          "release",
+          "milestone",
+          "software"
+        ],
+        "note_tokens": [
+          "0",
+          "01",
+          "2026",
+          "action",
+          "aims",
+          "alex",
+          "changes",
+          "code",
+          "cognitive",
+          "complete",
+          "completing",
+          "context",
+          "core",
+          "coverage",
+          "current",
+          "documentation",
+          "end",
+          "eval",
+          "facing",
+          "fact",
+          "features",
+          "goal",
+          "improving",
+          "involves",
+          "language",
+          "ledger",
+          "links",
+          "main",
+          "means",
+          "milestone",
+          "modes",
+          "next",
+          "others",
+          "personal",
+          "plan",
+          "programming",
+          "project",
+          "release",
+          "requiring",
+          "retrieval",
+          "semantic",
+          "ship",
+          "software",
+          "stable",
+          "statement",
+          "success",
+          "suite",
+          "tagged",
+          "this",
+          "usable",
+          "user",
+          "v1",
+          "validate",
+          "without",
+          "write",
+          "writing"
+        ],
+        "tag_tokens": [
+          "cognitive",
+          "goal",
+          "ledger",
+          "milestone",
+          "release",
+          "software"
+        ],
+        "attention_tokens": [
+          "0",
+          "2026",
+          "aims",
+          "alex",
+          "all",
+          "cognitive",
+          "current",
+          "end",
+          "fact",
+          "goal",
+          "language",
+          "ledger",
+          "milestone",
+          "programming",
+          "project",
+          "release",
+          "ship",
+          "software",
+          "stable",
+          "v1"
+        ],
+        "snippet": "Alex aims to ship a stable v1.0 release of the cognitive-ledger project by end of 2026.",
+        "has_next_action_checkbox": false,
+        "word_count": 96,
+        "created": "2025-01-01T00:00:00Z"
+      }
+    },
+    "notes/05_open_loops/loop__ci_cd_pipeline.md": {
+      "mtime": 1782781841.5545166,
+      "content_hash": "sha256:6f7cd83ed0e91ffb76f046b0367ac91702a29faadce7c2b017234a0dffdd88f2",
+      "note_type": "loops",
+      "candidate": {
+        "path": "notes/05_open_loops/loop__ci_cd_pipeline.md",
+        "rel_path": "notes/05_open_loops/loop__ci_cd_pipeline.md",
+        "type": "loop",
+        "title": "Set Up CI/CD Deployment Pipeline",
+        "statement": "Set up an automated CI/CD pipeline for the cognitive-ledger project.",
+        "body": "\n# Loop: Set Up CI/CD Deployment Pipeline\n\n## Question or Task\n\nSet up an automated CI/CD pipeline for the cognitive-ledger project.\n\n## Context\n\nCurrently deployment is done manually by running scripts. This needs to be automated.\nThe pipeline should run tests on every push and deploy tagged releases automatically.\nGitHub Actions is the preferred platform for CI/CD automation.\n\n## Next Action\n\n- [ ] Write GitHub Actions workflow for test runs\n- [ ] Add automated release deployment step\n\n## Links\n\n- [[fact__current_project]]\n- [[goal__ship_ledger_v1]]",
+        "updated": "2025-06-01T00:00:00Z",
+        "confidence": 0.8,
+        "source": "user",
+        "scope": "work",
+        "status": "open",
+        "tags": [
+          "ci-cd",
+          "deployment",
+          "pipeline",
+          "automation",
+          "devops"
+        ],
+        "note_tokens": [
+          "action",
+          "actions",
+          "add",
+          "automated",
+          "automatically",
+          "automation",
+          "cd",
+          "ci",
+          "cognitive",
+          "context",
+          "current",
+          "currently",
+          "deploy",
+          "deployment",
+          "devops",
+          "done",
+          "every",
+          "fact",
+          "github",
+          "goal",
+          "ledger",
+          "links",
+          "loop",
+          "manually",
+          "needs",
+          "next",
+          "pipeline",
+          "platform",
+          "preferred",
+          "project",
+          "push",
+          "question",
+          "release",
+          "releases",
+          "run",
+          "running",
+          "runs",
+          "scripts",
+          "set",
+          "ship",
+          "should",
+          "step",
+          "tagged",
+          "task",
+          "test",
+          "tests",
+          "this",
+          "up",
+          "v1",
+          "workflow",
+          "write"
+        ],
+        "tag_tokens": [
+          "automation",
+          "cd",
+          "ci",
+          "deployment",
+          "devops",
+          "pipeline"
+        ],
+        "attention_tokens": [
+          "actions",
+          "automated",
+          "automation",
+          "cd",
+          "ci",
+          "cognitive",
+          "current",
+          "deployment",
+          "devops",
+          "fact",
+          "github",
+          "goal",
+          "ledger",
+          "loop",
+          "next",
+          "open",
+          "pipeline",
+          "project",
+          "runs",
+          "set",
+          "ship",
+          "test",
+          "up",
+          "v1",
+          "work",
+          "workflow",
+          "write"
+        ],
+        "snippet": "Set up an automated CI/CD pipeline for the cognitive-ledger project. Next: Write GitHub Actions workflow for test runs",
+        "has_next_action_checkbox": true,
+        "word_count": 85,
+        "created": "2025-04-01T00:00:00Z"
+      }
+    },
+    "notes/05_open_loops/loop__dependency_audit.md": {
+      "mtime": 1782781846.980025,
+      "content_hash": "sha256:9025dc3245962c079d07a3f59a7fa0a8c120f9720021b2227ad02fc893a00ca8",
+      "note_type": "loops",
+      "candidate": {
+        "path": "notes/05_open_loops/loop__dependency_audit.md",
+        "rel_path": "notes/05_open_loops/loop__dependency_audit.md",
+        "type": "loop",
+        "title": "Review and Update Project Dependencies",
+        "statement": "Audit the cognitive-ledger project's Python dependencies for outdated packages and security vulnerabilities.",
+        "body": "\n# Loop: Review and Update Project Dependencies\n\n## Question or Task\n\nAudit the cognitive-ledger project's Python dependencies for outdated packages and security vulnerabilities.\n\n## Context\n\nSeveral dependencies have not been updated in months and may have security fixes available.\nThe dependency audit should check for version incompatibilities and remove unused packages.\nThis is a maintenance task that should happen quarterly.\n\n## Next Action\n\n- [ ] Run pip-audit to check for security issues\n- [ ] Update dependencies in pyproject.toml\n- [ ] Test that nothing breaks after updates\n\n## Links\n\n- [[fact__current_project]]\n- [[loop__ci_cd_pipeline]]",
+        "updated": "2025-06-01T00:00:00Z",
+        "confidence": 0.8,
+        "source": "user",
+        "scope": "work",
+        "status": "open",
+        "tags": [
+          "dependencies",
+          "audit",
+          "security",
+          "packages",
+          "maintenance"
+        ],
+        "note_tokens": [
+          "action",
+          "after",
+          "audit",
+          "available",
+          "been",
+          "breaks",
+          "cd",
+          "check",
+          "ci",
+          "cognitive",
+          "context",
+          "current",
+          "dependencies",
+          "dependency",
+          "fact",
+          "fixes",
+          "happen",
+          "have",
+          "incompatibilities",
+          "issues",
+          "ledger",
+          "links",
+          "loop",
+          "maintenance",
+          "may",
+          "months",
+          "next",
+          "not",
+          "nothing",
+          "outdated",
+          "packages",
+          "pip",
+          "pipeline",
+          "project",
+          "pyproject",
+          "python",
+          "quarterly",
+          "question",
+          "remove",
+          "review",
+          "run",
+          "s",
+          "security",
+          "several",
+          "should",
+          "task",
+          "test",
+          "this",
+          "toml",
+          "unused",
+          "update",
+          "updated",
+          "updates",
+          "version",
+          "vulnerabilities"
+        ],
+        "tag_tokens": [
+          "audit",
+          "dependencies",
+          "maintenance",
+          "packages",
+          "security"
+        ],
+        "attention_tokens": [
+          "audit",
+          "cd",
+          "check",
+          "ci",
+          "cognitive",
+          "current",
+          "dependencies",
+          "dependency",
+          "fact",
+          "issues",
+          "ledger",
+          "loop",
+          "maintenance",
+          "next",
+          "open",
+          "outdated",
+          "packages",
+          "pip",
+          "pipeline",
+          "project",
+          "python",
+          "review",
+          "run",
+          "s",
+          "security",
+          "update",
+          "vulnerabilities",
+          "work"
+        ],
+        "snippet": "Audit the cognitive-ledger project's Python dependencies for outdated packages and security vulnerabilities. Next: Run pip-audit to check for security issues",
+        "has_next_action_checkbox": true,
+        "word_count": 95,
+        "created": "2025-05-01T00:00:00Z"
+      }
+    },
+    "notes/06_concepts/concept__cognitive_ledger.md": {
+      "mtime": 1782781861.314611,
+      "content_hash": "sha256:b6f48cd6941e9e96f23be3e7ed136523d423a31f2877decf2216e2f35bb0d8ca",
+      "note_type": "concepts",
+      "candidate": {
+        "path": "notes/06_concepts/concept__cognitive_ledger.md",
+        "rel_path": "notes/06_concepts/concept__cognitive_ledger.md",
+        "type": "concept",
+        "title": "Concept: Cognitive Ledger",
+        "statement": "The cognitive ledger is a personal knowledge management system that stores structured facts, preferences, goals, and open loops as searchable notes.",
+        "body": "\n# Concept: Cognitive Ledger\n\n## Statement\n\nThe cognitive ledger is a personal knowledge management system that stores structured facts, preferences, goals, and open loops as searchable notes.\n\n## Context\n\nUnlike a general note-taking tool, the cognitive ledger categorises notes by type (facts, preferences, goals, concepts, open loops).\nRetrieval is the core capability: the ledger can answer questions by searching and ranking relevant notes.\nThe system is designed to be an external memory that complements natural human cognition.\nThe cognitive-ledger project is Alex's implementation of this concept using Python.\n\n## Links\n\n- [[fact__current_project]]\n- [[goal__ship_ledger_v1]]\n- [[pref__note_taking_tool]]",
+        "updated": "2025-06-01T00:00:00Z",
+        "confidence": 0.9,
+        "source": "user",
+        "scope": "all",
+        "status": "",
+        "tags": [
+          "cognitive-ledger",
+          "knowledge-system",
+          "retrieval",
+          "personal-knowledge",
+          "project"
+        ],
+        "note_tokens": [
+          "alex",
+          "answer",
+          "can",
+          "capability",
+          "categorises",
+          "cognition",
+          "cognitive",
+          "complements",
+          "concept",
+          "concepts",
+          "context",
+          "core",
+          "current",
+          "designed",
+          "external",
+          "fact",
+          "facts",
+          "general",
+          "goal",
+          "goals",
+          "human",
+          "implementation",
+          "knowledge",
+          "ledger",
+          "links",
+          "loops",
+          "management",
+          "memory",
+          "natural",
+          "note",
+          "notes",
+          "open",
+          "personal",
+          "pref",
+          "preferences",
+          "project",
+          "python",
+          "questions",
+          "ranking",
+          "relevant",
+          "retrieval",
+          "s",
+          "searchable",
+          "searching",
+          "ship",
+          "statement",
+          "stores",
+          "structured",
+          "system",
+          "taking",
+          "this",
+          "tool",
+          "type",
+          "unlike",
+          "using",
+          "v1"
+        ],
+        "tag_tokens": [
+          "cognitive",
+          "knowledge",
+          "ledger",
+          "personal",
+          "project",
+          "retrieval",
+          "system"
+        ],
+        "attention_tokens": [
+          "all",
+          "cognitive",
+          "concept",
+          "current",
+          "fact",
+          "facts",
+          "goal",
+          "goals",
+          "knowledge",
+          "ledger",
+          "loops",
+          "management",
+          "note",
+          "notes",
+          "open",
+          "personal",
+          "pref",
+          "preferences",
+          "project",
+          "retrieval",
+          "searchable",
+          "ship",
+          "stores",
+          "structured",
+          "system",
+          "taking",
+          "tool",
+          "v1"
+        ],
+        "snippet": "The cognitive ledger is a personal knowledge management system that stores structured facts, preferences, goals, and open loops as searchable notes.",
+        "has_next_action_checkbox": false,
+        "word_count": 96,
+        "created": "2025-01-01T00:00:00Z"
+      }
+    },
+    "notes/06_concepts/concept__spaced_repetition.md": {
+      "mtime": 1782781851.0797477,
+      "content_hash": "sha256:73647db9ac78b8d316ed449cbf7ffa02abad39358c56bace14db777901bc4b4c",
+      "note_type": "concepts",
+      "candidate": {
+        "path": "notes/06_concepts/concept__spaced_repetition.md",
+        "rel_path": "notes/06_concepts/concept__spaced_repetition.md",
+        "type": "concept",
+        "title": "Concept: Spaced Repetition",
+        "statement": "Spaced repetition is a learning technique that schedules reviews of information at increasing intervals to maximise long-term retention.",
+        "body": "\n# Concept: Spaced Repetition\n\n## Statement\n\nSpaced repetition is a learning technique that schedules reviews of information at increasing intervals to maximise long-term retention.\n\n## Context\n\nThe core idea is that memory decays over time following the Ebbinghaus forgetting curve.\nBy reviewing information just before it is forgotten, retention is reinforced efficiently.\nAnki is the most widely used spaced repetition software, using a flashcard model.\nAlex uses spaced repetition for language vocabulary and technical concepts.\n\n## Links\n\n- [[pref__learning_style]]\n- [[concept__zettelkasten]]",
+        "updated": "2025-06-01T00:00:00Z",
+        "confidence": 0.9,
+        "source": "user",
+        "scope": "all",
+        "status": "",
+        "tags": [
+          "spaced-repetition",
+          "learning",
+          "memory",
+          "anki",
+          "flashcards"
+        ],
+        "note_tokens": [
+          "alex",
+          "anki",
+          "before",
+          "concept",
+          "concepts",
+          "context",
+          "core",
+          "curve",
+          "decays",
+          "ebbinghaus",
+          "efficiently",
+          "flashcard",
+          "flashcards",
+          "following",
+          "forgetting",
+          "forgotten",
+          "idea",
+          "increasing",
+          "information",
+          "intervals",
+          "just",
+          "language",
+          "learning",
+          "links",
+          "long",
+          "maximise",
+          "memory",
+          "model",
+          "most",
+          "over",
+          "pref",
+          "reinforced",
+          "repetition",
+          "retention",
+          "reviewing",
+          "reviews",
+          "schedules",
+          "software",
+          "spaced",
+          "statement",
+          "style",
+          "technical",
+          "technique",
+          "term",
+          "time",
+          "used",
+          "uses",
+          "using",
+          "vocabulary",
+          "widely",
+          "zettelkasten"
+        ],
+        "tag_tokens": [
+          "anki",
+          "flashcards",
+          "learning",
+          "memory",
+          "repetition",
+          "spaced"
+        ],
+        "attention_tokens": [
+          "all",
+          "anki",
+          "concept",
+          "flashcards",
+          "increasing",
+          "information",
+          "intervals",
+          "learning",
+          "long",
+          "maximise",
+          "memory",
+          "pref",
+          "repetition",
+          "retention",
+          "reviews",
+          "schedules",
+          "spaced",
+          "style",
+          "technique",
+          "term",
+          "zettelkasten"
+        ],
+        "snippet": "Spaced repetition is a learning technique that schedules reviews of information at increasing intervals to maximise long-term retention.",
+        "has_next_action_checkbox": false,
+        "word_count": 81,
+        "created": "2025-01-01T00:00:00Z"
+      }
+    },
+    "notes/06_concepts/concept__zettelkasten.md": {
+      "mtime": 1782781856.6384373,
+      "content_hash": "sha256:d9d94eabda6409d4172748c47ebde64380f5a35fb56a06f8273f9a8346e67fa5",
+      "note_type": "concepts",
+      "candidate": {
+        "path": "notes/06_concepts/concept__zettelkasten.md",
+        "rel_path": "notes/06_concepts/concept__zettelkasten.md",
+        "type": "concept",
+        "title": "Concept: Zettelkasten Method",
+        "statement": "The Zettelkasten method is a knowledge management system based on atomic notes linked together into a web of ideas.",
+        "body": "\n# Concept: Zettelkasten Method\n\n## Statement\n\nThe Zettelkasten method is a knowledge management system based on atomic notes linked together into a web of ideas.\n\n## Context\n\nDeveloped by sociologist Niklas Luhmann, who used it to write dozens of books.\nEach note (Zettel) contains a single idea and links to related notes.\nThe value emerges from the connections between notes, not individual notes in isolation.\nObsidian implements a digital Zettelkasten through markdown files and wiki-style links.\n\n## Links\n\n- [[pref__note_taking_tool]]\n- [[concept__spaced_repetition]]",
+        "updated": "2025-06-01T00:00:00Z",
+        "confidence": 0.9,
+        "source": "user",
+        "scope": "all",
+        "status": "",
+        "tags": [
+          "zettelkasten",
+          "knowledge-management",
+          "notes",
+          "linking",
+          "method"
+        ],
+        "note_tokens": [
+          "atomic",
+          "based",
+          "between",
+          "books",
+          "concept",
+          "connections",
+          "contains",
+          "context",
+          "developed",
+          "digital",
+          "dozens",
+          "each",
+          "emerges",
+          "files",
+          "idea",
+          "ideas",
+          "implements",
+          "individual",
+          "into",
+          "isolation",
+          "knowledge",
+          "linked",
+          "linking",
+          "links",
+          "luhmann",
+          "management",
+          "markdown",
+          "method",
+          "niklas",
+          "not",
+          "note",
+          "notes",
+          "obsidian",
+          "pref",
+          "related",
+          "repetition",
+          "single",
+          "sociologist",
+          "spaced",
+          "statement",
+          "style",
+          "system",
+          "taking",
+          "through",
+          "together",
+          "tool",
+          "used",
+          "value",
+          "web",
+          "wiki",
+          "write",
+          "zettel",
+          "zettelkasten"
+        ],
+        "tag_tokens": [
+          "knowledge",
+          "linking",
+          "management",
+          "method",
+          "notes",
+          "zettelkasten"
+        ],
+        "attention_tokens": [
+          "all",
+          "atomic",
+          "based",
+          "concept",
+          "ideas",
+          "into",
+          "knowledge",
+          "linked",
+          "linking",
+          "management",
+          "method",
+          "note",
+          "notes",
+          "pref",
+          "repetition",
+          "spaced",
+          "system",
+          "taking",
+          "together",
+          "tool",
+          "web",
+          "zettelkasten"
+        ],
+        "snippet": "The Zettelkasten method is a knowledge management system based on atomic notes linked together into a web of ideas.",
+        "has_next_action_checkbox": false,
+        "word_count": 82,
+        "created": "2025-01-01T00:00:00Z"
+      }
+    }
+  },
+  "inverted": {
+    "works": [
+      "notes/01_identity/id__core_values.md",
+      "notes/02_facts/fact__employer.md"
+    ],
+    "each": [
+      "notes/01_identity/id__core_values.md",
+      "notes/04_goals/goal__run_marathon.md",
+      "notes/06_concepts/concept__zettelkasten.md"
+    ],
+    "honesty": [
+      "notes/01_identity/id__core_values.md"
+    ],
+    "being": [
+      "notes/01_identity/id__core_values.md"
+    ],
+    "all": [
+      "notes/01_identity/id__core_values.md",
+      "notes/02_facts/fact__coffee_preference.md",
+      "notes/02_facts/fact__current_project.md",
+      "notes/02_facts/fact__diet.md",
+      "notes/02_facts/fact__editor.md",
+      "notes/02_facts/fact__fitness_routine.md",
+      "notes/02_facts/fact__home_city.md",
+      "notes/02_facts/fact__home_setup.md",
+      "notes/02_facts/fact__operating_system.md",
+      "notes/02_facts/fact__programming_language.md",
+      "notes/03_preferences/pref__communication_style.md",
+      "notes/03_preferences/pref__learning_style.md",
+      "notes/03_preferences/pref__note_taking_tool.md",
+      "notes/04_goals/goal__learn_rust.md",
+      "notes/04_goals/goal__run_marathon.md",
+      "notes/04_goals/goal__ship_ledger_v1.md",
+      "notes/06_concepts/concept__cognitive_ledger.md",
+      "notes/06_concepts/concept__spaced_repetition.md",
+      "notes/06_concepts/concept__zettelkasten.md"
+    ],
+    "every": [
+      "notes/01_identity/id__core_values.md",
+      "notes/05_open_loops/loop__ci_cd_pipeline.md"
+    ],
+    "avoiding": [
+      "notes/01_identity/id__core_values.md",
+      "notes/03_preferences/pref__communication_style.md"
+    ],
+    "doing": [
+      "notes/01_identity/id__core_values.md",
+      "notes/03_preferences/pref__learning_style.md"
+    ],
+    "values": [
+      "notes/01_identity/id__core_values.md",
+      "notes/03_preferences/pref__code_style.md",
+      "notes/03_preferences/pref__communication_style.md",
+      "notes/03_preferences/pref__learning_style.md",
+      "notes/03_preferences/pref__meeting_style.md"
+    ],
+    "style": [
+      "notes/01_identity/id__core_values.md",
+      "notes/03_preferences/pref__code_style.md",
+      "notes/03_preferences/pref__communication_style.md",
+      "notes/03_preferences/pref__learning_style.md",
+      "notes/03_preferences/pref__meeting_style.md",
+      "notes/04_goals/goal__learn_rust.md",
+      "notes/06_concepts/concept__spaced_repetition.md",
+      "notes/06_concepts/concept__zettelkasten.md"
+    ],
+    "statement": [
+      "notes/01_identity/id__core_values.md",
+      "notes/02_facts/fact__coffee_preference.md",
+      "notes/02_facts/fact__current_project.md",
+      "notes/02_facts/fact__diet.md",
+      "notes/02_facts/fact__editor.md",
+      "notes/02_facts/fact__employer.md",
+      "notes/02_facts/fact__fitness_routine.md",
+      "notes/02_facts/fact__home_city.md",
+      "notes/02_facts/fact__home_setup.md",
+      "notes/02_facts/fact__operating_system.md",
+      "notes/02_facts/fact__programming_language.md",
+      "notes/03_preferences/pref__code_style.md",
+      "notes/03_preferences/pref__communication_style.md",
+      "notes/03_preferences/pref__learning_style.md",
+      "notes/03_preferences/pref__meeting_style.md",
+      "notes/03_preferences/pref__note_taking_tool.md",
+      "notes/04_goals/goal__learn_rust.md",
+      "notes/04_goals/goal__run_marathon.md",
+      "notes/04_goals/goal__ship_ledger_v1.md",
+      "notes/06_concepts/concept__cognitive_ledger.md",
+      "notes/06_concepts/concept__spaced_repetition.md",
+      "notes/06_concepts/concept__zettelkasten.md"
+    ],
+    "principles": [
+      "notes/01_identity/id__core_values.md"
+    ],
+    "links": [
+      "notes/01_identity/id__core_values.md",
+      "notes/02_facts/fact__coffee_preference.md",
+      "notes/02_facts/fact__current_project.md",
+      "notes/02_facts/fact__diet.md",
+      "notes/02_facts/fact__editor.md",
+      "notes/02_facts/fact__employer.md",
+      "notes/02_facts/fact__fitness_routine.md",
+      "notes/02_facts/fact__home_city.md",
+      "notes/02_facts/fact__home_setup.md",
+      "notes/02_facts/fact__operating_system.md",
+      "notes/02_facts/fact__programming_language.md",
+      "notes/03_preferences/pref__code_style.md",
+      "notes/03_preferences/pref__communication_style.md",
+      "notes/03_preferences/pref__learning_style.md",
+      "notes/03_preferences/pref__meeting_style.md",
+      "notes/03_preferences/pref__note_taking_tool.md",
+      "notes/04_goals/goal__learn_rust.md",
+      "notes/04_goals/goal__run_marathon.md",
+      "notes/04_goals/goal__ship_ledger_v1.md",
+      "notes/05_open_loops/loop__ci_cd_pipeline.md",
+      "notes/05_open_loops/loop__dependency_audit.md",
+      "notes/06_concepts/concept__cognitive_ledger.md",
+      "notes/06_concepts/concept__spaced_repetition.md",
+      "notes/06_concepts/concept__zettelkasten.md"
+    ],
+    "new": [
+      "notes/01_identity/id__core_values.md",
+      "notes/03_preferences/pref__learning_style.md"
+    ],
+    "week": [
+      "notes/01_identity/id__core_values.md",
+      "notes/02_facts/fact__fitness_routine.md",
+      "notes/04_goals/goal__run_marathon.md"
+    ],
+    "identity": [
+      "notes/01_identity/id__core_values.md"
+    ],
+    "alex": [
+      "notes/01_identity/id__core_values.md",
+      "notes/02_facts/fact__coffee_preference.md",
+      "notes/02_facts/fact__current_project.md",
+      "notes/02_facts/fact__diet.md",
+      "notes/02_facts/fact__editor.md",
+      "notes/02_facts/fact__employer.md",
+      "notes/02_facts/fact__fitness_routine.md",
+      "notes/02_facts/fact__home_city.md",
+      "notes/02_facts/fact__home_setup.md",
+      "notes/02_facts/fact__operating_system.md",
+      "notes/02_facts/fact__programming_language.md",
+      "notes/03_preferences/pref__code_style.md",
+      "notes/03_preferences/pref__communication_style.md",
+      "notes/03_preferences/pref__learning_style.md",
+      "notes/03_preferences/pref__meeting_style.md",
+      "notes/03_preferences/pref__note_taking_tool.md",
+      "notes/04_goals/goal__learn_rust.md",
+      "notes/04_goals/goal__run_marathon.md",
+      "notes/04_goals/goal__ship_ledger_v1.md",
+      "notes/06_concepts/concept__cognitive_ledger.md",
+      "notes/06_concepts/concept__spaced_repetition.md"
+    ],
+    "acquiring": [
+      "notes/01_identity/id__core_values.md"
+    ],
+    "communication": [
+      "notes/01_identity/id__core_values.md",
+      "notes/03_preferences/pref__communication_style.md",
+      "notes/03_preferences/pref__meeting_style.md"
+    ],
+    "efficiency": [
+      "notes/01_identity/id__core_values.md"
+    ],
+    "transparent": [
+      "notes/01_identity/id__core_values.md"
+    ],
+    "means": [
+      "notes/01_identity/id__core_values.md",
+      "notes/02_facts/fact__diet.md",
+      "notes/03_preferences/pref__communication_style.md",
+      "notes/04_goals/goal__ship_ledger_v1.md"
+    ],
+    "less": [
+      "notes/01_identity/id__core_values.md"
+    ],
+    "choosing": [
+      "notes/01_identity/id__core_values.md"
+    ],
+    "more": [
+      "notes/01_identity/id__core_values.md"
+    ],
+    "skills": [
+      "notes/01_identity/id__core_values.md",
+      "notes/03_preferences/pref__learning_style.md"
+    ],
+    "id": [
+      "notes/01_identity/id__core_values.md",
+      "notes/03_preferences/pref__code_style.md",
+      "notes/03_preferences/pref__communication_style.md",
+      "notes/03_preferences/pref__learning_style.md",
+      "notes/03_preferences/pref__meeting_style.md"
+    ],
+    "friends": [
+      "notes/01_identity/id__core_values.md"
+    ],
+    "solution": [
+      "notes/01_identity/id__core_values.md"
+    ],
+    "decision": [
+      "notes/01_identity/id__core_values.md"
+    ],
+    "direct": [
+      "notes/01_identity/id__core_values.md",
+      "notes/03_preferences/pref__communication_style.md"
+    ],
+    "dedicating": [
+      "notes/01_identity/id__core_values.md"
+    ],
+    "s": [
+      "notes/01_identity/id__core_values.md",
+      "notes/02_facts/fact__coffee_preference.md",
+      "notes/02_facts/fact__editor.md",
+      "notes/02_facts/fact__fitness_routine.md",
+      "notes/02_facts/fact__home_city.md",
+      "notes/02_facts/fact__programming_language.md",
+      "notes/04_goals/goal__run_marathon.md",
+      "notes/05_open_loops/loop__dependency_audit.md",
+      "notes/06_concepts/concept__cognitive_ledger.md"
+    ],
+    "continuous": [
+      "notes/01_identity/id__core_values.md"
+    ],
+    "these": [
+      "notes/01_identity/id__core_values.md"
+    ],
+    "pref": [
+      "notes/01_identity/id__core_values.md",
+      "notes/03_preferences/pref__code_style.md",
+      "notes/03_preferences/pref__communication_style.md",
+      "notes/03_preferences/pref__learning_style.md",
+      "notes/03_preferences/pref__meeting_style.md",
+      "notes/03_preferences/pref__note_taking_tool.md",
+      "notes/04_goals/goal__learn_rust.md",
+      "notes/06_concepts/concept__cognitive_ledger.md",
+      "notes/06_concepts/concept__spaced_repetition.md",
+      "notes/06_concepts/concept__zettelkasten.md"
+    ],
+    "guide": [
+      "notes/01_identity/id__core_values.md"
+    ],
+    "simplest": [
+      "notes/01_identity/id__core_values.md"
+    ],
+    "waste": [
+      "notes/01_identity/id__core_values.md"
+    ],
+    "learning": [
+      "notes/01_identity/id__core_values.md",
+      "notes/03_preferences/pref__learning_style.md",
+      "notes/04_goals/goal__learn_rust.md",
+      "notes/06_concepts/concept__spaced_repetition.md"
+    ],
+    "context": [
+      "notes/01_identity/id__core_values.md",
+      "notes/02_facts/fact__coffee_preference.md",
+      "notes/02_facts/fact__current_project.md",
+      "notes/02_facts/fact__diet.md",
+      "notes/02_facts/fact__editor.md",
+      "notes/02_facts/fact__employer.md",
+      "notes/02_facts/fact__fitness_routine.md",
+      "notes/02_facts/fact__home_city.md",
+      "notes/02_facts/fact__home_setup.md",
+      "notes/02_facts/fact__operating_system.md",
+      "notes/02_facts/fact__programming_language.md",
+      "notes/03_preferences/pref__code_style.md",
+      "notes/03_preferences/pref__communication_style.md",
+      "notes/03_preferences/pref__learning_style.md",
+      "notes/03_preferences/pref__meeting_style.md",
+      "notes/03_preferences/pref__note_taking_tool.md",
+      "notes/04_goals/goal__learn_rust.md",
+      "notes/04_goals/goal__run_marathon.md",
+      "notes/04_goals/goal__ship_ledger_v1.md",
+      "notes/05_open_loops/loop__ci_cd_pipeline.md",
+      "notes/05_open_loops/loop__dependency_audit.md",
+      "notes/06_concepts/concept__cognitive_ledger.md",
+      "notes/06_concepts/concept__spaced_repetition.md",
+      "notes/06_concepts/concept__zettelkasten.md"
+    ],
+    "time": [
+      "notes/01_identity/id__core_values.md",
+      "notes/03_preferences/pref__learning_style.md",
+      "notes/03_preferences/pref__meeting_style.md",
+      "notes/06_concepts/concept__spaced_repetition.md"
+    ],
+    "colleagues": [
+      "notes/01_identity/id__core_values.md"
+    ],
+    "knowledge": [
+      "notes/01_identity/id__core_values.md",
+      "notes/02_facts/fact__current_project.md",
+      "notes/03_preferences/pref__note_taking_tool.md",
+      "notes/06_concepts/concept__cognitive_ledger.md",
+      "notes/06_concepts/concept__zettelkasten.md"
+    ],
+    "core": [
+      "notes/01_identity/id__core_values.md",
+      "notes/03_preferences/pref__code_style.md",
+      "notes/03_preferences/pref__communication_style.md",
+      "notes/03_preferences/pref__learning_style.md",
+      "notes/03_preferences/pref__meeting_style.md",
+      "notes/04_goals/goal__ship_ledger_v1.md",
+      "notes/06_concepts/concept__cognitive_ledger.md",
+      "notes/06_concepts/concept__spaced_repetition.md"
+    ],
+    "cup": [
+      "notes/02_facts/fact__coffee_preference.md"
+    ],
+    "cream": [
+      "notes/02_facts/fact__coffee_preference.md"
+    ],
+    "per": [
+      "notes/02_facts/fact__coffee_preference.md",
+      "notes/02_facts/fact__fitness_routine.md"
+    ],
+    "filter": [
+      "notes/02_facts/fact__coffee_preference.md"
+    ],
+    "diet": [
+      "notes/02_facts/fact__coffee_preference.md",
+      "notes/02_facts/fact__diet.md",
+      "notes/02_facts/fact__fitness_routine.md",
+      "notes/04_goals/goal__run_marathon.md"
+    ],
+    "sugar": [
+      "notes/02_facts/fact__coffee_preference.md",
+      "notes/02_facts/fact__diet.md"
+    ],
+    "cups": [
+      "notes/02_facts/fact__coffee_preference.md"
+    ],
+    "average": [
+      "notes/02_facts/fact__coffee_preference.md"
+    ],
+    "milk": [
+      "notes/02_facts/fact__coffee_preference.md"
+    ],
+    "day": [
+      "notes/02_facts/fact__coffee_preference.md",
+      "notes/02_facts/fact__diet.md"
+    ],
+    "preference": [
+      "notes/02_facts/fact__coffee_preference.md",
+      "notes/02_facts/fact__diet.md",
+      "notes/03_preferences/pref__code_style.md",
+      "notes/03_preferences/pref__communication_style.md",
+      "notes/03_preferences/pref__learning_style.md",
+      "notes/03_preferences/pref__meeting_style.md",
+      "notes/03_preferences/pref__note_taking_tool.md"
+    ],
+    "fact": [
+      "notes/02_facts/fact__coffee_preference.md",
+      "notes/02_facts/fact__current_project.md",
+      "notes/02_facts/fact__diet.md",
+      "notes/02_facts/fact__editor.md",
+      "notes/02_facts/fact__employer.md",
+      "notes/02_facts/fact__fitness_routine.md",
+      "notes/02_facts/fact__home_city.md",
+      "notes/02_facts/fact__home_setup.md",
+      "notes/02_facts/fact__operating_system.md",
+      "notes/02_facts/fact__programming_language.md",
+      "notes/03_preferences/pref__code_style.md",
+      "notes/03_preferences/pref__note_taking_tool.md",
+      "notes/04_goals/goal__learn_rust.md",
+      "notes/04_goals/goal__run_marathon.md",
+      "notes/04_goals/goal__ship_ledger_v1.md",
+      "notes/05_open_loops/loop__ci_cd_pipeline.md",
+      "notes/05_open_loops/loop__dependency_audit.md",
+      "notes/06_concepts/concept__cognitive_ledger.md"
+    ],
+    "brewed": [
+      "notes/02_facts/fact__coffee_preference.md"
+    ],
+    "routine": [
+      "notes/02_facts/fact__coffee_preference.md",
+      "notes/02_facts/fact__diet.md",
+      "notes/02_facts/fact__fitness_routine.md",
+      "notes/04_goals/goal__run_marathon.md"
+    ],
+    "morning": [
+      "notes/02_facts/fact__coffee_preference.md",
+      "notes/02_facts/fact__fitness_routine.md"
+    ],
+    "avoids": [
+      "notes/02_facts/fact__coffee_preference.md",
+      "notes/02_facts/fact__diet.md",
+      "notes/03_preferences/pref__communication_style.md"
+    ],
+    "home": [
+      "notes/02_facts/fact__coffee_preference.md",
+      "notes/02_facts/fact__home_city.md",
+      "notes/02_facts/fact__home_setup.md",
+      "notes/02_facts/fact__operating_system.md"
+    ],
+    "starts": [
+      "notes/02_facts/fact__coffee_preference.md"
+    ],
+    "drink": [
+      "notes/02_facts/fact__coffee_preference.md"
+    ],
+    "no": [
+      "notes/02_facts/fact__coffee_preference.md"
+    ],
+    "two": [
+      "notes/02_facts/fact__coffee_preference.md"
+    ],
+    "coffee": [
+      "notes/02_facts/fact__coffee_preference.md",
+      "notes/02_facts/fact__diet.md"
+    ],
+    "aeropress": [
+      "notes/02_facts/fact__coffee_preference.md"
+    ],
+    "drinks": [
+      "notes/02_facts/fact__coffee_preference.md",
+      "notes/02_facts/fact__diet.md"
+    ],
+    "black": [
+      "notes/02_facts/fact__coffee_preference.md"
+    ],
+    "open": [
+      "notes/02_facts/fact__current_project.md",
+      "notes/05_open_loops/loop__ci_cd_pipeline.md",
+      "notes/05_open_loops/loop__dependency_audit.md",
+      "notes/06_concepts/concept__cognitive_ledger.md"
+    ],
+    "personal": [
+      "notes/02_facts/fact__current_project.md",
+      "notes/03_preferences/pref__communication_style.md",
+      "notes/03_preferences/pref__note_taking_tool.md",
+      "notes/04_goals/goal__ship_ledger_v1.md",
+      "notes/06_concepts/concept__cognitive_ledger.md"
+    ],
+    "retrieving": [
+      "notes/02_facts/fact__current_project.md"
+    ],
+    "v1": [
+      "notes/02_facts/fact__current_project.md",
+      "notes/04_goals/goal__ship_ledger_v1.md",
+      "notes/05_open_loops/loop__ci_cd_pipeline.md",
+      "notes/06_concepts/concept__cognitive_ledger.md"
+    ],
+    "storing": [
+      "notes/02_facts/fact__current_project.md"
+    ],
+    "python": [
+      "notes/02_facts/fact__current_project.md",
+      "notes/02_facts/fact__editor.md",
+      "notes/02_facts/fact__programming_language.md",
+      "notes/04_goals/goal__learn_rust.md",
+      "notes/05_open_loops/loop__dependency_audit.md",
+      "notes/06_concepts/concept__cognitive_ledger.md"
+    ],
+    "locally": [
+      "notes/02_facts/fact__current_project.md"
+    ],
+    "developer": [
+      "notes/02_facts/fact__current_project.md",
+      "notes/02_facts/fact__employer.md"
+    ],
+    "cognitive": [
+      "notes/02_facts/fact__current_project.md",
+      "notes/03_preferences/pref__note_taking_tool.md",
+      "notes/04_goals/goal__ship_ledger_v1.md",
+      "notes/05_open_loops/loop__ci_cd_pipeline.md",
+      "notes/05_open_loops/loop__dependency_audit.md",
+      "notes/06_concepts/concept__cognitive_ledger.md"
+    ],
+    "primary": [
+      "notes/02_facts/fact__current_project.md",
+      "notes/02_facts/fact__editor.md",
+      "notes/02_facts/fact__home_setup.md",
+      "notes/02_facts/fact__operating_system.md",
+      "notes/02_facts/fact__programming_language.md",
+      "notes/03_preferences/pref__note_taking_tool.md"
+    ],
+    "currently": [
+      "notes/02_facts/fact__current_project.md",
+      "notes/02_facts/fact__home_city.md",
+      "notes/05_open_loops/loop__ci_cd_pipeline.md"
+    ],
+    "facts": [
+      "notes/02_facts/fact__current_project.md",
+      "notes/03_preferences/pref__learning_style.md",
+      "notes/06_concepts/concept__cognitive_ledger.md"
+    ],
+    "working": [
+      "notes/02_facts/fact__current_project.md"
+    ],
+    "management": [
+      "notes/02_facts/fact__current_project.md",
+      "notes/02_facts/fact__employer.md",
+      "notes/02_facts/fact__operating_system.md",
+      "notes/03_preferences/pref__note_taking_tool.md",
+      "notes/06_concepts/concept__cognitive_ledger.md",
+      "notes/06_concepts/concept__zettelkasten.md"
+    ],
+    "stored": [
+      "notes/02_facts/fact__current_project.md"
+    ],
+    "connecting": [
+      "notes/02_facts/fact__current_project.md"
+    ],
+    "ledger": [
+      "notes/02_facts/fact__current_project.md",
+      "notes/03_preferences/pref__note_taking_tool.md",
+      "notes/04_goals/goal__ship_ledger_v1.md",
+      "notes/05_open_loops/loop__ci_cd_pipeline.md",
+      "notes/05_open_loops/loop__dependency_audit.md",
+      "notes/06_concepts/concept__cognitive_ledger.md"
+    ],
+    "github": [
+      "notes/02_facts/fact__current_project.md",
+      "notes/05_open_loops/loop__ci_cd_pipeline.md"
+    ],
+    "current": [
+      "notes/02_facts/fact__current_project.md",
+      "notes/02_facts/fact__employer.md",
+      "notes/02_facts/fact__programming_language.md",
+      "notes/03_preferences/pref__note_taking_tool.md",
+      "notes/04_goals/goal__ship_ledger_v1.md",
+      "notes/05_open_loops/loop__ci_cd_pipeline.md",
+      "notes/05_open_loops/loop__dependency_audit.md",
+      "notes/06_concepts/concept__cognitive_ledger.md"
+    ],
+    "runs": [
+      "notes/02_facts/fact__current_project.md",
+      "notes/02_facts/fact__fitness_routine.md",
+      "notes/02_facts/fact__operating_system.md",
+      "notes/04_goals/goal__run_marathon.md",
+      "notes/05_open_loops/loop__ci_cd_pipeline.md"
+    ],
+    "language": [
+      "notes/02_facts/fact__current_project.md",
+      "notes/02_facts/fact__editor.md",
+      "notes/02_facts/fact__programming_language.md",
+      "notes/03_preferences/pref__code_style.md",
+      "notes/04_goals/goal__learn_rust.md",
+      "notes/04_goals/goal__ship_ledger_v1.md",
+      "notes/06_concepts/concept__spaced_repetition.md"
+    ],
+    "project": [
+      "notes/02_facts/fact__current_project.md",
+      "notes/02_facts/fact__employer.md",
+      "notes/02_facts/fact__programming_language.md",
+      "notes/03_preferences/pref__note_taking_tool.md",
+      "notes/04_goals/goal__ship_ledger_v1.md",
+      "notes/05_open_loops/loop__ci_cd_pipeline.md",
+      "notes/05_open_loops/loop__dependency_audit.md",
+      "notes/06_concepts/concept__cognitive_ledger.md"
+    ],
+    "daily": [
+      "notes/02_facts/fact__current_project.md",
+      "notes/02_facts/fact__operating_system.md",
+      "notes/03_preferences/pref__note_taking_tool.md"
+    ],
+    "source": [
+      "notes/02_facts/fact__current_project.md"
+    ],
+    "concept": [
+      "notes/02_facts/fact__current_project.md",
+      "notes/03_preferences/pref__learning_style.md",
+      "notes/03_preferences/pref__note_taking_tool.md",
+      "notes/06_concepts/concept__cognitive_ledger.md",
+      "notes/06_concepts/concept__spaced_repetition.md",
+      "notes/06_concepts/concept__zettelkasten.md"
+    ],
+    "development": [
+      "notes/02_facts/fact__current_project.md",
+      "notes/02_facts/fact__editor.md",
+      "notes/02_facts/fact__operating_system.md",
+      "notes/02_facts/fact__programming_language.md",
+      "notes/03_preferences/pref__code_style.md"
+    ],
+    "ship": [
+      "notes/02_facts/fact__current_project.md",
+      "notes/04_goals/goal__ship_ledger_v1.md",
+      "notes/05_open_loops/loop__ci_cd_pipeline.md",
+      "notes/06_concepts/concept__cognitive_ledger.md"
+    ],
+    "tool": [
+      "notes/02_facts/fact__current_project.md",
+      "notes/03_preferences/pref__learning_style.md",
+      "notes/03_preferences/pref__note_taking_tool.md",
+      "notes/04_goals/goal__learn_rust.md",
+      "notes/06_concepts/concept__cognitive_ledger.md",
+      "notes/06_concepts/concept__zettelkasten.md"
+    ],
+    "programming": [
+      "notes/02_facts/fact__current_project.md",
+      "notes/02_facts/fact__editor.md",
+      "notes/02_facts/fact__programming_language.md",
+      "notes/03_preferences/pref__code_style.md",
+      "notes/04_goals/goal__learn_rust.md",
+      "notes/04_goals/goal__ship_ledger_v1.md"
+    ],
+    "notes": [
+      "notes/02_facts/fact__current_project.md",
+      "notes/03_preferences/pref__note_taking_tool.md",
+      "notes/06_concepts/concept__cognitive_ledger.md",
+      "notes/06_concepts/concept__zettelkasten.md"
+    ],
+    "uses": [
+      "notes/02_facts/fact__current_project.md",
+      "notes/02_facts/fact__editor.md",
+      "notes/02_facts/fact__operating_system.md",
+      "notes/02_facts/fact__programming_language.md",
+      "notes/03_preferences/pref__meeting_style.md",
+      "notes/03_preferences/pref__note_taking_tool.md",
+      "notes/06_concepts/concept__spaced_repetition.md"
+    ],
+    "system": [
+      "notes/02_facts/fact__current_project.md",
+      "notes/02_facts/fact__editor.md",
+      "notes/02_facts/fact__home_setup.md",
+      "notes/02_facts/fact__operating_system.md",
+      "notes/06_concepts/concept__cognitive_ledger.md",
+      "notes/06_concepts/concept__zettelkasten.md"
+    ],
+    "goal": [
+      "notes/02_facts/fact__current_project.md",
+      "notes/02_facts/fact__fitness_routine.md",
+      "notes/03_preferences/pref__learning_style.md",
+      "notes/04_goals/goal__learn_rust.md",
+      "notes/04_goals/goal__run_marathon.md",
+      "notes/04_goals/goal__ship_ledger_v1.md",
+      "notes/05_open_loops/loop__ci_cd_pipeline.md",
+      "notes/06_concepts/concept__cognitive_ledger.md"
+    ],
+    "side": [
+      "notes/02_facts/fact__current_project.md",
+      "notes/02_facts/fact__operating_system.md",
+      "notes/03_preferences/pref__learning_style.md"
+    ],
+    "food": [
+      "notes/02_facts/fact__diet.md"
+    ],
+    "this": [
+      "notes/02_facts/fact__diet.md",
+      "notes/03_preferences/pref__communication_style.md",
+      "notes/04_goals/goal__learn_rust.md",
+      "notes/04_goals/goal__ship_ledger_v1.md",
+      "notes/05_open_loops/loop__ci_cd_pipeline.md",
+      "notes/05_open_loops/loop__dependency_audit.md",
+      "notes/06_concepts/concept__cognitive_ledger.md"
+    ],
+    "processed": [
+      "notes/02_facts/fact__diet.md"
+    ],
+    "mostly": [
+      "notes/02_facts/fact__diet.md"
+    ],
+    "eating": [
+      "notes/02_facts/fact__diet.md"
+    ],
+    "vegetables": [
+      "notes/02_facts/fact__diet.md"
+    ],
+    "follows": [
+      "notes/02_facts/fact__diet.md",
+      "notes/03_preferences/pref__code_style.md"
+    ],
+    "meals": [
+      "notes/02_facts/fact__diet.md"
+    ],
+    "approach": [
+      "notes/02_facts/fact__diet.md",
+      "notes/03_preferences/pref__learning_style.md"
+    ],
+    "exceptions": [
+      "notes/02_facts/fact__diet.md"
+    ],
+    "bread": [
+      "notes/02_facts/fact__diet.md"
+    ],
+    "low": [
+      "notes/02_facts/fact__diet.md"
+    ],
+    "supports": [
+      "notes/02_facts/fact__diet.md",
+      "notes/02_facts/fact__fitness_routine.md",
+      "notes/04_goals/goal__learn_rust.md"
+    ],
+    "levels": [
+      "notes/02_facts/fact__diet.md"
+    ],
+    "throughout": [
+      "notes/02_facts/fact__diet.md",
+      "notes/02_facts/fact__home_setup.md"
+    ],
+    "fats": [
+      "notes/02_facts/fact__diet.md"
+    ],
+    "dietary": [
+      "notes/02_facts/fact__diet.md"
+    ],
+    "pasta": [
+      "notes/02_facts/fact__diet.md"
+    ],
+    "nutrition": [
+      "notes/02_facts/fact__diet.md"
+    ],
+    "carbohydrates": [
+      "notes/02_facts/fact__diet.md"
+    ],
+    "sugary": [
+      "notes/02_facts/fact__diet.md"
+    ],
+    "refined": [
+      "notes/02_facts/fact__diet.md"
+    ],
+    "energy": [
+      "notes/02_facts/fact__diet.md"
+    ],
+    "foods": [
+      "notes/02_facts/fact__diet.md"
+    ],
+    "carb": [
+      "notes/02_facts/fact__diet.md"
+    ],
+    "healthy": [
+      "notes/02_facts/fact__diet.md"
+    ],
+    "proteins": [
+      "notes/02_facts/fact__diet.md"
+    ],
+    "social": [
+      "notes/02_facts/fact__diet.md"
+    ],
+    "fitness": [
+      "notes/02_facts/fact__diet.md",
+      "notes/02_facts/fact__fitness_routine.md",
+      "notes/04_goals/goal__run_marathon.md"
+    ],
+    "health": [
+      "notes/02_facts/fact__diet.md",
+      "notes/02_facts/fact__fitness_routine.md"
+    ],
+    "limiting": [
+      "notes/02_facts/fact__diet.md"
+    ],
+    "made": [
+      "notes/02_facts/fact__diet.md"
+    ],
+    "occasionally": [
+      "notes/02_facts/fact__diet.md",
+      "notes/02_facts/fact__operating_system.md"
+    ],
+    "themes": [
+      "notes/02_facts/fact__editor.md"
+    ],
+    "vs": [
+      "notes/02_facts/fact__editor.md"
+    ],
+    "operating": [
+      "notes/02_facts/fact__editor.md",
+      "notes/02_facts/fact__home_setup.md",
+      "notes/02_facts/fact__operating_system.md"
+    ],
+    "used": [
+      "notes/02_facts/fact__editor.md",
+      "notes/02_facts/fact__home_setup.md",
+      "notes/02_facts/fact__operating_system.md",
+      "notes/03_preferences/pref__learning_style.md",
+      "notes/03_preferences/pref__note_taking_tool.md",
+      "notes/06_concepts/concept__spaced_repetition.md",
+      "notes/06_concepts/concept__zettelkasten.md"
+    ],
+    "code": [
+      "notes/02_facts/fact__editor.md",
+      "notes/03_preferences/pref__code_style.md",
+      "notes/03_preferences/pref__learning_style.md",
+      "notes/04_goals/goal__ship_ledger_v1.md"
+    ],
+    "integration": [
+      "notes/02_facts/fact__editor.md"
+    ],
+    "changes": [
+      "notes/02_facts/fact__editor.md",
+      "notes/04_goals/goal__ship_ledger_v1.md"
+    ],
+    "directly": [
+      "notes/02_facts/fact__editor.md"
+    ],
+    "edits": [
+      "notes/02_facts/fact__editor.md"
+    ],
+    "configured": [
+      "notes/02_facts/fact__editor.md",
+      "notes/02_facts/fact__operating_system.md"
+    ],
+    "git": [
+      "notes/02_facts/fact__editor.md"
+    ],
+    "file": [
+      "notes/02_facts/fact__editor.md"
+    ],
+    "quick": [
+      "notes/02_facts/fact__editor.md"
+    ],
+    "setup": [
+      "notes/02_facts/fact__editor.md",
+      "notes/02_facts/fact__home_city.md",
+      "notes/02_facts/fact__home_setup.md",
+      "notes/02_facts/fact__operating_system.md"
+    ],
+    "editing": [
+      "notes/02_facts/fact__editor.md"
+    ],
+    "extension": [
+      "notes/02_facts/fact__editor.md"
+    ],
+    "typescript": [
+      "notes/02_facts/fact__editor.md",
+      "notes/02_facts/fact__programming_language.md",
+      "notes/04_goals/goal__learn_rust.md"
+    ],
+    "custom": [
+      "notes/02_facts/fact__editor.md"
+    ],
+    "editor": [
+      "notes/02_facts/fact__editor.md",
+      "notes/02_facts/fact__home_setup.md",
+      "notes/02_facts/fact__operating_system.md",
+      "notes/02_facts/fact__programming_language.md"
+    ],
+    "extensions": [
+      "notes/02_facts/fact__editor.md"
+    ],
+    "vscode": [
+      "notes/02_facts/fact__editor.md"
+    ],
+    "includes": [
+      "notes/02_facts/fact__editor.md"
+    ],
+    "environment": [
+      "notes/02_facts/fact__editor.md"
+    ],
+    "main": [
+      "notes/02_facts/fact__editor.md",
+      "notes/02_facts/fact__fitness_routine.md",
+      "notes/02_facts/fact__programming_language.md",
+      "notes/04_goals/goal__ship_ledger_v1.md"
+    ],
+    "tools": [
+      "notes/02_facts/fact__editor.md",
+      "notes/03_preferences/pref__learning_style.md",
+      "notes/03_preferences/pref__meeting_style.md",
+      "notes/03_preferences/pref__note_taking_tool.md",
+      "notes/04_goals/goal__learn_rust.md"
+    ],
+    "editors": [
+      "notes/02_facts/fact__editor.md"
+    ],
+    "neovim": [
+      "notes/02_facts/fact__editor.md"
+    ],
+    "both": [
+      "notes/02_facts/fact__editor.md",
+      "notes/03_preferences/pref__communication_style.md"
+    ],
+    "vim": [
+      "notes/02_facts/fact__editor.md"
+    ],
+    "configuration": [
+      "notes/02_facts/fact__editor.md"
+    ],
+    "terminal": [
+      "notes/02_facts/fact__editor.md"
+    ],
+    "keybindings": [
+      "notes/02_facts/fact__editor.md"
+    ],
+    "modal": [
+      "notes/02_facts/fact__editor.md"
+    ],
+    "work": [
+      "notes/02_facts/fact__employer.md",
+      "notes/02_facts/fact__operating_system.md",
+      "notes/02_facts/fact__programming_language.md",
+      "notes/03_preferences/pref__code_style.md",
+      "notes/03_preferences/pref__meeting_style.md",
+      "notes/05_open_loops/loop__ci_cd_pipeline.md",
+      "notes/05_open_loops/loop__dependency_audit.md"
+    ],
+    "infrastructure": [
+      "notes/02_facts/fact__employer.md"
+    ],
+    "tooling": [
+      "notes/02_facts/fact__employer.md",
+      "notes/02_facts/fact__programming_language.md"
+    ],
+    "automation": [
+      "notes/02_facts/fact__employer.md",
+      "notes/02_facts/fact__programming_language.md",
+      "notes/05_open_loops/loop__ci_cd_pipeline.md"
+    ],
+    "company": [
+      "notes/02_facts/fact__employer.md"
+    ],
+    "internal": [
+      "notes/02_facts/fact__employer.md"
+    ],
+    "joined": [
+      "notes/02_facts/fact__employer.md"
+    ],
+    "specialises": [
+      "notes/02_facts/fact__employer.md"
+    ],
+    "services": [
+      "notes/02_facts/fact__employer.md"
+    ],
+    "transformation": [
+      "notes/02_facts/fact__employer.md"
+    ],
+    "software": [
+      "notes/02_facts/fact__employer.md",
+      "notes/02_facts/fact__programming_language.md",
+      "notes/04_goals/goal__ship_ledger_v1.md",
+      "notes/06_concepts/concept__spaced_repetition.md"
+    ],
+    "august": [
+      "notes/02_facts/fact__employer.md"
+    ],
+    "crayon": [
+      "notes/02_facts/fact__employer.md"
+    ],
+    "primarily": [
+      "notes/02_facts/fact__employer.md"
+    ],
+    "digital": [
+      "notes/02_facts/fact__employer.md",
+      "notes/06_concepts/concept__zettelkasten.md"
+    ],
+    "projects": [
+      "notes/02_facts/fact__employer.md",
+      "notes/02_facts/fact__programming_language.md",
+      "notes/03_preferences/pref__learning_style.md"
+    ],
+    "employer": [
+      "notes/02_facts/fact__employer.md"
+    ],
+    "asset": [
+      "notes/02_facts/fact__employer.md"
+    ],
+    "2022": [
+      "notes/02_facts/fact__employer.md"
+    ],
+    "cloud": [
+      "notes/02_facts/fact__employer.md",
+      "notes/03_preferences/pref__note_taking_tool.md"
+    ],
+    "job": [
+      "notes/02_facts/fact__employer.md"
+    ],
+    "running": [
+      "notes/02_facts/fact__fitness_routine.md",
+      "notes/04_goals/goal__run_marathon.md",
+      "notes/05_open_loops/loop__ci_cd_pipeline.md"
+    ],
+    "occasional": [
+      "notes/02_facts/fact__fitness_routine.md"
+    ],
+    "long": [
+      "notes/02_facts/fact__fitness_routine.md",
+      "notes/03_preferences/pref__communication_style.md",
+      "notes/04_goals/goal__learn_rust.md",
+      "notes/06_concepts/concept__spaced_repetition.md"
+    ],
+    "monday": [
+      "notes/02_facts/fact__fitness_routine.md"
+    ],
+    "5": [
+      "notes/02_facts/fact__fitness_routine.md"
+    ],
+    "10": [
+      "notes/02_facts/fact__fitness_routine.md"
+    ],
+    "schedule": [
+      "notes/02_facts/fact__fitness_routine.md"
+    ],
+    "between": [
+      "notes/02_facts/fact__fitness_routine.md",
+      "notes/02_facts/fact__home_setup.md",
+      "notes/06_concepts/concept__zettelkasten.md"
+    ],
+    "strength": [
+      "notes/02_facts/fact__fitness_routine.md"
+    ],
+    "typically": [
+      "notes/02_facts/fact__fitness_routine.md"
+    ],
+    "length": [
+      "notes/02_facts/fact__fitness_routine.md"
+    ],
+    "friday": [
+      "notes/02_facts/fact__fitness_routine.md"
+    ],
+    "marathon": [
+      "notes/02_facts/fact__fitness_routine.md",
+      "notes/04_goals/goal__run_marathon.md"
+    ],
+    "times": [
+      "notes/02_facts/fact__fitness_routine.md"
+    ],
+    "supplemented": [
+      "notes/02_facts/fact__fitness_routine.md"
+    ],
+    "exercise": [
+      "notes/02_facts/fact__fitness_routine.md"
+    ],
+    "run": [
+      "notes/02_facts/fact__fitness_routine.md",
+      "notes/04_goals/goal__run_marathon.md",
+      "notes/05_open_loops/loop__ci_cd_pipeline.md",
+      "notes/05_open_loops/loop__dependency_audit.md"
+    ],
+    "kilometres": [
+      "notes/02_facts/fact__fitness_routine.md"
+    ],
+    "training": [
+      "notes/02_facts/fact__fitness_routine.md",
+      "notes/04_goals/goal__run_marathon.md"
+    ],
+    "wednesday": [
+      "notes/02_facts/fact__fitness_routine.md"
+    ],
+    "form": [
+      "notes/02_facts/fact__fitness_routine.md"
+    ],
+    "term": [
+      "notes/02_facts/fact__fitness_routine.md",
+      "notes/04_goals/goal__learn_rust.md",
+      "notes/06_concepts/concept__spaced_repetition.md"
+    ],
+    "completing": [
+      "notes/02_facts/fact__fitness_routine.md",
+      "notes/04_goals/goal__ship_ledger_v1.md"
+    ],
+    "three": [
+      "notes/02_facts/fact__fitness_routine.md"
+    ],
+    "weekends": [
+      "notes/02_facts/fact__fitness_routine.md"
+    ],
+    "transport": [
+      "notes/02_facts/fact__home_city.md"
+    ],
+    "oslo": [
+      "notes/02_facts/fact__home_city.md"
+    ],
+    "capital": [
+      "notes/02_facts/fact__home_city.md"
+    ],
+    "kka": [
+      "notes/02_facts/fact__home_city.md"
+    ],
+    "excellent": [
+      "notes/02_facts/fact__home_city.md"
+    ],
+    "gr": [
+      "notes/02_facts/fact__home_city.md"
+    ],
+    "location": [
+      "notes/02_facts/fact__home_city.md"
+    ],
+    "public": [
+      "notes/02_facts/fact__home_city.md"
+    ],
+    "2024": [
+      "notes/02_facts/fact__home_city.md"
+    ],
+    "norway": [
+      "notes/02_facts/fact__home_city.md"
+    ],
+    "city": [
+      "notes/02_facts/fact__home_city.md"
+    ],
+    "offers": [
+      "notes/02_facts/fact__home_city.md"
+    ],
+    "walkable": [
+      "notes/02_facts/fact__home_city.md"
+    ],
+    "lives": [
+      "notes/02_facts/fact__home_city.md"
+    ],
+    "centre": [
+      "notes/02_facts/fact__home_city.md"
+    ],
+    "nerl": [
+      "notes/02_facts/fact__home_city.md"
+    ],
+    "since": [
+      "notes/02_facts/fact__home_city.md"
+    ],
+    "neighbourhood": [
+      "notes/02_facts/fact__home_city.md"
+    ],
+    "february": [
+      "notes/02_facts/fact__home_city.md"
+    ],
+    "facing": [
+      "notes/02_facts/fact__home_setup.md",
+      "notes/04_goals/goal__ship_ledger_v1.md"
+    ],
+    "dual": [
+      "notes/02_facts/fact__home_setup.md"
+    ],
+    "ergonomic": [
+      "notes/02_facts/fact__home_setup.md"
+    ],
+    "27": [
+      "notes/02_facts/fact__home_setup.md"
+    ],
+    "monitors": [
+      "notes/02_facts/fact__home_setup.md"
+    ],
+    "24": [
+      "notes/02_facts/fact__home_setup.md"
+    ],
+    "inch": [
+      "notes/02_facts/fact__home_setup.md"
+    ],
+    "has": [
+      "notes/02_facts/fact__home_setup.md",
+      "notes/02_facts/fact__programming_language.md",
+      "notes/04_goals/goal__run_marathon.md"
+    ],
+    "consists": [
+      "notes/02_facts/fact__home_setup.md"
+    ],
+    "alternating": [
+      "notes/02_facts/fact__home_setup.md"
+    ],
+    "desk": [
+      "notes/02_facts/fact__home_setup.md"
+    ],
+    "standing": [
+      "notes/02_facts/fact__home_setup.md"
+    ],
+    "monitor": [
+      "notes/02_facts/fact__home_setup.md"
+    ],
+    "good": [
+      "notes/02_facts/fact__home_setup.md",
+      "notes/03_preferences/pref__code_style.md"
+    ],
+    "natural": [
+      "notes/02_facts/fact__home_setup.md",
+      "notes/06_concepts/concept__cognitive_ledger.md"
+    ],
+    "north": [
+      "notes/02_facts/fact__home_setup.md"
+    ],
+    "secondary": [
+      "notes/02_facts/fact__home_setup.md",
+      "notes/02_facts/fact__programming_language.md"
+    ],
+    "display": [
+      "notes/02_facts/fact__home_setup.md"
+    ],
+    "light": [
+      "notes/02_facts/fact__home_setup.md"
+    ],
+    "window": [
+      "notes/02_facts/fact__home_setup.md"
+    ],
+    "office": [
+      "notes/02_facts/fact__home_setup.md"
+    ],
+    "workday": [
+      "notes/02_facts/fact__home_setup.md"
+    ],
+    "chair": [
+      "notes/02_facts/fact__home_setup.md"
+    ],
+    "hardware": [
+      "notes/02_facts/fact__home_setup.md"
+    ],
+    "allows": [
+      "notes/02_facts/fact__home_setup.md"
+    ],
+    "dedicated": [
+      "notes/02_facts/fact__home_setup.md"
+    ],
+    "space": [
+      "notes/02_facts/fact__home_setup.md"
+    ],
+    "also": [
+      "notes/02_facts/fact__home_setup.md"
+    ],
+    "sitting": [
+      "notes/02_facts/fact__home_setup.md"
+    ],
+    "testing": [
+      "notes/02_facts/fact__operating_system.md"
+    ],
+    "vm": [
+      "notes/02_facts/fact__operating_system.md"
+    ],
+    "zsh": [
+      "notes/02_facts/fact__operating_system.md"
+    ],
+    "apple": [
+      "notes/02_facts/fact__operating_system.md"
+    ],
+    "default": [
+      "notes/02_facts/fact__operating_system.md"
+    ],
+    "server": [
+      "notes/02_facts/fact__operating_system.md"
+    ],
+    "linux": [
+      "notes/02_facts/fact__operating_system.md"
+    ],
+    "package": [
+      "notes/02_facts/fact__operating_system.md"
+    ],
+    "macbook": [
+      "notes/02_facts/fact__operating_system.md"
+    ],
+    "pro": [
+      "notes/02_facts/fact__operating_system.md"
+    ],
+    "homebrew": [
+      "notes/02_facts/fact__operating_system.md"
+    ],
+    "shell": [
+      "notes/02_facts/fact__operating_system.md",
+      "notes/02_facts/fact__programming_language.md"
+    ],
+    "computer": [
+      "notes/02_facts/fact__operating_system.md"
+    ],
+    "macos": [
+      "notes/02_facts/fact__operating_system.md"
+    ],
+    "mac": [
+      "notes/02_facts/fact__operating_system.md"
+    ],
+    "scripting": [
+      "notes/02_facts/fact__programming_language.md"
+    ],
+    "years": [
+      "notes/02_facts/fact__programming_language.md"
+    ],
+    "backend": [
+      "notes/02_facts/fact__programming_language.md"
+    ],
+    "several": [
+      "notes/02_facts/fact__programming_language.md",
+      "notes/05_open_loops/loop__dependency_audit.md"
+    ],
+    "include": [
+      "notes/02_facts/fact__programming_language.md",
+      "notes/03_preferences/pref__note_taking_tool.md"
+    ],
+    "ecosystem": [
+      "notes/02_facts/fact__programming_language.md"
+    ],
+    "its": [
+      "notes/02_facts/fact__programming_language.md",
+      "notes/04_goals/goal__learn_rust.md"
+    ],
+    "data": [
+      "notes/02_facts/fact__programming_language.md"
+    ],
+    "most": [
+      "notes/02_facts/fact__programming_language.md",
+      "notes/03_preferences/pref__meeting_style.md",
+      "notes/06_concepts/concept__spaced_repetition.md"
+    ],
+    "prefers": [
+      "notes/02_facts/fact__programming_language.md",
+      "notes/03_preferences/pref__code_style.md",
+      "notes/03_preferences/pref__communication_style.md",
+      "notes/03_preferences/pref__learning_style.md",
+      "notes/03_preferences/pref__meeting_style.md",
+      "notes/03_preferences/pref__note_taking_tool.md"
+    ],
+    "professionally": [
+      "notes/02_facts/fact__programming_language.md"
+    ],
+    "frontend": [
+      "notes/02_facts/fact__programming_language.md"
+    ],
+    "been": [
+      "notes/02_facts/fact__programming_language.md",
+      "notes/04_goals/goal__run_marathon.md",
+      "notes/05_open_loops/loop__dependency_audit.md"
+    ],
+    "languages": [
+      "notes/02_facts/fact__programming_language.md"
+    ],
+    "readability": [
+      "notes/02_facts/fact__programming_language.md"
+    ],
+    "writing": [
+      "notes/02_facts/fact__programming_language.md",
+      "notes/03_preferences/pref__learning_style.md",
+      "notes/04_goals/goal__ship_ledger_v1.md"
+    ],
+    "processing": [
+      "notes/02_facts/fact__programming_language.md"
+    ],
+    "short": [
+      "notes/03_preferences/pref__code_style.md"
+    ],
+    "avoided": [
+      "notes/03_preferences/pref__code_style.md"
+    ],
+    "workaround": [
+      "notes/03_preferences/pref__code_style.md"
+    ],
+    "unnecessary": [
+      "notes/03_preferences/pref__code_style.md"
+    ],
+    "one": [
+      "notes/03_preferences/pref__code_style.md"
+    ],
+    "make": [
+      "notes/03_preferences/pref__code_style.md"
+    ],
+    "explanatory": [
+      "notes/03_preferences/pref__code_style.md"
+    ],
+    "do": [
+      "notes/03_preferences/pref__code_style.md"
+    ],
+    "self": [
+      "notes/03_preferences/pref__code_style.md"
+    ],
+    "obvious": [
+      "notes/03_preferences/pref__code_style.md"
+    ],
+    "comments": [
+      "notes/03_preferences/pref__code_style.md"
+    ],
+    "enough": [
+      "notes/03_preferences/pref__code_style.md"
+    ],
+    "unless": [
+      "notes/03_preferences/pref__code_style.md"
+    ],
+    "abbreviated": [
+      "notes/03_preferences/pref__code_style.md"
+    ],
+    "principle": [
+      "notes/03_preferences/pref__code_style.md"
+    ],
+    "rather": [
+      "notes/03_preferences/pref__code_style.md",
+      "notes/03_preferences/pref__communication_style.md",
+      "notes/03_preferences/pref__learning_style.md"
+    ],
+    "read": [
+      "notes/03_preferences/pref__code_style.md"
+    ],
+    "naming": [
+      "notes/03_preferences/pref__code_style.md"
+    ],
+    "well": [
+      "notes/03_preferences/pref__code_style.md",
+      "notes/03_preferences/pref__note_taking_tool.md"
+    ],
+    "logic": [
+      "notes/03_preferences/pref__code_style.md"
+    ],
+    "minimal": [
+      "notes/03_preferences/pref__code_style.md",
+      "notes/03_preferences/pref__meeting_style.md"
+    ],
+    "names": [
+      "notes/03_preferences/pref__code_style.md"
+    ],
+    "should": [
+      "notes/03_preferences/pref__code_style.md",
+      "notes/03_preferences/pref__communication_style.md",
+      "notes/03_preferences/pref__meeting_style.md",
+      "notes/05_open_loops/loop__ci_cd_pipeline.md",
+      "notes/05_open_loops/loop__dependency_audit.md"
+    ],
+    "named": [
+      "notes/03_preferences/pref__code_style.md"
+    ],
+    "documentation": [
+      "notes/03_preferences/pref__code_style.md",
+      "notes/03_preferences/pref__learning_style.md",
+      "notes/04_goals/goal__ship_ledger_v1.md"
+    ],
+    "coding": [
+      "notes/03_preferences/pref__code_style.md"
+    ],
+    "screen": [
+      "notes/03_preferences/pref__code_style.md"
+    ],
+    "than": [
+      "notes/03_preferences/pref__code_style.md",
+      "notes/03_preferences/pref__communication_style.md",
+      "notes/03_preferences/pref__learning_style.md"
+    ],
+    "explicit": [
+      "notes/03_preferences/pref__code_style.md"
+    ],
+    "there": [
+      "notes/03_preferences/pref__code_style.md"
+    ],
+    "non": [
+      "notes/03_preferences/pref__code_style.md"
+    ],
+    "descriptive": [
+      "notes/03_preferences/pref__code_style.md"
+    ],
+    "thing": [
+      "notes/03_preferences/pref__code_style.md"
+    ],
+    "functions": [
+      "notes/03_preferences/pref__code_style.md"
+    ],
+    "point": [
+      "notes/03_preferences/pref__communication_style.md"
+    ],
+    "feedback": [
+      "notes/03_preferences/pref__communication_style.md"
+    ],
+    "meeting": [
+      "notes/03_preferences/pref__communication_style.md",
+      "notes/03_preferences/pref__meeting_style.md"
+    ],
+    "written": [
+      "notes/03_preferences/pref__communication_style.md",
+      "notes/03_preferences/pref__meeting_style.md"
+    ],
+    "brevity": [
+      "notes/03_preferences/pref__communication_style.md"
+    ],
+    "preamble": [
+      "notes/03_preferences/pref__communication_style.md"
+    ],
+    "contexts": [
+      "notes/03_preferences/pref__communication_style.md"
+    ],
+    "preambles": [
+      "notes/03_preferences/pref__communication_style.md"
+    ],
+    "quickly": [
+      "notes/03_preferences/pref__communication_style.md"
+    ],
+    "said": [
+      "notes/03_preferences/pref__communication_style.md"
+    ],
+    "concise": [
+      "notes/03_preferences/pref__communication_style.md"
+    ],
+    "needs": [
+      "notes/03_preferences/pref__communication_style.md",
+      "notes/05_open_loops/loop__ci_cd_pipeline.md"
+    ],
+    "vague": [
+      "notes/03_preferences/pref__communication_style.md"
+    ],
+    "excessive": [
+      "notes/03_preferences/pref__communication_style.md"
+    ],
+    "getting": [
+      "notes/03_preferences/pref__communication_style.md"
+    ],
+    "saying": [
+      "notes/03_preferences/pref__communication_style.md"
+    ],
+    "hedging": [
+      "notes/03_preferences/pref__communication_style.md"
+    ],
+    "diplomatic": [
+      "notes/03_preferences/pref__communication_style.md"
+    ],
+    "professional": [
+      "notes/03_preferences/pref__communication_style.md"
+    ],
+    "specific": [
+      "notes/03_preferences/pref__communication_style.md"
+    ],
+    "actionable": [
+      "notes/03_preferences/pref__communication_style.md"
+    ],
+    "without": [
+      "notes/03_preferences/pref__communication_style.md",
+      "notes/04_goals/goal__ship_ledger_v1.md"
+    ],
+    "filler": [
+      "notes/03_preferences/pref__communication_style.md"
+    ],
+    "applies": [
+      "notes/03_preferences/pref__communication_style.md"
+    ],
+    "messages": [
+      "notes/03_preferences/pref__communication_style.md"
+    ],
+    "overly": [
+      "notes/03_preferences/pref__communication_style.md"
+    ],
+    "rust": [
+      "notes/03_preferences/pref__learning_style.md",
+      "notes/04_goals/goal__learn_rust.md"
+    ],
+    "skill": [
+      "notes/03_preferences/pref__learning_style.md"
+    ],
+    "actual": [
+      "notes/03_preferences/pref__learning_style.md"
+    ],
+    "learned": [
+      "notes/03_preferences/pref__learning_style.md"
+    ],
+    "solving": [
+      "notes/03_preferences/pref__learning_style.md"
+    ],
+    "picking": [
+      "notes/03_preferences/pref__learning_style.md"
+    ],
+    "over": [
+      "notes/03_preferences/pref__learning_style.md",
+      "notes/03_preferences/pref__note_taking_tool.md",
+      "notes/06_concepts/concept__spaced_repetition.md"
+    ],
+    "reading": [
+      "notes/03_preferences/pref__learning_style.md"
+    ],
+    "small": [
+      "notes/03_preferences/pref__learning_style.md",
+      "notes/04_goals/goal__learn_rust.md"
+    ],
+    "retain": [
+      "notes/03_preferences/pref__learning_style.md"
+    ],
+    "practice": [
+      "notes/03_preferences/pref__learning_style.md"
+    ],
+    "experimenting": [
+      "notes/03_preferences/pref__learning_style.md"
+    ],
+    "repetition": [
+      "notes/03_preferences/pref__learning_style.md",
+      "notes/06_concepts/concept__spaced_repetition.md",
+      "notes/06_concepts/concept__zettelkasten.md"
+    ],
+    "spaced": [
+      "notes/03_preferences/pref__learning_style.md",
+      "notes/06_concepts/concept__spaced_repetition.md",
+      "notes/06_concepts/concept__zettelkasten.md"
+    ],
+    "technologies": [
+      "notes/03_preferences/pref__learning_style.md"
+    ],
+    "but": [
+      "notes/03_preferences/pref__learning_style.md"
+    ],
+    "building": [
+      "notes/03_preferences/pref__learning_style.md",
+      "notes/04_goals/goal__run_marathon.md"
+    ],
+    "passively": [
+      "notes/03_preferences/pref__learning_style.md"
+    ],
+    "tutorials": [
+      "notes/03_preferences/pref__learning_style.md"
+    ],
+    "real": [
+      "notes/03_preferences/pref__learning_style.md"
+    ],
+    "learn": [
+      "notes/03_preferences/pref__learning_style.md",
+      "notes/04_goals/goal__learn_rust.md"
+    ],
+    "best": [
+      "notes/03_preferences/pref__learning_style.md"
+    ],
+    "following": [
+      "notes/03_preferences/pref__learning_style.md",
+      "notes/04_goals/goal__run_marathon.md",
+      "notes/06_concepts/concept__spaced_repetition.md"
+    ],
+    "hands": [
+      "notes/03_preferences/pref__learning_style.md"
+    ],
+    "solidifies": [
+      "notes/03_preferences/pref__learning_style.md"
+    ],
+    "acquisition": [
+      "notes/03_preferences/pref__learning_style.md"
+    ],
+    "useful": [
+      "notes/03_preferences/pref__learning_style.md"
+    ],
+    "concepts": [
+      "notes/03_preferences/pref__learning_style.md",
+      "notes/06_concepts/concept__cognitive_ledger.md",
+      "notes/06_concepts/concept__spaced_repetition.md"
+    ],
+    "learns": [
+      "notes/03_preferences/pref__learning_style.md"
+    ],
+    "problem": [
+      "notes/03_preferences/pref__learning_style.md"
+    ],
+    "usually": [
+      "notes/03_preferences/pref__learning_style.md"
+    ],
+    "chat": [
+      "notes/03_preferences/pref__meeting_style.md"
+    ],
+    "they": [
+      "notes/03_preferences/pref__meeting_style.md"
+    ],
+    "documents": [
+      "notes/03_preferences/pref__meeting_style.md"
+    ],
+    "interrupt": [
+      "notes/03_preferences/pref__meeting_style.md"
+    ],
+    "have": [
+      "notes/03_preferences/pref__meeting_style.md",
+      "notes/05_open_loops/loop__dependency_audit.md"
+    ],
+    "document": [
+      "notes/03_preferences/pref__meeting_style.md"
+    ],
+    "can": [
+      "notes/03_preferences/pref__meeting_style.md",
+      "notes/06_concepts/concept__cognitive_ledger.md"
+    ],
+    "complex": [
+      "notes/03_preferences/pref__meeting_style.md"
+    ],
+    "clear": [
+      "notes/03_preferences/pref__meeting_style.md"
+    ],
+    "flow": [
+      "notes/03_preferences/pref__meeting_style.md"
+    ],
+    "synchronous": [
+      "notes/03_preferences/pref__meeting_style.md"
+    ],
+    "async": [
+      "notes/03_preferences/pref__meeting_style.md"
+    ],
+    "blocking": [
+      "notes/03_preferences/pref__meeting_style.md"
+    ],
+    "asynchronous": [
+      "notes/03_preferences/pref__meeting_style.md"
+    ],
+    "collaboration": [
+      "notes/03_preferences/pref__meeting_style.md"
+    ],
+    "resolved": [
+      "notes/03_preferences/pref__meeting_style.md"
+    ],
+    "necessary": [
+      "notes/03_preferences/pref__meeting_style.md"
+    ],
+    "state": [
+      "notes/03_preferences/pref__meeting_style.md"
+    ],
+    "end": [
+      "notes/03_preferences/pref__meeting_style.md",
+      "notes/04_goals/goal__ship_ledger_v1.md"
+    ],
+    "meetings": [
+      "notes/03_preferences/pref__meeting_style.md"
+    ],
+    "items": [
+      "notes/03_preferences/pref__meeting_style.md"
+    ],
+    "action": [
+      "notes/03_preferences/pref__meeting_style.md",
+      "notes/04_goals/goal__learn_rust.md",
+      "notes/04_goals/goal__run_marathon.md",
+      "notes/04_goals/goal__ship_ledger_v1.md",
+      "notes/05_open_loops/loop__ci_cd_pipeline.md",
+      "notes/05_open_loops/loop__dependency_audit.md"
+    ],
+    "only": [
+      "notes/03_preferences/pref__meeting_style.md",
+      "notes/03_preferences/pref__note_taking_tool.md"
+    ],
+    "focused": [
+      "notes/03_preferences/pref__meeting_style.md"
+    ],
+    "agenda": [
+      "notes/03_preferences/pref__meeting_style.md"
+    ],
+    "calendar": [
+      "notes/03_preferences/pref__meeting_style.md"
+    ],
+    "using": [
+      "notes/03_preferences/pref__meeting_style.md",
+      "notes/06_concepts/concept__cognitive_ledger.md",
+      "notes/06_concepts/concept__spaced_repetition.md"
+    ],
+    "like": [
+      "notes/03_preferences/pref__meeting_style.md"
+    ],
+    "protect": [
+      "notes/03_preferences/pref__meeting_style.md"
+    ],
+    "questions": [
+      "notes/03_preferences/pref__meeting_style.md",
+      "notes/06_concepts/concept__cognitive_ledger.md"
+    ],
+    "instead": [
+      "notes/03_preferences/pref__meeting_style.md"
+    ],
+    "shared": [
+      "notes/03_preferences/pref__meeting_style.md"
+    ],
+    "message": [
+      "notes/03_preferences/pref__meeting_style.md"
+    ],
+    "recorded": [
+      "notes/03_preferences/pref__meeting_style.md"
+    ],
+    "discussions": [
+      "notes/03_preferences/pref__meeting_style.md"
+    ],
+    "reserved": [
+      "notes/03_preferences/pref__meeting_style.md"
+    ],
+    "pairs": [
+      "notes/03_preferences/pref__note_taking_tool.md"
+    ],
+    "synced": [
+      "notes/03_preferences/pref__note_taking_tool.md"
+    ],
+    "templater": [
+      "notes/03_preferences/pref__note_taking_tool.md"
+    ],
+    "note": [
+      "notes/03_preferences/pref__note_taking_tool.md",
+      "notes/06_concepts/concept__cognitive_ledger.md",
+      "notes/06_concepts/concept__zettelkasten.md"
+    ],
+    "plugins": [
+      "notes/03_preferences/pref__note_taking_tool.md"
+    ],
+    "stores": [
+      "notes/03_preferences/pref__note_taking_tool.md",
+      "notes/06_concepts/concept__cognitive_ledger.md"
+    ],
+    "via": [
+      "notes/03_preferences/pref__note_taking_tool.md"
+    ],
+    "application": [
+      "notes/03_preferences/pref__note_taking_tool.md"
+    ],
+    "repository": [
+      "notes/03_preferences/pref__note_taking_tool.md"
+    ],
+    "plain": [
+      "notes/03_preferences/pref__note_taking_tool.md"
+    ],
+    "markdown": [
+      "notes/03_preferences/pref__note_taking_tool.md",
+      "notes/06_concepts/concept__zettelkasten.md"
+    ],
+    "querying": [
+      "notes/03_preferences/pref__note_taking_tool.md"
+    ],
+    "folder": [
+      "notes/03_preferences/pref__note_taking_tool.md"
+    ],
+    "disk": [
+      "notes/03_preferences/pref__note_taking_tool.md"
+    ],
+    "up": [
+      "notes/03_preferences/pref__note_taking_tool.md",
+      "notes/05_open_loops/loop__ci_cd_pipeline.md"
+    ],
+    "obsidian": [
+      "notes/03_preferences/pref__note_taking_tool.md",
+      "notes/06_concepts/concept__zettelkasten.md"
+    ],
+    "zettelkasten": [
+      "notes/03_preferences/pref__note_taking_tool.md",
+      "notes/06_concepts/concept__spaced_repetition.md",
+      "notes/06_concepts/concept__zettelkasten.md"
+    ],
+    "private": [
+      "notes/03_preferences/pref__note_taking_tool.md"
+    ],
+    "backed": [
+      "notes/03_preferences/pref__note_taking_tool.md"
+    ],
+    "local": [
+      "notes/03_preferences/pref__note_taking_tool.md"
+    ],
+    "dataview": [
+      "notes/03_preferences/pref__note_taking_tool.md"
+    ],
+    "taking": [
+      "notes/03_preferences/pref__note_taking_tool.md",
+      "notes/06_concepts/concept__cognitive_ledger.md",
+      "notes/06_concepts/concept__zettelkasten.md"
+    ],
+    "structured": [
+      "notes/03_preferences/pref__note_taking_tool.md",
+      "notes/04_goals/goal__run_marathon.md",
+      "notes/06_concepts/concept__cognitive_ledger.md"
+    ],
+    "vault": [
+      "notes/03_preferences/pref__note_taking_tool.md"
+    ],
+    "files": [
+      "notes/03_preferences/pref__note_taking_tool.md",
+      "notes/06_concepts/concept__zettelkasten.md"
+    ],
+    "systems": [
+      "notes/04_goals/goal__learn_rust.md"
+    ],
+    "versatility": [
+      "notes/04_goals/goal__learn_rust.md"
+    ],
+    "cli": [
+      "notes/04_goals/goal__learn_rust.md"
+    ],
+    "performance": [
+      "notes/04_goals/goal__learn_rust.md"
+    ],
+    "attractive": [
+      "notes/04_goals/goal__learn_rust.md"
+    ],
+    "wants": [
+      "notes/04_goals/goal__learn_rust.md"
+    ],
+    "beyond": [
+      "notes/04_goals/goal__learn_rust.md"
+    ],
+    "memory": [
+      "notes/04_goals/goal__learn_rust.md",
+      "notes/06_concepts/concept__cognitive_ledger.md",
+      "notes/06_concepts/concept__spaced_repetition.md"
+    ],
+    "resource": [
+      "notes/04_goals/goal__learn_rust.md"
+    ],
+    "safe": [
+      "notes/04_goals/goal__learn_rust.md"
+    ],
+    "book": [
+      "notes/04_goals/goal__learn_rust.md"
+    ],
+    "command": [
+      "notes/04_goals/goal__learn_rust.md"
+    ],
+    "complete": [
+      "notes/04_goals/goal__learn_rust.md",
+      "notes/04_goals/goal__run_marathon.md",
+      "notes/04_goals/goal__ship_ledger_v1.md"
+    ],
+    "safety": [
+      "notes/04_goals/goal__learn_rust.md"
+    ],
+    "level": [
+      "notes/04_goals/goal__learn_rust.md"
+    ],
+    "build": [
+      "notes/04_goals/goal__learn_rust.md"
+    ],
+    "guarantees": [
+      "notes/04_goals/goal__learn_rust.md"
+    ],
+    "vehicle": [
+      "notes/04_goals/goal__learn_rust.md"
+    ],
+    "fast": [
+      "notes/04_goals/goal__learn_rust.md"
+    ],
+    "line": [
+      "notes/04_goals/goal__learn_rust.md"
+    ],
+    "official": [
+      "notes/04_goals/goal__learn_rust.md"
+    ],
+    "next": [
+      "notes/04_goals/goal__learn_rust.md",
+      "notes/04_goals/goal__run_marathon.md",
+      "notes/04_goals/goal__ship_ledger_v1.md",
+      "notes/05_open_loops/loop__ci_cd_pipeline.md",
+      "notes/05_open_loops/loop__dependency_audit.md"
+    ],
+    "plan": [
+      "notes/04_goals/goal__learn_rust.md",
+      "notes/04_goals/goal__run_marathon.md",
+      "notes/04_goals/goal__ship_ledger_v1.md"
+    ],
+    "characteristics": [
+      "notes/04_goals/goal__learn_rust.md"
+    ],
+    "prepare": [
+      "notes/04_goals/goal__run_marathon.md"
+    ],
+    "km": [
+      "notes/04_goals/goal__run_marathon.md"
+    ],
+    "progressively": [
+      "notes/04_goals/goal__run_marathon.md"
+    ],
+    "195": [
+      "notes/04_goals/goal__run_marathon.md"
+    ],
+    "athletic": [
+      "notes/04_goals/goal__run_marathon.md"
+    ],
+    "register": [
+      "notes/04_goals/goal__run_marathon.md"
+    ],
+    "race": [
+      "notes/04_goals/goal__run_marathon.md"
+    ],
+    "42": [
+      "notes/04_goals/goal__run_marathon.md"
+    ],
+    "months": [
+      "notes/04_goals/goal__run_marathon.md",
+      "notes/05_open_loops/loop__dependency_audit.md"
+    ],
+    "programme": [
+      "notes/04_goals/goal__run_marathon.md"
+    ],
+    "foot": [
+      "notes/04_goals/goal__run_marathon.md"
+    ],
+    "full": [
+      "notes/04_goals/goal__run_marathon.md"
+    ],
+    "follow": [
+      "notes/04_goals/goal__run_marathon.md"
+    ],
+    "involves": [
+      "notes/04_goals/goal__run_marathon.md",
+      "notes/04_goals/goal__ship_ledger_v1.md"
+    ],
+    "18": [
+      "notes/04_goals/goal__run_marathon.md"
+    ],
+    "longer": [
+      "notes/04_goals/goal__run_marathon.md"
+    ],
+    "event": [
+      "notes/04_goals/goal__run_marathon.md"
+    ],
+    "base": [
+      "notes/04_goals/goal__run_marathon.md"
+    ],
+    "target": [
+      "notes/04_goals/goal__run_marathon.md"
+    ],
+    "within": [
+      "notes/04_goals/goal__run_marathon.md"
+    ],
+    "16": [
+      "notes/04_goals/goal__run_marathon.md"
+    ],
+    "stable": [
+      "notes/04_goals/goal__ship_ledger_v1.md"
+    ],
+    "user": [
+      "notes/04_goals/goal__ship_ledger_v1.md"
+    ],
+    "release": [
+      "notes/04_goals/goal__ship_ledger_v1.md",
+      "notes/05_open_loops/loop__ci_cd_pipeline.md"
+    ],
+    "modes": [
+      "notes/04_goals/goal__ship_ledger_v1.md"
+    ],
+    "coverage": [
+      "notes/04_goals/goal__ship_ledger_v1.md"
+    ],
+    "milestone": [
+      "notes/04_goals/goal__ship_ledger_v1.md"
+    ],
+    "aims": [
+      "notes/04_goals/goal__ship_ledger_v1.md"
+    ],
+    "suite": [
+      "notes/04_goals/goal__ship_ledger_v1.md"
+    ],
+    "01": [
+      "notes/04_goals/goal__ship_ledger_v1.md"
+    ],
+    "validate": [
+      "notes/04_goals/goal__ship_ledger_v1.md"
+    ],
+    "0": [
+      "notes/04_goals/goal__ship_ledger_v1.md"
+    ],
+    "others": [
+      "notes/04_goals/goal__ship_ledger_v1.md"
+    ],
+    "write": [
+      "notes/04_goals/goal__ship_ledger_v1.md",
+      "notes/05_open_loops/loop__ci_cd_pipeline.md",
+      "notes/06_concepts/concept__zettelkasten.md"
+    ],
+    "eval": [
+      "notes/04_goals/goal__ship_ledger_v1.md"
+    ],
+    "semantic": [
+      "notes/04_goals/goal__ship_ledger_v1.md"
+    ],
+    "features": [
+      "notes/04_goals/goal__ship_ledger_v1.md"
+    ],
+    "2026": [
+      "notes/04_goals/goal__ship_ledger_v1.md"
+    ],
+    "retrieval": [
+      "notes/04_goals/goal__ship_ledger_v1.md",
+      "notes/06_concepts/concept__cognitive_ledger.md"
+    ],
+    "success": [
+      "notes/04_goals/goal__ship_ledger_v1.md"
+    ],
+    "tagged": [
+      "notes/04_goals/goal__ship_ledger_v1.md",
+      "notes/05_open_loops/loop__ci_cd_pipeline.md"
+    ],
+    "improving": [
+      "notes/04_goals/goal__ship_ledger_v1.md"
+    ],
+    "usable": [
+      "notes/04_goals/goal__ship_ledger_v1.md"
+    ],
+    "requiring": [
+      "notes/04_goals/goal__ship_ledger_v1.md"
+    ],
+    "workflow": [
+      "notes/05_open_loops/loop__ci_cd_pipeline.md"
+    ],
+    "loop": [
+      "notes/05_open_loops/loop__ci_cd_pipeline.md",
+      "notes/05_open_loops/loop__dependency_audit.md"
+    ],
+    "add": [
+      "notes/05_open_loops/loop__ci_cd_pipeline.md"
+    ],
+    "set": [
+      "notes/05_open_loops/loop__ci_cd_pipeline.md"
+    ],
+    "deploy": [
+      "notes/05_open_loops/loop__ci_cd_pipeline.md"
+    ],
+    "deployment": [
+      "notes/05_open_loops/loop__ci_cd_pipeline.md"
+    ],
+    "platform": [
+      "notes/05_open_loops/loop__ci_cd_pipeline.md"
+    ],
+    "preferred": [
+      "notes/05_open_loops/loop__ci_cd_pipeline.md"
+    ],
+    "automated": [
+      "notes/05_open_loops/loop__ci_cd_pipeline.md"
+    ],
+    "step": [
+      "notes/05_open_loops/loop__ci_cd_pipeline.md"
+    ],
+    "tests": [
+      "notes/05_open_loops/loop__ci_cd_pipeline.md"
+    ],
+    "automatically": [
+      "notes/05_open_loops/loop__ci_cd_pipeline.md"
+    ],
+    "test": [
+      "notes/05_open_loops/loop__ci_cd_pipeline.md",
+      "notes/05_open_loops/loop__dependency_audit.md"
+    ],
+    "actions": [
+      "notes/05_open_loops/loop__ci_cd_pipeline.md"
+    ],
+    "devops": [
+      "notes/05_open_loops/loop__ci_cd_pipeline.md"
+    ],
+    "question": [
+      "notes/05_open_loops/loop__ci_cd_pipeline.md",
+      "notes/05_open_loops/loop__dependency_audit.md"
+    ],
+    "pipeline": [
+      "notes/05_open_loops/loop__ci_cd_pipeline.md",
+      "notes/05_open_loops/loop__dependency_audit.md"
+    ],
+    "push": [
+      "notes/05_open_loops/loop__ci_cd_pipeline.md"
+    ],
+    "releases": [
+      "notes/05_open_loops/loop__ci_cd_pipeline.md"
+    ],
+    "ci": [
+      "notes/05_open_loops/loop__ci_cd_pipeline.md",
+      "notes/05_open_loops/loop__dependency_audit.md"
+    ],
+    "cd": [
+      "notes/05_open_loops/loop__ci_cd_pipeline.md",
+      "notes/05_open_loops/loop__dependency_audit.md"
+    ],
+    "scripts": [
+      "notes/05_open_loops/loop__ci_cd_pipeline.md"
+    ],
+    "done": [
+      "notes/05_open_loops/loop__ci_cd_pipeline.md"
+    ],
+    "manually": [
+      "notes/05_open_loops/loop__ci_cd_pipeline.md"
+    ],
+    "task": [
+      "notes/05_open_loops/loop__ci_cd_pipeline.md",
+      "notes/05_open_loops/loop__dependency_audit.md"
+    ],
+    "version": [
+      "notes/05_open_loops/loop__dependency_audit.md"
+    ],
+    "audit": [
+      "notes/05_open_loops/loop__dependency_audit.md"
+    ],
+    "breaks": [
+      "notes/05_open_loops/loop__dependency_audit.md"
+    ],
+    "check": [
+      "notes/05_open_loops/loop__dependency_audit.md"
+    ],
+    "updates": [
+      "notes/05_open_loops/loop__dependency_audit.md"
+    ],
+    "outdated": [
+      "notes/05_open_loops/loop__dependency_audit.md"
+    ],
+    "update": [
+      "notes/05_open_loops/loop__dependency_audit.md"
+    ],
+    "maintenance": [
+      "notes/05_open_loops/loop__dependency_audit.md"
+    ],
+    "quarterly": [
+      "notes/05_open_loops/loop__dependency_audit.md"
+    ],
+    "review": [
+      "notes/05_open_loops/loop__dependency_audit.md"
+    ],
+    "pip": [
+      "notes/05_open_loops/loop__dependency_audit.md"
+    ],
+    "issues": [
+      "notes/05_open_loops/loop__dependency_audit.md"
+    ],
+    "toml": [
+      "notes/05_open_loops/loop__dependency_audit.md"
+    ],
+    "nothing": [
+      "notes/05_open_loops/loop__dependency_audit.md"
+    ],
+    "pyproject": [
+      "notes/05_open_loops/loop__dependency_audit.md"
+    ],
+    "fixes": [
+      "notes/05_open_loops/loop__dependency_audit.md"
+    ],
+    "dependencies": [
+      "notes/05_open_loops/loop__dependency_audit.md"
+    ],
+    "packages": [
+      "notes/05_open_loops/loop__dependency_audit.md"
+    ],
+    "unused": [
+      "notes/05_open_loops/loop__dependency_audit.md"
+    ],
+    "not": [
+      "notes/05_open_loops/loop__dependency_audit.md",
+      "notes/06_concepts/concept__zettelkasten.md"
+    ],
+    "vulnerabilities": [
+      "notes/05_open_loops/loop__dependency_audit.md"
+    ],
+    "incompatibilities": [
+      "notes/05_open_loops/loop__dependency_audit.md"
+    ],
+    "updated": [
+      "notes/05_open_loops/loop__dependency_audit.md"
+    ],
+    "available": [
+      "notes/05_open_loops/loop__dependency_audit.md"
+    ],
+    "happen": [
+      "notes/05_open_loops/loop__dependency_audit.md"
+    ],
+    "security": [
+      "notes/05_open_loops/loop__dependency_audit.md"
+    ],
+    "remove": [
+      "notes/05_open_loops/loop__dependency_audit.md"
+    ],
+    "dependency": [
+      "notes/05_open_loops/loop__dependency_audit.md"
+    ],
+    "after": [
+      "notes/05_open_loops/loop__dependency_audit.md"
+    ],
+    "may": [
+      "notes/05_open_loops/loop__dependency_audit.md"
+    ],
+    "implementation": [
+      "notes/06_concepts/concept__cognitive_ledger.md"
+    ],
+    "external": [
+      "notes/06_concepts/concept__cognitive_ledger.md"
+    ],
+    "complements": [
+      "notes/06_concepts/concept__cognitive_ledger.md"
+    ],
+    "type": [
+      "notes/06_concepts/concept__cognitive_ledger.md"
+    ],
+    "cognition": [
+      "notes/06_concepts/concept__cognitive_ledger.md"
+    ],
+    "answer": [
+      "notes/06_concepts/concept__cognitive_ledger.md"
+    ],
+    "categorises": [
+      "notes/06_concepts/concept__cognitive_ledger.md"
+    ],
+    "designed": [
+      "notes/06_concepts/concept__cognitive_ledger.md"
+    ],
+    "capability": [
+      "notes/06_concepts/concept__cognitive_ledger.md"
+    ],
+    "searchable": [
+      "notes/06_concepts/concept__cognitive_ledger.md"
+    ],
+    "searching": [
+      "notes/06_concepts/concept__cognitive_ledger.md"
+    ],
+    "goals": [
+      "notes/06_concepts/concept__cognitive_ledger.md"
+    ],
+    "unlike": [
+      "notes/06_concepts/concept__cognitive_ledger.md"
+    ],
+    "loops": [
+      "notes/06_concepts/concept__cognitive_ledger.md"
+    ],
+    "preferences": [
+      "notes/06_concepts/concept__cognitive_ledger.md"
+    ],
+    "general": [
+      "notes/06_concepts/concept__cognitive_ledger.md"
+    ],
+    "relevant": [
+      "notes/06_concepts/concept__cognitive_ledger.md"
+    ],
+    "ranking": [
+      "notes/06_concepts/concept__cognitive_ledger.md"
+    ],
+    "human": [
+      "notes/06_concepts/concept__cognitive_ledger.md"
+    ],
+    "retention": [
+      "notes/06_concepts/concept__spaced_repetition.md"
+    ],
+    "technique": [
+      "notes/06_concepts/concept__spaced_repetition.md"
+    ],
+    "forgetting": [
+      "notes/06_concepts/concept__spaced_repetition.md"
+    ],
+    "schedules": [
+      "notes/06_concepts/concept__spaced_repetition.md"
+    ],
+    "reviewing": [
+      "notes/06_concepts/concept__spaced_repetition.md"
+    ],
+    "reviews": [
+      "notes/06_concepts/concept__spaced_repetition.md"
+    ],
+    "flashcards": [
+      "notes/06_concepts/concept__spaced_repetition.md"
+    ],
+    "curve": [
+      "notes/06_concepts/concept__spaced_repetition.md"
+    ],
+    "increasing": [
+      "notes/06_concepts/concept__spaced_repetition.md"
+    ],
+    "flashcard": [
+      "notes/06_concepts/concept__spaced_repetition.md"
+    ],
+    "idea": [
+      "notes/06_concepts/concept__spaced_repetition.md",
+      "notes/06_concepts/concept__zettelkasten.md"
+    ],
+    "information": [
+      "notes/06_concepts/concept__spaced_repetition.md"
+    ],
+    "reinforced": [
+      "notes/06_concepts/concept__spaced_repetition.md"
+    ],
+    "decays": [
+      "notes/06_concepts/concept__spaced_repetition.md"
+    ],
+    "maximise": [
+      "notes/06_concepts/concept__spaced_repetition.md"
+    ],
+    "just": [
+      "notes/06_concepts/concept__spaced_repetition.md"
+    ],
+    "ebbinghaus": [
+      "notes/06_concepts/concept__spaced_repetition.md"
+    ],
+    "vocabulary": [
+      "notes/06_concepts/concept__spaced_repetition.md"
+    ],
+    "forgotten": [
+      "notes/06_concepts/concept__spaced_repetition.md"
+    ],
+    "technical": [
+      "notes/06_concepts/concept__spaced_repetition.md"
+    ],
+    "anki": [
+      "notes/06_concepts/concept__spaced_repetition.md"
+    ],
+    "before": [
+      "notes/06_concepts/concept__spaced_repetition.md"
+    ],
+    "efficiently": [
+      "notes/06_concepts/concept__spaced_repetition.md"
+    ],
+    "model": [
+      "notes/06_concepts/concept__spaced_repetition.md"
+    ],
+    "intervals": [
+      "notes/06_concepts/concept__spaced_repetition.md"
+    ],
+    "widely": [
+      "notes/06_concepts/concept__spaced_repetition.md"
+    ],
+    "value": [
+      "notes/06_concepts/concept__zettelkasten.md"
+    ],
+    "linked": [
+      "notes/06_concepts/concept__zettelkasten.md"
+    ],
+    "related": [
+      "notes/06_concepts/concept__zettelkasten.md"
+    ],
+    "individual": [
+      "notes/06_concepts/concept__zettelkasten.md"
+    ],
+    "ideas": [
+      "notes/06_concepts/concept__zettelkasten.md"
+    ],
+    "sociologist": [
+      "notes/06_concepts/concept__zettelkasten.md"
+    ],
+    "niklas": [
+      "notes/06_concepts/concept__zettelkasten.md"
+    ],
+    "emerges": [
+      "notes/06_concepts/concept__zettelkasten.md"
+    ],
+    "atomic": [
+      "notes/06_concepts/concept__zettelkasten.md"
+    ],
+    "contains": [
+      "notes/06_concepts/concept__zettelkasten.md"
+    ],
+    "into": [
+      "notes/06_concepts/concept__zettelkasten.md"
+    ],
+    "developed": [
+      "notes/06_concepts/concept__zettelkasten.md"
+    ],
+    "together": [
+      "notes/06_concepts/concept__zettelkasten.md"
+    ],
+    "zettel": [
+      "notes/06_concepts/concept__zettelkasten.md"
+    ],
+    "wiki": [
+      "notes/06_concepts/concept__zettelkasten.md"
+    ],
+    "dozens": [
+      "notes/06_concepts/concept__zettelkasten.md"
+    ],
+    "through": [
+      "notes/06_concepts/concept__zettelkasten.md"
+    ],
+    "implements": [
+      "notes/06_concepts/concept__zettelkasten.md"
+    ],
+    "single": [
+      "notes/06_concepts/concept__zettelkasten.md"
+    ],
+    "linking": [
+      "notes/06_concepts/concept__zettelkasten.md"
+    ],
+    "connections": [
+      "notes/06_concepts/concept__zettelkasten.md"
+    ],
+    "method": [
+      "notes/06_concepts/concept__zettelkasten.md"
+    ],
+    "web": [
+      "notes/06_concepts/concept__zettelkasten.md"
+    ],
+    "isolation": [
+      "notes/06_concepts/concept__zettelkasten.md"
+    ],
+    "luhmann": [
+      "notes/06_concepts/concept__zettelkasten.md"
+    ],
+    "books": [
+      "notes/06_concepts/concept__zettelkasten.md"
+    ],
+    "based": [
+      "notes/06_concepts/concept__zettelkasten.md"
+    ]
+  },
+  "build_ms": 21.175417
+}

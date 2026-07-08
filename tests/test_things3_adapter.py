@@ -114,8 +114,9 @@ class TestCreateTask(unittest.TestCase):
         with patch("ledger.integrations.things3._run", side_effect=fake_run):
             adapter.create_task("Title", notes="ledger:loop__y status:open", project="Work")
         first = run_calls[0]
-        self.assertIn("--project", first)
-        self.assertIn("Work", first)
+        # things3-cli: project/area via --list-id=ID, title positional after --
+        self.assertIn("--list-id=Work", first)
+        self.assertIn("Title", first)
 
 
 # ---------------------------------------------------------------------------
@@ -132,12 +133,17 @@ class TestUpdateTask(unittest.TestCase):
         existing = _task(uuid="uuid1")
 
         def fake_run(args, **kwargs):
-            if "task" in args:
-                return json.dumps(existing)
+            # confirm reads `things tasks --json` (a list)
+            if "tasks" in args:
+                return json.dumps([existing])
             return ""
 
-        with patch("ledger.integrations.things3._run", side_effect=fake_run):
+        with patch("ledger.integrations.things3._run", side_effect=fake_run) as mock_run:
             adapter.update_task("uuid1", title="New Title")
+        first = mock_run.call_args_list[0][0][0]
+        self.assertIn("update", first)
+        self.assertIn("--id=uuid1", first)
+        self.assertIn("New Title", first)
 
 
 # ---------------------------------------------------------------------------
@@ -159,15 +165,17 @@ class TestCompleteCancel(unittest.TestCase):
         existing = _task(uuid="u1")
 
         def fake_run(args, **kwargs):
-            if "task" in args:
-                return json.dumps(existing)
+            if "tasks" in args:
+                return json.dumps([existing])
             return ""
 
         with patch("ledger.integrations.things3._run", side_effect=fake_run) as mock_run:
             adapter.complete_task("u1")
         first_call_args = mock_run.call_args_list[0][0][0]
-        self.assertIn("complete", first_call_args)
-        self.assertIn("u1", first_call_args)
+        # things3-cli has no `complete` command: it's `update --id=U --completed`
+        self.assertIn("update", first_call_args)
+        self.assertIn("--id=u1", first_call_args)
+        self.assertIn("--completed", first_call_args)
 
 
 # ---------------------------------------------------------------------------
@@ -217,7 +225,8 @@ class TestProjects(unittest.TestCase):
 class TestGetTaskByUuid(unittest.TestCase):
     def test_returns_task(self):
         task = _task(uuid="abc")
-        with _make_run_mock(json.dumps(task)):
+        # get_task_by_uuid scans `things tasks --json` (a list)
+        with _make_run_mock(json.dumps([task])):
             result = adapter.get_task_by_uuid("abc")
         self.assertEqual(result["uuid"], "abc")
 
