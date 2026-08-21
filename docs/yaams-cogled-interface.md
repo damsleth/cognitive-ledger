@@ -134,6 +134,25 @@ hardcoded (`review.py:31-34`).
    deletes/rejects from the inbox, cogled has nothing to log that YAAMS can
    match against. Phase A is impossible until YAAMS embeds these.
 
+4. **Timestamp format — RESOLVED 2026-08-21.** YAAMS wrote `created`/`updated`
+   with `datetime.isoformat()`, which emits `+00:00`. Cogled's `sleep lint`
+   requires a trailing `Z` and **rejects** the offset, so every ingest run
+   dropped a summary note into `00_inbox/` that cogled's own lint refused —
+   2 errors per run. Note that §2c below already specified `Z`: this was YAAMS
+   violating an existing contract, not an underspecified one, which is exactly
+   the class of drift this document exists to catch.
+
+   Hand-fixing the offending files was cosmetic — the writer regenerated the
+   error on the next ingest (3 files fixed at 07:35, a fresh bad one appeared at
+   07:50). Fixed at the producer:
+   `yaams/synthesize/summarize.py:write_summary_to_inbox` now formats
+   `%Y-%m-%dT%H:%M:%SZ`, handling naive and tz-aware `when` identically.
+
+   **Lint is the contract test.** Anything writing into `00_inbox/` should be
+   checked with `ledger sleep lint` before it is called done; a producer that
+   emits notes the sink rejects is a broken seam even when both sides pass their
+   own tests.
+
 ### 2c. Contract v1 inbox frontmatter (target)
 
 YAAMS must emit these fields. Cogled's reject path reads them into the
