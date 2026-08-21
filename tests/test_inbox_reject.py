@@ -493,3 +493,56 @@ class InboxRejectedCliTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestReapUnheldLocks(unittest.TestCase):
+    """`FileLock` never unlinks (avoiding an unlink-after-unlock race), so lock
+    files accumulate. `cleanup_inbox` used to miss them entirely: it only looked
+    in 00_inbox and only at locks whose .md sibling was gone. 57 were sitting in
+    the live tree, mostly under 02_facts/.
+    """
+
+    def test_reaps_unheld_locks_across_typed_folders(self):
+        from ledger.inbox import reap_unheld_locks
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "02_facts").mkdir()
+            (root / "05_open_loops").mkdir()
+            note = root / "02_facts" / "fact__x.md"
+            note.write_text("# x\n", encoding="utf-8")
+            lock_a = root / "02_facts" / "fact__x.md.lock"
+            lock_b = root / "05_open_loops" / "loop__y.md.lock"
+            lock_a.touch()
+            lock_b.touch()
+
+            found = reap_unheld_locks(notes_dir=root, apply=False)
+            self.assertEqual(len(found), 2, found)
+            self.assertTrue(lock_a.exists(), "dry run must not delete")
+
+            reaped = reap_unheld_locks(notes_dir=root, apply=True)
+            self.assertEqual(len(reaped), 2)
+            self.assertFalse(lock_a.exists())
+            self.assertFalse(lock_b.exists())
+            self.assertTrue(note.exists(), "the note itself must survive")
+
+    def test_leaves_a_held_lock_alone(self):
+        """A lock someone holds is live contention, not garbage."""
+        import fcntl
+        import os
+
+        from ledger.inbox import reap_unheld_locks
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "02_facts").mkdir()
+            lock = root / "02_facts" / "fact__held.md.lock"
+            lock.touch()
+            fd = os.open(str(lock), os.O_RDWR)
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                self.assertEqual(reap_unheld_locks(notes_dir=root, apply=True), [])
+                self.assertTrue(lock.exists())
+            finally:
+                fcntl.flock(fd, fcntl.LOCK_UN)
+                os.close(fd)

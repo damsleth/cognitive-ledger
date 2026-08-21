@@ -162,11 +162,15 @@ class TestCompleteCancel(unittest.TestCase):
         mock_run.assert_not_called()
 
     def test_complete_calls_correct_command(self):
-        existing = _task(uuid="u1")
+        # A completed task leaves the active list, so the confirmation read
+        # must come back empty — that absence IS the success signal.
+        done = {"updated": False}
 
         def fake_run(args, **kwargs):
             if "tasks" in args:
-                return json.dumps([existing])
+                return json.dumps([] if done["updated"] else [_task(uuid="u1")])
+            if "update" in args:
+                done["updated"] = True
             return ""
 
         with patch("ledger.integrations.things3._run", side_effect=fake_run) as mock_run:
@@ -176,6 +180,18 @@ class TestCompleteCancel(unittest.TestCase):
         self.assertIn("update", first_call_args)
         self.assertIn("--id=u1", first_call_args)
         self.assertIn("--completed", first_call_args)
+
+    def test_complete_raises_if_task_stays_active(self):
+        """A write that silently did nothing must not report success."""
+        def fake_run(args, **kwargs):
+            if "tasks" in args:
+                return json.dumps([_task(uuid="u1")])
+            return ""
+
+        with patch("ledger.integrations.things3._run", side_effect=fake_run):
+            with patch("ledger.integrations.things3.time.sleep"):
+                with self.assertRaises(RuntimeError):
+                    adapter.complete_task("u1")
 
 
 # ---------------------------------------------------------------------------
