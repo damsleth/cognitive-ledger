@@ -217,6 +217,34 @@ def _resolve_query_args_from_profile(args) -> tuple[str, int, str]:
     return str(scope), int(limit), str(retrieval_mode)
 
 
+def _warn_if_index_stale(retrieval_mode: str) -> None:
+    """Warn when notes have changed since the semantic index was built.
+
+    Only meaningful for semantic modes: those draw candidates from the
+    embedding index, so a note that was never embedded cannot be retrieved at
+    all, and an edited one is ranked on its stale content. Silence here is what
+    makes "I imported it and the query still misses" look like a retrieval
+    failure rather than a stale index.
+    """
+    if "semantic" not in (retrieval_mode or ""):
+        return
+    try:
+        from ledger.embeddings import notes_newer_than_index
+        stale = notes_newer_than_index()
+    except Exception:
+        return
+    if not stale:
+        return
+    shown = ", ".join(stale[:3]) + ("..." if len(stale) > 3 else "")
+    print(
+        f"warning: {len(stale)} note(s) changed since the semantic index was "
+        f"built ({shown}). In {retrieval_mode} the candidate pool comes from "
+        f"the index, so a new note is unreachable and an edited one ranks on "
+        f"its old content. Rebuild with: ledger sleep index",
+        file=sys.stderr,
+    )
+
+
 def handle_query_command(args):
     # Resolve scope/limit/retrieval_mode from profile + explicit flags.
     _scope, _limit, _retrieval_mode = _resolve_query_args_from_profile(args)
@@ -241,6 +269,8 @@ def handle_query_command(args):
     except ValueError as e:
         print(f"error: {e}", file=sys.stderr)
         raise SystemExit(2)
+
+    _warn_if_index_stale(_retrieval_mode)
 
     payload = rank_query(
         query=validated_query,
@@ -1282,13 +1312,18 @@ def handle_inbox_command(args):
         result = cleanup_inbox(stale_days=args.days, apply=args.apply)
         orphaned = result["orphaned_locks"]
         stale = result["stale_items"]
+        unheld = result.get("unheld_locks") or []
         label = "Removed" if args.apply else "Would remove"
-        if not orphaned and not stale:
+        if not orphaned and not stale and not unheld:
             print("Nothing to clean up.")
             return
         if orphaned:
             print(f"{label} {len(orphaned)} orphaned lock file(s):")
             for f in orphaned:
+                print(f"  {f}")
+        if unheld:
+            print(f"{label} {len(unheld)} unheld lock file(s) across the notes tree:")
+            for f in unheld:
                 print(f"  {f}")
         if stale:
             print(f"{label} {len(stale)} stale auto-generated item(s):")
@@ -1539,6 +1574,12 @@ def handle_loops_sync(args) -> None:
         n for n in all_loops_raw
         if _enum_val(getattr(n.frontmatter, "status", None), "open") in active_statuses
     ]
+    # Closed loops are not synced as tasks, but their slugs are needed so a
+    # closed loop's task is completed rather than mistaken for a deleted one.
+    closed_slugs = {
+        n.path.stem for n in all_loops_raw
+        if _enum_val(getattr(n.frontmatter, "status", None), "open") == "closed"
+    }
 
     # The Frontmatter model only exposes known schema fields, so custom keys
     # (things_uuid, things_list_id) must be read from the raw YAML.
@@ -1580,10 +1621,12 @@ def handle_loops_sync(args) -> None:
         completed_maps_to=cfg.things3_completed_maps_to,
         canceled_maps_to=cfg.things3_canceled_maps_to,
         orphan_action=cfg.things3_orphan_action,
+        closed_slugs=closed_slugs,
     )
 
     # Apply actions
-    stats = {"create": 0, "update": 0, "reverse": 0, "orphan": 0, "noop": 0, "error": 0}
+    stats = {"create": 0, "update": 0, "reverse": 0, "complete": 0,
+             "orphan": 0, "noop": 0, "error": 0}
 
     for action in actions:
         try:
@@ -1630,6 +1673,15 @@ def handle_loops_sync(args) -> None:
                             action.new_loop_status,
                             action.new_things_uuid,
                         )
+
+            elif action.kind == "forward_complete":
+                stats["complete"] += 1
+                adapter.complete_task(action.things_uuid, dry_run=dry_run)
+                if dry_run:
+                    print(
+                        f"  [dry-run] would complete {action.things_uuid} "
+                        f"({action.loop_slug} is closed)"
+                    )
 
             elif action.kind == "orphan_cancel":
                 stats["orphan"] += 1
@@ -1791,6 +1843,7 @@ def handle_import_claude_memory_command(args):
             "folders_scanned": result.folders_scanned,
             "written": result.written,
             "skipped": result.skipped,
+            "skipped_already_promoted": len(plan.skipped_promoted),
             "paths": result.written_paths,
         }
         print(json.dumps(payload, ensure_ascii=False))
@@ -1799,10 +1852,13 @@ def handle_import_claude_memory_command(args):
     if dry_run:
         print(cm.render_report(plan, mode=mode, preview=args.preview))
     else:
-        print(
-            f"imported {result.written} note(s) into {mode} "
-            f"(skipped {result.skipped} unchanged)"
-        )
+        promoted = len(plan.skipped_promoted)
+        unchanged = result.skipped - promoted
+        msg = f"imported {result.written} note(s) into {mode} (skipped {unchanged} unchanged"
+        msg += f", {promoted} already promoted)" if promoted else ")"
+        print(msg)
+        for n in plan.skipped_promoted:
+            print(f"  already promoted, not re-imported: {n.name} -> {n.skip_reason}")
         for rel in result.written_paths:
             print(f"  {rel}")
 
