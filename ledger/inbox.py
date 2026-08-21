@@ -159,6 +159,57 @@ def triage_suggestions(notes_dir: Path | None = None) -> list[dict[str, Any]]:
     return suggestions
 
 
+def reap_unheld_locks(
+    notes_dir: Path | None = None,
+    apply: bool = False,
+) -> list[str]:
+    """Remove ``*.md.lock`` files across the notes tree that nobody holds.
+
+    ``FileLock`` deliberately does not unlink on release — unlinking after
+    releasing the flock lets a waiter and a newcomer both believe they hold the
+    lock. The files therefore accumulate, and ``cleanup_inbox`` never caught
+    them: it only looked in ``00_inbox`` and only at locks whose ``.md`` sibling
+    was *missing*. A batch import leaves one lock per note next to a note that
+    very much exists, in whatever typed folder it landed in. 42 of them were
+    sitting in ``05_open_loops/`` when this was written.
+
+    Safe because it is an explicit maintenance sweep, not the write path: a lock
+    is only removed if a non-blocking flock succeeds, which proves no process
+    holds it, and the unlink happens while we hold it.
+    """
+    import fcntl
+    import os
+
+    nd = Path(notes_dir) if notes_dir else Path(get_config().ledger_notes_dir)
+    if not nd.is_dir():
+        return []
+
+    reaped: list[str] = []
+    for lock_file in sorted(nd.glob("*/*.md.lock")):
+        fd = None
+        try:
+            fd = os.open(str(lock_file), os.O_RDWR)
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            continue          # someone holds it — leave it alone
+        except OSError:
+            continue
+        else:
+            reaped.append(str(lock_file.relative_to(nd)))
+            if apply:
+                try:
+                    lock_file.unlink()
+                except OSError:
+                    reaped.pop()
+        finally:
+            if fd is not None:
+                try:
+                    fcntl.flock(fd, fcntl.LOCK_UN)
+                finally:
+                    os.close(fd)
+    return reaped
+
+
 def cleanup_inbox(
     notes_dir: Path | None = None,
     stale_days: int = 14,
@@ -181,12 +232,18 @@ def cleanup_inbox(
         apply: If False, only report what would be removed (dry-run).
 
     Returns:
-        Dict with keys "orphaned_locks", "stale_items", and
-        "logged_rejections" (list of filenames logged as rejections).
+        Dict with keys "orphaned_locks", "stale_items",
+        "logged_rejections" (filenames logged as rejections), and
+        "unheld_locks" (accumulated lock files reaped tree-wide).
     """
     inbox = _inbox_dir(notes_dir)
     if not inbox.is_dir():
-        return {"orphaned_locks": [], "stale_items": [], "logged_rejections": []}
+        return {
+            "orphaned_locks": [],
+            "stale_items": [],
+            "logged_rejections": [],
+            "unheld_locks": reap_unheld_locks(notes_dir=notes_dir, apply=apply),
+        }
 
     now = datetime.now(timezone.utc)
     orphaned_locks: list[str] = []
@@ -236,7 +293,12 @@ def cleanup_inbox(
                 if lock_file.exists():
                     lock_file.unlink()
 
-    return {"orphaned_locks": orphaned_locks, "stale_items": stale_items, "logged_rejections": logged_rejections}
+    return {
+        "orphaned_locks": orphaned_locks,
+        "stale_items": stale_items,
+        "logged_rejections": logged_rejections,
+        "unheld_locks": reap_unheld_locks(notes_dir=notes_dir, apply=apply),
+    }
 
 
 def promote(
