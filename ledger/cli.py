@@ -1539,6 +1539,12 @@ def handle_loops_sync(args) -> None:
         n for n in all_loops_raw
         if _enum_val(getattr(n.frontmatter, "status", None), "open") in active_statuses
     ]
+    # Closed loops are not synced as tasks, but their slugs are needed so a
+    # closed loop's task is completed rather than mistaken for a deleted one.
+    closed_slugs = {
+        n.path.stem for n in all_loops_raw
+        if _enum_val(getattr(n.frontmatter, "status", None), "open") == "closed"
+    }
 
     # The Frontmatter model only exposes known schema fields, so custom keys
     # (things_uuid, things_list_id) must be read from the raw YAML.
@@ -1580,10 +1586,12 @@ def handle_loops_sync(args) -> None:
         completed_maps_to=cfg.things3_completed_maps_to,
         canceled_maps_to=cfg.things3_canceled_maps_to,
         orphan_action=cfg.things3_orphan_action,
+        closed_slugs=closed_slugs,
     )
 
     # Apply actions
-    stats = {"create": 0, "update": 0, "reverse": 0, "orphan": 0, "noop": 0, "error": 0}
+    stats = {"create": 0, "update": 0, "reverse": 0, "complete": 0,
+             "orphan": 0, "noop": 0, "error": 0}
 
     for action in actions:
         try:
@@ -1630,6 +1638,15 @@ def handle_loops_sync(args) -> None:
                             action.new_loop_status,
                             action.new_things_uuid,
                         )
+
+            elif action.kind == "forward_complete":
+                stats["complete"] += 1
+                adapter.complete_task(action.things_uuid, dry_run=dry_run)
+                if dry_run:
+                    print(
+                        f"  [dry-run] would complete {action.things_uuid} "
+                        f"({action.loop_slug} is closed)"
+                    )
 
             elif action.kind == "orphan_cancel":
                 stats["orphan"] += 1

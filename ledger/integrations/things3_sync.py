@@ -45,7 +45,7 @@ class Action:
 
     kind: str
     """One of: create | update | reverse_complete | reverse_cancel |
-    orphan_flag | orphan_cancel | noop
+    orphan_flag | orphan_cancel | forward_complete | noop
     """
 
     # Things-side fields
@@ -136,6 +136,7 @@ def reconcile(
     completed_maps_to: str = "closed",
     canceled_maps_to: str = "snoozed",
     orphan_action: str = "flag",
+    closed_slugs: set[str] | None = None,
 ) -> list[Action]:
     """Compute the delta between ledger loops and Things tasks.
 
@@ -151,6 +152,9 @@ def reconcile(
         completed_maps_to: Ledger status for completed Things tasks.
         canceled_maps_to: Ledger status for cancelled Things tasks.
         orphan_action: What to do with orphaned tasks (flag/cancel/ignore).
+            closed_slugs: Slugs of loops that exist but are closed. Their tasks
+                are completed, not flagged — a closed loop is finished work, not
+                a deleted one.
 
     Returns:
         List of ``Action`` objects to apply.
@@ -278,6 +282,21 @@ def reconcile(
 
         loop = loops_by_slug.get(slug)
         if loop is None and (not uuid or uuid not in loops_by_uuid):
+            # The loop is absent from the *active* set. That happens two ways,
+            # and they are not the same event: it was closed (finished work), or
+            # it was deleted (genuine orphan). Completing a closed loop's task
+            # is the forward half of the reverse_complete path — without it,
+            # closing a loop in the ledger leaves its Things task open forever
+            # and it eventually gets flagged "[orphan]", which reads as a
+            # mistake rather than as done.
+            if slug in (closed_slugs or set()):
+                actions.append(Action(
+                    kind="forward_complete",
+                    things_uuid=uuid,
+                    loop_slug=slug,
+                    reason=f"loop {slug!r} is closed in the ledger",
+                ))
+                continue
             # Genuine orphan — loop deleted from ledger
             if orphan_action == "cancel":
                 actions.append(Action(
