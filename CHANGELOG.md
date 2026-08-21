@@ -1,5 +1,81 @@
 # Changelog
 
+## 2026-08-21 (0.11.1)
+
+Five fixes found by auditing the live tree (`~/brain/ledger`) rather than the
+code. Each one let the curated tree drift from what the tooling reported: the
+directory held 58 loop files while only 37 were open, and 7 of those 37 were
+artifacts of the importer.
+
+### Fixed
+- **`import-claude-memory` filed naming *facts* as concepts.** `convention` was
+  in `_CONCEPT_MARKERS`, and concept-in-title is the highest-precedence rule, so
+  it overrode every other signal — `nocos-jan-naming-convention` (a
+  disambiguation fact) became a concept. Dropped from the marker set; the
+  remaining markers are unaffected and no existing concept note is titled with
+  it. The kebab-case limitation of the multi-word markers is now documented and
+  deliberately *not* widened, since the observed bug was over-classification.
+- **`import-claude-memory` re-imported notes triage had already promoted.** The
+  importer had no view of the typed folders, so a changed memory file forked a
+  second copy of an already-promoted note. Live damage:
+  `yaams-owa-ingestion-roadmap` existed as both a fact and a loop, and
+  `three-gaps-branches-rollout` came back as an *open* loop after the
+  hand-written original was closed with every step ticked. New
+  `existing_external_ids()` indexes `external_id` across typed folders
+  (`00_inbox/` excluded — staging is not promotion) and `build_plan` skips a
+  collision. Skips are reported in their own bucket and exposed as
+  `skipped_already_promoted` in `--json`, never folded into "unchanged": the skip
+  drops a genuine *update*, so it must be loud.
+- **A closed loop's Things3 task was flagged `[orphan]` instead of completed.**
+  The sync had a reverse path (complete in Things → close the loop) but no
+  forward one. `reconcile()` receives only open/blocked loops, so a closed loop
+  was indistinguishable from a deleted one. It now also takes `closed_slugs` and
+  emits a `forward_complete` action; genuinely deleted loops still orphan as
+  before, and tasks already in the logbook are skipped so history does not churn.
+  Measured on the live tree: 8 orphan flags → 8 correct completions.
+- **Every Things3 complete/cancel reported a false error.** Confirmation
+  re-read the task via `get_task_by_uuid`, which scans `things tasks --json` —
+  the *active* list. A completed task has by definition left it, so the check
+  could never pass. New `_confirm_gone_from_active` confirms by absence. This
+  also mattered for correctness, not just noise: a genuinely failed write was
+  indistinguishable from this false one.
+- **Accumulated `.md.lock` files were never reaped.** `cleanup_inbox` looked only
+  in `00_inbox/`, and only at locks whose `.md` sibling was *missing* — but a
+  batch import leaves one lock per note next to a note that exists, in whatever
+  typed folder it landed in. 99 were sitting in the live tree, 57 of them under
+  `02_facts/`. New `reap_unheld_locks()` sweeps the notes tree and removes a lock
+  only when a non-blocking flock proves nobody holds it, unlinking while holding
+  it. `FileLock` itself is unchanged — its no-unlink-on-release is deliberate
+  (unlink after dropping the flock lets a waiter and a newcomer both think they
+  hold it) and is now documented as such.
+
+### Added
+- **Stale-index warning on `ledger query`.** In a semantic mode the candidate
+  pool comes from the embedding index, so an unembedded note is unreachable and
+  an edited one ranks on its old content — a silent, bimodal failure that makes
+  a stale index look like bad retrieval. `ledger query` now compares note mtimes
+  against the index build time and warns on stderr (keeping `--json` clean),
+  naming `ledger sleep index`. Placed at query time rather than after each write
+  so one check covers import, triage, `notes add`, and hand edits alike.
+  New helper `embeddings.notes_newer_than_index()`.
+- `cleanup_inbox()` returns an `unheld_locks` key; `ledger inbox cleanup` lists
+  them and `--apply` reaps them.
+
+### Changed
+- `reconcile()` signature gains `closed_slugs`; new action kind
+  `forward_complete` and a `complete` counter in the sync summary.
+
+### Docs
+- `docs/claude-memory-import.md` — concept-marker precedence and why the set is
+  narrow; new "Re-import safety" section.
+- `docs/yaams-cogled-interface.md` — drift item 4 (inbox timestamp format)
+  recorded and resolved; §2c already required `Z`, so this was a producer
+  violating an existing contract. Notes that `ledger sleep lint` is the contract
+  test for anything writing into `00_inbox/`.
+- `AGENTS.md` — forward/reverse sync directions and closed-vs-deleted; lock-file
+  lifecycle and reaping; stale-index warning.
+
+
 ## 2026-06-21 (0.11.0)
 
 ### Added
