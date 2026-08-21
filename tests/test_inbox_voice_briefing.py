@@ -152,7 +152,13 @@ class InboxModuleTests(unittest.TestCase):
         import shutil
         shutil.rmtree(self.cfg.ledger_notes_dir / "00_inbox")
         from ledger.inbox import cleanup_inbox
-        self.assertEqual(cleanup_inbox(), {"orphaned_locks": [], "stale_items": [], "logged_rejections": []})
+        # "unheld_locks" sweeps the whole notes tree, so a missing 00_inbox no
+        # longer means there is nothing to report — assert per key.
+        result = cleanup_inbox()
+        self.assertEqual(result["orphaned_locks"], [])
+        self.assertEqual(result["stale_items"], [])
+        self.assertEqual(result["logged_rejections"], [])
+        self.assertIn("unheld_locks", result)
 
     def test_promote_moves_inbox_item_to_correct_type(self):
         from ledger.inbox import promote
