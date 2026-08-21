@@ -89,6 +89,24 @@ ledger context --format boot # session boot payload
 ledger context --format identity  # identity notes only
 ```
 
+**Stale-index warning.** In a semantic mode (`semantic_hybrid`, `semantic`) the
+candidate pool is drawn from the embedding index first, so a note that was never
+embedded cannot be retrieved at all and an edited one ranks on its old content.
+The failure is bimodal and silent — which makes "I imported it and the query
+still misses" look like bad retrieval rather than a stale index. `ledger query`
+therefore checks note mtimes against the index build time and warns on **stderr**
+(so `--json` output stays clean):
+
+```
+warning: 2 note(s) changed since the semantic index was built (...). In
+semantic_hybrid the candidate pool comes from the index, so a new note is
+unreachable and an edited one ranks on its old content. Rebuild with:
+ledger sleep index
+```
+
+Rebuild with `ledger sleep index` (which also regenerates the semantic index) or
+`ledger embed build --target ledger`. The check is one `stat` per note.
+
 **`LEDGER_EMBEDDINGS_OFFLINE`** — set to `1` or `true` to skip model downloads and use only locally cached sentence-transformer weights (`local_files_only=True`). Useful in air-gapped environments or to avoid accidental downloads during `ledger embed build`. Accepted values: `1`, `true`, `yes`, `on`.
 
 ### Bitemporal validity
@@ -224,6 +242,22 @@ ledger migrate bitemporal --check   # preview valid_from / valid_to back-fill
 ledger migrate bitemporal --apply   # write back-fill + append timeline entry
 ```
 
+**Lock files.** `FileLock` deliberately does **not** unlink on release: unlinking
+after dropping the flock lets a waiter and a newcomer both believe they hold the
+lock. `<note>.md.lock` files therefore accumulate — a batch import leaves one per
+note, beside a note that very much exists. `ledger inbox cleanup` reaps them
+tree-wide (`unheld_locks` in its result), removing a lock only when a
+non-blocking flock succeeds, which proves nobody holds it:
+
+```bash
+ledger inbox cleanup           # dry run — lists what would go
+ledger inbox cleanup --apply   # reap
+```
+
+Safe because this is an explicit maintenance sweep, not the write path. Expect a
+few `08_indices/*.lock` files to survive: those are held by the running process
+writing the timeline/index, and are not note locks.
+
 **Contradiction scan** (`ledger sleep contradictions`) uses a local NLI classifier to detect pairs of notes whose content contradicts each other. Three outcomes:
 
 - **auto-supersede** — score ≥ `contradiction_auto_threshold` (default 0.85) + candidate is strictly newer + no confidence inversion → calls `supersede()`, moves old note to `09_archive/`.
@@ -261,8 +295,23 @@ ledger loops sync --dry-run   # preview without writing anything
 
 1. For each open loop not yet in Things: creates a task with title = loop title, notes = `ledger:<slug> status:<status>`.
 2. For each loop already in Things (matched by `things_uuid` frontmatter key, or `ledger:<slug>` marker): updates task title/notes if they drifted.
-3. For each completed/cancelled Things task: sets the loop's `status` to `things3_completed_maps_to` / `things3_canceled_maps_to` and writes `things_uuid` back to frontmatter.
-4. Tasks with a `ledger:` marker whose loop no longer exists: handled per `things3_orphan_action` (flag / cancel / ignore).
+3. For each completed/cancelled Things task: sets the loop's `status` to `things3_completed_maps_to` / `things3_canceled_maps_to` and writes `things_uuid` back to frontmatter. (*reverse* direction: Things → ledger)
+4. For each task whose loop is **closed** in the ledger: completes the task. (*forward* direction: ledger → Things) Closing a loop is finished work, so its task is completed rather than left open — see below.
+5. Tasks with a `ledger:` marker whose loop **no longer exists at all**: handled per `things3_orphan_action` (flag / cancel / ignore).
+
+**Closed ≠ deleted.** Steps 4 and 5 are different events and must not be
+conflated. `reconcile()` receives only open/blocked loops in its desired set, so
+a closed loop is absent from it — and for a long time that made a closed loop
+look *deleted*, leaving its task open until it got flagged `[orphan]`, which
+reads as a mistake rather than as done. `reconcile()` now also takes
+`closed_slugs` and emits a `forward_complete` action for those. Tasks already in
+the logbook are skipped so history does not churn.
+
+**Confirmation is by absence.** `get_task_by_uuid` scans `things tasks --json`,
+which lists *active* tasks only. A complete/cancel is therefore confirmed by the
+task having **left** that list, not by re-reading it there — the presence check
+made every completion report a false error, which would equally have masked a
+real failed write.
 
 **Config keys** (`~/.config/ledger/config.yaml`):
 
