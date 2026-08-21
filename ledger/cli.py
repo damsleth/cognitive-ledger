@@ -217,6 +217,34 @@ def _resolve_query_args_from_profile(args) -> tuple[str, int, str]:
     return str(scope), int(limit), str(retrieval_mode)
 
 
+def _warn_if_index_stale(retrieval_mode: str) -> None:
+    """Warn when notes have changed since the semantic index was built.
+
+    Only meaningful for semantic modes: those draw candidates from the
+    embedding index, so a note that was never embedded cannot be retrieved at
+    all, and an edited one is ranked on its stale content. Silence here is what
+    makes "I imported it and the query still misses" look like a retrieval
+    failure rather than a stale index.
+    """
+    if "semantic" not in (retrieval_mode or ""):
+        return
+    try:
+        from ledger.embeddings import notes_newer_than_index
+        stale = notes_newer_than_index()
+    except Exception:
+        return
+    if not stale:
+        return
+    shown = ", ".join(stale[:3]) + ("..." if len(stale) > 3 else "")
+    print(
+        f"warning: {len(stale)} note(s) changed since the semantic index was "
+        f"built ({shown}). In {retrieval_mode} the candidate pool comes from "
+        f"the index, so a new note is unreachable and an edited one ranks on "
+        f"its old content. Rebuild with: ledger sleep index",
+        file=sys.stderr,
+    )
+
+
 def handle_query_command(args):
     # Resolve scope/limit/retrieval_mode from profile + explicit flags.
     _scope, _limit, _retrieval_mode = _resolve_query_args_from_profile(args)
@@ -241,6 +269,8 @@ def handle_query_command(args):
     except ValueError as e:
         print(f"error: {e}", file=sys.stderr)
         raise SystemExit(2)
+
+    _warn_if_index_stale(_retrieval_mode)
 
     payload = rank_query(
         query=validated_query,
@@ -1282,13 +1312,18 @@ def handle_inbox_command(args):
         result = cleanup_inbox(stale_days=args.days, apply=args.apply)
         orphaned = result["orphaned_locks"]
         stale = result["stale_items"]
+        unheld = result.get("unheld_locks") or []
         label = "Removed" if args.apply else "Would remove"
-        if not orphaned and not stale:
+        if not orphaned and not stale and not unheld:
             print("Nothing to clean up.")
             return
         if orphaned:
             print(f"{label} {len(orphaned)} orphaned lock file(s):")
             for f in orphaned:
+                print(f"  {f}")
+        if unheld:
+            print(f"{label} {len(unheld)} unheld lock file(s) across the notes tree:")
+            for f in unheld:
                 print(f"  {f}")
         if stale:
             print(f"{label} {len(stale)} stale auto-generated item(s):")

@@ -642,6 +642,44 @@ def load_semantic_manifest() -> dict[str, Any]:
     return payload
 
 
+def notes_newer_than_index(target: str = "ledger") -> list[str]:
+    """Return note paths modified after the semantic index was last built.
+
+    In ``semantic_hybrid`` the candidate pool is drawn from the embedding index
+    first, so a note that is not embedded never enters it — lexical overlap
+    cannot rescue it. The quality cliff is bimodal, not gradual: the note is
+    simply unreachable until the index is rebuilt. That makes an
+    import-then-query look like "the import did nothing", which is the wrong
+    conclusion. Cheap enough to check on every query (one stat per note).
+    """
+    from ledger.config import get_config
+
+    manifest = load_semantic_manifest()
+    entry = ((manifest.get("targets") or {}).get(target) or {}).get("latest") or {}
+    built_at = entry.get("built_at")
+    if not built_at:
+        return []
+    try:
+        built = dt.datetime.fromisoformat(str(built_at).replace("Z", "+00:00"))
+    except ValueError:
+        return []
+
+    notes_dir = Path(get_config().ledger_notes_dir)
+    if not notes_dir.is_dir():
+        return []
+    stale: list[str] = []
+    for note in notes_dir.glob("*/*.md"):
+        if note.parent.name == "08_indices":
+            continue
+        try:
+            mtime = dt.datetime.fromtimestamp(note.stat().st_mtime, tz=dt.timezone.utc)
+        except OSError:
+            continue
+        if mtime > built:
+            stale.append(str(note.relative_to(notes_dir)))
+    return sorted(stale)
+
+
 def write_semantic_manifest(manifest: dict[str, Any]) -> None:
     manifest_path = get_config().semantic_manifest_path
     ensure_parent(manifest_path)
