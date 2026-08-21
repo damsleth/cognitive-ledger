@@ -150,7 +150,7 @@ def complete_task(uuid: str, *, dry_run: bool = False) -> None:
         print(f"[dry-run] things update --id={uuid} --completed")
         return
     _run(["things", "update", "--yes", f"--id={uuid}", "--completed"])
-    _confirm_by_uuid(uuid, op="complete")
+    _confirm_gone_from_active(uuid, op="complete")
 
 
 def cancel_task(uuid: str, *, dry_run: bool = False) -> None:
@@ -159,7 +159,7 @@ def cancel_task(uuid: str, *, dry_run: bool = False) -> None:
         print(f"[dry-run] things update --id={uuid} --canceled")
         return
     _run(["things", "update", "--yes", f"--id={uuid}", "--canceled"])
-    _confirm_by_uuid(uuid, op="cancel")
+    _confirm_gone_from_active(uuid, op="cancel")
 
 
 def ensure_project(name: str, *, dry_run: bool = False) -> None:
@@ -228,6 +228,32 @@ def _confirm_created(
             elif notes_snippet and notes_snippet in task_notes:
                 return task.get("uuid") or task.get("id")
     return None
+
+
+def _confirm_gone_from_active(
+    uuid: str,
+    *,
+    op: str,
+    retries: int = 2,
+    delay: float = 1.0,
+) -> None:
+    """Confirm a completed/cancelled task has left the active list.
+
+    ``get_task_by_uuid`` scans ``things tasks --json``, which lists *active*
+    tasks only. Confirming a complete/cancel by re-reading it there can never
+    succeed — success is precisely the task no longer being active. Using the
+    presence check made every completion report a false error, which would
+    also have hidden a genuine one.
+    """
+    for attempt in range(retries + 1):
+        if attempt:
+            time.sleep(delay)
+        if get_task_by_uuid(uuid) is None:
+            return
+    raise RuntimeError(
+        f"things {op}: task {uuid!r} is still active after "
+        f"{retries + 1} re-read attempts"
+    )
 
 
 def _confirm_by_uuid(
