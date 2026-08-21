@@ -200,6 +200,19 @@ ledger embed build --target ledger --backend local --model TaylorAI/bge-micro-v2
 ledger embed status --target ledger    # verify index exists
 ```
 
+**Rebuild the index after adding notes.** In `semantic_hybrid` the candidate pool
+is drawn from the embedding index first, so a note that has not been embedded
+never enters it — lexical overlap cannot rescue it. The effect is bimodal, not
+gradual: the note is simply unreachable until you rebuild, and then it ranks
+normally. Import, triage, `notes add`, and hand edits all open this window.
+
+`ledger query` warns on stderr when notes are newer than the index, so you are
+not left concluding that retrieval is bad when the index is merely stale:
+
+```bash
+ledger sleep index    # regenerates derived indices *and* the semantic index
+```
+
 Optional ranking mechanisms (all off by default; enable after A/B validation):
 
 | Mechanism | Config key | CLI | Notes |
