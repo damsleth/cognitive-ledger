@@ -64,6 +64,11 @@ _LEGACY_STATE_FILENAME = "claude_memory_import_state.json"
 # who the fact came from.
 VIA_CHANNEL = "claude-memory"
 
+# Skip-reason marker for a memory file whose note triage already promoted into
+# a typed folder. Surfaced separately from "unchanged" so a dropped *update*
+# is visible instead of being reported as a no-op.
+SKIP_ALREADY_PROMOTED = "already promoted"
+
 # Body/name markers used to refine the heterogeneous "project" and
 # "reference" Claude types into ledger types.
 _LOOP_MARKERS = re.compile(
@@ -72,8 +77,18 @@ _LOOP_MARKERS = re.compile(
     r"next step|follow[- ]?up|wip|in progress|backlog)\b",
     re.IGNORECASE,
 )
+# ponytail: "convention" deliberately excluded. In this corpus it almost always
+# means a naming/formatting rule about specific entities ("Jan vs Jan Karl naming
+# convention") — a fact or preference, not a mental model. Leaving it in made the
+# title-first branch below classify disambiguation facts as concepts.
+# ponytail: the multi-word markers ("mental model", "design pattern") only ever
+# fire against a prose body — a Claude memory `name` is a kebab-case slug, so
+# they cannot match there. Left as-is on purpose: bug A was over-classification,
+# so normalising separators to widen the match is the wrong direction without
+# evidence that concepts are being missed. Upgrade path if that evidence shows
+# up: match against `name_l.replace("-", " ")`.
 _CONCEPT_MARKERS = re.compile(
-    r"\b(architecture|philosophy|axiom|principle|convention|framework|"
+    r"\b(architecture|philosophy|axiom|principle|framework|"
     r"mental model|design pattern|invariant|taxonomy)\b",
     re.IGNORECASE,
 )
@@ -316,6 +331,14 @@ class ImportPlan:
     def skipped(self) -> list[PlannedNote]:
         return [n for n in self.notes if n.skipped]
 
+    @property
+    def skipped_promoted(self) -> list[PlannedNote]:
+        """Skipped because a typed note with the same external_id exists."""
+        return [
+            n for n in self.notes
+            if n.skipped and (n.skip_reason or "").startswith(SKIP_ALREADY_PROMOTED)
+        ]
+
 
 _WIKILINK = re.compile(r"\[\[([^\]]+)\]\]")
 _NOTE_PREFIXES = tuple(layout.prefix for layout in NOTE_LAYOUTS.values())
@@ -432,6 +455,33 @@ def iter_memory_files(memory_root: Path) -> list[Path]:
     return out
 
 
+def existing_external_ids(cfg: LedgerConfig) -> dict[str, str]:
+    """Map ``external_id`` -> existing note path across every typed folder.
+
+    ``import-claude-memory`` is otherwise blind to what triage already
+    promoted: re-importing a memory file whose note was promoted (or closed)
+    re-creates it as a fresh open loop. That is how completed work reappears
+    as an open loop, and how a fact and a loop end up as twins.
+    """
+    from ledger.parsing.frontmatter import parse_frontmatter_text
+
+    notes_dir = cfg.ledger_notes_dir
+    found: dict[str, str] = {}
+    if not notes_dir or not Path(notes_dir).is_dir():
+        return found
+    for path in sorted(Path(notes_dir).glob("*/*.md")):
+        if path.parent.name == "00_inbox":
+            continue
+        try:
+            meta, _ = parse_frontmatter_text(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError):
+            continue
+        ext = (meta or {}).get("external_id")
+        if ext:
+            found.setdefault(str(ext), str(path))
+    return found
+
+
 def build_plan(
     *,
     memory_root: Path,
@@ -442,6 +492,7 @@ def build_plan(
     files = iter_memory_files(memory_root)
     state = _load_state(cfg)
     entries = state.get("entries", {})
+    already_typed = existing_external_ids(cfg)
 
     plan = ImportPlan(memory_root=memory_root)
     plan.files_seen = len(files)
@@ -508,6 +559,13 @@ def build_plan(
         if prev and prev.get("hash") == origin_hash:
             note.skipped = True
             note.skip_reason = "unchanged since last import"
+        elif external_id in already_typed:
+            # Triage already promoted this memory into a typed note. Importing
+            # it again would fork a second copy (twin) or resurrect closed work.
+            note.skipped = True
+            note.skip_reason = (
+                f"{SKIP_ALREADY_PROMOTED}: {already_typed[external_id]}"
+            )
 
         plan.notes.append(note)
 
@@ -659,7 +717,18 @@ def render_report(plan: ImportPlan, *, mode: str, preview: int = 4) -> str:
     lines.append(
         f"scanned     : {plan.files_seen} files across {plan.folders_scanned} project folders"
     )
-    lines.append(f"to import   : {len(planned)}   skipped (unchanged): {len(plan.skipped)}")
+    promoted = plan.skipped_promoted
+    unchanged = len(plan.skipped) - len(promoted)
+    lines.append(f"to import   : {len(planned)}   skipped (unchanged): {unchanged}")
+    if promoted:
+        lines.append(
+            f"skipped (already promoted): {len(promoted)} "
+            "— triage already moved these into a typed folder; re-importing "
+            "would fork a twin or reopen closed work. Update the typed note "
+            "directly if the memory file has new content."
+        )
+        for n in promoted:
+            lines.append(f"  - {n.name} -> {n.skip_reason}")
     total_links = sum(n.link_count for n in planned)
     resolved_links = sum(n.resolved_links for n in planned)
     lines.append(

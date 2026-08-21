@@ -270,3 +270,39 @@ class TestReconcileMultiple(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestClosedLoopCompletesTask(unittest.TestCase):
+    """A closed loop is finished work, not a deleted one.
+
+    Before this, `reconcile` only received open/blocked loops, so closing a loop
+    in the ledger made its Things task look deleted and it got flagged
+    "[orphan]" — reading as a mistake instead of as done. Regression guard for
+    the 8 loops closed during the 2026-08-21 brain/ledger cohesion pass.
+    """
+
+    def test_closed_loop_task_is_completed_not_flagged(self):
+        task = _task(uuid="t-closed", notes=_make_marker("loop__done", "closed"))
+        actions = reconcile(
+            loops=[],                      # closed loops are not in the active set
+            tasks=[task],
+            closed_slugs={"loop__done"},
+        )
+        kinds = [a.kind for a in actions]
+        self.assertIn("forward_complete", kinds)
+        self.assertNotIn("orphan_flag", kinds)
+        done = next(a for a in actions if a.kind == "forward_complete")
+        self.assertEqual(done.things_uuid, "t-closed")
+
+    def test_deleted_loop_is_still_an_orphan(self):
+        task = _task(uuid="t-gone", notes=_make_marker("loop__vanished", "open"))
+        actions = reconcile(loops=[], tasks=[task], closed_slugs={"loop__other"})
+        kinds = [a.kind for a in actions]
+        self.assertIn("orphan_flag", kinds)
+        self.assertNotIn("forward_complete", kinds)
+
+    def test_already_completed_task_is_left_alone(self):
+        """No churn on history — a completed task needs no second completion."""
+        task = _task(uuid="t-hist", notes=_make_marker("loop__done", "closed"), status="completed")
+        actions = reconcile(loops=[], tasks=[task], closed_slugs={"loop__done"})
+        self.assertNotIn("forward_complete", [a.kind for a in actions])
