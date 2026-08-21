@@ -1791,6 +1791,7 @@ def handle_import_claude_memory_command(args):
             "folders_scanned": result.folders_scanned,
             "written": result.written,
             "skipped": result.skipped,
+            "skipped_already_promoted": len(plan.skipped_promoted),
             "paths": result.written_paths,
         }
         print(json.dumps(payload, ensure_ascii=False))
@@ -1799,10 +1800,13 @@ def handle_import_claude_memory_command(args):
     if dry_run:
         print(cm.render_report(plan, mode=mode, preview=args.preview))
     else:
-        print(
-            f"imported {result.written} note(s) into {mode} "
-            f"(skipped {result.skipped} unchanged)"
-        )
+        promoted = len(plan.skipped_promoted)
+        unchanged = result.skipped - promoted
+        msg = f"imported {result.written} note(s) into {mode} (skipped {unchanged} unchanged"
+        msg += f", {promoted} already promoted)" if promoted else ")"
+        print(msg)
+        for n in plan.skipped_promoted:
+            print(f"  already promoted, not re-imported: {n.name} -> {n.skip_reason}")
         for rel in result.written_paths:
             print(f"  {rel}")
 
