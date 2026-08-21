@@ -55,6 +55,26 @@ dry-run report prints the chosen type and the reason for every file.
 Marker precedence (highest first): concept-in-title → project open-work →
 concept-in-body → type default.
 
+**Concept markers are deliberately narrow.** The set is
+`architecture | philosophy | axiom | principle | framework | mental model |
+design pattern | invariant | taxonomy`. Because concept-in-title is the *highest*
+precedence rule, a loose marker there overrides every other signal — which is how
+`nocos-jan-naming-convention` (a disambiguation fact: Jan = Jan Guttormsen,
+Jan Karl = Jan Karl Andersen) was filed as a concept. `convention` was dropped for
+exactly this reason: in practice it names a naming/formatting rule about specific
+entities, which is a fact or a preference, not a mental model.
+
+Two consequences worth knowing before you widen the set:
+
+- The multi-word markers (`mental model`, `design pattern`) can only ever fire
+  against a **body**. A Claude memory `name` is a kebab-case slug, so
+  `hugr-design-pattern` does not match. This is left unwidened on purpose — the
+  observed bug was *over*-classification. If evidence shows concepts are being
+  missed, the upgrade path is matching against `name_l.replace("-", " ")`.
+- Triage is the backstop, and it works: it corrected the Jan note to
+  `03_preferences/`. But a wrong proposal that nobody reviews becomes a wrong
+  note, so the heuristic should be conservative rather than eager.
+
 ### Synthesized frontmatter
 
 Claude memory files carry none of the ledger's required fields, so the
@@ -73,6 +93,40 @@ importer synthesizes them:
 Every imported note records where it came from, both in a `## Provenance`
 body section and in three frontmatter fields (the *provenance triad*,
 below). `[[wikilinks]]` in the source body are preserved verbatim.
+
+## Re-import safety
+
+The importer is **not** blind to what triage has already done. Before planning a
+write it indexes `external_id` across every typed folder
+(`existing_external_ids()`; `00_inbox/` is excluded, because staging is not
+promotion) and skips any memory file whose note already lives in one.
+
+Without that guard, re-importing a changed memory file forked a second copy of a
+note that had already been promoted. Two real failures in the live tree:
+
+- `yaams-owa-ingestion-roadmap` existed as **both** `02_facts/fact__…` and
+  `05_open_loops/loop__…`, with the fact newer and richer — so a tier boost would
+  have hit two copies of differing freshness.
+- `three-gaps-branches-rollout` came back as an **open loop** after the
+  hand-written original had been closed with every step ticked. The importer
+  resurrected finished work.
+
+Skips are reported in their own bucket, never folded into "unchanged":
+
+```
+to import   : 26   skipped (unchanged): 63
+skipped (already promoted): 2 — triage already moved these into a typed folder;
+re-importing would fork a twin or reopen closed work. Update the typed note
+directly if the memory file has new content.
+  - yaams-owa-ingestion-roadmap -> already promoted: .../02_facts/fact__yaams_owa_ingestion_roadmap.md
+```
+
+`--json` exposes the same count as `skipped_already_promoted`.
+
+**This is a skip, not a merge.** If the memory file genuinely has new content,
+that content is *not* imported — update the typed note by hand. Reporting the
+skip loudly is the point: silently swallowing an update would be worse than the
+twin it prevents.
 
 ## Schema proposal — making the ledger a clean sink for both pipelines
 
