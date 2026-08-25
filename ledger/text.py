@@ -41,7 +41,7 @@ def normalize_statement(value: str) -> str:
 
 
 def count_words(text: str) -> int:
-    return len(re.findall(r"\S+", text))
+    return len(text.split())
 
 
 def infer_lang(content: str) -> str:
