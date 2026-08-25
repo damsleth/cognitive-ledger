@@ -133,8 +133,7 @@ def _write_inbox_note(text: str, *, title: str = "", tags: str = "", scope: str 
     """Write a minimal inbox capture and return its path. Human triages later."""
     from ledger.config import get_config
     from ledger.inbox import _inbox_dir
-    from ledger.io import safe_write_text
-    from ledger.parsing.frontmatter import serialize_frontmatter
+    from ledger.text import write_markdown
 
     now = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     inbox = _inbox_dir(get_config().ledger_notes_dir)
@@ -150,8 +149,7 @@ def _write_inbox_note(text: str, *, title: str = "", tags: str = "", scope: str 
     fm = {"created": now, "updated": now, "tags": tag_list,
           "confidence": 0.5, "source": "assistant", "scope": scope, "via": "mcp"}
     heading = f"# {title}\n\n" if title else ""
-    body = f"{serialize_frontmatter(fm)}{heading}{text.strip()}\n"
-    safe_write_text(path, body)
+    write_markdown(path, fm, f"{heading}{text.strip()}")
     return {"created": str(path), "status": "captured_to_inbox"}
 
 
