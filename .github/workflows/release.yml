@@ -17,6 +17,8 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      LEDGER_NOTES_DIR: ${{ github.workspace }}/tests/fixtures/corpus/notes
     strategy:
       fail-fast: false
       matrix:
