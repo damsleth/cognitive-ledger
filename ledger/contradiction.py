@@ -697,6 +697,7 @@ def run_contradiction_scan(
             except OSError:
                 continue
             neighbor_fm, neighbor_body = parse_frontmatter_text(neighbor_text)
+            neighbor_body = strip_private_tags(neighbor_body)
 
             # Skip already-superseded neighbors
             neighbor_superseded = _is_superseded(neighbor_fm)
