@@ -183,6 +183,31 @@ class AddNoteTests(unittest.TestCase):
         self.assertIn("[[other-note]]", text)
         self.assertIn("https://example.com", text)
 
+    def test_bare_link_is_rendered_as_wikilink(self):
+        result = add_note(body="Body.", note_type="fact", links=["fact__other_note"])
+        text = result.path.read_text(encoding="utf-8")
+        self.assertIn("- [[fact__other_note]]", text)
+
+    def test_direct_loop_is_lint_clean_shape(self):
+        result = add_note(
+            body="Follow up the unresolved deployment question.",
+            note_type="loop",
+            inbox=False,
+        )
+        text = result.path.read_text(encoding="utf-8")
+        self.assertIn("status: open", text)
+        self.assertIn("## Next action", text)
+        self.assertIn("- [ ] Define the next concrete action.", text)
+
+    def test_existing_next_action_is_not_duplicated(self):
+        result = add_note(
+            body="# Follow up\n\n## Next action\n\n- [ ] Call the owner.",
+            note_type="loop",
+            inbox=False,
+        )
+        text = result.path.read_text(encoding="utf-8")
+        self.assertEqual(text.count("## Next action"), 1)
+
     def test_collision_counter(self):
         first = add_note(body="Same.", note_type="fact", slug="dup")
         second = add_note(body="Same.", note_type="fact", slug="dup")

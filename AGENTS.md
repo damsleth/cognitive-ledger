@@ -138,6 +138,8 @@ Default retrieval hides notes with an expired `valid_to`; use `--as-of` to query
 
 **Fusion mode (`semantic_hybrid`).** `fusion: weighted_sum` (default, byte-identical to previous behaviour) or `fusion: rrf` (Reciprocal Rank Fusion — merges independent lexical + semantic rank lists over the full candidate pool). `rrf_k` controls the smoothing constant (default 60). Env: `LEDGER_FUSION`. **Keep `fusion: weighted_sum`: on the real corpus RRF measures worse (hit@1 0.467 vs 0.733, mrr 0.654 vs 0.804) — `k=60` flattens rank differences on small candidate pools. RRF remains opt-in pending a genuine improvement.**
 
+**YAAMS raw-store invariant.** Raw YAAMS items are immutable and append-only: deterministic ID = `sha256(source:source_id)`, persisted with `INSERT OR IGNORE`. Never compress or rewrite the raw tier; improve retrieval and promote curated atomic notes instead.
+
 **PRF — Pseudo-Relevance Feedback (dense path, default off).** Expands the query vector via the Rocchio formula using top-m pseudo-positive and bottom-n pseudo-negative results before re-ranking. Config: `prf_enabled` (false), `prf_top_m` (3), `prf_bottom_n` (5), `prf_alpha` (1.0), `prf_beta` (0.75), `prf_gamma` (0.15). Env: `LEDGER_PRF_ENABLED`, `LEDGER_PRF_ALPHA/BETA/GAMMA`. Per-query: `--prf` flag. **Keep `prf_enabled: false` until `ledger ab run` proves improvement.**
 
 ### Signals (Feedback Loop)
@@ -244,9 +246,9 @@ ledger migrate bitemporal --apply   # write back-fill + append timeline entry
 
 **Lock files.** `FileLock` deliberately does **not** unlink on release: unlinking
 after dropping the flock lets a waiter and a newcomer both believe they hold the
-lock. `<note>.md.lock` files therefore accumulate — a batch import leaves one per
-note, beside a note that very much exists. `ledger inbox cleanup` reaps them
-tree-wide (`unheld_locks` in its result), removing a lock only when a
+lock. `*.lock` files therefore accumulate across note and importer directories.
+`ledger inbox cleanup` reaps them recursively (`unheld_locks` in its result),
+including nested and non-Markdown locks, removing a lock only when a
 non-blocking flock succeeds, which proves nobody holds it:
 
 ```bash
@@ -254,9 +256,9 @@ ledger inbox cleanup           # dry run — lists what would go
 ledger inbox cleanup --apply   # reap
 ```
 
-Safe because this is an explicit maintenance sweep, not the write path. Expect a
-few `08_indices/*.lock` files to survive: those are held by the running process
-writing the timeline/index, and are not note locks.
+Safe because this is an explicit maintenance sweep, not the write path. Expect
+locks held by the running process to survive, including timeline, index, or
+importer state locks.
 
 **Contradiction scan** (`ledger sleep contradictions`) uses a local NLI classifier to detect pairs of notes whose content contradicts each other. Three outcomes:
 

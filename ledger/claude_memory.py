@@ -87,6 +87,11 @@ _LOOP_MARKERS = re.compile(
 # so normalising separators to widen the match is the wrong direction without
 # evidence that concepts are being missed. Upgrade path if that evidence shows
 # up: match against `name_l.replace("-", " ")`.
+_TITLE_CONCEPT_MARKERS = re.compile(
+    r"\b(architecture|philosophy|axiom|principle|framework|"
+    r"invariant|taxonomy)\b",
+    re.IGNORECASE,
+)
 _CONCEPT_MARKERS = re.compile(
     r"\b(architecture|philosophy|axiom|principle|framework|"
     r"mental model|design pattern|invariant|taxonomy)\b",
@@ -238,7 +243,7 @@ def classify(claude_type: str, name: str, body: str) -> Classification:
 
     # The title is the strongest signal: an "architecture"/"philosophy" note
     # is a concept even if its body mentions follow-up work.
-    if _CONCEPT_MARKERS.search(name_l):
+    if _TITLE_CONCEPT_MARKERS.search(name_l):
         return Classification("concepts", "assistant", "concept marker in title → concept")
 
     if ctype == "project" and _LOOP_MARKERS.search(text):

@@ -970,6 +970,11 @@ class LedgerConfig:
         semantic ranking independently, then merges with RRF(k=rrf_k).
         Opt-in pending A/B eval; does not affect weighted_sum path.
 
+    Keep weighted_sum as the default: the real-corpus A/B measured hit@1 0.733
+    and MRR 0.804 versus RRF's 0.467 and 0.654. RRF with k=60 flattens rank
+    differences on this small candidate pool; require a fresh A/B win before
+    changing the default.
+
     Override via LEDGER_FUSION env var.
     """
 

@@ -119,6 +119,22 @@ ledger import obsidian queue sync --vault /path/to/vault      # manual sync
 ledger import obsidian doctor --vault /path/to/vault          # health check
 ```
 
+### Create a note
+
+`ledger notes add` writes to `00_inbox/` by default. Pass `--no-inbox` when the
+type is already decided and the note can land directly in its typed folder.
+
+```bash
+ledger notes add --type fact "The deployment window is Thursday."
+ledger notes add --type loop --no-inbox \
+  --link fact__deployment_policy \
+  "Confirm the Thursday deployment window."
+```
+
+Direct loops include `status: open` and a `## Next action` checkbox, so the
+tool's own `ledger sleep lint` accepts what it writes. Bare `--link` values
+become `[[wikilinks]]`; URLs and explicit Markdown links pass through unchanged.
+
 ## Indexing and Retrieval
 
 ### Build indices
