@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import datetime as dt
 from dataclasses import dataclass
-from typing import Protocol, Any
+from typing import Any
 
 
 # ---------------------------------------------------------------------------
@@ -408,22 +408,3 @@ def trust_verdict(
     if recency < 0.15:
         return TrustVerdict("low", "low confidence and stale", conf)
     return TrustVerdict("low", "low confidence", conf)
-
-
-# ---------------------------------------------------------------------------
-# Scorer protocol (for future A/B wrapping)
-# ---------------------------------------------------------------------------
-
-class Scorer(Protocol):
-    """Interface for a scoring component.
-
-    A ``Scorer`` takes a candidate (as a plain dict) and a ``QueryCtx`` and
-    returns a ``(score_delta, reason_label_or_empty)`` pair.  Multiple scorers
-    can be composed by summing their deltas.
-    """
-
-    def __call__(
-        self,
-        candidate: dict[str, Any],
-        ctx: QueryCtx,
-    ) -> tuple[float, str]: ...
