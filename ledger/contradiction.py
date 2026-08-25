@@ -47,6 +47,7 @@ from ledger.config import get_config
 from ledger.layout import NOTE_LAYOUTS
 from ledger.parsing.frontmatter import parse_frontmatter_text, serialize_frontmatter
 from ledger.parsing.privacy import strip_private_tags
+from ledger.scoring import canonical_scope
 from ledger.io import safe_write_text
 
 
@@ -364,7 +365,7 @@ def _get_semantic_neighbors(
     neighbors: list[dict[str, Any]] = []
 
     # Normalise candidate scope for comparison.
-    cand_scope_norm = (candidate_scope or "").strip().lower() or None
+    cand_scope_norm = canonical_scope(candidate_scope) or None
 
     for item in items:
         rel_path = str(item.get("rel_path", ""))
@@ -385,7 +386,7 @@ def _get_semantic_neighbors(
         # Scope "all" is a cross-scope sentinel — never filtered out.
         # When the candidate has no scope (or scope "all"), skip filtering.
         if cand_scope_norm and cand_scope_norm != "all":
-            item_scope = str(item.get("scope", "")).strip().lower()
+            item_scope = canonical_scope(item.get("scope", ""))
             if item_scope and item_scope != "all" and item_scope != cand_scope_norm:
                 continue
 
@@ -575,6 +576,11 @@ def run_contradiction_scan(
 
     # Load scan state
     state = load_state(indices_dir)
+    # In-run pair guard. Pair keys are symmetric, so when both notes of a pair
+    # are candidates the reverse direction comes up again later in this scan.
+    # resolved_pairs is only written under --apply, so without this a --check
+    # run infers every such pair twice and double-counts it in the report.
+    seen_pairs: set[str] = set()
 
     # Collect candidates: notes that are new or have changed since last scan
     candidates: list[tuple[str, Path, str, dict[str, Any], str]] = []
@@ -661,6 +667,21 @@ def run_contradiction_scan(
         return None
 
     for candidate_ref, candidate_abs, content_h, cand_fm, cand_body in candidates:
+        # `candidates` was snapshotted before this loop. Under --apply an earlier
+        # iteration may have superseded this very note, which stamps superseded_by
+        # and moves the file into 09_archive. Scoring the stale in-memory copy
+        # would then call supersede() with a path that no longer exists, and that
+        # failure degrades into a spurious conflict note in the inbox.
+        if apply:
+            if not candidate_abs.exists():
+                continue
+            try:
+                fresh_fm, _ = parse_frontmatter_text(candidate_abs.read_text(encoding="utf-8"))
+            except OSError:
+                continue
+            if _is_superseded(fresh_fm):
+                continue
+
         cand_type = _note_type_from_path(candidate_abs)
         cand_is_identity = _is_identity_path(candidate_abs)
         cand_lang_no = _is_lang_no(cand_fm)
@@ -684,8 +705,9 @@ def run_contradiction_scan(
 
             # Pair idempotency check
             pk = _pair_key(candidate_ref, neighbor_rel)
-            if pk in state.resolved_pairs:
+            if pk in state.resolved_pairs or pk in seen_pairs:
                 continue
+            seen_pairs.add(pk)
 
             # Resolve neighbor abs path
             neighbor_abs = _rel_path_to_abs(neighbor_rel, ledger_notes_dir)
@@ -719,6 +741,13 @@ def run_contradiction_scan(
             except Exception as exc:
                 scan_result.nli_available = False
                 scan_result.nli_unavailable_reason = str(exc)
+                # Only persist when this run already changed the filesystem.
+                # If NLI was unavailable from the first pair nothing was written,
+                # and the next run should still see the full candidate set --
+                # but once supersessions or conflict notes exist on disk, losing
+                # the state that records them means redoing the whole scan.
+                if apply and (scan_result.supersessions or scan_result.conflict_notes):
+                    save_state(indices_dir, state)
                 return scan_result
 
             scan_result.pairs_evaluated += 1
@@ -842,17 +871,20 @@ def run_contradiction_scan(
                             candidate_ref, neighbor_rel, now_fb
                         )
                         inbox_dir.mkdir(parents=True, exist_ok=True)
-                        safe_write_text(
-                            inbox_dir / filename_fb,
-                            _build_conflict_note(
-                                candidate_ref,
-                                neighbor_rel,
-                                score,
-                                cand_body,
-                                neighbor_body,
-                                now_fb,
-                            ),
+                        conflict_path_fb = inbox_dir / filename_fb
+                        content_fb = _build_conflict_note(
+                            candidate_ref,
+                            neighbor_rel,
+                            score,
+                            cand_body,
+                            neighbor_body,
+                            now_fb,
                         )
+                        safe_write_text(conflict_path_fb, content_fb)
+                        # Mirror the REVIEW path: seed the in-memory cache so the
+                        # reverse direction of this pair, evaluated later in the
+                        # same run, finds it instead of writing a duplicate.
+                        _conflict_note_texts[str(conflict_path_fb)] = content_fb
                         _append_conflict_timeline(
                             f"notes/00_inbox/{filename_fb}",
                             candidate_ref,
