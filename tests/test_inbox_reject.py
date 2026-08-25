@@ -526,6 +526,24 @@ class TestReapUnheldLocks(unittest.TestCase):
             self.assertFalse(lock_b.exists())
             self.assertTrue(note.exists(), "the note itself must survive")
 
+    def test_reaps_nested_non_markdown_lock(self):
+        from ledger.inbox import reap_unheld_locks
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state_dir = root / "08_indices" / "importers" / "claude_memory"
+            state_dir.mkdir(parents=True)
+            lock = state_dir / "state.json.lock"
+            lock.touch()
+
+            found = reap_unheld_locks(notes_dir=root, apply=False)
+            self.assertEqual(found, ["08_indices/importers/claude_memory/state.json.lock"])
+            self.assertTrue(lock.exists(), "dry run must not delete")
+
+            reaped = reap_unheld_locks(notes_dir=root, apply=True)
+            self.assertEqual(reaped, found)
+            self.assertFalse(lock.exists())
+
     def test_leaves_a_held_lock_alone(self):
         """A lock someone holds is live contention, not garbage."""
         import fcntl
