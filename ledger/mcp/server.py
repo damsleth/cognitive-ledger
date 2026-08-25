@@ -41,13 +41,16 @@ def scrub_for_egress(obj: Any) -> Any:
 
 
 def _parse_date(raw: str | None):
+    """Parse a date or ISO timestamp; naive values are assumed UTC.
+
+    datetime.fromisoformat (3.11+) already covers YYYY-MM-DD, trailing "Z",
+    offsets and fractional seconds -- all of which the previous strptime/date
+    pair rejected, raising an uncaught ValueError out of the MCP tool.
+    """
     if not raw:
         return None
-    try:
-        return dt.datetime.strptime(raw, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=dt.timezone.utc)
-    except ValueError:
-        d = dt.date.fromisoformat(raw)
-        return dt.datetime(d.year, d.month, d.day, tzinfo=dt.timezone.utc)
+    parsed = dt.datetime.fromisoformat(raw)
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=dt.timezone.utc)
 
 
 def create_server(*, config=None, allow_write: bool = False, with_yaams: bool = False):
@@ -55,6 +58,7 @@ def create_server(*, config=None, allow_write: bool = False, with_yaams: bool = 
     FastMCP = _require_mcp()
     from ledger.config import get_config, set_config
     from ledger.query import query_result_to_json, rank_query
+    from ledger.validation import validate_scope
 
     if config is not None:
         set_config(config)
@@ -64,6 +68,7 @@ def create_server(*, config=None, allow_write: bool = False, with_yaams: bool = 
     @mcp.tool()
     def ledger_query(query: str, scope: str = "all", limit: int = 8, view: str = "context") -> dict:
         """Rank ledger notes for a query. Returns scored results with trust verdicts."""
+        scope = validate_scope(scope)
         payload = rank_query(query=query, scope=scope, limit=limit,
                              aliases_path=get_config().aliases_path,
                              retrieval_mode=get_config().retrieval_mode)
@@ -72,6 +77,7 @@ def create_server(*, config=None, allow_write: bool = False, with_yaams: bool = 
     @mcp.tool()
     def ledger_recall_as_of(query: str, as_of: str, scope: str = "all", limit: int = 8) -> dict:
         """Recall notes valid at a point in time (YYYY-MM-DD or full ISO)."""
+        scope = validate_scope(scope)
         payload = rank_query(query=query, scope=scope, limit=limit,
                              aliases_path=get_config().aliases_path,
                              retrieval_mode=get_config().retrieval_mode,
@@ -81,6 +87,7 @@ def create_server(*, config=None, allow_write: bool = False, with_yaams: bool = 
     @mcp.tool()
     def ledger_changed_since(query: str, since: str, scope: str = "all", limit: int = 8) -> dict:
         """Return notes matching *query* created/updated on or after *since*."""
+        scope = validate_scope(scope)
         payload = rank_query(query=query, scope=scope, limit=limit,
                              aliases_path=get_config().aliases_path,
                              retrieval_mode=get_config().retrieval_mode,
@@ -96,6 +103,7 @@ def create_server(*, config=None, allow_write: bool = False, with_yaams: bool = 
     @mcp.tool()
     def ledger_answer(question: str, scope: str = "all", limit: int = 5) -> dict:
         """Synthesize a grounded, cited answer to a question (plan 45)."""
+        scope = validate_scope(scope)
         from ledger.synthesize import answer as synth_answer
         result = synth_answer(question, scope=scope, limit=limit)
         return scrub_for_egress(result.to_dict())
@@ -104,6 +112,7 @@ def create_server(*, config=None, allow_write: bool = False, with_yaams: bool = 
         @mcp.tool()
         def ledger_remember(text: str, title: str = "", tags: str = "", scope: str = "all") -> dict:
             """Capture a note into the inbox for later human triage (write-gated)."""
+            scope = validate_scope(scope)
             return scrub_for_egress(_write_inbox_note(text, title=title, tags=tags, scope=scope))
 
     if with_yaams:
