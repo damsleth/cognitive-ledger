@@ -113,7 +113,7 @@ frontmatter:
       - meta       # about the ledger itself
     lang:
       - en         # English
-      - no         # Norwegian
+      - "no"         # Norwegian
       - mixed      # both languages
     status:
       - open       # active, needs resolution

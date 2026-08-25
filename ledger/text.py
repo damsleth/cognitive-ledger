@@ -46,7 +46,10 @@ def count_words(text: str) -> int:
 
 def infer_lang(content: str) -> str:
     has_no = bool(re.search(r"\b(og|ikke|jeg|du|vi|skal|med|uten|hvor|hva|hvis)\b", content, re.I))
-    has_en = bool(re.search(r"\b(and|not|i|you|we|should|with|without|what|if)\b", content, re.I))
+    # ponytail: "i" is excluded on purpose -- it is the most common Norwegian
+    # preposition ("in"), and including it made pure Norwegian text infer as
+    # "mixed", which bypasses the strict lang:no contradiction threshold.
+    has_en = bool(re.search(r"\b(and|not|you|we|should|with|without|what|if)\b", content, re.I))
     if has_no and has_en:
         return "mixed"
     if has_no:
