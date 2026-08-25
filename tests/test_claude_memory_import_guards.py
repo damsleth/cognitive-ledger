@@ -10,9 +10,14 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from ledger.claude_memory import (
+    ImportResult,
     SKIP_ALREADY_PROMOTED,
     classify,
     existing_external_ids,
@@ -95,6 +100,49 @@ class TestSkipMarker(unittest.TestCase):
         reason = f"{SKIP_ALREADY_PROMOTED}: /notes/02_facts/fact__x.md"
         self.assertTrue(reason.startswith(SKIP_ALREADY_PROMOTED))
         self.assertNotIn("unchanged", reason)
+
+
+class TestSkipMarkerCliRendering(unittest.TestCase):
+    def _run(self, *, json_output: bool) -> str:
+        from ledger.cli import handle_import_claude_memory_command
+
+        promoted = SimpleNamespace(
+            name="changed-memory",
+            skip_reason="already promoted: notes/02_facts/fact__changed.md",
+        )
+        plan = SimpleNamespace(skipped_promoted=[promoted])
+        result = ImportResult(
+            dry_run=False,
+            mode="inbox",
+            files_seen=2,
+            folders_scanned=1,
+            written=0,
+            skipped=2,
+        )
+        args = SimpleNamespace(
+            memory_root=None,
+            direct=False,
+            apply=True,
+            json=json_output,
+            preview=False,
+        )
+        buf = StringIO()
+        with (
+            patch("ledger.claude_memory.run_import", return_value=(result, plan)),
+            redirect_stdout(buf),
+        ):
+            handle_import_claude_memory_command(args)
+        return buf.getvalue()
+
+    def test_text_report_separates_promoted_from_unchanged(self):
+        output = self._run(json_output=False)
+        self.assertIn("skipped 1 unchanged, 1 already promoted", output)
+        self.assertIn("already promoted, not re-imported: changed-memory", output)
+
+    def test_json_report_has_distinct_promoted_count(self):
+        payload = __import__("json").loads(self._run(json_output=True))
+        self.assertEqual(payload["skipped"], 2)
+        self.assertEqual(payload["skipped_already_promoted"], 1)
 
 
 if __name__ == "__main__":
