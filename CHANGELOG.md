@@ -1,5 +1,48 @@
 # Changelog
 
+## 2026-08-25 (0.11.2)
+
+`0.11.1` was documented in source but never tagged or published. This patch
+ships that work together with the hardening completed since then.
+
+### Fixed
+- **Direct loop creation now produces a valid loop.** `ledger notes add --type
+  loop --no-inbox` writes `status: open` plus a checked-by-lint `## Next action`
+  section. Existing next-action sections are preserved. Bare `--link` values are
+  emitted as `[[wikilinks]]`; URLs and explicit Markdown links stay unchanged.
+- **Lock cleanup now reaches the whole notes tree.** `ledger inbox cleanup`
+  finds nested locks and non-Markdown locks such as
+  `08_indices/importers/claude_memory/state.json.lock`. The non-blocking flock
+  check remains the deletion gate, so locks held by a running process survive.
+- **Norwegian language metadata survives YAML fixtures and inference.** Quoted
+  `lang: "no"` values no longer become boolean `false`, package language
+  detection includes Norwegian, and tests guard the schema mirror.
+- **MCP inputs fail cleanly and consistently.** Full ISO timestamps now parse,
+  naive timestamps assume UTC, scope aliases are canonicalized on both sides,
+  and invalid scopes raise a validation error.
+- **Contradiction scans are idempotent within a run.** Reverse pairs are
+  evaluated once, superseded candidates are rechecked before reuse, fallback
+  conflict notes don't duplicate, and partial state survives a later NLI
+  failure.
+- **Private content stays out of contradiction neighbors.** MCP capture also
+  writes parseable frontmatter, and trust verdicts no longer call an affirmed
+  medium-confidence note "unaffirmed".
+- **Promoted Claude-memory skips are covered at the CLI boundary.** Text and
+  JSON tests now prove that dropped updates remain separate from unchanged
+  files.
+
+### Changed
+- Concept-title classification now uses a title-only marker set. Multi-word
+  prose markers such as `mental model` and `design pattern` stay available in
+  bodies without leaving a dead kebab-case title path or widening the
+  classifier.
+- Removed unused scorer and virtualenv abstractions plus a machine-local npm
+  shim. The hand-rolled frontmatter parser stays because it preserves values
+  such as `lang: no` that generic YAML parsing can coerce.
+- Completed AI-memory plans 01 through 05 and 12 are archived. The live roadmap
+  now records the commits and A/B evidence that closed them. Its runner only
+  dispatches active plans and works with macOS Bash 3.2.
+
 ## 2026-08-21 (0.11.1)
 
 Five fixes found by auditing the live tree (`~/brain/ledger`) rather than the
