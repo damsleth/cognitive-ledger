@@ -139,9 +139,11 @@ def _build_frontmatter(
   source: str,
   scope: str,
   lang: str,
+  status: str | None = None,
 ) -> str:
   ts = now.strftime("%Y-%m-%dT%H:%M:%SZ")
   tag_list = ", ".join(sorted({t.strip() for t in tags if t and t.strip()}))
+  status_line = f"status: {status}\n" if status else ""
   return (
     "---\n"
     f"created: {ts}\n"
@@ -151,8 +153,21 @@ def _build_frontmatter(
     f"source: {source}\n"
     f"scope: {scope}\n"
     f"lang: {lang}\n"
+    f"{status_line}"
     "---\n\n"
   )
+
+
+def _normalize_link(link: str) -> str:
+  """Render note references as wikilinks while preserving external links."""
+  value = link.strip()
+  if (
+    (value.startswith("[[") and value.endswith("]]"))
+    or value.startswith(("http://", "https://", "mailto:"))
+    or (value.startswith("[") and "](" in value and value.endswith(")"))
+  ):
+    return value
+  return f"[[{value}]]"
 
 
 def _build_body(
@@ -160,6 +175,7 @@ def _build_body(
   raw_body: str,
   title: str,
   links: Iterable[str],
+  ensure_next_action: bool = False,
 ) -> str:
   body = raw_body.strip()
   has_h1 = any(line.strip().startswith("# ") for line in body.splitlines())
@@ -168,12 +184,16 @@ def _build_body(
     out.append(f"# {title}")
     out.append("")
   out.append(body)
+  if ensure_next_action and not re.search(
+    r"^##\s+Next action\s*$", body, re.MULTILINE | re.IGNORECASE
+  ):
+    out.extend(["", "## Next action", "", "- [ ] Define the next concrete action."])
   link_list = [link for link in links if link and link.strip()]
   if link_list:
     out.append("")
     out.append("## Links")
     for link in link_list:
-      out.append(f"- {link.strip()}")
+      out.append(f"- {_normalize_link(link)}")
   if not out[-1].endswith("\n"):
     out.append("")
   return "\n".join(out)
@@ -262,8 +282,14 @@ def add_note(
     source=source,
     scope=scope,
     lang=lang,
+    status="open" if canonical_type == "loops" else None,
   )
-  body_text = _build_body(raw_body=body, title=effective_title, links=links)
+  body_text = _build_body(
+    raw_body=body,
+    title=effective_title,
+    links=links,
+    ensure_next_action=canonical_type == "loops",
+  )
   content = frontmatter + body_text + ("\n" if not body_text.endswith("\n") else "")
 
   target = _resolve_target(

@@ -55,10 +55,10 @@ dry-run report prints the chosen type and the reason for every file.
 Marker precedence (highest first): concept-in-title → project open-work →
 concept-in-body → type default.
 
-**Concept markers are deliberately narrow.** The set is
-`architecture | philosophy | axiom | principle | framework | mental model |
-design pattern | invariant | taxonomy`. Because concept-in-title is the *highest*
-precedence rule, a loose marker there overrides every other signal — which is how
+**Concept markers are deliberately narrow.** Titles use
+`architecture | philosophy | axiom | principle | framework | invariant |
+taxonomy`. Prose bodies also recognize `mental model` and `design pattern`.
+Because concept-in-title is the *highest* precedence rule, a loose marker there overrides every other signal, which is how
 `nocos-jan-naming-convention` (a disambiguation fact: Jan = Jan Guttormsen,
 Jan Karl = Jan Karl Andersen) was filed as a concept. `convention` was dropped for
 exactly this reason: in practice it names a naming/formatting rule about specific
@@ -66,11 +66,11 @@ entities, which is a fact or a preference, not a mental model.
 
 Two consequences worth knowing before you widen the set:
 
-- The multi-word markers (`mental model`, `design pattern`) can only ever fire
-  against a **body**. A Claude memory `name` is a kebab-case slug, so
-  `hugr-design-pattern` does not match. This is left unwidened on purpose — the
-  observed bug was *over*-classification. If evidence shows concepts are being
-  missed, the upgrade path is matching against `name_l.replace("-", " ")`.
+- The multi-word markers (`mental model`, `design pattern`) fire only against a
+  **body**. A Claude memory `name` is a kebab-case slug, so
+  `hugr-design-pattern` does not match. The separate title marker set makes that
+  constraint explicit. If evidence shows concepts are being missed, the upgrade
+  path is matching against `name_l.replace("-", " ")`.
 - Triage is the backstop, and it works: it corrected the Jan note to
   `03_preferences/`. But a wrong proposal that nobody reviews becomes a wrong
   note, so the heuristic should be conservative rather than eager.

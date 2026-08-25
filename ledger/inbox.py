@@ -163,7 +163,7 @@ def reap_unheld_locks(
     notes_dir: Path | None = None,
     apply: bool = False,
 ) -> list[str]:
-    """Remove ``*.md.lock`` files across the notes tree that nobody holds.
+    """Remove ``*.lock`` files across the notes tree that nobody holds.
 
     ``FileLock`` deliberately does not unlink on release — unlinking after
     releasing the flock lets a waiter and a newcomer both believe they hold the
@@ -185,7 +185,7 @@ def reap_unheld_locks(
         return []
 
     reaped: list[str] = []
-    for lock_file in sorted(nd.glob("*/*.md.lock")):
+    for lock_file in sorted(nd.rglob("*.lock")):
         fd = None
         try:
             fd = os.open(str(lock_file), os.O_RDWR)

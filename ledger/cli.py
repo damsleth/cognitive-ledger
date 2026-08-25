@@ -2069,7 +2069,11 @@ def main(argv=None) -> int:
         "--tag", dest="tags", action="append", default=[], help="Frontmatter tag (repeatable)"
     )
     notes_add_parser.add_argument(
-        "--link", dest="links", action="append", default=[], help="Links section entry (repeatable)"
+        "--link",
+        dest="links",
+        action="append",
+        default=[],
+        help="Wikilink target or external link (repeatable)",
     )
     notes_add_parser.add_argument("--source", default="assistant")
     notes_add_parser.add_argument("--scope", default="work")
