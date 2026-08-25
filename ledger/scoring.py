@@ -92,10 +92,15 @@ def canonical_scope(scope: Any) -> str:
 
 
 def scope_matches(note_scope: str, query_scope: str) -> bool:
-    """Return True if *note_scope* satisfies *query_scope*."""
-    if query_scope == "all":
+    """Return True if *note_scope* satisfies *query_scope*.
+
+    Both sides are canonicalised: "life" is a documented alias for "personal",
+    so a query for one must match notes stored as either.
+    """
+    query = canonical_scope(query_scope)
+    if query == "all":
         return True
-    return canonical_scope(note_scope) == query_scope
+    return canonical_scope(note_scope) == query
 
 
 def scope_component(note_scope: str, query_scope: str) -> float:
@@ -375,6 +380,11 @@ class TrustVerdict:
     score: float = 0.0
 
 
+def _affirmations(count: float) -> float | int:
+    """Render an affirmation count without a spurious trailing .0."""
+    return int(count) if count == int(count) else round(count, 1)
+
+
 def trust_verdict(
     *,
     effective_confidence: float,
@@ -399,11 +409,14 @@ def trust_verdict(
     if contradicted:
         return TrustVerdict("low", "contradicted by another note", conf * 0.5)
     if conf >= high_confidence and validation_count >= 1:
-        n = int(validation_count) if validation_count == int(validation_count) else round(validation_count, 1)
-        return TrustVerdict("high", f"high-confidence, affirmed {n}×", conf)
+        return TrustVerdict("high", f"high-confidence, affirmed {_affirmations(validation_count)}×", conf)
     if conf >= high_confidence:
         return TrustVerdict("high", "high-confidence", conf)
     if conf >= medium_confidence:
+        if validation_count >= 1:
+            return TrustVerdict(
+                "medium", f"moderate confidence, affirmed {_affirmations(validation_count)}×", conf
+            )
         return TrustVerdict("medium", "moderate confidence, unaffirmed", conf)
     if recency < 0.15:
         return TrustVerdict("low", "low confidence and stale", conf)
