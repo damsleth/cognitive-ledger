@@ -31,7 +31,7 @@ web = [
     "markdown-it-py>=3.0",
 ]
 mcp = [
-    "mcp>=1.0",
+    "mcp>=1.0,<2"  # 2.x removed mcp.server.fastmcp,
 ]
 # Everything needed to run the full test suite without skips
 # (web UI + chart rendering + MCP). Embeddings tests skip gracefully on their own.
