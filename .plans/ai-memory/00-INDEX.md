@@ -73,14 +73,12 @@ Metrics (`ledger/eval.py:326-512`): `hit@1`, `hit@k`, `mrr`, plus `false_positiv
 ## Dependency DAG & ordering
 
 ```
-Stage 0 (BLOCKING — nothing below merges until 01+02 land):
+Stage 0 (COMPLETE, archived):
   01 eval-cases ─┐
   02 contradiction-fixtures ─┤
-  03 eval-gate-mandatory ────┘  (03 is pure process/docs, parallel)
+  03 eval-gate-mandatory ────┘
 
-Stage 1 (quick wins, parallel after Stage 0):
-  04 rerank-stage          [gate: T1, needs 01]
-  05 document-weighted-sum-vs-rrf   (docs only, no deps)
+Stage 1 (04-05 COMPLETE; active plans below):
   06 bitemporal-event-time [needs 01 temporal cases; touches yaams]
   07 validate-prior-tiebreaker      [needs 01]
 
@@ -89,7 +87,7 @@ Stage 2 (medium bets):
   09 attribute-slot-model     [gate: T3, needs 02+03, builds on 06+08]
   10 ebbinghaus-reinforcement [gate: T4, needs 01]
   11 amem-link-generation     [needs sleep pipeline]
-  12 provenance-weighted-confidence  [A/B only, needs 01]
+  12 provenance-weighted-confidence  [COMPLETE, archived]
 
 Stage 3 (larger bets — only behind proven gates):
   13 associative-ppr-retrieval [gate: T5, needs 01 multi-hop; touches yaams NER]
@@ -104,6 +102,11 @@ Stage 3 (larger bets — only behind proven gates):
 - T6 (Plan 14) retention <~90% → synthesis nodes stay **out of the default retrieval path** (browse-only).
 
 ## The 16 plans
+
+Completed plans 01–05 and 12 are archived under `.plans/done/ai-memory/`.
+Plans 01–03 shipped in `a481e5c`, plan 04 passed T1 and shipped in `395c74d`,
+plan 05 is captured in the contributor/config documentation, and plan 12
+shipped off by default after a quality-tied A/B in v0.9.0.
 
 | # | Plan | Report § | Stage | Gate | Touches yaams |
 |---|---|---|---|---|---|

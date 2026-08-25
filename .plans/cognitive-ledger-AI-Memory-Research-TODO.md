@@ -10,18 +10,18 @@ The eval harness (`ledger eval` / `ledger_ab`, exit 0/2/3) lives here, so this r
 
 Nothing in Stage 1-3 ships without passing `ledger_ab`. This is the single most important anti-entropy investment: it makes every later change reversible and measurable.
 
-- [ ] **Expand `retrieval_eval_cases.yaml`** with multi-hop, temporal, and negative cases. Source: report Stage 0 + T5.
-- [ ] **Build T2 contradiction fixtures**: 30-50 synthetic supersession pairs (location/job/preference changes) + 50 non-conflicting near-duplicate negatives, in a ledger fork. Source: report T2.
-- [ ] **Build T3 implicit-conflict fixtures**: Type I co-referential ("lives in Seattle" -> "new lease in Portland") and Type II propagated ("leg injury" -> invalidates "bikes to work") pairs. Source: report T3 + STALE (arXiv 2605.06527).
-- [ ] **Make the `ledger_ab` exit-code gate (0/2/3) mandatory** in the workflow for every item below. Source: report Stage 0.
+- [x] **Expand `retrieval_eval_cases.yaml`** with multi-hop, temporal, and negative cases. Shipped in `a481e5c`. Source: report Stage 0 + T5.
+- [x] **Build T2 contradiction fixtures**: 30-50 synthetic supersession pairs (location/job/preference changes) + 50 non-conflicting near-duplicate negatives. Shipped in `a481e5c`. Source: report T2.
+- [x] **Build T3 implicit-conflict fixtures**: Type I co-referential and Type II propagated pairs. Shipped in `a481e5c`. Source: report T3 + STALE (arXiv 2605.06527).
+- [x] **Make the `ledger_ab` exit-code gate (0/2/3) mandatory** in the workflow for every item below. Shipped in `a481e5c`. Source: report Stage 0.
 
 ---
 
 ## Stage 1: quick wins
 
-- [ ] **Add `--rerank` to `semantic_hybrid`** using `bge-reranker-v2-m3` over the existing 24-36 shortlist, reusing the loaded BGE-M3. **[bridge]** shares the rerank capability with YAAMS. Gate on T1. Source: report B1.
-- [ ] **Run T1**: `semantic_hybrid` vs `semantic_hybrid + rerank`, metrics MRR / hit@1 / p95 latency. Vary candidate pool (24 vs 36 vs 60). Ship only if MRR gain beats the latency cost. Source: report B1 + T1.
-- [ ] **Document the weighted_sum > RRF decision in-repo.** Your A/B data already shows weighted_sum (hit@1 0.733, MRR 0.830) beats RRF (hit@1 0.467); record it so nobody "fixes" it later. Pure anti-rot. Source: report B2.
+- [x] **Validate and tune the existing `semantic_rerank` mode.** Shipped in `395c74d` after T1 improved hit@1 by 0.0256; `LEDGER_RERANK_INPUT_K` and the tuning space landed in `a02920e`. Source: report B1.
+- [x] **Run T1**: `semantic_hybrid` vs `semantic_rerank`, including candidate-pool tuning. Gate passed (exit 0) in `395c74d`. Source: report B1 + T1.
+- [x] **Document the weighted_sum > RRF decision in-repo.** Recorded in `AGENTS.md`, `config.sample.yaml`, and `LedgerConfig.fusion`; raw YAAMS append-only storage is also explicit. Source: report B2.
 - [ ] **Consume event-time into the bitemporal fields.** Populate `valid_from` from the YAAMS source timestamp **[bridge]** (see YAAMS emit task), make `--as-of` the default retrieval lens when query parsing detects a temporal scope, and ensure notes with `valid_to < now` down-rank but never delete. Source: report A1.
 - [ ] **Validate the `prior` tie-breaker** via the `prior_enabled: false` ablation. Confirm recency+importance+relevance is doing useful work and that `prior_tie_band 0.02` earns its place. Source: report B3a + T4.
 
@@ -36,7 +36,7 @@ Nothing in Stage 1-3 ships without passing `ledger_ab`. This is the single most 
 - [ ] **Bridge signal scoring to Ebbinghaus reinforcement.** Treat `retrieval_hit` / `preference_applied` signals as R = e^(-t/S) events (S incremented on recall, dt reset) that bump a per-note `strength`, replacing the hard 20-signal binary gate with a continuous ramp. Cap the boost (reuse `validation_boost_cap: 0.15`); keep synthetic signals down-weighted. Source: report B3b + MemoryBank (arXiv 2305.10250).
 - [ ] **Run T4 cold-start ramp**: signals-off (today) vs hard-on-at-20 vs continuous reinforcement, MRR trajectory as signal count grows 0 -> 50. Continuous ramp should dominate in the 10-25 signal regime. Source: report T4.
 - [ ] **Add A-MEM link generation in sleep (links only).** For each newly promoted note, embed it, find top-k similar existing notes, propose `[[links]]`. No note mutation yet. Source: report D2 (links).
-- [ ] **Set up provenance-weighted confidence as an A/B candidate.** Use the existing formula (`effective = confidence x provenance_weight + min(boost_per x affirmations, cap)`) and ordering. No new code, just an A/B. Source: report E2.
+- [x] **Set up provenance-weighted confidence as an A/B candidate.** Shipped off by default after a quality-tied A/B in v0.9.0 (`05dda15`, merged by `1575e45`). Source: report E2.
 
 ---
 

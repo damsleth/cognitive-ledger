@@ -16,9 +16,18 @@ PERM="${PERM:-acceptEdits}"
 PLANS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$PLANS_DIR/../.." && pwd)"   # cognitive-ledger repo root
 
-# DAG: stage -> plan numbers. Stage 0 blocks everything below it.
-# Within a stage, plans are independent unless their file's "Needs:" says otherwise.
-declare -A STAGE=( [0]="01 02 03" [1]="04 05 06 07" [2]="08 09 10 11 12" [3]="13 14 15 16" )
+# DAG: stage -> active plan numbers. Completed plans live in
+# .plans/done/ai-memory and are deliberately excluded from dispatch.
+# A case statement keeps the runner compatible with macOS Bash 3.2.
+stage_plans () {
+  case "$1" in
+    0) echo "" ;;
+    1) echo "06 07" ;;
+    2) echo "08 09 10 11" ;;
+    3) echo "13 14 15 16" ;;
+    *) return 1 ;;
+  esac
+}
 
 plan_file () { ls "$PLANS_DIR/$1-"*.md 2>/dev/null | head -1; }
 
@@ -60,22 +69,25 @@ cmd="${1:-help}"; arg="${2:-}"; apply=0
 
 case "$cmd" in
   dag)
-    for s in 0 1 2 3; do echo "Stage $s: ${STAGE[$s]}"; done ;;
-  check)  # self-check: every plan number resolves to exactly one file
+    for s in 0 1 2 3; do echo "Stage $s: $(stage_plans "$s")"; done ;;
+  check)  # self-check: every active plan number resolves to exactly one file
     bad=0
-    for s in 0 1 2 3; do for n in ${STAGE[$s]}; do
+    checked=0
+    for s in 0 1 2 3; do for n in $(stage_plans "$s"); do
       cnt="$(ls "$PLANS_DIR/$n-"*.md 2>/dev/null | wc -l | tr -d ' ')"
       [[ "$cnt" == "1" ]] || { echo "FAIL: plan $n resolved $cnt files"; bad=1; }
+      checked=$((checked + 1))
     done; done
-    [[ "$bad" == "0" ]] && echo "OK: all 16 plan numbers resolve to one file each" || exit 1 ;;
+    [[ "$bad" == "0" ]] && echo "OK: all $checked active plans resolve to one file each" || exit 1 ;;
   plan)
     [[ -n "$arg" && "$arg" != "--apply" ]] || { echo "usage: run.sh plan <NN> [--apply]"; exit 2; }
     dispatch "$arg" "$apply" ;;
   stage)
-    [[ -n "$arg" && "$arg" != "--apply" && -n "${STAGE[$arg]:-}" ]] || { echo "usage: run.sh stage <0-3> [--apply]"; exit 2; }
+    [[ -n "$arg" && "$arg" != "--apply" ]] || { echo "usage: run.sh stage <0-3> [--apply]"; exit 2; }
+    plans="$(stage_plans "$arg")" || { echo "usage: run.sh stage <0-3> [--apply]"; exit 2; }
     [[ "$apply" == "1" ]] || echo "(dry-run — pass --apply to actually dispatch)"
-    echo "Stage $arg: ${STAGE[$arg]}  [sequential, one branch per plan]"
-    for n in ${STAGE[$arg]}; do dispatch "$n" "$apply"; done ;;
+    echo "Stage $arg: $plans  [sequential, one branch per plan]"
+    for n in $plans; do dispatch "$n" "$apply"; done ;;
   status)
     cd "$REPO"; echo "ai-mem branches (✓ = merged to main):"
     for b in $(git for-each-ref --format='%(refname:short)' refs/heads/ai-mem 2>/dev/null); do
@@ -89,7 +101,7 @@ AI-Memory plan runner. Dispatches plans to headless Sonnet agents (one branch ea
   run.sh stage <0-3> [--apply]   dispatch a whole stage (sequential)
   run.sh plan  <NN>  [--apply]   dispatch one plan (e.g. 04)
   run.sh status              list ai-mem/* branches and merge state
-Without --apply, prints what it would do. Stage 0 blocks the rest — run it first.
+Without --apply, prints what it would do. Stage 0 is complete and archived.
 Env: CLAUDE_BIN, MODEL (default sonnet), PERM (acceptEdits|bypassPermissions).
 EOF
     ;;
