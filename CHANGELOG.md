@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- Release CI now points `LEDGER_NOTES_DIR` at the fixture corpus. Fresh GitHub
+  runners have no user config, and the code-tree guard correctly rejected the
+  checkout as a notes directory during test collection.
+
 ## 2026-08-25 (0.11.2)
 
 `0.11.1` was documented in source but never tagged or published. This patch
