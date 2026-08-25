@@ -200,7 +200,7 @@
   note_b: "Bjørn har nå bosatt seg i Bergen."
   relation: contradiction
   attribute: residence
-  lang: no
+  lang: "no"
   expected_nli_fail: true
 
 - id: t2_pos_27
@@ -208,7 +208,7 @@
   note_b: "Kari er nå ansatt i TechNor AS."
   relation: contradiction
   attribute: employer
-  lang: no
+  lang: "no"
   expected_nli_fail: true
 
 - id: t2_pos_28
@@ -216,7 +216,7 @@
   note_b: "Ole spiser nå kjøtt igjen."
   relation: contradiction
   attribute: diet
-  lang: no
+  lang: "no"
   expected_nli_fail: true
 
 - id: t2_pos_29
@@ -224,7 +224,7 @@
   note_b: "Prosjektet ble ferdigstilt i april."
   relation: contradiction
   attribute: project_status
-  lang: no
+  lang: "no"
   expected_nli_fail: true
 
 - id: t2_pos_30
@@ -232,7 +232,7 @@
   note_b: "Ingrid har leid leilighet på Grünerløkka."
   relation: contradiction
   attribute: residence
-  lang: no
+  lang: "no"
   expected_nli_fail: true
 
 - id: t2_pos_31
@@ -240,7 +240,7 @@
   note_b: "Tor startet eget firma i januar."
   relation: contradiction
   attribute: employer
-  lang: no
+  lang: "no"
   expected_nli_fail: true
 
 - id: t2_pos_32
@@ -248,7 +248,7 @@
   note_b: "Astrid har bosatt seg i Stavanger."
   relation: contradiction
   attribute: residence
-  lang: no
+  lang: "no"
   expected_nli_fail: true
 
 - id: t2_pos_33
@@ -256,7 +256,7 @@
   note_b: "Lars ble degradert til teammedlem."
   relation: contradiction
   attribute: role
-  lang: no
+  lang: "no"
   expected_nli_fail: true
 
 # ── Negative pairs — lang:en  (relation: compatible, ≥50 required) ───────────
@@ -585,39 +585,39 @@
   note_b: "Bjørn er ansatt i Norges hovedstad."
   relation: compatible
   attribute: work_location
-  lang: no
+  lang: "no"
 
 - id: t2_neg_47
   note_a: "Kari er glad i friluftsliv."
   note_b: "Kari er mye ute i naturen på fritiden."
   relation: compatible
   attribute: lifestyle
-  lang: no
+  lang: "no"
 
 - id: t2_neg_48
   note_a: "Ole studerte i Trondheim."
   note_b: "Ole fullførte graden sin ved NTNU."
   relation: compatible
   attribute: education
-  lang: no
+  lang: "no"
 
 - id: t2_neg_49
   note_a: "Ingrid er prosjektleder."
   note_b: "Ingrid leder et tverrfaglig prosjektteam."
   relation: compatible
   attribute: role
-  lang: no
+  lang: "no"
 
 - id: t2_neg_50
   note_a: "Tor har to barn."
   note_b: "Tor er familiefar."
   relation: compatible
   attribute: lifestyle
-  lang: no
+  lang: "no"
 
 - id: t2_neg_51
   note_a: "Astrid holder på med Python-utvikling."
   note_b: "Astrid er en erfaren programmerer."
   relation: compatible
   attribute: skills
-  lang: no
+  lang: "no"
