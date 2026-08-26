@@ -20,6 +20,15 @@ from unittest.mock import patch
 
 import pytest
 
+# ledger.config refuses to file notes inside the checkout, and that check runs
+# at import time - so on any machine without ~/.config/ledger/config.yaml (CI,
+# a fresh clone) test modules that import `ledger` fail during *collection*,
+# before a fixture can help. Point the whole session at a scratch dir here,
+# above the test modules that conftest is imported ahead of.
+_TEST_NOTES_DIR = os.environ.setdefault(
+    "LEDGER_NOTES_DIR", tempfile.mkdtemp(prefix="ledger-tests-")
+)
+
 
 @pytest.fixture
 def temp_notes_dir() -> Generator[Path, None, None]:
