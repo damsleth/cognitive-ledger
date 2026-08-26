@@ -14,24 +14,37 @@ from ledger.config import (
 )
 
 
-class TestLedgerConfig(unittest.TestCase):
-    """Tests for LedgerConfig."""
+class _LedgerEnvIsolation:
+    """setUp/tearDown for tests that resolve config from a temp XDG dir.
+
+    The teardown wipe used to be unpaired: it deleted every LEDGER_* var and
+    never put them back, so every test that ran after this file saw an
+    unconfigured ledger. On a laptop with ~/.config/ledger/config.yaml that
+    is invisible; on CI it was 71 failures and two collection errors.
+    """
 
     def setUp(self):
         reset_config()
-        self._orig_xdg = os.environ.get("XDG_CONFIG_HOME")
+        self._orig_env = {
+            k: v
+            for k, v in os.environ.items()
+            if k.startswith("LEDGER_") or k == "XDG_CONFIG_HOME"
+        }
+        # These tests assert what the config file resolves to; an ambient
+        # LEDGER_NOTES_DIR would override it and the assertions would read
+        # the override instead.
+        os.environ.pop("LEDGER_NOTES_DIR", None)
 
     def tearDown(self):
         reset_config()
-        # Clean up env vars
-        for key in list(os.environ.keys()):
-            if key.startswith("LEDGER_"):
-                del os.environ[key]
-        # Restore XDG_CONFIG_HOME (tests point it at temp dirs)
-        if self._orig_xdg is None:
-            os.environ.pop("XDG_CONFIG_HOME", None)
-        else:
-            os.environ["XDG_CONFIG_HOME"] = self._orig_xdg
+        for key in [k for k in os.environ if k.startswith("LEDGER_")]:
+            del os.environ[key]
+        os.environ.pop("XDG_CONFIG_HOME", None)
+        os.environ.update(self._orig_env)
+
+
+class TestLedgerConfig(_LedgerEnvIsolation, unittest.TestCase):
+    """Tests for LedgerConfig."""
 
     def _write_user_config(self, base_dir: Path, content: str) -> Path:
         """Write a user config to the canonical XDG location under base_dir."""
@@ -313,22 +326,8 @@ class TestConfigSingleton(unittest.TestCase):
         self.assertIs(config1, config2)
 
 
-class TestThings3Config(unittest.TestCase):
+class TestThings3Config(_LedgerEnvIsolation, unittest.TestCase):
     """Tests for Things3 sync config keys."""
-
-    def setUp(self):
-        reset_config()
-        self._orig_xdg = os.environ.get("XDG_CONFIG_HOME")
-
-    def tearDown(self):
-        reset_config()
-        for key in list(os.environ.keys()):
-            if key.startswith("LEDGER_"):
-                del os.environ[key]
-        if self._orig_xdg is None:
-            os.environ.pop("XDG_CONFIG_HOME", None)
-        else:
-            os.environ["XDG_CONFIG_HOME"] = self._orig_xdg
 
     def _write_user_config(self, base_dir: Path, content: str) -> None:
         os.environ["XDG_CONFIG_HOME"] = str(base_dir)
