@@ -25,9 +25,14 @@ def load_ledger_module():
 class InitTests(unittest.TestCase):
     def setUp(self):
         self._orig_xdg = os.environ.get("XDG_CONFIG_HOME")
+        # init writes the config file; an ambient LEDGER_NOTES_DIR would win
+        # over what it persisted and the assertions would read the override.
+        self._orig_notes_dir = os.environ.pop("LEDGER_NOTES_DIR", None)
 
     def tearDown(self):
         reset_config()
+        if self._orig_notes_dir is not None:
+            os.environ["LEDGER_NOTES_DIR"] = self._orig_notes_dir
         if self._orig_xdg is None:
             os.environ.pop("XDG_CONFIG_HOME", None)
         else:
