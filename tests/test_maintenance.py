@@ -428,7 +428,7 @@ def test_status_prints_gate_reasoning(tmp_path, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "No sleep needed" in out
     assert "days_since=0 >= 7 with work_present=False" in out
-    assert "changes_since=0 >= 25" in out
+    assert "unique_changes_since=0 >= 25" in out
     assert "unlogged_change_count=0 >= 50" in out
     assert "sync_drift=clean in ['state_invalid', 'timeline_rewound']" in out
 
@@ -476,6 +476,60 @@ def test_age_gate_requires_work_since_last_sleep(tmp_path, monkeypatch):
     assert active_payload["sleep_recommendation_reasons"] == ["days_since"]
 
 
+def test_volume_gate_counts_unique_note_paths(tmp_path, monkeypatch):
+    config = _make_temp_config(tmp_path)
+    clean_report = {
+        "state_invalid": False,
+        "state_exists": True,
+        "timeline_rewound": False,
+        "unlogged_paths": [],
+    }
+    try:
+        repeated = [
+            {
+                "ts": f"2026-08-27T00:00:{i:02d}Z",
+                "action": "updated",
+                "path": "notes/02_facts/fact__same.md",
+                "desc": str(i),
+            }
+            for i in range(25)
+        ]
+        events = [
+            {
+                "ts": "2026-08-27T00:00:00Z",
+                "action": "sleep",
+                "path": "-",
+                "desc": "done",
+            },
+            *repeated,
+        ]
+        _write(
+            config.timeline_jsonl_path,
+            "".join(json.dumps(event) + "\n" for event in events),
+        )
+        monkeypatch.setattr(maintenance, "_compute_sync_report", lambda: clean_report)
+
+        repeated_payload = maintenance._status_payload()
+        assert repeated_payload["changes_since"] == 25
+        assert repeated_payload["unique_changes_since"] == 1
+        assert repeated_payload["sleep_recommended"] is False
+
+        for i, event in enumerate(repeated, start=1):
+            event["path"] = f"notes/02_facts/fact__{i}.md"
+        _write(
+            config.timeline_jsonl_path,
+            "".join(json.dumps(event) + "\n" for event in events),
+        )
+        unique_payload = maintenance._status_payload()
+    finally:
+        reset_config()
+
+    assert unique_payload["unique_changes_since"] == 25
+    assert unique_payload["sleep_recommendation_reasons"] == [
+        "unique_changes_since"
+    ]
+
+
 def test_status_counts_changes_from_jsonl_not_generated_markdown(tmp_path, monkeypatch):
     config = _make_temp_config(tmp_path)
     try:
@@ -513,6 +567,7 @@ def test_status_counts_changes_from_jsonl_not_generated_markdown(tmp_path, monke
 
     assert payload["entries_total"] == 2
     assert payload["changes_since"] == 1
+    assert payload["unique_changes_since"] == 1
 
 
 def test_status_handles_every_sync_state_without_missing_drift_count(tmp_path, monkeypatch):

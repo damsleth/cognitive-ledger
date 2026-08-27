@@ -52,7 +52,7 @@ from ledger.schema_values import (
 LARGE_FILE_WORD_THRESHOLD = 400
 SYNC_STATE_VERSION = 2
 SLEEP_DAYS_THRESHOLD = 7
-SLEEP_CHANGE_THRESHOLD = 25
+SLEEP_UNIQUE_CHANGE_THRESHOLD = 25
 SLEEP_UNLOGGED_CHANGE_THRESHOLD = 50
 SLEEP_DRIFT_STATES = frozenset({"state_invalid", "timeline_rewound"})
 
@@ -330,6 +330,7 @@ def _status_payload() -> dict:
         "last_sleep": None,
         "entries_total": 0,
         "changes_since": 0,
+        "unique_changes_since": 0,
         "days_since": 0,
         "sync_drift": "unknown",
         "unlogged_change_count": 0,
@@ -359,7 +360,15 @@ def _status_payload() -> dict:
     last_sleep = entries[sleep_idx]
     last_sleep_ts = last_sleep[1]
     payload["last_sleep"] = last_sleep_ts
-    payload["changes_since"] = max(0, len(entries) - sleep_idx - 1)
+    entries_since_sleep = entries[sleep_idx + 1 :]
+    payload["changes_since"] = len(entries_since_sleep)
+    payload["unique_changes_since"] = len(
+        {
+            path
+            for _lineno, _ts, _action, path, _desc in entries_since_sleep
+            if _is_tracked_path(path)
+        }
+    )
     last_dt = parse_timestamp(last_sleep_ts)
     now_dt = datetime.now(timezone.utc)
     days_since = 0
@@ -379,7 +388,8 @@ def _status_payload() -> dict:
     else:
         payload["sync_drift"] = "clean"
     work_present = (
-        payload["changes_since"] > 0 or payload["unlogged_change_count"] > 0
+        payload["unique_changes_since"] > 0
+        or payload["unlogged_change_count"] > 0
     )
     gate_evaluations = [
         {
@@ -392,11 +402,11 @@ def _status_payload() -> dict:
             "met": days_since >= SLEEP_DAYS_THRESHOLD and work_present,
         },
         {
-            "code": "changes_since",
-            "observed": payload["changes_since"],
+            "code": "unique_changes_since",
+            "observed": payload["unique_changes_since"],
             "operator": ">=",
-            "threshold": SLEEP_CHANGE_THRESHOLD,
-            "met": payload["changes_since"] >= SLEEP_CHANGE_THRESHOLD,
+            "threshold": SLEEP_UNIQUE_CHANGE_THRESHOLD,
+            "met": payload["unique_changes_since"] >= SLEEP_UNIQUE_CHANGE_THRESHOLD,
         },
         {
             "code": "unlogged_change_count",
@@ -441,6 +451,7 @@ def cmd_status(as_json: bool = False) -> int:
         return 0
     print(f"Last sleep: {payload['last_sleep']}")
     print(f"Changes since: {payload['changes_since']}")
+    print(f"Unique notes changed: {payload['unique_changes_since']}")
     print(f"Days since: {payload['days_since']}")
     drift = payload["sync_drift"]
     if drift == "state_invalid":
