@@ -12,11 +12,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from ledger.io.safe_write import safe_append_line, safe_write_text
+from ledger.io.safe_write import FileLock, safe_append_line, safe_write_text
 
 TIMELINE_MARKDOWN_HEADER = """# Timeline
 
-Append-only log of meaningful note changes.
+Generated view of meaningful note changes. Do not edit directly.
 
 Format: `<ISO timestamp> | <action> | <path> | <description>`
 
@@ -107,9 +107,8 @@ def ensure_timeline_jsonl(
 ) -> list[dict[str, Any]]:
     """Ensure JSONL exists, migrating from markdown if needed."""
     jsonl_path = Path(timeline_jsonl_path)
-    events = load_timeline_jsonl(jsonl_path)
-    if events:
-        return events
+    if jsonl_path.is_file():
+        return load_timeline_jsonl(jsonl_path)
 
     md_events = parse_timeline_markdown(timeline_md_path)
     if md_events:
@@ -139,35 +138,20 @@ def regenerate_timeline_markdown(
     timeline_jsonl_path: Path | str,
     timeline_md_path: Path | str,
 ) -> None:
-    """Regenerate timeline markdown from JSONL source.
-
-    Merges any md-only entries (manually appended lines not present in the
-    JSONL) into the JSONL file before rendering, so hand-written timeline
-    entries are preserved and deduplicated.
-    """
+    """Regenerate the read-only markdown view from the JSONL source."""
     jsonl_path = Path(timeline_jsonl_path)
     md_path = Path(timeline_md_path)
 
-    jsonl_events = load_timeline_jsonl(jsonl_path)
-
-    # Collect keys already in JSONL to detect md-only entries
-    jsonl_keys = {(str(e.get("ts", "")), str(e.get("path", ""))) for e in jsonl_events}
-
-    # Parse md for entries not yet in jsonl
-    md_only: list[dict[str, Any]] = []
-    for md_event in parse_timeline_markdown(md_path):
-        key = (str(md_event.get("ts", "")), str(md_event.get("path", "")))
-        if key not in jsonl_keys:
-            md_only.append(md_event)
-
-    # Merge md-only entries into jsonl persistently
-    if md_only:
-        for event in md_only:
-            append_timeline_jsonl(jsonl_path, event)
+    # Lock the generated view before loading JSONL. Concurrent appenders then
+    # render in append order, so the last writer always sees every prior event.
+    with FileLock(md_path):
         jsonl_events = load_timeline_jsonl(jsonl_path)
-
-    jsonl_events.sort(key=lambda item: str(item.get("ts", "")))
-    safe_write_text(md_path, render_timeline_markdown(jsonl_events))
+        jsonl_events.sort(key=lambda item: str(item.get("ts", "")))
+        safe_write_text(
+            md_path,
+            render_timeline_markdown(jsonl_events),
+            use_lock=False,
+        )
 
 
 def timeline_since(
