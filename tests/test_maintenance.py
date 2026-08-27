@@ -5,6 +5,7 @@ from pathlib import Path
 
 from ledger.config import LedgerConfig, set_config, reset_config
 from ledger import maintenance
+from ledger.io.safe_write import append_timeline_entry
 
 
 def _write(path: Path, content: str) -> None:
@@ -268,6 +269,35 @@ After.
     out = capsys.readouterr().out
     assert check_rc == 1
     assert "Unlogged note changes: 1" in out
+
+
+def test_sync_matches_timeline_event_to_current_file_version(tmp_path, capsys):
+    config = _make_temp_config(tmp_path)
+    try:
+        note = config.ledger_notes_dir / "02_facts" / "fact__versioned.md"
+        _write(note, "before\n")
+        _write(config.timeline_jsonl_path, "")
+        maintenance.cmd_sync(apply=True)
+        capsys.readouterr()
+
+        _write(note, "logged version\n")
+        append_timeline_entry(
+            config.timeline_path,
+            "updated",
+            note,
+            "logged",
+            root_dir=config.ledger_root,
+            ledger_notes_dir=config.ledger_notes_dir,
+        )
+        assert maintenance._compute_sync_report()["unlogged_paths"] == []
+
+        _write(note, "later unlogged version\n")
+        report = maintenance._compute_sync_report()
+    finally:
+        reset_config()
+
+    assert report["logged_paths"] == []
+    assert report["unlogged_paths"] == ["notes/02_facts/fact__versioned.md"]
 
 
 def test_status_recommends_sleep_for_large_unlogged_drift(tmp_path, monkeypatch):

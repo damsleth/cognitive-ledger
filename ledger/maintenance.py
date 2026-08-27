@@ -180,7 +180,7 @@ def _is_tracked_path(rel_path: str) -> bool:
 
 def _compute_sync_report() -> dict[str, Any]:
     _notes_dir, _indices_dir, _timeline_path = _config_paths()
-    timeline_entries = _timeline_jsonl_entries(get_config().timeline_jsonl_path)
+    timeline_events = timeline_lib.load_timeline_jsonl(get_config().timeline_jsonl_path)
     current_snapshot = _tracked_note_snapshot()
     state_path = _sync_state_path()
     state = _load_sync_state(state_path)
@@ -192,7 +192,7 @@ def _compute_sync_report() -> dict[str, Any]:
         "last_synced_at": "",
         "state_version": None,
         "tracked_count": len(current_snapshot),
-        "timeline_total": len(timeline_entries),
+        "timeline_total": len(timeline_events),
         "timeline_since_count": 0,
         "timeline_rewound": False,
         "added": [],
@@ -237,21 +237,34 @@ def _compute_sync_report() -> dict[str, Any]:
     except (TypeError, ValueError):
         baseline_count = 0
 
-    if baseline_count > len(timeline_entries):
+    if baseline_count > len(timeline_events):
         report["timeline_rewound"] = True
-        timeline_since = timeline_entries
+        timeline_since = timeline_events
     else:
-        timeline_since = timeline_entries[baseline_count:]
+        timeline_since = timeline_events[baseline_count:]
 
-    logged_paths = sorted(
+    logged_paths_set: set[str] = set()
+    for event in timeline_since:
+        path_field = str(event.get("path", "")).strip()
+        if not _is_tracked_path(path_field) or path_field not in drift_paths:
+            continue
+        if path_field not in current_snapshot:
+            if str(event.get("action", "")) in {"deleted", "archived"}:
+                logged_paths_set.add(path_field)
+            continue
+        if str(event.get("content_hash", "")) == current_snapshot[path_field]:
+            logged_paths_set.add(path_field)
+
+    logged_paths = sorted(logged_paths_set)
+    unlogged_paths = sorted(path for path in drift_paths if path not in logged_paths)
+    timeline_only_paths = sorted(
         {
-            path_field.strip()
-            for _lineno, _ts, _action, path_field, _desc in timeline_since
-            if _is_tracked_path(path_field)
+            str(event.get("path", "")).strip()
+            for event in timeline_since
+            if _is_tracked_path(str(event.get("path", "")))
+            and str(event.get("path", "")).strip() not in drift_paths
         }
     )
-    unlogged_paths = sorted(path for path in drift_paths if path not in logged_paths)
-    timeline_only_paths = sorted(path for path in logged_paths if path not in drift_paths)
 
     report["timeline_since_count"] = len(timeline_since)
     report["added"] = added

@@ -85,6 +85,29 @@ def test_jsonl_is_the_only_writable_timeline_source(tmp_path: Path):
     assert "fact__md_only.md" not in rendered
 
 
+def test_canonical_append_records_current_note_hash(tmp_path: Path):
+    notes_dir = tmp_path / "notes"
+    note = notes_dir / "02_facts" / "fact__hashed.md"
+    note.parent.mkdir(parents=True)
+    note.write_text("current content\n", encoding="utf-8")
+    md = notes_dir / "08_indices" / "timeline.md"
+
+    append_timeline_entry(
+        md,
+        "updated",
+        note,
+        "hashed",
+        root_dir=tmp_path,
+        ledger_notes_dir=notes_dir,
+        timestamp="2026-02-02T00:00:00Z",
+    )
+
+    import hashlib
+
+    event = load_timeline_jsonl(md.with_name("timeline.jsonl"))[0]
+    assert event["content_hash"] == hashlib.sha256(note.read_bytes()).hexdigest()
+
+
 def test_missing_jsonl_is_migrated_before_canonical_append(tmp_path: Path):
     md = tmp_path / "timeline.md"
     jsonl = tmp_path / "timeline.jsonl"
