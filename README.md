@@ -400,7 +400,7 @@ Agents should read `AGENTS.md` for the full protocol — golden rules, note conv
 - Search before you write (`rg`, `fd`)
 - One idea per file
 - Never store raw chat logs
-- Append to `notes/08_indices/timeline.md` after every note operation
+- Append through `append_timeline_entry` after every note operation; `timeline.md` is generated from `timeline.jsonl`
 
 ## Python Environment
 
