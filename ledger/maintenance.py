@@ -1492,6 +1492,15 @@ def cmd_sleep(as_json: bool = False) -> int:
             "guidance": "timeline.jsonl is the source of truth",
         },
         {
+            "step": "6b",
+            "title": "Re-baseline sync state",
+            "command": "sheep sync --apply",
+            "guidance": (
+                "Without this, `sheep status` keeps recommending sleep on sync_drift "
+                "right after a completed sleep. Add --accept-drift if it refuses."
+            ),
+        },
+        {
             "step": 7,
             "title": "Commit",
             "command": 'git add -A && git commit -m "sleep: weekly consolidation"',
@@ -1544,6 +1553,12 @@ def cmd_sleep(as_json: bool = False) -> int:
         "\"from ledger.embeddings import append_timeline_entry; "
         "append_timeline_entry('sleep', '-', 'consolidation complete')\""
     )
+    print("")
+    print("6b. Re-baseline sync state (else `sheep status` nags on sync_drift forever)")
+    print("    sheep sync --check                  # what drifted since last baseline")
+    print("    sheep sync --apply                  # write current snapshot as baseline")
+    print("    sheep sync --apply --accept-drift   # required if --apply refuses;")
+    print("                                        # logs an audited accept_drift event")
     print("")
     print("7. Commit")
     print('   git add -A && git commit -m "sleep: weekly consolidation"')
