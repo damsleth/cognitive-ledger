@@ -343,13 +343,18 @@ def _status_payload() -> dict:
         payload["unlogged_change_count"] = len(sync_report["unlogged_paths"])
     else:
         payload["sync_drift"] = "clean"
+    work_present = (
+        payload["changes_since"] > 0 or payload["unlogged_change_count"] > 0
+    )
     gate_evaluations = [
         {
             "code": "days_since",
             "observed": days_since,
             "operator": ">=",
             "threshold": SLEEP_DAYS_THRESHOLD,
-            "met": days_since >= SLEEP_DAYS_THRESHOLD,
+            "requires_work": True,
+            "work_present": work_present,
+            "met": days_since >= SLEEP_DAYS_THRESHOLD and work_present,
         },
         {
             "code": "changes_since",
@@ -414,10 +419,13 @@ def cmd_status(as_json: bool = False) -> int:
     else:
         print("Sync drift: clean")
     evaluations = payload["sleep_gate_evaluations"]
-    evaluation_text = ", ".join(
-        f"{gate['code']}={gate['observed']} {gate['operator']} {gate['threshold']}"
-        for gate in evaluations
-    )
+    evaluation_parts = []
+    for gate in evaluations:
+        text = f"{gate['code']}={gate['observed']} {gate['operator']} {gate['threshold']}"
+        if gate.get("requires_work"):
+            text += f" with work_present={gate['work_present']}"
+        evaluation_parts.append(text)
+    evaluation_text = ", ".join(evaluation_parts)
     if payload["sleep_recommended"]:
         reasons = ", ".join(payload["sleep_recommendation_reasons"])
         print(f"-> Sleep recommended ({reasons}; {evaluation_text})")
