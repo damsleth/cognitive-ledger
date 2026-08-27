@@ -8,6 +8,7 @@ notes concurrently.
 from __future__ import annotations
 
 import fcntl
+import hashlib
 import os
 import tempfile
 from contextlib import contextmanager
@@ -334,6 +335,16 @@ def append_timeline_entry(
         "path": str(note_path),
         "desc": description,
     }
+    physical_note_path: Path | None = None
+    note_path_obj = Path(note_path)
+    if str(note_path).replace("\\", "/").startswith("notes/") and ledger_notes_dir:
+        physical_note_path = Path(ledger_notes_dir) / note_path_obj.relative_to("notes")
+    elif note_path_obj.is_absolute():
+        physical_note_path = note_path_obj
+    elif root_dir is not None:
+        physical_note_path = Path(root_dir) / note_path_obj
+    if physical_note_path is not None and physical_note_path.is_file():
+        event["content_hash"] = hashlib.sha256(physical_note_path.read_bytes()).hexdigest()
     if activity_type:
         event["activity_type"] = activity_type
 
