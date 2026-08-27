@@ -20,7 +20,6 @@ from ledger.text import (  # noqa: F401 — re-exported for intra-backend caller
     slugify,
     write_markdown,
 )
-from ledger.timeline import append_timeline_jsonl
 
 
 TIMELINE_HEADER = """# Timeline
@@ -77,15 +76,6 @@ def append_timeline(path: Path, action: str, rel_path: str, description: str, ts
         ledger_notes_dir=notes_root,
     ).as_posix()
 
-    if ts is not None:
-        ensure_timeline(path)
-        append_timeline_jsonl(
-            path.with_name("timeline.jsonl"),
-            {"ts": ts, "action": action, "path": note_path, "desc": description},
-        )
-        safe_append_line(path, f"{ts} | {action} | {note_path} | {description}")
-        return
-
     append_timeline_entry(
         timeline_path=path,
         action=action,
@@ -93,6 +83,7 @@ def append_timeline(path: Path, action: str, rel_path: str, description: str, ts
         description=description,
         root_dir=ledger_root,
         ledger_notes_dir=notes_root,
+        timestamp=ts,
     )
 
 

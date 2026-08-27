@@ -35,7 +35,7 @@ Apply the voice profile to tone, sentence structure, and vocabulary when writing
 - No chat transcripts — ever
 - No invented facts — use `source: inferred` + `confidence < 0.7`
 - Always bump `updated` timestamp when editing
-- Always append to `notes/08_indices/timeline.md` after any note operation via `ledger timeline add`
+- Always append through `append_timeline_entry`; `timeline.jsonl` is the source of truth and `timeline.md` is generated
 
 ### Should I write?
 
@@ -48,7 +48,7 @@ If none apply: don't write. Noise kills retrieval.
 2. **Create/update the right type** (atomic, one idea per file; use the right folder + prefix)
 3. **Frontmatter required**: `created`, `updated`, `tags`, `confidence`, `source`, `scope`, `lang` (+ `status` for loops)
 4. **No transcripts**: never store raw chat logs; summarize into atomic notes
-5. **Append timeline**: `echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) | <verb> | <path> | <why>" >> notes/08_indices/timeline.md`
+5. **Append timeline**: `.venv/bin/python -c "from ledger.embeddings import append_timeline_entry; append_timeline_entry('<verb>', '<path>', '<why>')"`
 
 ### Python env
 
@@ -486,7 +486,7 @@ Pattern: `{type}__{slug}.md` where slug is lowercase with underscores.
 2. DECIDE    If exists: update. If not: create.
 3. PATH      notes/{folder}/{type}__{slug}.md
 4. WRITE     Frontmatter + content (use template as reference)
-5. TIMELINE  echo "{ts} | created | {path} | {desc}" >> notes/08_indices/timeline.md
+5. TIMELINE  .venv/bin/python -c "from ledger.embeddings import append_timeline_entry; append_timeline_entry('created', '{path}', '{desc}')"
 6. VERIFY    git diff
 ```
 
@@ -663,7 +663,7 @@ happens:
 
 1. Remove the file from its current location.
 2. Remove or update any links pointing to it.
-3. Append a `deleted` entry to `notes/08_indices/timeline.md`.
+3. Append a `deleted` event through `append_timeline_entry` (never edit generated `timeline.md`).
 4. Do not move the note to `09_archive/` for delete/forget requests; treat these as hard-deletes.
 
 If you are unsure whether to persist something, either ask the user or

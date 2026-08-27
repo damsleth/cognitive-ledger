@@ -268,3 +268,93 @@ After.
     out = capsys.readouterr().out
     assert check_rc == 1
     assert "Unlogged note changes: 1" in out
+
+
+def test_status_recommends_sleep_for_large_unlogged_drift(tmp_path, monkeypatch):
+    config = _make_temp_config(tmp_path)
+    try:
+        _write(
+            config.timeline_jsonl_path,
+            '{"ts":"2026-08-27T00:00:00Z","action":"sleep","path":"-","desc":"done"}\n',
+        )
+        monkeypatch.setattr(
+            maintenance,
+            "_compute_sync_report",
+            lambda: {
+                "state_invalid": False,
+                "state_exists": True,
+                "timeline_rewound": False,
+                "unlogged_paths": [f"notes/02_facts/fact__{i}.md" for i in range(50)],
+            },
+        )
+
+        payload = maintenance._status_payload()
+    finally:
+        reset_config()
+
+    assert payload["unlogged_change_count"] == 50
+    assert payload["sleep_recommended"] is True
+
+
+def test_status_counts_changes_from_jsonl_not_generated_markdown(tmp_path, monkeypatch):
+    config = _make_temp_config(tmp_path)
+    try:
+        _write(
+            config.timeline_jsonl_path,
+            "\n".join(
+                [
+                    '{"ts":"2026-08-26T00:00:00Z","action":"sleep","path":"-","desc":"done"}',
+                    '{"ts":"2026-08-27T00:00:00Z","action":"updated","path":"notes/02_facts/fact__one.md","desc":"one"}',
+                    "",
+                ]
+            ),
+        )
+        _write(
+            config.timeline_path,
+            "# Timeline\n\n---\n"
+            "2026-08-26T00:00:00Z | sleep | - | done\n"
+            "2026-08-27T00:00:00Z | updated | notes/02_facts/fact__md_only.md | direct edit\n"
+            "2026-08-27T00:00:01Z | updated | notes/02_facts/fact__also_md_only.md | direct edit\n",
+        )
+        monkeypatch.setattr(
+            maintenance,
+            "_compute_sync_report",
+            lambda: {
+                "state_invalid": False,
+                "state_exists": True,
+                "timeline_rewound": False,
+                "unlogged_paths": [],
+            },
+        )
+
+        payload = maintenance._status_payload()
+    finally:
+        reset_config()
+
+    assert payload["entries_total"] == 2
+    assert payload["changes_since"] == 1
+
+
+def test_status_handles_every_sync_state_without_missing_drift_count(tmp_path, monkeypatch):
+    config = _make_temp_config(tmp_path)
+    try:
+        _write(
+            config.timeline_jsonl_path,
+            '{"ts":"2026-08-27T00:00:00Z","action":"sleep","path":"-","desc":"done"}\n',
+        )
+        for state in ("state_invalid", "unknown", "timeline_rewound", "clean"):
+            report = {
+                "state_invalid": state == "state_invalid",
+                "state_exists": state != "unknown",
+                "timeline_rewound": state == "timeline_rewound",
+                "unlogged_paths": [],
+            }
+            monkeypatch.setattr(maintenance, "_compute_sync_report", lambda: report)
+            payload = maintenance._status_payload()
+            assert payload["sync_drift"] == state
+            assert payload["unlogged_change_count"] == 0
+            assert payload["sleep_recommended"] is (
+                state in {"state_invalid", "timeline_rewound"}
+            )
+    finally:
+        reset_config()
