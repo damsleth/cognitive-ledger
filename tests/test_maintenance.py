@@ -332,10 +332,53 @@ def test_status_prints_gate_reasoning(tmp_path, monkeypatch, capsys):
 
     out = capsys.readouterr().out
     assert "No sleep needed" in out
-    assert "days_since=0 >= 7" in out
+    assert "days_since=0 >= 7 with work_present=False" in out
     assert "changes_since=0 >= 25" in out
     assert "unlogged_change_count=0 >= 50" in out
     assert "sync_drift=clean in ['state_invalid', 'timeline_rewound']" in out
+
+
+def test_age_gate_requires_work_since_last_sleep(tmp_path, monkeypatch):
+    config = _make_temp_config(tmp_path)
+    clean_report = {
+        "state_invalid": False,
+        "state_exists": True,
+        "timeline_rewound": False,
+        "unlogged_paths": [],
+    }
+    try:
+        _write(
+            config.timeline_jsonl_path,
+            '{"ts":"2026-08-01T00:00:00Z","action":"sleep","path":"-","desc":"done"}\n',
+        )
+        monkeypatch.setattr(maintenance, "_compute_sync_report", lambda: clean_report)
+
+        idle_payload = maintenance._status_payload()
+        with_work_gate = next(
+            gate
+            for gate in idle_payload["sleep_gate_evaluations"]
+            if gate["code"] == "days_since"
+        )
+        assert idle_payload["days_since"] >= 7
+        assert with_work_gate["work_present"] is False
+        assert idle_payload["sleep_recommended"] is False
+
+        with config.timeline_jsonl_path.open("a", encoding="utf-8") as handle:
+            handle.write(
+                '{"ts":"2026-08-02T00:00:00Z","action":"updated",'
+                '"path":"notes/02_facts/fact__one.md","desc":"changed"}\n'
+            )
+        active_payload = maintenance._status_payload()
+    finally:
+        reset_config()
+
+    age_gate = next(
+        gate
+        for gate in active_payload["sleep_gate_evaluations"]
+        if gate["code"] == "days_since"
+    )
+    assert age_gate["work_present"] is True
+    assert active_payload["sleep_recommendation_reasons"] == ["days_since"]
 
 
 def test_status_counts_changes_from_jsonl_not_generated_markdown(tmp_path, monkeypatch):
