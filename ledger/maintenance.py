@@ -299,21 +299,26 @@ def _status_payload() -> dict:
         "sync_drift": "unknown",
         "unlogged_change_count": 0,
         "sleep_recommended": False,
+        "sleep_recommendation_reasons": [],
+        "sleep_gate_evaluations": [],
     }
     if not timeline.is_file():
         payload["sleep_recommended"] = True
         payload["sleep_recommendation_reason"] = "timeline_missing"
+        payload["sleep_recommendation_reasons"] = ["timeline_missing"]
         return payload
     entries = _timeline_jsonl_entries(timeline)
     payload["entries_total"] = len(entries)
     if not entries:
         payload["sleep_recommended"] = True
         payload["sleep_recommendation_reason"] = "first_run"
+        payload["sleep_recommendation_reasons"] = ["first_run"]
         return payload
     sleep_positions = [idx for idx, entry in enumerate(entries) if entry[2] == "sleep"]
     if not sleep_positions:
         payload["sleep_recommended"] = True
         payload["sleep_recommendation_reason"] = "first_run"
+        payload["sleep_recommendation_reasons"] = ["first_run"]
         return payload
     sleep_idx = sleep_positions[-1]
     last_sleep = entries[sleep_idx]
@@ -338,12 +343,41 @@ def _status_payload() -> dict:
         payload["unlogged_change_count"] = len(sync_report["unlogged_paths"])
     else:
         payload["sync_drift"] = "clean"
-    payload["sleep_recommended"] = (
-        days_since >= SLEEP_DAYS_THRESHOLD
-        or payload["changes_since"] >= SLEEP_CHANGE_THRESHOLD
-        or payload["unlogged_change_count"] >= SLEEP_UNLOGGED_CHANGE_THRESHOLD
-        or payload["sync_drift"] in SLEEP_DRIFT_STATES
-    )
+    gate_evaluations = [
+        {
+            "code": "days_since",
+            "observed": days_since,
+            "operator": ">=",
+            "threshold": SLEEP_DAYS_THRESHOLD,
+            "met": days_since >= SLEEP_DAYS_THRESHOLD,
+        },
+        {
+            "code": "changes_since",
+            "observed": payload["changes_since"],
+            "operator": ">=",
+            "threshold": SLEEP_CHANGE_THRESHOLD,
+            "met": payload["changes_since"] >= SLEEP_CHANGE_THRESHOLD,
+        },
+        {
+            "code": "unlogged_change_count",
+            "observed": payload["unlogged_change_count"],
+            "operator": ">=",
+            "threshold": SLEEP_UNLOGGED_CHANGE_THRESHOLD,
+            "met": payload["unlogged_change_count"] >= SLEEP_UNLOGGED_CHANGE_THRESHOLD,
+        },
+        {
+            "code": "sync_drift",
+            "observed": payload["sync_drift"],
+            "operator": "in",
+            "threshold": sorted(SLEEP_DRIFT_STATES),
+            "met": payload["sync_drift"] in SLEEP_DRIFT_STATES,
+        },
+    ]
+    payload["sleep_gate_evaluations"] = gate_evaluations
+    payload["sleep_recommendation_reasons"] = [
+        gate["code"] for gate in gate_evaluations if gate["met"]
+    ]
+    payload["sleep_recommended"] = bool(payload["sleep_recommendation_reasons"])
     return payload
 
 
@@ -379,10 +413,16 @@ def cmd_status(as_json: bool = False) -> int:
         print(f"Sync drift: {payload['unlogged_change_count']} unlogged note change(s)")
     else:
         print("Sync drift: clean")
+    evaluations = payload["sleep_gate_evaluations"]
+    evaluation_text = ", ".join(
+        f"{gate['code']}={gate['observed']} {gate['operator']} {gate['threshold']}"
+        for gate in evaluations
+    )
     if payload["sleep_recommended"]:
-        print("-> Sleep recommended")
+        reasons = ", ".join(payload["sleep_recommendation_reasons"])
+        print(f"-> Sleep recommended ({reasons}; {evaluation_text})")
     else:
-        print("-> No sleep needed")
+        print(f"-> No sleep needed ({evaluation_text})")
     return 0
 
 

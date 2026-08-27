@@ -294,6 +294,48 @@ def test_status_recommends_sleep_for_large_unlogged_drift(tmp_path, monkeypatch)
 
     assert payload["unlogged_change_count"] == 50
     assert payload["sleep_recommended"] is True
+    assert payload["sleep_recommendation_reasons"] == ["unlogged_change_count"]
+    drift_gate = next(
+        gate
+        for gate in payload["sleep_gate_evaluations"]
+        if gate["code"] == "unlogged_change_count"
+    )
+    assert drift_gate == {
+        "code": "unlogged_change_count",
+        "observed": 50,
+        "operator": ">=",
+        "threshold": 50,
+        "met": True,
+    }
+
+
+def test_status_prints_gate_reasoning(tmp_path, monkeypatch, capsys):
+    config = _make_temp_config(tmp_path)
+    try:
+        _write(
+            config.timeline_jsonl_path,
+            '{"ts":"2026-08-27T00:00:00Z","action":"sleep","path":"-","desc":"done"}\n',
+        )
+        monkeypatch.setattr(
+            maintenance,
+            "_compute_sync_report",
+            lambda: {
+                "state_invalid": False,
+                "state_exists": True,
+                "timeline_rewound": False,
+                "unlogged_paths": [],
+            },
+        )
+        maintenance.cmd_status()
+    finally:
+        reset_config()
+
+    out = capsys.readouterr().out
+    assert "No sleep needed" in out
+    assert "days_since=0 >= 7" in out
+    assert "changes_since=0 >= 25" in out
+    assert "unlogged_change_count=0 >= 50" in out
+    assert "sync_drift=clean in ['state_invalid', 'timeline_rewound']" in out
 
 
 def test_status_counts_changes_from_jsonl_not_generated_markdown(tmp_path, monkeypatch):
