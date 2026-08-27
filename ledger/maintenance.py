@@ -135,6 +135,11 @@ def _sync_state_path() -> Path:
     return indices_dir / "sync_state.json"
 
 
+def _sync_acceptance_path() -> Path:
+    _notes_dir, indices_dir, _timeline = _config_paths()
+    return indices_dir / "sync_acceptance.jsonl"
+
+
 def _sha256_path(path: Path) -> str:
     hasher = hashlib.sha256()
     with path.open("rb") as handle:
@@ -422,7 +427,7 @@ def cmd_status(as_json: bool = False) -> int:
     print(f"Days since: {payload['days_since']}")
     drift = payload["sync_drift"]
     if drift == "state_invalid":
-        print("Sync drift: state invalid (run `sheep sync --apply`)")
+        print("Sync drift: state invalid (run `sheep sync --apply --accept-drift`)")
     elif drift == "unknown":
         print("Sync drift: unknown (run `sheep sync --apply`)")
     elif drift == "timeline_rewound":
@@ -447,14 +452,52 @@ def cmd_status(as_json: bool = False) -> int:
     return 0
 
 
-def cmd_sync(apply: bool = False) -> int:
+def _sync_apply_blockers(report: dict[str, Any]) -> list[str]:
+    blockers = []
+    if report["state_invalid"]:
+        blockers.append("state_invalid")
+    if report["timeline_rewound"]:
+        blockers.append("timeline_rewound")
+    if report["unlogged_paths"]:
+        blockers.append("unlogged_changes")
+    return blockers
+
+
+def _append_sync_acceptance(report: dict[str, Any], blockers: list[str]) -> None:
+    from ledger.io import safe_append_line
+
+    paths = sorted(str(path) for path in report["unlogged_paths"])
+    event = {
+        "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "action": "accept_drift",
+        "blockers": blockers,
+        "unlogged_change_count": len(paths),
+        "unlogged_paths_sha256": hashlib.sha256("\n".join(paths).encode()).hexdigest(),
+        "timeline_rewound": bool(report["timeline_rewound"]),
+        "state_invalid": bool(report["state_invalid"]),
+    }
+    safe_append_line(_sync_acceptance_path(), json.dumps(event, sort_keys=True))
+
+
+def cmd_sync(apply: bool = False, accept_drift: bool = False) -> int:
     if apply:
+        report = _compute_sync_report()
+        blockers = _sync_apply_blockers(report)
+        if blockers and not accept_drift:
+            print("Refusing to replace an existing sync baseline with unresolved drift.")
+            print(f"Blockers: {', '.join(blockers)}")
+            print("-> Review with `sheep sync --check`, then use `--accept-drift` explicitly.")
+            return 2
         payload = _write_sync_state()
+        if blockers:
+            _append_sync_acceptance(report, blockers)
         print("=== Sync State Updated ===")
         print(f"State: {_relative(_sync_state_path())}")
         print(f"Last synced: {payload['last_synced_at']}")
         print(f"Tracked notes: {payload['tracked_file_count']}")
         print(f"Timeline event count: {payload['timeline_event_count']}")
+        if blockers:
+            print(f"Accepted drift audit: {_relative(_sync_acceptance_path())}")
         return 0
 
     report = _compute_sync_report()
@@ -463,7 +506,7 @@ def cmd_sync(apply: bool = False) -> int:
 
     if report["state_invalid"]:
         print("State is invalid JSON.")
-        print("-> Run `sheep sync --apply` to reset baseline")
+        print("-> Run `sheep sync --apply --accept-drift` to reset baseline explicitly")
         return 1
     if not report["state_exists"]:
         print("State not found.")
@@ -1582,6 +1625,11 @@ def build_parser() -> argparse.ArgumentParser:
     mode_group = sync_parser.add_mutually_exclusive_group()
     mode_group.add_argument("--check", action="store_true", help="Check drift (default)")
     mode_group.add_argument("--apply", action="store_true", help="Write current notes snapshot as baseline")
+    sync_parser.add_argument(
+        "--accept-drift",
+        action="store_true",
+        help="Explicitly accept unresolved drift when replacing an existing baseline",
+    )
 
     contradictions_parser = subparsers.add_parser(
         "contradictions",
@@ -1638,7 +1686,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "sleep":
         return cmd_sleep(as_json=as_json)
     if args.command == "sync":
-        return _wrap_sync(apply=bool(args.apply), as_json=as_json)
+        if args.accept_drift and not args.apply:
+            sync_parser.error("--accept-drift requires --apply")
+        return _wrap_sync(
+            apply=bool(args.apply),
+            accept_drift=bool(args.accept_drift),
+            as_json=as_json,
+        )
     if args.command == "contradictions":
         from ledger.contradiction import cmd_sleep_contradictions
         return cmd_sleep_contradictions(apply=bool(getattr(args, "apply", False)))
@@ -1734,10 +1788,10 @@ def _wrap_data_cmd(command: str, fn, as_json: bool) -> int:
     return int(rc or 0)
 
 
-def _wrap_sync(apply: bool, as_json: bool) -> int:
+def _wrap_sync(apply: bool, accept_drift: bool, as_json: bool) -> int:
     """cmd_sync is action when --apply, data when --check."""
     if not as_json:
-        return cmd_sync(apply=apply)
+        return cmd_sync(apply=apply, accept_drift=accept_drift)
     import io as _io
     import time as _t
     from contextlib import redirect_stdout
@@ -1745,7 +1799,7 @@ def _wrap_sync(apply: bool, as_json: bool) -> int:
     buf = _io.StringIO()
     try:
         with redirect_stdout(buf):
-            rc = cmd_sync(apply=apply)
+            rc = cmd_sync(apply=apply, accept_drift=accept_drift)
     except Exception as exc:
         from ledger.conventions import (
             EXIT_USER_ERROR, action_envelope, emit_action,
