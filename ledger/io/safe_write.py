@@ -256,7 +256,7 @@ def safe_append_line(
 ) -> None:
     """Safely append a line to a file with locking.
 
-    This is the canonical way to append to timeline.md and similar files.
+    Use this for append-only source files such as JSONL, not generated views.
     Uses file locking to prevent race conditions in concurrent appends.
 
     Args:
@@ -292,6 +292,7 @@ def append_timeline_entry(
     root_dir: Path | None = None,
     ledger_notes_dir: Path | None = None,
     activity_type: str = "",
+    timestamp: str | None = None,
 ) -> None:
     """Append an entry to the timeline with proper locking.
 
@@ -299,7 +300,7 @@ def append_timeline_entry(
     All code paths should use this instead of direct file appends.
 
     Args:
-        timeline_path: Path to timeline.md
+        timeline_path: Path to the generated timeline.md view
         action: Action type (created|updated|archived|deleted|closed|sleep)
         note_path: Path to the affected note
         description: Brief description of the change
@@ -307,14 +308,16 @@ def append_timeline_entry(
         ledger_notes_dir: Ledger notes dir for normalizing note paths to notes/... (optional)
         activity_type: Optional activity classification
             (decision|bugfix|feature|refactor|discovery|change)
+        timestamp: Optional event timestamp for imports; defaults to now
 
     Raises:
         NoteWriteError: If the append fails.
     """
     from datetime import datetime, timezone
 
-    now = datetime.now(timezone.utc)
-    timestamp = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+    if timestamp is None:
+        now = datetime.now(timezone.utc)
+        timestamp = now.strftime("%Y-%m-%dT%H:%M:%SZ")
 
     # Make path relative to root if possible
     from ledger.layout import logical_path
@@ -335,12 +338,14 @@ def append_timeline_entry(
         event["activity_type"] = activity_type
 
     timeline_path = Path(timeline_path)
-    from ledger.timeline import append_timeline_jsonl
+    from ledger.timeline import (
+        append_timeline_jsonl,
+        ensure_timeline_jsonl,
+        regenerate_timeline_markdown,
+    )
 
     # New source of truth: timeline.jsonl
     timeline_jsonl_path = timeline_path.with_name("timeline.jsonl")
+    ensure_timeline_jsonl(timeline_path, timeline_jsonl_path)
     append_timeline_jsonl(timeline_jsonl_path, event)
-
-    # Compatibility append for existing markdown consumers.
-    entry = f"{timestamp} | {action} | {note_path} | {description}"
-    safe_append_line(timeline_path, entry)
+    regenerate_timeline_markdown(timeline_jsonl_path, timeline_path)
