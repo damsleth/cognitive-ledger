@@ -73,3 +73,11 @@ def test_sheep_sync_check_is_data_class():
   # Data class: no top-level `ok`; carries applied=false.
   assert "ok" not in payload
   assert payload["applied"] is False
+
+
+def test_sheep_sync_accept_drift_flag_is_parsed():
+  from ledger.maintenance import build_parser
+
+  args = build_parser().parse_args(["sync", "--apply", "--accept-drift"])
+  assert args.apply is True
+  assert args.accept_drift is True

@@ -300,6 +300,37 @@ def test_sync_matches_timeline_event_to_current_file_version(tmp_path, capsys):
     assert report["unlogged_paths"] == ["notes/02_facts/fact__versioned.md"]
 
 
+def test_sync_apply_requires_explicit_drift_acceptance(tmp_path, capsys):
+    config = _make_temp_config(tmp_path)
+    try:
+        note = config.ledger_notes_dir / "02_facts" / "fact__guarded.md"
+        _write(note, "before\n")
+        _write(config.timeline_jsonl_path, "")
+        assert maintenance.cmd_sync(apply=True) == 0
+        state_before = maintenance._sync_state_path().read_text(encoding="utf-8")
+        capsys.readouterr()
+
+        _write(note, "unlogged\n")
+        assert maintenance.cmd_sync(apply=True) == 2
+        refused_out = capsys.readouterr().out
+        assert "Refusing" in refused_out
+        assert "unlogged_changes" in refused_out
+        assert maintenance._sync_state_path().read_text(encoding="utf-8") == state_before
+        assert not maintenance._sync_acceptance_path().exists()
+
+        assert maintenance.cmd_sync(apply=True, accept_drift=True) == 0
+        audit = json.loads(
+            maintenance._sync_acceptance_path().read_text(encoding="utf-8").strip()
+        )
+    finally:
+        reset_config()
+
+    assert audit["action"] == "accept_drift"
+    assert audit["blockers"] == ["unlogged_changes"]
+    assert audit["unlogged_change_count"] == 1
+    assert len(audit["unlogged_paths_sha256"]) == 64
+
+
 def test_status_recommends_sleep_for_large_unlogged_drift(tmp_path, monkeypatch):
     config = _make_temp_config(tmp_path)
     try:
