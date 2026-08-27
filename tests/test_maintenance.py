@@ -331,6 +331,40 @@ def test_sync_apply_requires_explicit_drift_acceptance(tmp_path, capsys):
     assert len(audit["unlogged_paths_sha256"]) == 64
 
 
+def test_sync_detects_rewritten_timeline_prefix_at_same_length(tmp_path, capsys):
+    config = _make_temp_config(tmp_path)
+    try:
+        _write(
+            config.timeline_jsonl_path,
+            "\n".join(
+                [
+                    '{"ts":"2026-08-01T00:00:00Z","action":"sleep","path":"-","desc":"one"}',
+                    '{"ts":"2026-08-02T00:00:00Z","action":"sleep","path":"-","desc":"two"}',
+                    "",
+                ]
+            ),
+        )
+        assert maintenance.cmd_sync(apply=True) == 0
+        capsys.readouterr()
+
+        _write(
+            config.timeline_jsonl_path,
+            "\n".join(
+                [
+                    '{"ts":"2026-08-01T00:00:00Z","action":"sleep","path":"-","desc":"rewritten"}',
+                    '{"ts":"2026-08-02T00:00:00Z","action":"sleep","path":"-","desc":"two"}',
+                    "",
+                ]
+            ),
+        )
+        report = maintenance._compute_sync_report()
+    finally:
+        reset_config()
+
+    assert report["timeline_total"] == 2
+    assert report["timeline_rewound"] is True
+
+
 def test_status_recommends_sleep_for_large_unlogged_drift(tmp_path, monkeypatch):
     config = _make_temp_config(tmp_path)
     try:
