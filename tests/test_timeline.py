@@ -9,6 +9,7 @@ from ledger.timeline import (
     timeline_since,
     timeline_for_note,
 )
+from ledger.io.safe_write import append_timeline_entry
 
 
 def test_migrate_markdown_to_jsonl(tmp_path: Path):
@@ -55,3 +56,53 @@ def test_timeline_queries(tmp_path: Path):
     by_note = timeline_for_note(jsonl, "notes/02_facts/fact__one.md")
     assert len(by_note) == 1
     assert by_note[0]["action"] == "created"
+
+
+def test_jsonl_is_the_only_writable_timeline_source(tmp_path: Path):
+    md = tmp_path / "timeline.md"
+    jsonl = tmp_path / "timeline.jsonl"
+    md.write_text(
+        "# Timeline\n\n---\n"
+        "2026-02-01T00:00:00Z | created | notes/02_facts/fact__md_only.md | direct append\n",
+        encoding="utf-8",
+    )
+    jsonl.write_text("", encoding="utf-8")
+
+    append_timeline_entry(
+        md,
+        "created",
+        "notes/02_facts/fact__canonical.md",
+        "canonical append",
+        timestamp="2026-02-02T00:00:00Z",
+    )
+
+    events = load_timeline_jsonl(jsonl)
+    assert [event["path"] for event in events] == [
+        "notes/02_facts/fact__canonical.md"
+    ]
+    rendered = md.read_text(encoding="utf-8")
+    assert "fact__canonical.md" in rendered
+    assert "fact__md_only.md" not in rendered
+
+
+def test_missing_jsonl_is_migrated_before_canonical_append(tmp_path: Path):
+    md = tmp_path / "timeline.md"
+    jsonl = tmp_path / "timeline.jsonl"
+    md.write_text(
+        "# Timeline\n\n---\n"
+        "2026-02-01T00:00:00Z | created | notes/02_facts/fact__legacy.md | legacy\n",
+        encoding="utf-8",
+    )
+
+    append_timeline_entry(
+        md,
+        "updated",
+        "notes/02_facts/fact__new.md",
+        "new",
+        timestamp="2026-02-02T00:00:00Z",
+    )
+
+    assert [event["path"] for event in load_timeline_jsonl(jsonl)] == [
+        "notes/02_facts/fact__legacy.md",
+        "notes/02_facts/fact__new.md",
+    ]

@@ -51,6 +51,10 @@ from ledger.schema_values import (
 
 LARGE_FILE_WORD_THRESHOLD = 400
 SYNC_STATE_VERSION = 1
+SLEEP_DAYS_THRESHOLD = 7
+SLEEP_CHANGE_THRESHOLD = 25
+SLEEP_UNLOGGED_CHANGE_THRESHOLD = 50
+SLEEP_DRIFT_STATES = frozenset({"state_invalid", "timeline_rewound"})
 
 
 @dataclass
@@ -110,6 +114,22 @@ def _timeline_entries(timeline_path: Path) -> list[tuple[int, str, str, str, str
     return entries
 
 
+def _timeline_jsonl_entries(timeline_jsonl_path: Path) -> list[tuple[int, str, str, str, str]]:
+    """Return machine-source events in the tuple shape used by maintenance."""
+    return [
+        (
+            lineno,
+            str(event.get("ts", "")),
+            str(event.get("action", "")),
+            str(event.get("path", "")),
+            str(event.get("desc", "")),
+        )
+        for lineno, event in enumerate(
+            timeline_lib.load_timeline_jsonl(timeline_jsonl_path), start=1
+        )
+    ]
+
+
 def _sync_state_path() -> Path:
     _notes_dir, indices_dir, _timeline = _config_paths()
     return indices_dir / "sync_state.json"
@@ -159,8 +179,8 @@ def _is_tracked_path(rel_path: str) -> bool:
 
 
 def _compute_sync_report() -> dict[str, Any]:
-    _notes_dir, _indices_dir, timeline_path = _config_paths()
-    timeline_entries = _timeline_entries(timeline_path)
+    _notes_dir, _indices_dir, _timeline_path = _config_paths()
+    timeline_entries = _timeline_jsonl_entries(get_config().timeline_jsonl_path)
     current_snapshot = _tracked_note_snapshot()
     state_path = _sync_state_path()
     state = _load_sync_state(state_path)
@@ -245,10 +265,10 @@ def _compute_sync_report() -> dict[str, Any]:
 
 
 def _write_sync_state() -> dict[str, Any]:
-    _notes_dir, indices_dir, timeline_path = _config_paths()
+    _notes_dir, indices_dir, _timeline_path = _config_paths()
     indices_dir.mkdir(parents=True, exist_ok=True)
 
-    timeline_entries = _timeline_entries(timeline_path)
+    timeline_entries = _timeline_jsonl_entries(get_config().timeline_jsonl_path)
     snapshot = _tracked_note_snapshot()
     now_ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -267,7 +287,8 @@ def _write_sync_state() -> dict[str, Any]:
 
 def _status_payload() -> dict:
     """Build the structured status report shared by human and --json paths."""
-    _notes_dir, _indices_dir, timeline = _config_paths()
+    _notes_dir, _indices_dir, _timeline = _config_paths()
+    timeline = get_config().timeline_jsonl_path
     payload = {
         "timeline_path": str(timeline),
         "timeline_exists": timeline.is_file(),
@@ -276,13 +297,14 @@ def _status_payload() -> dict:
         "changes_since": 0,
         "days_since": 0,
         "sync_drift": "unknown",
+        "unlogged_change_count": 0,
         "sleep_recommended": False,
     }
     if not timeline.is_file():
         payload["sleep_recommended"] = True
         payload["sleep_recommendation_reason"] = "timeline_missing"
         return payload
-    entries = _timeline_entries(timeline)
+    entries = _timeline_jsonl_entries(timeline)
     payload["entries_total"] = len(entries)
     if not entries:
         payload["sleep_recommended"] = True
@@ -316,7 +338,12 @@ def _status_payload() -> dict:
         payload["unlogged_change_count"] = len(sync_report["unlogged_paths"])
     else:
         payload["sync_drift"] = "clean"
-    payload["sleep_recommended"] = (days_since >= 7 or payload["changes_since"] >= 25)
+    payload["sleep_recommended"] = (
+        days_since >= SLEEP_DAYS_THRESHOLD
+        or payload["changes_since"] >= SLEEP_CHANGE_THRESHOLD
+        or payload["unlogged_change_count"] >= SLEEP_UNLOGGED_CHANGE_THRESHOLD
+        or payload["sync_drift"] in SLEEP_DRIFT_STATES
+    )
     return payload
 
 
