@@ -50,7 +50,7 @@ from ledger.schema_values import (
 )
 
 LARGE_FILE_WORD_THRESHOLD = 400
-SYNC_STATE_VERSION = 1
+SYNC_STATE_VERSION = 2
 SLEEP_DAYS_THRESHOLD = 7
 SLEEP_CHANGE_THRESHOLD = 25
 SLEEP_UNLOGGED_CHANGE_THRESHOLD = 50
@@ -148,6 +148,15 @@ def _sha256_path(path: Path) -> str:
     return hasher.hexdigest()
 
 
+def _timeline_prefix_sha256(events: list[dict[str, Any]], count: int | None = None) -> str:
+    prefix = events if count is None else events[:count]
+    canonical = "\n".join(
+        json.dumps(event, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        for event in prefix
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
 def _tracked_note_snapshot() -> dict[str, str]:
     snapshot: dict[str, str] = {}
     for path in _iter_note_files(include_indices=False):
@@ -242,7 +251,14 @@ def _compute_sync_report() -> dict[str, Any]:
     except (TypeError, ValueError):
         baseline_count = 0
 
-    if baseline_count > len(timeline_events):
+    expected_prefix_hash = str(state.get("timeline_prefix_sha256", "")).strip()
+    prefix_changed = bool(
+        expected_prefix_hash
+        and baseline_count <= len(timeline_events)
+        and _timeline_prefix_sha256(timeline_events, baseline_count)
+        != expected_prefix_hash
+    )
+    if baseline_count > len(timeline_events) or prefix_changed:
         report["timeline_rewound"] = True
         timeline_since = timeline_events
     else:
@@ -286,15 +302,16 @@ def _write_sync_state() -> dict[str, Any]:
     _notes_dir, indices_dir, _timeline_path = _config_paths()
     indices_dir.mkdir(parents=True, exist_ok=True)
 
-    timeline_entries = _timeline_jsonl_entries(get_config().timeline_jsonl_path)
+    timeline_events = timeline_lib.load_timeline_jsonl(get_config().timeline_jsonl_path)
     snapshot = _tracked_note_snapshot()
     now_ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     payload: dict[str, Any] = {
         "version": SYNC_STATE_VERSION,
         "last_synced_at": now_ts,
-        "timeline_event_count": len(timeline_entries),
-        "last_timeline_timestamp": timeline_entries[-1][1] if timeline_entries else "",
+        "timeline_event_count": len(timeline_events),
+        "timeline_prefix_sha256": _timeline_prefix_sha256(timeline_events),
+        "last_timeline_timestamp": str(timeline_events[-1].get("ts", "")) if timeline_events else "",
         "tracked_file_count": len(snapshot),
         "files": snapshot,
     }
