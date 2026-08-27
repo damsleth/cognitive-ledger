@@ -2,10 +2,34 @@
 
 ## Unreleased
 
+## 2026-08-27 (0.11.3)
+
 ### Fixed
 - Release CI now points `LEDGER_NOTES_DIR` at the fixture corpus. Fresh GitHub
   runners have no user config, and the code-tree guard correctly rejected the
   checkout as a notes directory during test collection.
+- **Timeline now has one authoritative write path.** `timeline.jsonl` is the
+  machine source of truth, `timeline.md` is a generated read-only view, and all
+  canonical appends regenerate that view under a lock. A missing JSONL file is
+  migrated once from legacy Markdown without allowing later hand-edits to
+  become machine events.
+- **Sleep status reads the authoritative timeline and gates on sync drift.**
+  Fifty unlogged note changes, an invalid sync state, or a rewritten timeline
+  now recommends consolidation without missing-key failures.
+- **Logged note changes are tied to their exact content.** Timeline events
+  record the current note SHA-256, so an older event for the same path cannot
+  hide a later unlogged edit. Sync state also hashes its timeline prefix to
+  detect same-length rewrites.
+- **Replacing a drifted sync baseline requires explicit acceptance.**
+  `sheep sync --apply` refuses unresolved drift; `--accept-drift` records a
+  compact audit event before the discrepancy is acknowledged.
+
+### Changed
+- `sheep status` reports every sleep-gate predicate and its observed value in
+  both human and JSON output.
+- The seven-day gate requires at least one changed note, and the 25-change
+  volume gate counts unique note paths rather than repeated events for one
+  note. Raw `changes_since` remains available for compatibility.
 
 ## 2026-08-25 (0.11.2)
 
