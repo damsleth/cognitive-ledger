@@ -22,6 +22,17 @@
   of `things3_canceled_maps_to`. Leaving it open let a deliberately deferred
   loop keep nagging, which is the one thing snoozing is for.
 
+### Added
+- **`/review` in the web UI**: keyboard-first moderation of inbox promotion
+  candidates. Approve, reject, inline rewrite, merge, yes/no and simple-choice
+  questions, with the note count in the status bar. Approved candidates pass
+  the existing lint gate before promotion, mutations require a loopback client
+  plus a CSRF token, and contradiction candidates need an explicit
+  confirmation. Inbox frontmatter gains `review_question`, `review_options`
+  and `review_requires_rewrite`. Raw captures (`note__ingest_summary_*`,
+  `session__*`) are source material, not proposals, and are counted separately
+  rather than queued.
+
 ## 2026-08-27 (0.11.3)
 
 ### Fixed
