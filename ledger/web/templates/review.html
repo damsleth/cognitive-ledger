@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block head_extra %}
+  <script src="/static/review.js" defer></script>
+{% endblock %}
+
+{% block crumbs %}
+  <a href="/browse">browse</a>
+  <span class="crumb-sep">/</span>
+  <span>review</span>
+{% endblock %}
+
+{% block content %}
+<header class="page-header review-page-header">
+  <div>
+    <h1>Review queue</h1>
+    <p class="meta">Human confirmation is the quality gate. Each approval is linted before promotion.</p>
+  </div>
+  <button class="shortcut-help" type="button" data-shortcut-help aria-expanded="false">keys ?</button>
+</header>
+
+<div class="shortcut-panel" data-shortcut-panel hidden>
+  <span><kbd>A</kbd>/<kbd>Y</kbd> approve</span>
+  <span><kbd>X</kbd>/<kbd>N</kbd> reject</span>
+  <span><kbd>1–9</kbd> answer</span>
+  <span><kbd>E</kbd> rewrite</span>
+  <span><kbd>S</kbd> skip</span>
+</div>
+
+{% include "_review_stage.html" %}
+{% endblock %}
