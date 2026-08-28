@@ -704,6 +704,9 @@ class InboxCandidate:
     conflict_classification: str | None = None
     conflict_confidence: float | None = None
     conflict_reason: str | None = None
+    review_question: str | None = None
+    review_options: tuple[str, ...] = ()
+    review_requires_rewrite: bool = False
 
 
 @dataclass
@@ -760,6 +763,16 @@ def _load_one_candidate(path: Path) -> InboxCandidate:
         except (TypeError, ValueError):
             return None
 
+    raw_review_options = fm.get("review_options", [])
+    if isinstance(raw_review_options, list):
+        review_options = tuple(
+            str(option).strip() for option in raw_review_options if str(option).strip()
+        )
+    elif raw_review_options:
+        review_options = (str(raw_review_options).strip(),)
+    else:
+        review_options = ()
+
     return InboxCandidate(
         path=path,
         filename=path.name,
@@ -776,6 +789,10 @@ def _load_one_candidate(path: Path) -> InboxCandidate:
         conflict_classification=str(fm.get("conflict_classification", "") or "") or None,
         conflict_confidence=_coerce_float(fm.get("conflict_confidence")),
         conflict_reason=str(fm.get("conflict_reason", "") or "") or None,
+        review_question=str(fm.get("review_question", "") or "").strip() or None,
+        review_options=review_options,
+        review_requires_rewrite=str(fm.get("review_requires_rewrite", "")).lower()
+        in {"1", "true", "yes", "on"},
     )
 
 

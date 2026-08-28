@@ -12,6 +12,7 @@ so they remain easy to test with a custom corpus.
 from __future__ import annotations
 
 import logging
+import secrets
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -70,7 +71,7 @@ def create_app(
     cfg = config or get_config()
     app = FastAPI(
         title="Cognitive Ledger",
-        description="Local read-only web UI for browsing the ledger.",
+        description="Local web UI for browsing and reviewing the ledger.",
         version="0.1.0",
         docs_url=None,
         redoc_url=None,
@@ -79,6 +80,7 @@ def create_app(
     app.state.config = cfg
     app.state.corpus = corpus or Corpus(cfg)
     app.state.templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
+    app.state.review_csrf_token = secrets.token_urlsafe(32)
 
     # Inject statusbar data as Jinja2 globals so base.html can render without
     # each route having to pass it explicitly.  The corpus reference is captured
@@ -112,9 +114,15 @@ def create_app(
         except Exception:
             return False
 
+    def _statusbar_review_count() -> int:
+        from ledger.web.services.review import load_review_items
+
+        return len(load_review_items(_the_corpus.notes_dir))
+
     app.state.templates.env.globals["statusbar_notes"] = _statusbar_notes
     app.state.templates.env.globals["statusbar_index_built_at"] = _statusbar_index_built_at
     app.state.templates.env.globals["statusbar_embeddings"] = _statusbar_embeddings
+    app.state.templates.env.globals["statusbar_review_count"] = _statusbar_review_count
 
     # Singular type labels for the .note-type-pill chips: "facts" -> "fact",
     # "loops" -> "loop". Search hits already carry the singular label, but
@@ -134,6 +142,7 @@ def create_app(
     from ledger.web.routes import browse as browse_routes
     from ledger.web.routes import graph as graph_routes
     from ledger.web.routes import note as note_routes
+    from ledger.web.routes import review as review_routes
     from ledger.web.routes import search as search_routes
     from ledger.web.routes import signals as signals_routes
 
@@ -141,6 +150,7 @@ def create_app(
     app.include_router(browse_routes.router)
     app.include_router(graph_routes.router)
     app.include_router(note_routes.router)
+    app.include_router(review_routes.router)
     app.include_router(search_routes.router)
     app.include_router(signals_routes.router)
 
