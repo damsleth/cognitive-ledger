@@ -196,6 +196,53 @@ class TestReconcileReverse(unittest.TestCase):
         actions = reconcile(loops, tasks, completed_maps_to="closed")
         self.assertEqual(actions[0].kind, "reverse_complete")
 
+    def test_trashed_closes_the_loop(self):
+        """Trashed in Things is a decision: the loop closes, no duplicate."""
+        loops = [_loop(things_uuid="t1")]
+        tasks = [_task(uuid="t1", status="trashed")]
+        actions = reconcile(loops, tasks)
+        self.assertEqual(actions[0].kind, "reverse_complete")
+        self.assertEqual(actions[0].new_loop_status, "closed")
+
+    def test_trashed_ignores_completed_maps_to(self):
+        loops = [_loop(things_uuid="t1")]
+        tasks = [_task(uuid="t1", status="trashed")]
+        actions = reconcile(loops, tasks, completed_maps_to="snoozed")
+        self.assertEqual(actions[0].new_loop_status, "closed")
+
+    def test_live_task_beats_trashed_duplicate(self):
+        """A loop without things_uuid must bind to its live task, not the copy."""
+        loops = [_loop()]
+        tasks = [
+            _task(uuid="dead", status="trashed"),
+            _task(uuid="live", status="inbox"),
+        ]
+        actions = reconcile(loops, tasks)
+        self.assertEqual([a.kind for a in actions], ["noop"])
+
+    def test_snoozed_loop_cancels_its_task(self):
+        """A snoozed loop is deferred, not deleted: cancel, do not flag."""
+        loops = []
+        tasks = [_task(uuid="t1", notes="ledger:loop__later status:snoozed")]
+        actions = reconcile(loops, tasks, orphan_action="flag",
+                            snoozed_slugs={"loop__later"})
+        self.assertEqual([a.kind for a in actions], ["forward_cancel"])
+        self.assertEqual(actions[0].things_uuid, "t1")
+
+    def test_unknown_slug_is_still_an_orphan(self):
+        loops = []
+        tasks = [_task(uuid="t1", notes="ledger:loop__gone status:open")]
+        actions = reconcile(loops, tasks, orphan_action="flag",
+                            snoozed_slugs={"loop__later"})
+        self.assertEqual([a.kind for a in actions], ["orphan_flag"])
+
+    def test_trashed_task_is_not_an_orphan(self):
+        loops = []
+        tasks = [_task(uuid="t1", notes="ledger:loop__gone status:open",
+                       status="trashed")]
+        actions = reconcile(loops, tasks, orphan_action="flag")
+        self.assertEqual(actions, [])
+
 
 # ---------------------------------------------------------------------------
 # reconcile — orphan
