@@ -1580,6 +1580,20 @@ def handle_loops_sync(args) -> None:
         n.path.stem for n in all_loops_raw
         if _enum_val(getattr(n.frontmatter, "status", None), "open") == "closed"
     }
+    # Closing a loop archives it out of 05_open_loops, which get_notes() is the
+    # only place that scans — so the set above misses exactly the loops that
+    # were finished properly, and their tasks get flagged "[orphan]" instead of
+    # completed. Anything still named loop__*.md in the archive is a retired
+    # loop, which is all this needs to know.
+    closed_slugs |= {
+        p.stem for p in (Path(notes_dir) / "09_archive").glob("loop__*.md")
+    }
+    # Snoozed loops are neither active nor closed. Without their own set they
+    # fall through to the orphan branch and get flagged as if deleted.
+    snoozed_slugs = {
+        n.path.stem for n in all_loops_raw
+        if _enum_val(getattr(n.frontmatter, "status", None), "open") == "snoozed"
+    }
 
     # The Frontmatter model only exposes known schema fields, so custom keys
     # (things_uuid, things_list_id) must be read from the raw YAML.
@@ -1622,11 +1636,12 @@ def handle_loops_sync(args) -> None:
         canceled_maps_to=cfg.things3_canceled_maps_to,
         orphan_action=cfg.things3_orphan_action,
         closed_slugs=closed_slugs,
+        snoozed_slugs=snoozed_slugs,
     )
 
     # Apply actions
     stats = {"create": 0, "update": 0, "reverse": 0, "complete": 0,
-             "orphan": 0, "noop": 0, "error": 0}
+             "cancel": 0, "orphan": 0, "noop": 0, "error": 0}
 
     for action in actions:
         try:
@@ -1681,6 +1696,15 @@ def handle_loops_sync(args) -> None:
                     print(
                         f"  [dry-run] would complete {action.things_uuid} "
                         f"({action.loop_slug} is closed)"
+                    )
+
+            elif action.kind == "forward_cancel":
+                stats["cancel"] += 1
+                adapter.cancel_task(action.things_uuid, dry_run=dry_run)
+                if dry_run:
+                    print(
+                        f"  [dry-run] would cancel {action.things_uuid} "
+                        f"({action.loop_slug} is snoozed)"
                     )
 
             elif action.kind == "orphan_cancel":
