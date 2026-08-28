@@ -54,6 +54,13 @@
           </a>
         </li>
         <li>
+          <a href="/review"
+             class="type-link{% if active_type == 'review' %} active{% endif %}">
+            <span class="type-label">review</span>
+            <span class="type-count">{{ statusbar_review_count() }}</span>
+          </a>
+        </li>
+        <li>
           <a href="/signals"
              class="type-link{% if active_type == 'signals' %} active{% endif %}">
             <span class="type-label">signals</span>
