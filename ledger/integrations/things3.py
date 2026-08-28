@@ -50,7 +50,14 @@ _STATUS_MAP = {0: "open", 2: "cancelled", 3: "completed"}
 
 
 def _normalize_status(task: dict) -> dict:
-    """Coerce the numeric ``status`` field to the string reconcile expects."""
+    """Coerce the numeric ``status`` field to the string reconcile expects.
+
+    ``trashed`` wins over the numeric status: Things reports a trashed todo
+    as ``status: 0`` (incomplete) with ``trashed: true``, so the numeric code
+    alone would read it back as an open task.
+    """
+    if task.get("trashed"):
+        return {**task, "status": "trashed"}
     st = task.get("status")
     if isinstance(st, int):
         task = {**task, "status": _STATUS_MAP.get(st, "open")}
@@ -61,20 +68,21 @@ def read_tasks(*, marker_prefix: str = "ledger:") -> list[dict[str, Any]]:
     """Return all Things tasks whose notes contain *marker_prefix*.
 
     ``things tasks --json`` lists only *active* todos; completed live in
-    ``logbook`` and cancelled in ``canceled``.  Reverse-sync needs those too
-    (otherwise a task completed in Things is invisible → its loop never
-    closes and a duplicate is recreated each run), so union all three.
-    ``--limit=0`` disables the CLI's default 200-row cap.  Dedupe by uuid;
-    the numeric ``status`` is normalized to a string for reconcile.
+    ``logbook``, cancelled in ``canceled`` and deleted ones in ``trash``.
+    Reverse-sync needs all of them (otherwise a task completed or thrown away
+    in Things is invisible → its loop never closes and a duplicate is
+    recreated each run), so union all four.  ``--limit=0`` disables the CLI's
+    default 200-row cap.  Dedupe by uuid; the numeric ``status`` is
+    normalized to a string for reconcile.
     """
     by_uuid: dict[str, dict] = {}
-    for section in ("tasks", "logbook", "canceled"):
+    for section in ("tasks", "logbook", "canceled", "trash"):
         raw = _run(["things", section, "--json", "--limit=0"])
         for t in json.loads(raw or "[]"):
             if marker_prefix not in (t.get("notes") or ""):
                 continue
             uuid = t.get("uuid") or t.get("id") or ""
-            # tasks (active) wins over logbook/canceled on uuid collision
+            # tasks (active) wins over logbook/canceled/trash on uuid collision
             by_uuid.setdefault(uuid, _normalize_status(t))
     return list(by_uuid.values())
 
