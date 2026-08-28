@@ -369,7 +369,7 @@ Sleep merges duplicates, promotes patterns into stable notes, updates indices, a
 
 ## Web UI
 
-A local read-only web interface for browsing the corpus: browse/read, search, backlinks, a force-directed graph view, signals dashboard, `/healthz`, and `/admin/reload`.
+A local web interface for browsing the corpus and rapidly reviewing promotion candidates: browse/read, search, backlinks, a force-directed graph view, signals dashboard, `/healthz`, and `/admin/reload`.
 
 ```bash
 pip install 'cognitive-ledger[web]'        # installs FastAPI + uvicorn + jinja2 + markdown-it-py
@@ -386,10 +386,22 @@ Routes:
 - `/search?q=...` - lexical or semantic-hybrid search
 - `/graph` - force-directed graph of the corpus (nodes = notes, edges = wikilinks); type-filter chips and an "open loops only" mode. `/graph/data.json` serves the payload.
 - `/signals` - signal dashboard
+- `/review` - keyboard-first inbox review: approve/reject, inline rewrite, merge, yes/no, and simple-choice questions. Approved candidates pass the existing note lint gate before promotion.
 - `/healthz` - JSON readiness/status probe
 - `/admin/reload` - POST endpoint that reloads the corpus and clears search cache
 
-Keyboard shortcuts: `/` focuses search, `g` opens the graph, `j`/`k` move through the current list (`Enter` opens), `Esc` blurs.
+Global keyboard shortcuts: `/` focuses search, `g` opens the graph, `j`/`k` move through the current list (`Enter` opens), `Esc` blurs. In `/review`: `A`/`Y` approves, `X`/`N` rejects, `1`–`9` answers a choice, `E` opens the rewrite form, and `S` skips.
+
+LLM-generated question candidates use ordinary inbox Markdown plus two optional frontmatter fields. Put `{{answer}}` in the title or body for simple-choice substitution:
+
+```yaml
+review_question: "What does SLA mean in this context?"
+review_options: ["Service level agreement", "Software license agreement"]
+```
+
+Without `review_options`, the question is treated as yes/no: yes approves the proposed note and no rejects it. Human approval stamps `reviewed_by`, `reviewed_at`, `source: user`, and confidence of at least `0.9`; choice metadata is removed after the answer is materialized. Contradiction candidates require an explicit confirmation checkbox.
+
+Set `review_requires_rewrite: true` for a proposed note that needs deliberate editing before approval. Raw captures such as `note__ingest_summary_*` and `session__*` are source material rather than candidates; `/review` excludes them from the yes/no queue and reports their count separately until an LLM extraction step creates atomic proposals.
 
 The server is local-only by default (`127.0.0.1`); binding to a non-loopback host prints a warning since the ledger has no auth.
 

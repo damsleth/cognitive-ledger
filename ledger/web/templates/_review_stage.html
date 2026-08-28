@@ -1,0 +1,159 @@
+<section id="review-stage" class="review-stage" aria-live="polite">
+  {% set total = stats.processed + remaining %}
+  {% set progress = ((stats.processed / total) * 100) if total else 100 %}
+  <div class="review-scoreboard">
+    <div class="review-progress-copy">
+      <strong>{{ stats.processed }}</strong> processed
+      <span>· {{ remaining }} left</span>
+    </div>
+    <div class="review-score-cells" aria-label="Session score">
+      <span class="score-good">{{ stats.accepted }} ✓</span>
+      <span>{{ stats.answered }} answered</span>
+      <span>{{ stats.merged }} merged</span>
+      <span class="score-bad">{{ stats.rejected }} rejected</span>
+      {% if stats.streak %}<span class="score-streak">🔥 {{ stats.streak }}</span>{% endif %}
+    </div>
+    <div class="review-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ progress|round|int }}">
+      <span style="width: {{ progress }}%"></span>
+    </div>
+  </div>
+
+  {% if error %}
+  <div class="review-error" role="alert"><strong>Not processed:</strong> {{ error }}</div>
+  {% endif %}
+
+  {% if item %}
+  {% set candidate = item.candidate %}
+  <article class="review-card{% if candidate.conflict_classification == 'contradict' %} review-card-conflict{% endif %}">
+    <header class="review-card-header">
+      <div class="review-kicker">
+        <span class="note-type-pill">{{ candidate.type|type_label }}</span>
+        {% if candidate.promoted_by %}<span>{{ candidate.promoted_by }}</span>{% endif %}
+        {% if candidate.yaams_entity %}<span>{{ candidate.yaams_entity }}</span>{% endif %}
+      </div>
+      <span class="review-confidence">{{ "%.0f"|format(candidate.confidence * 100) }}% confidence</span>
+    </header>
+
+    {% if item.requires_rewrite %}
+    <div class="review-question">
+      <span class="review-question-label">Rewrite task</span>
+      <h2>Extract one atomic, durable note</h2>
+    </div>
+    {% elif candidate.review_question %}
+    <div class="review-question">
+      <span class="review-question-label">Question</span>
+      <h2>{{ candidate.review_question }}</h2>
+    </div>
+    {% else %}
+    <div class="review-question">
+      <span class="review-question-label">Quality gate</span>
+      <h2>Is this correct, durable, and useful?</h2>
+    </div>
+    {% endif %}
+
+    {% if candidate.conflict_classification == 'contradict' %}
+    <div class="review-conflict">
+      <strong>Contradiction detected</strong>
+      {% if candidate.conflict_reason %}<span>{{ candidate.conflict_reason }}</span>{% endif %}
+      <label><input form="review-form" type="checkbox" name="confirm_conflict" value="1" /> I reviewed the conflict explicitly</label>
+    </div>
+    {% endif %}
+
+    {% if item.requires_rewrite %}
+    <div class="review-rewrite-required">
+      <strong>Rewrite required</strong>
+      <span>Reduce this proposal to one durable, atomic claim before approval.</span>
+    </div>
+    {% endif %}
+
+    <form id="review-form"
+          class="review-form"
+          method="post"
+          action="/review/{{ item.id }}/decide"
+          hx-post="/review/{{ item.id }}/decide"
+          hx-target="#review-stage"
+          hx-swap="outerHTML"
+          hx-disabled-elt="button">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+      {% for key, value in stats.items() %}<input type="hidden" name="{{ key }}" value="{{ value }}" />{% endfor %}
+
+      <section class="review-proposal">
+        <h3>{{ candidate.title }}</h3>
+        <pre class="review-preview">{{ candidate.body }}</pre>
+      </section>
+
+      {% if candidate.review_options %}
+      <div class="review-options" aria-label="Answer choices">
+        {% for option in candidate.review_options %}
+        <button class="review-option" type="submit" name="answer" value="{{ option }}" aria-keyshortcuts="{{ loop.index }}">
+          <kbd>{{ loop.index }}</kbd><span>{{ option }}</span>
+        </button>
+        {% endfor %}
+      </div>
+      {% elif not item.requires_rewrite %}
+      <div class="review-primary-actions">
+        <button class="review-action review-approve" type="submit" name="action" value="accept" aria-keyshortcuts="A Y">
+          <span aria-hidden="true">👍</span>
+          <span>{{ "Yes, approve" if candidate.review_question else "Approve" }}</span>
+          <kbd>A</kbd>
+        </button>
+        <button class="review-action review-reject" type="submit" name="action" value="reject" aria-keyshortcuts="X N">
+          <span aria-hidden="true">👎</span>
+          <span>{{ "No, reject" if candidate.review_question else "Reject" }}</span>
+          <kbd>X</kbd>
+        </button>
+      </div>
+      {% endif %}
+
+      <details class="review-editor" data-review-editor>
+        <summary><span>Rewrite before approving</span><kbd>E</kbd></summary>
+        <div class="review-edit-grid">
+          <label>Title
+            <input name="title" value="{{ candidate.title }}" maxlength="240" required />
+          </label>
+          <label>Type
+            <select name="target_type">
+              {% for type in target_types %}
+              <option value="{{ type.key }}"{% if type.key == candidate.type %} selected{% endif %}>{{ type.label }}</option>
+              {% endfor %}
+            </select>
+          </label>
+        </div>
+        <label>Markdown body
+          <textarea name="body" rows="14" required>{{ candidate.body }}</textarea>
+        </label>
+        <button class="review-action review-save" type="submit" name="action" value="rewrite_accept">Save rewrite + approve</button>
+      </details>
+
+      <footer class="review-secondary-actions">
+        {% if candidate.review_options or item.requires_rewrite %}
+        <button class="text-button danger" type="submit" name="action" value="reject">
+          {{ "None are correct — reject" if candidate.review_options else "Reject candidate" }}
+        </button>
+        {% endif %}
+        {% if candidate.merge_with %}
+        <button class="text-button" type="submit" name="action" value="merge">Merge into {{ candidate.merge_with }}</button>
+        {% endif %}
+        <label class="reject-reason">Reject as
+          <select name="reason">
+            {% for reason in reject_reasons %}<option value="{{ reason }}">{{ reason|replace('_', ' ') }}</option>{% endfor %}
+          </select>
+        </label>
+        <button class="text-button" type="submit" name="action" value="skip" aria-keyshortcuts="S">Skip <kbd>S</kbd></button>
+      </footer>
+    </form>
+  </article>
+  {% else %}
+  <div class="review-complete">
+    <span aria-hidden="true">✓</span>
+    {% if source_capture_count %}
+    <h2>No atomic candidates</h2>
+    <p>{{ source_capture_count }} source capture{{ "s" if source_capture_count != 1 else "" }} await LLM extraction. They are deliberately excluded from the yes/no queue.</p>
+    {% else %}
+    <h2>Review queue cleared</h2>
+    <p>No promotion candidates are waiting. New LLM candidates will appear here automatically.</p>
+    {% endif %}
+    <a class="review-action review-save" href="/browse">Back to ledger</a>
+  </div>
+  {% endif %}
+</section>
