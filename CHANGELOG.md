@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+### Fixed
+- **Things3 sync no longer treats a discarded task as a missing one.**
+  `read_tasks` unioned `tasks`, `logbook` and `canceled` but not `trash`, so a
+  todo thrown away in Things was invisible to the next run, which recreated it
+  as a duplicate. Trash is now read too, and `trashed: true` overrides the
+  numeric status (Things reports a trashed todo as `status: 0`, so the code
+  alone read it back as open). Trashed maps to `closed` outright rather than
+  following `things3_completed_maps_to`: throwing a task away is a decision,
+  not an absence. A live task always wins over a trashed duplicate of the same
+  loop, so a loop with no `things_uuid` cannot bind to its own discarded copy.
+- **A closed loop's task is completed instead of flagged `[orphan]`.** Closing
+  a loop moves it to `09_archive`, and `get_notes("loops")` only scans
+  `05_open_loops`, so `closed_slugs` missed exactly the loops that were
+  finished properly. Archived `loop__*.md` files now count as closed.
+- **Snoozed loops have a forward path.** They are neither active nor closed, so
+  they fell through to the orphan branch and their tasks were flagged as if the
+  loop had been deleted. A snoozed loop now cancels its task, the forward half
+  of `things3_canceled_maps_to`. Leaving it open let a deliberately deferred
+  loop keep nagging, which is the one thing snoozing is for.
+
 ## 2026-08-27 (0.11.3)
 
 ### Fixed

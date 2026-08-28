@@ -45,7 +45,7 @@ class Action:
 
     kind: str
     """One of: create | update | reverse_complete | reverse_cancel |
-    orphan_flag | orphan_cancel | forward_complete | noop
+    orphan_flag | orphan_cancel | forward_complete | forward_cancel | noop
     """
 
     # Things-side fields
@@ -137,6 +137,7 @@ def reconcile(
     canceled_maps_to: str = "snoozed",
     orphan_action: str = "flag",
     closed_slugs: set[str] | None = None,
+    snoozed_slugs: set[str] | None = None,
 ) -> list[Action]:
     """Compute the delta between ledger loops and Things tasks.
 
@@ -150,11 +151,16 @@ def reconcile(
         default_project: Fallback Things project for new tasks.
         blocked_project: Things project for blocked loops.
         completed_maps_to: Ledger status for completed Things tasks.
+            Trashed tasks are always ``closed`` and ignore this.
         canceled_maps_to: Ledger status for cancelled Things tasks.
         orphan_action: What to do with orphaned tasks (flag/cancel/ignore).
             closed_slugs: Slugs of loops that exist but are closed. Their tasks
                 are completed, not flagged — a closed loop is finished work, not
                 a deleted one.
+            snoozed_slugs: Slugs of loops that exist but are snoozed. Their tasks
+                are cancelled, the forward half of ``canceled_maps_to``. Leaving
+                them open would let a deliberately deferred loop keep nagging in
+                Things, which is the one thing snoozing is for.
 
     Returns:
         List of ``Action`` objects to apply.
@@ -180,7 +186,14 @@ def reconcile(
         parsed = _parse_marker(task.get("notes") or "", prefix=marker_prefix)
         if parsed:
             slug, _ = parsed
-            tasks_by_slug[slug] = task
+            prev = tasks_by_slug.get(slug)
+            # A live task always beats a trashed duplicate of the same loop.
+            # Without this, a loop with no things_uuid could bind to its own
+            # discarded copy and get closed while its real task is open.
+            if prev is None or (
+                prev.get("status") == "trashed" and task.get("status") != "trashed"
+            ):
+                tasks_by_slug[slug] = task
 
     # --- Pass 1: Loops → Things (create / update / drift) ---
     for loop in loops:
@@ -218,16 +231,25 @@ def reconcile(
             current_uuid = task.get("uuid") or task.get("id", "")
             task_status = task.get("status", "").lower()
 
-            # Conflict guard: if Things task is completed/cancelled, handle reverse sync
-            if task_status in ("completed", "logbook"):
+            # Conflict guard: if Things task is completed/trashed/cancelled,
+            # handle reverse sync
+            if task_status in ("completed", "logbook", "trashed"):
+                # Trashing a task in Things is a decision, not an absence, so
+                # it closes the loop outright rather than following
+                # completed_maps_to. Skipping it here is what produced
+                # duplicates: the task was invisible to the next run, which
+                # recreated it.
+                trashed = task_status == "trashed"
+                new_status = "closed" if trashed else completed_maps_to
+                verb = "trashed" if trashed else "completed"
                 actions.append(Action(
                     kind="reverse_complete",
                     things_uuid=current_uuid,
                     loop_path=loop.path,
                     loop_slug=loop.slug,
-                    new_loop_status=completed_maps_to,
+                    new_loop_status=new_status,
                     new_things_uuid=current_uuid,
-                    reason=f"Things task completed → loop status={completed_maps_to}",
+                    reason=f"Things task {verb} → loop status={new_status}",
                 ))
                 continue
             if task_status == "cancelled":
@@ -276,8 +298,8 @@ def reconcile(
         uuid = task.get("uuid") or task.get("id", "")
         task_status = (task.get("status") or "").lower()
 
-        # Skip already-completed/cancelled tasks (they're not orphans, just history)
-        if task_status in ("completed", "cancelled", "logbook"):
+        # Skip already-completed/cancelled/trashed tasks (history, not orphans)
+        if task_status in ("completed", "cancelled", "logbook", "trashed"):
             continue
 
         loop = loops_by_slug.get(slug)
@@ -295,6 +317,14 @@ def reconcile(
                     things_uuid=uuid,
                     loop_slug=slug,
                     reason=f"loop {slug!r} is closed in the ledger",
+                ))
+                continue
+            if slug in (snoozed_slugs or set()):
+                actions.append(Action(
+                    kind="forward_cancel",
+                    things_uuid=uuid,
+                    loop_slug=slug,
+                    reason=f"loop {slug!r} is snoozed in the ledger",
                 ))
                 continue
             # Genuine orphan — loop deleted from ledger
