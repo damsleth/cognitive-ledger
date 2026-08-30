@@ -32,6 +32,48 @@
   and `review_requires_rewrite`. Raw captures (`note__ingest_summary_*`,
   `session__*`) are source material, not proposals, and are counted separately
   rather than queued.
+### Added
+- **memcore: the shared retrieval contract as its own package.** `memcore/`
+  at the repo root is separately installable (`pip install -e ./memcore`),
+  stdlib-only, and holds the seam yaams used to carry ported copies of: the
+  `ScoredResult` schema (`memcore.schema`), reciprocal rank fusion incl. a
+  generalized `fuse_ranked_lists` (`memcore.rrf`), the cross-encoder reranker
+  (`memcore.rerank`, sentence-transformers imported lazily at call time), and
+  trust verdicts plus a generalized `attach_trust_verdicts` (`memcore.trust`).
+  The ledger re-exports everything at the old import paths
+  (`ledger.retrieval_types`, `ledger.rerank`, `ledger.query.
+  reciprocal_rank_fusion`, `ledger.scoring.trust_verdict`,
+  `ledger.retrieval.attach_trust_verdicts`) so no caller changes; the
+  `cognitive-ledger` wheel bundles memcore so standalone installs keep
+  working.
+- **`ledger embed search --batch`.** Reads JSONL requests from stdin
+  (`{"query": str, "limit": int?, "target": str?}`), loads the embedding
+  encoder once, and writes one JSON result per line to stdout in input order
+  (same schema as `--json`). A bad line emits `{"error": "..."}` on its line
+  and the batch continues. Lets yaams's promote dedup stop spawning one
+  subprocess (and one cold SentenceTransformer load) per candidate statement.
+- **Seam golden test** (`tests/test_seam_golden.py`) locking the exact JSON
+  shapes of `ledger embed search --json`, one `--batch` output line, and
+  `ledger paths --json` — the payloads yaams parses (`yaams/promote/dedup.py`,
+  `yaams/synthesize/summarize.py`). Shape drift now fails a test here instead
+  of failing silently in the other repo.
+- **WikiSkill-style persistent wiki for the A/B loop** (`ledger/ab_wiki.py`,
+  after arXiv:2608.27454). `ledger ab loop` now maintains a knowledge layer
+  under `<out-dir>/wiki/`: a per-param impact tracker with verdicts
+  (`prioritize` / `explore` / `struggling` / `avoid`) rebuilt from the raw
+  trial log, and an append-only `evolution.md`. Rejected candidates still
+  update the wiki — only the champion rolls back — and the proposer consults
+  it to rank which param to mutate next, so the loop stops re-exploring
+  directions with a consistent record of regression. `--no-wiki` restores
+  blind coordinate descent.
+- **Signal pattern mining** (`ledger signal patterns`, `ledger/patterns.py`).
+  A wiki-maintainer pass over `signals.jsonl` that writes a pattern directory
+  to `08_indices/patterns.{json,md}`: failure modes (repeatedly missed
+  queries, correction-prone / stale / contradicted notes) and strategies
+  (high-value notes), each with evidence counts, first/last-seen timestamps,
+  and a suggested action. Thresholds use weighted counts, so synthetic
+  signals stay down-weighted. Concept mapping documented in
+  `docs/wikiskill.md`.
 
 ## 2026-08-27 (0.11.3)
 
