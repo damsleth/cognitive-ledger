@@ -17,6 +17,12 @@ champion's overrides -- no git branches. Each trial:
 Champion advancement requires winning *both* the screen and the holdout. The
 champion is in-memory + persisted to ``champion.json``; ``--resume`` reloads it.
 
+A persistent wiki (``ledger/ab_wiki.py``, WikiSkill-style; see
+``docs/wikiskill.md``) sits between the raw trial log and the proposer: every
+trial -- rejected ones included -- updates a per-param impact tracker under
+``<out_dir>/wiki/``, and the proposer consults it to rank which param to
+mutate next. Disable with ``--no-wiki`` for blind coordinate descent.
+
 ponytail: probes run against the live corpus in ``repo_root`` (the same direct
 path ``ledger ab run`` takes when both refs are HEAD) -- no per-trial git
 worktree. Switch to worktree isolation only if a trial ever needs to mutate
@@ -36,6 +42,7 @@ from typing import Any
 import yaml
 
 from ledger import ab
+from ledger.ab_wiki import WIKI_DIRNAME, Wiki
 from ledger.config import get_config
 from ledger.retrieval import resolve_retrieval_mode
 
@@ -91,6 +98,7 @@ def next_proposal(
     space: dict[str, list[str]],
     champion_env: dict[str, str],
     history: list[dict[str, Any]],
+    wiki: Wiki | None = None,
 ) -> dict[str, str] | None:
     """Return one untried single-key mutation, or ``None`` if space is exhausted.
 
@@ -98,13 +106,20 @@ def next_proposal(
     the champion's current value for that key and hasn't been tried before. When
     the champion advances, its values update, so previously-skipped values become
     eligible again -- the classic re-centering behaviour.
+
+    With a ``wiki``, the param sweep order is wiki-informed: params with an
+    accepted mutation on record come first, params with a consistent failure
+    record come last (see ``Wiki.proposal_order``). An empty wiki degrades to
+    plain space order, so behaviour without history is unchanged.
     """
     tried: set[tuple[str, str]] = set()
     for entry in history:
         mutation = entry.get("mutation") or {}
         for k, val in mutation.items():
             tried.add((str(k), str(val)))
-    for key, values in space.items():
+    keys = wiki.proposal_order(list(space)) if wiki is not None else list(space)
+    for key in keys:
+        values = space[key]
         current = str(champion_env.get(key, ""))
         for val in values:
             if val == current:
@@ -228,6 +243,15 @@ def run_loop(args: argparse.Namespace) -> int:
         champ_path.write_text(json.dumps(champion, indent=2))
         print(f"[ab loop] baseline objective={champion['screen_objective']:.4f}")
 
+    # --- wiki (persistent knowledge layer; rebuilt from the raw trial log) ---
+    wiki: Wiki | None = None
+    if not getattr(args, "no_wiki", False):
+        wiki = Wiki.open(out_dir / WIKI_DIRNAME, history)
+        wiki.save()
+        if wiki.params:
+            print(f"[ab loop] wiki: {wiki.trials_seen} prior trial(s) folded into "
+                  f"{len(wiki.params)} param record(s)")
+
     stop = _Stop()
     signal.signal(signal.SIGINT, stop)
 
@@ -236,7 +260,7 @@ def run_loop(args: argparse.Namespace) -> int:
 
     # --- main loop -----------------------------------------------------------
     while trial < args.max_trials and not stop.requested:
-        mutation = next_proposal(space, champion["env"], history)
+        mutation = next_proposal(space, champion["env"], history, wiki)
         if mutation is None:
             print("[ab loop] search space exhausted")
             break
@@ -290,6 +314,10 @@ def run_loop(args: argparse.Namespace) -> int:
         history.append(record)
         with log_path.open("a") as fh:
             fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+        if wiki is not None:
+            # The wiki is never rolled back: rejected candidates update it too.
+            wiki.observe(record)
+            wiki.save()
         print(
             f"[ab loop] trial {trial}: {mutation} screen_obj={cand_obj:.4f} "
             f"(Δ{screen_delta:+.4f}) {record['decision']}"
@@ -308,6 +336,9 @@ def run_loop(args: argparse.Namespace) -> int:
     print(f"benchmark objective: {final_obj:.4f}  quality={final['quality']}")
     print(f"champion saved to  : {champ_path}")
     print(f"results log        : {log_path}")
+    if wiki is not None:
+        for line in wiki.summary_lines():
+            print(line)
     return 0
 
 
@@ -336,6 +367,8 @@ def build_parser() -> argparse.ArgumentParser:
                         help="Where champion.json + ab_loop_results.jsonl live")
     parser.add_argument("--resume", action="store_true",
                         help="Continue from existing champion.json + results log")
+    parser.add_argument("--no-wiki", action="store_true",
+                        help="Disable the persistent wiki (blind coordinate descent)")
     return parser
 
 
