@@ -41,7 +41,11 @@ test = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["ledger"]
+# memcore is also separately installable (pip install -e ./memcore) for
+# consumers like yaams; bundling it here keeps the standalone ledger
+# install (brew/pipx) working without a second dist.
+packages = ["ledger", "memcore"]
+exclude = ["memcore/pyproject.toml", "memcore/README.md", "memcore/*.egg-info"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
