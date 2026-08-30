@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### Added
+- **WikiSkill-style persistent wiki for the A/B loop** (`ledger/ab_wiki.py`,
+  after arXiv:2608.27454). `ledger ab loop` now maintains a knowledge layer
+  under `<out-dir>/wiki/`: a per-param impact tracker with verdicts
+  (`prioritize` / `explore` / `struggling` / `avoid`) rebuilt from the raw
+  trial log, and an append-only `evolution.md`. Rejected candidates still
+  update the wiki — only the champion rolls back — and the proposer consults
+  it to rank which param to mutate next, so the loop stops re-exploring
+  directions with a consistent record of regression. `--no-wiki` restores
+  blind coordinate descent.
+- **Signal pattern mining** (`ledger signal patterns`, `ledger/patterns.py`).
+  A wiki-maintainer pass over `signals.jsonl` that writes a pattern directory
+  to `08_indices/patterns.{json,md}`: failure modes (repeatedly missed
+  queries, correction-prone / stale / contradicted notes) and strategies
+  (high-value notes), each with evidence counts, first/last-seen timestamps,
+  and a suggested action. Thresholds use weighted counts, so synthetic
+  signals stay down-weighted. Concept mapping documented in
+  `docs/wikiskill.md`.
+
 ## 2026-08-27 (0.11.3)
 
 ### Fixed
