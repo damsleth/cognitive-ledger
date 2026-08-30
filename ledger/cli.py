@@ -550,6 +550,8 @@ def handle_embed_clean_command(args):
 
 
 def handle_embed_search_command(args):
+    if getattr(args, "batch", False):
+        return _handle_embed_search_batch(args)
     try:
         validated_query = validate_query(args.query)
         validated_limit = validate_limit(args.limit, min_val=1, max_val=100)
@@ -572,6 +574,26 @@ def handle_embed_search_command(args):
         print(json.dumps(payload, indent=2, ensure_ascii=False))
         return
     print(semantic_lib.format_embed_search_human(payload))
+
+
+def _handle_embed_search_batch(args):
+    """Implement ``ledger embed search --batch`` (JSONL in, JSONL out).
+
+    Result objects have the same schema as the single-query ``--json`` path,
+    compacted to one line each, emitted in input order. A bad input line
+    yields ``{"error": "..."}`` on its line and the batch continues. The
+    embedding encoder is loaded once for the whole batch.
+    """
+    backend = resolve_embed_backend(args.embed_backend)
+    for payload in semantic_lib.batch_semantic_search_lines(
+        sys.stdin,
+        default_target=args.target,
+        default_limit=args.limit,
+        embed_backend=backend,
+        embed_model=args.embed_model,
+        allow_api_on_source=args.allow_api_on_source,
+    ):
+        print(json.dumps(payload, ensure_ascii=False), flush=True)
 
 
 def handle_discover_source_command(args):
@@ -879,6 +901,9 @@ def handle_signal_command(args):
             for query, count in list(misses.items())[:5]:
                 print(f"  {float(count):3g}x  {query}")
 
+    elif sub == "patterns":
+        _handle_signal_patterns(args)
+
     elif sub == "seed":
         _handle_signal_seed(args)
 
@@ -886,8 +911,37 @@ def handle_signal_command(args):
         _handle_signal_purge(args)
 
     else:
-        print("Usage: ledger signal {add|summarize|stats|seed|purge}")
+        print("Usage: ledger signal {add|summarize|stats|patterns|seed|purge}")
         raise SystemExit(1)
+
+
+def _handle_signal_patterns(args):
+    """Implement ``ledger signal patterns`` (WikiSkill-style wiki maintainer)."""
+    from ledger.patterns import write_patterns
+
+    cfg = get_config()
+    thresholds = {}
+    if getattr(args, "min_misses", None) is not None:
+        thresholds["min_misses"] = float(args.min_misses)
+    if getattr(args, "min_corrections", None) is not None:
+        thresholds["min_corrections"] = float(args.min_corrections)
+    json_path, md_path, result = write_patterns(cfg.ledger_notes_dir, **thresholds)
+
+    if getattr(args, "json", False):
+        print(json.dumps(result, ensure_ascii=False))
+        return
+
+    meta = result["_meta"]
+    print(
+        f"Mined {meta['failure_count']} failure pattern(s) and "
+        f"{meta['strategy_count']} strategy pattern(s) "
+        f"from {meta['total_signals']} signals."
+    )
+    for pattern in result["patterns"][:5]:
+        print(f"  [{pattern['category']}] {pattern['kind']}: {pattern['subject']}")
+    if len(result["patterns"]) > 5:
+        print(f"  … {len(result['patterns']) - 5} more")
+    print(f"Pattern directory written to {json_path} and {md_path}")
 
 
 def _handle_signal_seed(args):
@@ -2320,9 +2374,23 @@ def main(argv=None) -> int:
         help="Skip confirmation. Required when stdin is not a TTY (destructive).",
     )
 
-    embed_search_parser = embed_subparsers.add_parser("search", help="Semantic search over a built index")
+    embed_search_parser = embed_subparsers.add_parser(
+        "search",
+        help="Semantic search over a built index (single --query, or --batch JSONL)",
+    )
     embed_search_parser.add_argument("--target", choices=("ledger", "source"), default="ledger")
-    embed_search_parser.add_argument("--query", required=True)
+    embed_search_query_src = embed_search_parser.add_mutually_exclusive_group(required=True)
+    embed_search_query_src.add_argument("--query")
+    embed_search_query_src.add_argument(
+        "--batch",
+        action="store_true",
+        help="Batch mode: read JSONL requests from stdin, one object per line "
+             '({"query": str, "limit": int?, "target": "ledger"|"source"?}; '
+             "limit/target default to the CLI flags), and write one JSON result "
+             "per line to stdout in input order — same schema as --json. The "
+             "embedding encoder is loaded once for the whole batch. A bad line "
+             'emits {"error": "..."} on its line; the batch continues.',
+    )
     embed_search_parser.add_argument("--limit", type=int, default=5)
     embed_search_parser.add_argument("--embed-backend", dest="embed_backend", choices=cfg.embed_backends, default=None)
     embed_search_parser.add_argument("--embed-model", dest="embed_model", default=None)
@@ -2564,6 +2632,27 @@ def main(argv=None) -> int:
 
     signal_subparsers.add_parser("summarize", help="Rebuild signal_summary.json")
     signal_subparsers.add_parser("stats", help="Print signal statistics")
+
+    signal_patterns_parser = signal_subparsers.add_parser(
+        "patterns",
+        help="Mine failure/strategy patterns from the signal log into "
+             "08_indices/patterns.{json,md} (WikiSkill-style wiki maintainer)",
+    )
+    signal_patterns_parser.add_argument(
+        "--min-misses",
+        type=float,
+        default=None,
+        metavar="N",
+        help="Weighted miss count before a query becomes a failure pattern (default: 3)",
+    )
+    signal_patterns_parser.add_argument(
+        "--min-corrections",
+        type=float,
+        default=None,
+        metavar="N",
+        help="Weighted corrections before a note becomes a failure pattern (default: 2)",
+    )
+    signal_patterns_parser.add_argument("--json", action="store_true", dest="json")
 
     signal_seed_parser = signal_subparsers.add_parser(
         "seed",

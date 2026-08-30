@@ -214,6 +214,14 @@ Build the embedding index to activate `semantic_hybrid` (the default retrieval m
 ```bash
 ledger embed build --target ledger --backend local --model TaylorAI/bge-micro-v2
 ledger embed status --target ledger    # verify index exists
+ledger embed search --query "deploy window" --json     # search the built index
+
+# Batch mode: JSONL requests on stdin, one JSON result per line on stdout,
+# in input order. The encoder loads once for the whole batch — use this
+# instead of one `ledger embed search` subprocess per query (yaams promote
+# dedup does). A bad line emits {"error": "..."} and the batch continues.
+printf '%s\n' '{"query": "deploy window"}' '{"query": "scoring weights", "limit": 3}' \
+  | ledger embed search --batch
 ```
 
 **Rebuild the index after adding notes.** In `semantic_hybrid` the candidate pool
@@ -251,6 +259,13 @@ ledger ab run --corpus ~/Code/ledger-notes --baseline-ref main --candidate-ref H
 ledger ab run --baseline-ref HEAD --candidate-ref HEAD \
   --candidate-env LEDGER_WEIGHT_SIGNAL=0.1 --runs 5
 ```
+
+`ledger ab loop` runs the autonomous propose → screen → holdout → accept loop
+over a YAML search space. Every trial — rejected ones included — also updates a
+persistent, WikiSkill-style wiki under `<out-dir>/wiki/` (per-param impact
+tracker, verdicts, and an append-only evolution log) that the proposer consults
+to prioritize promising parameters and stop re-exploring consistently failing
+ones. Pass `--no-wiki` for blind coordinate descent. See `docs/wikiskill.md`.
 
 `--baseline-mode` / `--candidate-mode` default to your **configured**
 `retrieval_mode` (e.g. `semantic_hybrid`), not `legacy`; pass the flags
@@ -336,9 +351,12 @@ ledger signal add --type correction --note notes/03_preferences/pref__x.md --det
 ledger signal add --type rating --rating 8
 ledger signal summarize            # rebuild signal_summary.json
 ledger signal stats                # counts, top notes, coverage gaps
+ledger signal patterns             # distill the log into 08_indices/patterns.{json,md}
 ```
 
 Signal scoring is disabled by default (`score_weight_signal: 0.0`) until enough data accumulates. Enable via `config.yaml` once you have 20+ signals.
+
+`ledger signal patterns` acts as a WikiSkill-style wiki maintainer: it mines the raw signal log for recurring failure modes (repeatedly missed queries, correction-prone / stale / contradicted notes) and strategies (high-value notes), each with a suggested action. See `docs/wikiskill.md`.
 
 ## Session Lifecycle Hooks
 

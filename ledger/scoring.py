@@ -363,61 +363,8 @@ def effective_confidence(
 
 
 # ---------------------------------------------------------------------------
-# Trust verdict (plan 46)
+# Trust verdict (plan 46) — moved to the shared memcore package (yaams
+# consumes it too); re-exported here at the old import path.
 # ---------------------------------------------------------------------------
 
-@dataclass(frozen=True)
-class TrustVerdict:
-    """A human-readable trust assessment for a retrieval result.
-
-    ``level`` is one of ``high`` | ``medium`` | ``low``. ``reason`` is a short
-    sentence explaining the level. ``score`` is a continuous [0,1] proxy for
-    sorting/debugging only — it never feeds ranking.
-    """
-
-    level: str
-    reason: str
-    score: float = 0.0
-
-
-def _affirmations(count: float) -> float | int:
-    """Render an affirmation count without a spurious trailing .0."""
-    return int(count) if count == int(count) else round(count, 1)
-
-
-def trust_verdict(
-    *,
-    effective_confidence: float,
-    validation_count: float,
-    contradicted: bool,
-    superseded: bool,
-    recency: float,
-    high_confidence: float = 0.85,
-    medium_confidence: float = 0.60,
-) -> TrustVerdict:
-    """Collapse trust signals into a verdict. Pure, deterministic, display-only.
-
-    Precedence:
-    1. superseded or contradicted → ``low`` (names the issue)
-    2. high confidence and at least one affirmation → ``high``
-    3. moderate confidence → ``medium``
-    4. otherwise → ``low`` (``stale`` when recency is very low)
-    """
-    conf = clamp01(effective_confidence)
-    if superseded:
-        return TrustVerdict("low", "superseded by a newer note", conf * 0.5)
-    if contradicted:
-        return TrustVerdict("low", "contradicted by another note", conf * 0.5)
-    if conf >= high_confidence and validation_count >= 1:
-        return TrustVerdict("high", f"high-confidence, affirmed {_affirmations(validation_count)}×", conf)
-    if conf >= high_confidence:
-        return TrustVerdict("high", "high-confidence", conf)
-    if conf >= medium_confidence:
-        if validation_count >= 1:
-            return TrustVerdict(
-                "medium", f"moderate confidence, affirmed {_affirmations(validation_count)}×", conf
-            )
-        return TrustVerdict("medium", "moderate confidence, unaffirmed", conf)
-    if recency < 0.15:
-        return TrustVerdict("low", "low confidence and stale", conf)
-    return TrustVerdict("low", "low confidence", conf)
+from memcore.trust import TrustVerdict, trust_verdict  # noqa: F401, E402

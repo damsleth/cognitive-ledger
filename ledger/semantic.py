@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Iterable, Iterator
 
 
 @dataclass
@@ -178,6 +179,71 @@ def semantic_search_target(
         "index_item_count": int(payload.get("index_item_count", 0) or 0),
         "results": projected_results,
     }
+
+
+def batch_semantic_search_lines(
+    lines: Iterable[str],
+    *,
+    default_target: str = "ledger",
+    default_limit: int = 5,
+    embed_backend: str = "local",
+    embed_model: str | None = None,
+    allow_api_on_source: bool = False,
+    search_fn: Callable[..., dict[str, Any]] | None = None,
+) -> Iterator[dict[str, Any]]:
+    """Run one semantic search per JSONL request line, in input order.
+
+    Backs ``ledger embed search --batch``. Each line is a JSON object
+    ``{"query": str, "limit": int?, "target": "ledger"|"source"?}``; missing
+    keys fall back to ``default_limit`` / ``default_target``. Yields one dict
+    per non-blank line: the same payload shape as ``semantic_search_target``
+    on success, or ``{"error": "..."}`` for that line's failure — a bad line
+    never aborts the rest of the batch. Blank lines are skipped.
+
+    All searches run in this process, so the embedding encoder is loaded once
+    (module-level cache in ``ledger.embeddings``) instead of once per query —
+    the point of batch mode versus one subprocess per statement.
+
+    ``search_fn`` is injectable for tests and defaults to
+    ``semantic_search_target``.
+    """
+    from ledger.validation import validate_limit, validate_query
+
+    if search_fn is None:
+        search_fn = semantic_search_target
+    for raw_line in lines:
+        line = raw_line.strip()
+        if not line:
+            continue
+        try:
+            request = json.loads(line)
+        except json.JSONDecodeError as exc:
+            yield {"error": f"invalid JSON: {exc}"}
+            continue
+        if not isinstance(request, dict):
+            yield {"error": "each line must be a JSON object with a 'query' key"}
+            continue
+        target = str(request.get("target") or default_target)
+        if target not in ("ledger", "source"):
+            yield {"error": f"invalid target: {target!r} (expected 'ledger' or 'source')"}
+            continue
+        try:
+            query = validate_query(request.get("query"))
+            limit = validate_limit(request.get("limit", default_limit), min_val=1, max_val=100)
+        except Exception as exc:  # QueryValidationError, ValueError, TypeError
+            yield {"error": str(exc)}
+            continue
+        try:
+            yield search_fn(
+                query,
+                target=target,
+                limit=limit,
+                embed_backend=embed_backend,
+                embed_model=embed_model,
+                allow_api_on_source=allow_api_on_source,
+            )
+        except Exception as exc:  # one bad search must not kill the batch
+            yield {"error": str(exc)}
 
 
 def format_embed_search_human(payload: dict[str, Any]) -> str:
