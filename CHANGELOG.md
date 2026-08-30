@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+### Added
+- **memcore: the shared retrieval contract as its own package.** `memcore/`
+  at the repo root is separately installable (`pip install -e ./memcore`),
+  stdlib-only, and holds the seam yaams used to carry ported copies of: the
+  `ScoredResult` schema (`memcore.schema`), reciprocal rank fusion incl. a
+  generalized `fuse_ranked_lists` (`memcore.rrf`), the cross-encoder reranker
+  (`memcore.rerank`, sentence-transformers imported lazily at call time), and
+  trust verdicts plus a generalized `attach_trust_verdicts` (`memcore.trust`).
+  The ledger re-exports everything at the old import paths
+  (`ledger.retrieval_types`, `ledger.rerank`, `ledger.query.
+  reciprocal_rank_fusion`, `ledger.scoring.trust_verdict`,
+  `ledger.retrieval.attach_trust_verdicts`) so no caller changes; the
+  `cognitive-ledger` wheel bundles memcore so standalone installs keep
+  working.
+- **`ledger embed search --batch`.** Reads JSONL requests from stdin
+  (`{"query": str, "limit": int?, "target": str?}`), loads the embedding
+  encoder once, and writes one JSON result per line to stdout in input order
+  (same schema as `--json`). A bad line emits `{"error": "..."}` on its line
+  and the batch continues. Lets yaams's promote dedup stop spawning one
+  subprocess (and one cold SentenceTransformer load) per candidate statement.
+- **Seam golden test** (`tests/test_seam_golden.py`) locking the exact JSON
+  shapes of `ledger embed search --json`, one `--batch` output line, and
+  `ledger paths --json` — the payloads yaams parses (`yaams/promote/dedup.py`,
+  `yaams/synthesize/summarize.py`). Shape drift now fails a test here instead
+  of failing silently in the other repo.
+
 ## 2026-08-27 (0.11.3)
 
 ### Fixed
