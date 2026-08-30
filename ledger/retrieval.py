@@ -1420,27 +1420,20 @@ def attach_trust_verdicts(
     config = _cfg()
     if not config.show_trust_verdict:
         return results
-    from ledger.scoring import trust_verdict
-    for result in results:
-        conf = resolve_confidence(result, signal_summary)
-        components = getattr(result, "components", None)
-        recency = float(getattr(components, "recency", 0.0) or 0.0)
-        rel_path = str(_candidate_value(result, "rel_path", "") or "")
-        validations = 0.0
-        contradicted = False
-        if signal_summary is not None and rel_path:
-            from ledger.signals import get_contradiction_count, get_validation_count
-            validations = get_validation_count(rel_path, summary=signal_summary)
-            contradicted = get_contradiction_count(rel_path, summary=signal_summary) > 0
-        superseded = bool(str(_candidate_value(result, "superseded_by", "") or ""))
-        result.trust = trust_verdict(
-            effective_confidence=conf,
-            validation_count=validations,
-            contradicted=contradicted,
-            superseded=superseded,
-            recency=recency,
-        )
-    return results
+    from memcore.trust import attach_trust_verdicts as _attach
+
+    validation_count_of = None
+    contradiction_count_of = None
+    if signal_summary is not None:
+        from ledger.signals import get_contradiction_count, get_validation_count
+        validation_count_of = lambda p: get_validation_count(p, summary=signal_summary)  # noqa: E731
+        contradiction_count_of = lambda p: get_contradiction_count(p, summary=signal_summary)  # noqa: E731
+    return _attach(
+        results,
+        confidence_of=lambda r: resolve_confidence(r, signal_summary),
+        validation_count_of=validation_count_of,
+        contradiction_count_of=contradiction_count_of,
+    )
 
 
 def apply_prior_tiebreak(ranked: list["ScoredResult"]) -> list["ScoredResult"]:
