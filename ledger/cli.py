@@ -550,6 +550,8 @@ def handle_embed_clean_command(args):
 
 
 def handle_embed_search_command(args):
+    if getattr(args, "batch", False):
+        return _handle_embed_search_batch(args)
     try:
         validated_query = validate_query(args.query)
         validated_limit = validate_limit(args.limit, min_val=1, max_val=100)
@@ -572,6 +574,26 @@ def handle_embed_search_command(args):
         print(json.dumps(payload, indent=2, ensure_ascii=False))
         return
     print(semantic_lib.format_embed_search_human(payload))
+
+
+def _handle_embed_search_batch(args):
+    """Implement ``ledger embed search --batch`` (JSONL in, JSONL out).
+
+    Result objects have the same schema as the single-query ``--json`` path,
+    compacted to one line each, emitted in input order. A bad input line
+    yields ``{"error": "..."}`` on its line and the batch continues. The
+    embedding encoder is loaded once for the whole batch.
+    """
+    backend = resolve_embed_backend(args.embed_backend)
+    for payload in semantic_lib.batch_semantic_search_lines(
+        sys.stdin,
+        default_target=args.target,
+        default_limit=args.limit,
+        embed_backend=backend,
+        embed_model=args.embed_model,
+        allow_api_on_source=args.allow_api_on_source,
+    ):
+        print(json.dumps(payload, ensure_ascii=False), flush=True)
 
 
 def handle_discover_source_command(args):
@@ -2296,9 +2318,23 @@ def main(argv=None) -> int:
         help="Skip confirmation. Required when stdin is not a TTY (destructive).",
     )
 
-    embed_search_parser = embed_subparsers.add_parser("search", help="Semantic search over a built index")
+    embed_search_parser = embed_subparsers.add_parser(
+        "search",
+        help="Semantic search over a built index (single --query, or --batch JSONL)",
+    )
     embed_search_parser.add_argument("--target", choices=("ledger", "source"), default="ledger")
-    embed_search_parser.add_argument("--query", required=True)
+    embed_search_query_src = embed_search_parser.add_mutually_exclusive_group(required=True)
+    embed_search_query_src.add_argument("--query")
+    embed_search_query_src.add_argument(
+        "--batch",
+        action="store_true",
+        help="Batch mode: read JSONL requests from stdin, one object per line "
+             '({"query": str, "limit": int?, "target": "ledger"|"source"?}; '
+             "limit/target default to the CLI flags), and write one JSON result "
+             "per line to stdout in input order — same schema as --json. The "
+             "embedding encoder is loaded once for the whole batch. A bad line "
+             'emits {"error": "..."} on its line; the batch continues.',
+    )
     embed_search_parser.add_argument("--limit", type=int, default=5)
     embed_search_parser.add_argument("--embed-backend", dest="embed_backend", choices=cfg.embed_backends, default=None)
     embed_search_parser.add_argument("--embed-model", dest="embed_model", default=None)
