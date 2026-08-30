@@ -83,6 +83,7 @@ ledger discover-source "<topic>" --source-notes-dir <root> --limit 20
 ledger embed build --target ledger --backend local --model TaylorAI/bge-micro-v2
 ledger embed status --target both
 ledger eval --cases "$(ledger paths --field ledger_notes_dir)/08_indices/retrieval_eval_cases.yaml" --k 3 --strict-cases
+ledger signal patterns       # mine failure/strategy patterns from the signal log (docs/wikiskill.md)
 ledger loops                 # compact list (default)
 ledger notes --type <all|identity|facts|preferences|goals|loops|concepts>
 ledger context --format boot # session boot payload
