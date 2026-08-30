@@ -348,28 +348,9 @@ def lexical_score_component(candidate: ScoredResult | dict[str, Any], query_toke
     return lexical_score, lexical_overlap_count, tag_overlap_count
 
 
-def reciprocal_rank_fusion(
-    ranked_lists: list[list[str]],
-    k: int = 60,
-) -> dict[str, float]:
-    """Compute Reciprocal Rank Fusion scores for items appearing in multiple rank lists.
-
-    Each element of ``ranked_lists`` is an ordered list of item keys (e.g.
-    ``rel_path`` strings) from highest to lowest rank.  Items that appear in
-    multiple lists accumulate scores; items absent from a list contribute 0.
-
-    Formula: RRF(d) = sum_over_lists(1 / (k + rank(d)))
-    where rank is 1-based and ``k`` is the smoothing constant (default 60).
-
-    Returns a dict mapping item key -> RRF score (higher is better).
-    The absolute score values are not meaningful on their own — use them
-    only for relative ordering.
-    """
-    scores: dict[str, float] = {}
-    for ranked in ranked_lists:
-        for rank_idx, item_key in enumerate(ranked):
-            scores[item_key] = scores.get(item_key, 0.0) + 1.0 / (k + rank_idx + 1)
-    return scores
+# Moved to the shared memcore package (yaams consumes it too); re-exported
+# here because ledger/tier1.py and external callers import it from this module.
+from memcore.rrf import reciprocal_rank_fusion  # noqa: F401, E402
 
 
 def prf_expand_query_vector(
