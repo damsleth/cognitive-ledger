@@ -186,16 +186,16 @@ Når forkortelseslanen fungerer, generaliseres den samme discover -> classify ->
 
 ### Phase 0 - Reconcile and freeze the baseline
 
-- [ ] Reconcile stale plan evidence before coding. In particular, `.plans/ai-memory/06-bitemporal-event-time.md` still says YAAMS event-time wiring is missing, while `enrich_candidate_event_time()` and its tests now implement the source-derived `valid_from` path. Mark implemented substeps as done; retain still-open temporal query/ranking work.
-- [ ] Freeze a consistent read-only YAAMS scenario with SQLite backup semantics, not a raw file copy while WAL writes may be active. Keep the private DB outside Git.
-- [ ] Write a non-sensitive scenario manifest containing DB schema version, file hash, item count, max `ingested_at`, max raw row/item boundary, source counts, candidate counts, query-feedback hash, YAAMS commit, ledger commit and config hashes with secrets removed.
+- [x] Reconcile stale plan evidence before coding. In particular, `.plans/ai-memory/06-bitemporal-event-time.md` still says YAAMS event-time wiring is missing, while `enrich_candidate_event_time()` and its tests now implement the source-derived `valid_from` path. Mark implemented substeps as done; retain still-open temporal query/ranking work. _(2026-08-30: plan 06 + index reconciled — (a)/(c) shipped, (b) auto-as-of open.)_
+- [x] Freeze a consistent read-only YAAMS scenario with SQLite backup semantics, not a raw file copy while WAL writes may be active. Keep the private DB outside Git. _(2026-08-30: `yaams scripts/promotion_freeze.py` → `~/brain/promotion_fixture.db`.)_
+- [x] Write a non-sensitive scenario manifest containing DB schema version, file hash, item count, max `ingested_at`, max raw row/item boundary, source counts, candidate counts, query-feedback hash, YAAMS commit, ledger commit and config hashes with secrets removed. _(2026-08-30: `yaams scripts/promotion_scenario.json`.)_
 - [ ] Define train/dev/holdout splits before evaluating a new design:
   - time split by `ingested_at`, not source `timestamp`, so late-arriving historic data is included exactly once;
   - entity/thread grouping to prevent near-identical messages leaking across splits;
   - a frozen holdout that no proposer prompt or tuning agent sees.
-- [ ] Snapshot the current 834 promotion candidates as immutable baseline evidence. Do not change their statuses during harness development.
-- [ ] Snapshot YAAMS entity/config aliases and materialize the 130 short-form candidates as the first abbreviation gold-set worksheet. Do not write abbreviation notes yet.
-- [ ] Add a one-command verification that the scenario manifest still matches the private fixture, analogous to YAAMS `autoresearch_freeze.py --check`.
+- [x] Snapshot the current 834 promotion candidates as immutable baseline evidence. Do not change their statuses during harness development. _(2026-08-30: in the fixture; `candidate_hash` in the manifest detects status drift.)_
+- [x] Snapshot YAAMS entity/config aliases and materialize the 130 short-form candidates as the first abbreviation gold-set worksheet. Do not write abbreviation notes yet. _(2026-08-30: `promotion_freeze.py --worksheet` → `~/brain/promotion_abbrev_worksheet.csv`, 130 rows, unlabeled.)_
+- [x] Add a one-command verification that the scenario manifest still matches the private fixture, analogous to YAAMS `autoresearch_freeze.py --check`. _(2026-08-30: `promotion_freeze.py --check`.)_
 
 **Exit condition:** Two consecutive baseline runs on the same snapshot produce identical candidate selection and identical mechanical metrics, apart from explicitly excluded wall-clock values.
 
@@ -455,4 +455,5 @@ Each PR must update tests in the owning repo. Cross-repo behavior needs matching
 
 ## Next action
 
-- [ ] Implement PR 1 only: reconcile current plan status, define the frozen scenario manifest and candidate-bundle schema, produce a baseline report from today's database, and export the 130 short YAAMS aliases as an unlabeled abbreviation worksheet. Do not generate notes, rescore/commit/delete live candidates or mutate entity aliases in that PR.
+- [x] Implement PR 1 only: reconcile current plan status, define the frozen scenario manifest and candidate-bundle schema, produce a baseline report from today's database, and export the 130 short YAAMS aliases as an unlabeled abbreviation worksheet. Do not generate notes, rescore/commit/delete live candidates or mutate entity aliases in that PR. _(Done 2026-08-30: yaams `scripts/promotion_freeze.py` (freeze/`--check`/`--report`/`--worksheet`) + `scripts/promotion_scenario.json`; contract v1 schema/example in both repos' `docs/contracts/` with tests; interface doc artifact 5; Phase 0 splits (train/dev/holdout) remain open.)_
+- [ ] PR 2 — abbreviation discovery: mine explicit patterns from the frozen fixture, label the 130-row worksheet into the first gold set; no ledger writes. Also define the Phase 0 train/dev/holdout splits before any proposer evaluation.
