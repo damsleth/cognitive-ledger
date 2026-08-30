@@ -18,7 +18,7 @@ through the three artifacts below. Either tool must still work standalone.
 
 ---
 
-## The four seam artifacts
+## The seam artifacts
 
 | # | Artifact | Direction | Producer | Consumer | Status |
 |---|----------|-----------|----------|----------|--------|
@@ -26,6 +26,7 @@ through the three artifacts below. Either tool must still work standalone.
 | 2 | Inbox candidate `.md` | YAAMS → cogled | `yaams promote review` | cogled inbox triage | exists, **under-specified** |
 | 3 | `rejected_candidates.jsonl` | cogled → YAAMS | cogled reject (Phase A) | YAAMS `promote generate` | exists |
 | 4 | `ledger embed search --json` | cogled → YAAMS | cogled CLI | YAAMS promote dedup | new in Phase C |
+| 5 | Candidate bundle JSONL | YAAMS → cogled | `yaams promote export` (planned) | cogled candidate validator / shadow A/B | **schema only** — see below |
 
 ---
 
@@ -290,6 +291,20 @@ Defensive failure mode: subprocess error, timeout, missing index, or bad JSON �
 verdict is `new`. Promotion is never blocked on tooling.
 
 ---
+
+## 5. Candidate bundle (YAAMS → cogled) — schema pinned, producer planned
+
+Defined for the agentisk enrichment loop
+(`.plans/agentisk-yaams-til-ledger-enrichment-og-todelt-eva.md`, PR 1).
+JSON Schema: `docs/contracts/candidate_bundle.schema.json` (bundle_schema_version 1),
+example: `candidate_bundle.example.json` alongside it. Cogled owns the schema;
+yaams keeps byte-identical copies under its own `docs/contracts/` as contract
+fixtures (validated by `tests/test_candidate_bundle_contract.py` in each repo)
+— update both copies in the same change set. Evolution is additive-only
+(consumers tolerate unknown fields); breaking changes bump
+`bundle_schema_version`. The bundle is the internal eval/gate format; the
+Markdown inbox candidate (artifact 2) remains the final handoff into
+`00_inbox/`.
 
 ## Failure posture (degrade open)
 
