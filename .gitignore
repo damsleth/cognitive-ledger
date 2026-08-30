@@ -32,3 +32,4 @@ config.yaml
 .plans/ab_results/
 .plans/done/
 .plans/DONE.md
+*.egg-info/
