@@ -3,10 +3,13 @@
 **Target executor:** one Sonnet subagent. **Cross-repo:** touches both `cognitive-ledger` and `yaams`.
 **Report:** A1 (Zep event-time vs ingestion-time; non-lossy invalidation). **Gate:** temporal cases from Plan 01. **Needs:** Plan 01 (temporal cases).
 
-## Status — fields + primitive exist; the wiring is missing
+## Status — (a) and (c) shipped; (b) still open _(reconciled 2026-08-30)_
 Already built: `valid_from`/`valid_to`/`superseded_by`/`supersedes` in `schema.yaml` + `ledger/bitemporal.py` (`parse_valid_time` 65-106, `is_valid_at` 107-140, `supersede()` 197-407 — sets `valid_to`, moves to `09_archive`, logs a supersession signal). `--as-of` retrieval lens exists: `apply_temporal_filter()` at `ledger/retrieval.py:893-962`.
 
-**Three gaps (report A1):** (a) `valid_from` is not populated from the *originating source* timestamp — promoted notes get note-creation time, conflating event-time with ingestion-time; (b) `--as-of` is opt-in, not auto-selected on temporal queries; (c) `supersede()` archives but ranking does **not** auto-down-rank live notes with `valid_to < now` ("Supersede() moves notes to archive but does not auto-suppress in current queries").
+**Of the three gaps (report A1):**
+- (a) **DONE** — yaams `enrich_candidate_event_time()` (`yaams/promote/review.py:157`) populates `valid_from` from the earliest non-inferred source timestamp, emits `valid_from_confidence: low` when all timestamps are inferred; covered by `tests/test_promote_contract.py`.
+- (b) **OPEN** — `--as-of` is still opt-in; no temporal-cue auto-selection exists in `ledger/query.py`/`retrieval.py`.
+- (c) **DONE, via exclusion not down-rank** — `apply_temporal_filter()` hides live notes with `valid_to < now` from current retrieval while keeping them reachable via `--as-of` (`ledger/retrieval.py:893-962`). The plan's softer down-rank-multiplier variant was not implemented; revisit only if hiding proves too aggressive.
 
 ## Steps
 

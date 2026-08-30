@@ -79,7 +79,7 @@ Stage 0 (COMPLETE, archived):
   03 eval-gate-mandatory ────┘
 
 Stage 1 (04-05 COMPLETE; active plans below):
-  06 bitemporal-event-time [needs 01 temporal cases; touches yaams]
+  06 bitemporal-event-time [(a)+(c) shipped, (b) auto-as-of still open; touches yaams]
   07 validate-prior-tiebreaker      [needs 01]
 
 Stage 2 (medium bets):
