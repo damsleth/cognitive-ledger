@@ -25,6 +25,8 @@ TIMELINE_FILENAME = "timeline.md"
 TIMELINE_JSONL_FILENAME = "timeline.jsonl"
 REJECTED_CANDIDATES_FILENAME = "rejected_candidates.jsonl"
 NOTE_INDEX_FILENAME = "note_index.json"
+PATTERNS_JSON_FILENAME = "patterns.json"
+PATTERNS_MD_FILENAME = "patterns.md"
 
 
 @dataclass(frozen=True)
@@ -114,6 +116,14 @@ def rejected_candidates_path(ledger_notes_dir: Path) -> Path:
 
 def note_index_path(ledger_notes_dir: Path) -> Path:
     return indices_dir(ledger_notes_dir) / NOTE_INDEX_FILENAME
+
+
+def patterns_json_path(ledger_notes_dir: Path) -> Path:
+    return indices_dir(ledger_notes_dir) / PATTERNS_JSON_FILENAME
+
+
+def patterns_md_path(ledger_notes_dir: Path) -> Path:
+    return indices_dir(ledger_notes_dir) / PATTERNS_MD_FILENAME
 
 
 def is_logical_note_path(path: str | Path) -> bool:

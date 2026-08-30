@@ -85,6 +85,7 @@ ledger embed status --target both
 ledger embed search --query "<topic>" --json
 printf '%s\n' '{"query":"<a>"}' '{"query":"<b>"}' | ledger embed search --batch   # one encoder load, JSONL out
 ledger eval --cases "$(ledger paths --field ledger_notes_dir)/08_indices/retrieval_eval_cases.yaml" --k 3 --strict-cases
+ledger signal patterns       # mine failure/strategy patterns from the signal log (docs/wikiskill.md)
 ledger loops                 # compact list (default)
 ledger notes --type <all|identity|facts|preferences|goals|loops|concepts>
 ledger context --format boot # session boot payload
