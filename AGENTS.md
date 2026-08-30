@@ -82,7 +82,10 @@ ledger query "<topic>" --as-of 2025-06-01   # notes valid on that date (includes
 ledger discover-source "<topic>" --source-notes-dir <root> --limit 20
 ledger embed build --target ledger --backend local --model TaylorAI/bge-micro-v2
 ledger embed status --target both
+ledger embed search --query "<topic>" --json
+printf '%s\n' '{"query":"<a>"}' '{"query":"<b>"}' | ledger embed search --batch   # one encoder load, JSONL out
 ledger eval --cases "$(ledger paths --field ledger_notes_dir)/08_indices/retrieval_eval_cases.yaml" --k 3 --strict-cases
+ledger signal patterns       # mine failure/strategy patterns from the signal log (docs/wikiskill.md)
 ledger loops                 # compact list (default)
 ledger notes --type <all|identity|facts|preferences|goals|loops|concepts>
 ledger context --format boot # session boot payload
@@ -635,6 +638,34 @@ standard command-line tools:
 
 Prefer these tools to complex frameworks. Simplicity makes it easier for
 future agents to understand and extend the system.
+
+## memcore (shared retrieval contract)
+
+`memcore/` at the repo root is a separately installable package
+(`pip install -e ./memcore`) holding the retrieval contract shared with the
+**yaams** sibling repo: the `ScoredResult` schema (`memcore.schema`), RRF
+fusion (`memcore.rrf`), the cross-encoder reranker (`memcore.rerank`), and
+trust verdicts (`memcore.trust`). yaams used to carry ported copies of these;
+it now imports memcore instead, so every public symbol and dataclass field in
+memcore is a cross-repo contract — additive changes only, and coordinate a
+yaams update for anything else.
+
+Rules:
+
+- **memcore is stdlib-only.** No runtime dependencies, ever. Anything needing
+  numpy/sklearn stays in `ledger/`. (`memcore.rerank` imports
+  sentence-transformers lazily, at call time only.)
+- The ledger re-exports memcore at the old import paths
+  (`ledger.retrieval_types`, `ledger.rerank`, `ledger.query
+  .reciprocal_rank_fusion`, `ledger.scoring.trust_verdict`,
+  `ledger.retrieval.attach_trust_verdicts`) — import from those inside
+  ledger code; the shims are the compatibility seam.
+- The JSON seams yaams shells out to (`ledger embed search --json`/`--batch`,
+  `ledger paths --json`) are shape-locked by `tests/test_seam_golden.py`.
+  If that test fails, you are breaking yaams — fix the shape or update both
+  repos together.
+
+See `memcore/README.md` for details.
 
 ## Electric Sheep (sleep / consolidation)
 

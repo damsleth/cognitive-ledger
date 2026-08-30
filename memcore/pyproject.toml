@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "memcore"
+version = "0.1.0"
+description = "Shared retrieval contract for cognitive-ledger and yaams: result schema, RRF fusion, cross-encoder reranking, trust verdicts. Stdlib-only."
+requires-python = ">=3.11"
+# Deliberately empty: memcore is stdlib-only (see README.md). Do not add
+# runtime dependencies here — that is the whole point of the package.
+dependencies = []
+
+[project.optional-dependencies]
+# Only needed to *call* rerank.get_reranker/rerank_pairs; importing
+# memcore.rerank stays dependency-free (the import is lazy).
+rerank = ["sentence-transformers>=2.2"]
+
+[tool.setuptools]
+# Flat layout: the package modules live next to this pyproject so the
+# containing repo can `import memcore` straight off its checkout root.
+packages = ["memcore"]
+
+[tool.setuptools.package-dir]
+memcore = "."
