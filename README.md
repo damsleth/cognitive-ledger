@@ -214,6 +214,14 @@ Build the embedding index to activate `semantic_hybrid` (the default retrieval m
 ```bash
 ledger embed build --target ledger --backend local --model TaylorAI/bge-micro-v2
 ledger embed status --target ledger    # verify index exists
+ledger embed search --query "deploy window" --json     # search the built index
+
+# Batch mode: JSONL requests on stdin, one JSON result per line on stdout,
+# in input order. The encoder loads once for the whole batch — use this
+# instead of one `ledger embed search` subprocess per query (yaams promote
+# dedup does). A bad line emits {"error": "..."} and the batch continues.
+printf '%s\n' '{"query": "deploy window"}' '{"query": "scoring weights", "limit": 3}' \
+  | ledger embed search --batch
 ```
 
 **Rebuild the index after adding notes.** In `semantic_hybrid` the candidate pool
