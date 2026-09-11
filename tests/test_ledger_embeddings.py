@@ -120,7 +120,6 @@ class LedgerEmbeddingsTests(unittest.TestCase):
             model="fake-local-model",
             source_root=self.source_root,
             write_manifest=False,
-            append_timeline=False,
         )
 
         result = payload["results"][0]
@@ -180,7 +179,6 @@ class LedgerEmbeddingsTests(unittest.TestCase):
             model="fake-local-model",
             source_root=self.source_root,
             write_manifest=True,
-            append_timeline=False,
         )
 
         manifest = self.embeddings.load_semantic_manifest()
@@ -188,7 +186,7 @@ class LedgerEmbeddingsTests(unittest.TestCase):
         target_dir = self.embeddings.get_config().semantic_root / "ledger"
         self.assertTrue(target_dir.exists())
 
-        result = self.embeddings.clean_indices("ledger", append_timeline=False)
+        result = self.embeddings.clean_indices("ledger")
 
         # On-disk vectors removed *and* the manifest no longer points at them.
         self.assertFalse(target_dir.exists())
@@ -199,7 +197,7 @@ class LedgerEmbeddingsTests(unittest.TestCase):
     def test_clean_missing_target_is_noop(self):
         # Cleaning a target that was never built should not error or fabricate
         # a manifest entry.
-        result = self.embeddings.clean_indices("ledger", append_timeline=False)
+        result = self.embeddings.clean_indices("ledger")
         self.assertEqual(result["removed"], [])
         self.assertEqual(result["manifest_pruned"], [])
 
@@ -210,7 +208,6 @@ class LedgerEmbeddingsTests(unittest.TestCase):
             model="fake-local-model",
             source_root=self.source_root,
             write_manifest=False,
-            append_timeline=False,
         )
         self.assertEqual(first["results"][0]["embedded_count"], 2)
         self.assertEqual(first["results"][0]["reused_count"], 0)
@@ -221,7 +218,6 @@ class LedgerEmbeddingsTests(unittest.TestCase):
             model="fake-local-model",
             source_root=self.source_root,
             write_manifest=False,
-            append_timeline=False,
         )
         self.assertEqual(second["results"][0]["embedded_count"], 0)
         self.assertEqual(second["results"][0]["reused_count"], 2)
@@ -238,7 +234,6 @@ class LedgerEmbeddingsTests(unittest.TestCase):
             model="fake-local-model",
             source_root=self.source_root,
             write_manifest=False,
-            append_timeline=False,
         )
         self.assertEqual(third["results"][0]["embedded_count"], 1)
         self.assertEqual(third["results"][0]["reused_count"], 1)
@@ -259,8 +254,7 @@ class LedgerEmbeddingsTests(unittest.TestCase):
                     model=self.embeddings.DEFAULT_OPENAI_MODEL,
                     source_root=self.source_root,
                     write_manifest=False,
-                    append_timeline=False,
-                )
+                        )
 
             with self.assertRaises(RuntimeError):
                 self.embeddings.semantic_score_map(
@@ -290,7 +284,6 @@ class LedgerEmbeddingsTests(unittest.TestCase):
             model="fake-local-model",
             source_root=self.source_root,
             write_manifest=False,
-            append_timeline=False,
         )
         self.call_log.clear()
         self.embeddings.clear_runtime_caches()

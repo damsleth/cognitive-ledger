@@ -695,7 +695,6 @@ def build_indices(
     model: str | None = None,
     source_root: Path | None = None,
     write_manifest: bool = True,
-    append_timeline: bool = True,
     text_template: str | None = None,
     device: str | None = None,
     batch_size: int | None = None,
@@ -762,13 +761,9 @@ def build_indices(
                 "built_at": result["built_at"],
             }
 
+        # ponytail: no timeline entry - the manifest is a derived build artifact,
+        # not a knowledge event. It was 28% of timeline volume and zero signal.
         write_semantic_manifest(manifest)
-        if append_timeline:
-            append_timeline_entry(
-                action="updated",
-                rel_path="notes/08_indices/semantic_manifest.json",
-                description=f"updated semantic embedding manifest ({backend}/{resolved_model})",
-            )
 
     return {
         "target": target,
@@ -829,7 +824,6 @@ def clean_indices(
     target: str,
     *,
     write_manifest: bool = True,
-    append_timeline: bool = True,
 ) -> dict[str, Any]:
     target = str(target or "").strip().lower()
     if target not in SUPPORTED_TARGETS:
@@ -858,12 +852,6 @@ def clean_indices(
             manifest["version"] = 1
             manifest["updated"] = now_iso()
             write_semantic_manifest(manifest)
-            if append_timeline:
-                append_timeline_entry(
-                    action="updated",
-                    rel_path="notes/08_indices/semantic_manifest.json",
-                    description=f"cleaned semantic embedding indices ({', '.join(manifest_pruned)})",
-                )
 
     return {"target": target, "removed": removed, "manifest_pruned": manifest_pruned}
 
