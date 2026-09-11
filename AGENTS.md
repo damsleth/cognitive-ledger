@@ -639,6 +639,24 @@ standard command-line tools:
 Prefer these tools to complex frameworks. Simplicity makes it easier for
 future agents to understand and extend the system.
 
+## Learned Patterns
+
+### Python / Test Runner
+- **Never use `python`, `python3`, or bare `pytest`** - all fail. Always use `.venv/bin/python -m pytest` (or `.venv/bin/pytest`) for this repo.
+- For the YAAMS repo (`/Users/damsleth/code/yaams`), use `/Users/damsleth/code/yaams/.venv/bin/python -m pytest` - it has its own isolated venv.
+
+### Write Tool Safety
+- Always **Read a file before Writing it** if the file might already exist on disk. The Write tool will error with "File has not been read yet" otherwise. Files that are frequently written without a prior read: `CHANGELOG.md`, `.plans/TODO.md`, `pyproject.toml`, test files.
+
+### Ledger Data Paths
+- Ledger data root: `~/brain/ledger/` - inbox at `~/brain/ledger/00_inbox/`, indices at `~/brain/ledger/08_indices/` (signals.jsonl, timeline.jsonl).
+- Notes vault root: `~/brain/notes/` - use absolute paths; relative paths like `notes/00_inbox` fail with fd/find.
+- `ledger paths --field` only accepts: `ledger_root`, `ledger_notes_dir`, `source_notes_dir`, `timeline_path`.
+
+### CLI Command Correctness
+- `hugr stats` (not `hugr status`) - `status` is not a valid hugr subcommand.
+- Workflow scripts must be **plain JavaScript, not TypeScript** - type annotations like `: string[]` cause parse errors at runtime.
+
 ## memcore (shared retrieval contract)
 
 `memcore/` at the repo root is a separately installable package
