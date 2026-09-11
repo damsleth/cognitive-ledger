@@ -490,7 +490,6 @@ def maybe_build_semantic_index(
             backend=backend,
             model=resolved_model,
             write_manifest=False,
-            append_timeline=False,
         )
     except Exception as exc:
         raise InvalidSetupError(
