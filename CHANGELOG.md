@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Removed
+- **The semantic embedding manifest no longer writes timeline entries.**
+  `embed build` and `embed clean` logged every manifest write to
+  `timeline.jsonl`; the manifest is a derived build artifact, not a knowledge
+  event, and these accounted for 28% of timeline volume with no signal. The
+  now-unused `append_timeline` keyword was dropped from
+  `embeddings.build_indices()` and `embeddings.clean_indices()`. Existing
+  manifest entries can be purged with
+  `grep -v 'semantic_manifest\.json' timeline.jsonl`, followed by
+  `regenerate_timeline_markdown()` and `sheep sync --apply --accept-drift`.
+
 ### Fixed
 - **Things3 sync no longer treats a discarded task as a missing one.**
   `read_tasks` unioned `tasks`, `logbook` and `canceled` but not `trash`, so a

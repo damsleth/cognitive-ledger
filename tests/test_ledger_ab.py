@@ -376,13 +376,11 @@ class LedgerABSemanticIndexBuildTests(unittest.TestCase):
                 backend,
                 model,
                 write_manifest=True,
-                append_timeline=True,
             ):
                 self.assertEqual(target, "ledger")
                 self.assertEqual(backend, "local")
                 self.assertEqual(model, "TaylorAI/bge-micro-v2")
                 self.assertFalse(write_manifest)
-                self.assertFalse(append_timeline)
                 return {
                     "results": [
                         {
