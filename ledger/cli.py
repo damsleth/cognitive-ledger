@@ -633,6 +633,22 @@ def handle_discover_source_command(args):
     print(semantic_lib.format_source_search_human(result))
 
 
+def _resolve_baseline_path(raw: str) -> Path:
+    """Resolve a baseline path for reading, by the same rules as writing.
+
+    ``--baseline`` read the path straight off the command line, so the file
+    ``--write-baseline notes/08_indices/x.json`` had just written was not found
+    unless you happened to run from the store. Half-fixing one flag and leaving
+    its twin is how this bug survived: both go through the resolver now.
+    """
+    config = get_config()
+    return layout.resolve_path(
+        Path(raw).expanduser(),
+        ledger_root=Path(config.ledger_root).resolve(),
+        ledger_notes_dir=Path(config.ledger_notes_dir).resolve(),
+    )
+
+
 def _resolve_baseline_output(raw: str) -> Path:
     """Resolve --write-baseline through the project's own path resolver.
 
@@ -670,6 +686,7 @@ def _resolve_baseline_output(raw: str) -> Path:
 
 def handle_eval_command(args):
     baseline_out = _resolve_baseline_output(args.write_baseline) if args.write_baseline else None
+    baseline_in = _resolve_baseline_path(args.baseline) if args.baseline else None
 
     try:
         backend = resolve_embed_backend(args.embed_backend)
@@ -717,7 +734,7 @@ def handle_eval_command(args):
             default_retrieval_mode=args.retrieval_mode,
             embed_backend=backend,
             embed_model=model,
-            baseline_path=args.baseline,
+            baseline_path=str(baseline_in) if baseline_in else None,
             baseline_written=baseline_written,
         )
         print(json.dumps(out, indent=2, ensure_ascii=False))
@@ -728,8 +745,8 @@ def handle_eval_command(args):
     if baseline_written:
         print(f"baseline written: {baseline_written}")
 
-    if args.baseline:
-        cmp = eval_lib.compare_with_baseline(result, args.baseline)
+    if baseline_in is not None:
+        cmp = eval_lib.compare_with_baseline(result, baseline_in)
         print(eval_lib.format_baseline_comparison(cmp, k=result["k"]))
         if cmp.get("available") and cmp.get("regressed"):
             raise SystemExit(2)
