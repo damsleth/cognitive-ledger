@@ -15,11 +15,12 @@ import-claude-memory` maps them onto the ledger note schema.
 ## Usage
 
 ```bash
-# Dry run (default): writes nothing, prints the full mapping table plus
-# a few rendered example notes. This is what you review first.
+# Dry run (default): writes nothing, prints the mapping table (one line per
+# note: date, type, scope, name, title; grouped by origin project, newest
+# first). This is what you review first.
 ledger import-claude-memory
 
-# Render more/less example notes in the report
+# Also render N notes in full, frontmatter and body, below the table
 ledger import-claude-memory --preview 8
 
 # Point at a non-default memory root
@@ -43,7 +44,9 @@ sha1, so unchanged files are skipped on the next run.
 
 The 4-value Claude taxonomy does not map one-to-one onto the 6 ledger
 types, so `project`/`reference` are refined with title/body markers. The
-dry-run report prints the chosen type and the reason for every file.
+dry-run report prints the Claude type next to the chosen ledger type for
+every file, so a marker-driven refinement is visible as a mismatch between
+the two columns.
 
 | Claude `metadata.type` | ledger type | ledger `source` | rule |
 | --- | --- | --- | --- |

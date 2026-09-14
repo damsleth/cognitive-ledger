@@ -21,6 +21,7 @@ from ledger.claude_memory import (
     SKIP_ALREADY_PROMOTED,
     classify,
     existing_external_ids,
+    render_report,
 )
 
 
@@ -143,6 +144,53 @@ class TestSkipMarkerCliRendering(unittest.TestCase):
         payload = __import__("json").loads(self._run(json_output=True))
         self.assertEqual(payload["skipped"], 2)
         self.assertEqual(payload["skipped_already_promoted"], 1)
+
+
+class TestMappingTable(unittest.TestCase):
+    """The table groups by origin project, newest project first."""
+
+    @staticmethod
+    def _note(project, name, updated, note_type="facts"):
+        return SimpleNamespace(
+            project=project,
+            name=name,
+            updated=updated,
+            description=f"title of {name}",
+            note_type=note_type,
+            scope="dev",
+            claude_type="reference",
+            link_count=0,
+            resolved_links=0,
+        )
+
+    def _render(self):
+        plan = SimpleNamespace(
+            memory_root=Path("/tmp/memroot"),
+            files_seen=3,
+            folders_scanned=2,
+            skipped=[],
+            skipped_promoted=[],
+            planned=[
+                self._note("stale-repo", "old-one", "2026-01-01T00:00:00Z"),
+                self._note("fresh-repo", "new-one", "2026-09-01T00:00:00Z"),
+                self._note(
+                    "fresh-repo", "a-pref", "2026-08-01T00:00:00Z", "preferences"
+                ),
+            ],
+        )
+        return render_report(plan, mode="inbox")
+
+    def test_newest_project_first_and_newest_note_first_within_it(self):
+        out = self._render()
+        self.assertLess(out.index("fresh-repo"), out.index("stale-repo"))
+        self.assertLess(out.index("new-one"), out.index("a-pref"))
+
+    def test_preferences_abbreviates_to_pref_not_prefe(self):
+        self.assertNotIn("prefe ", self._render())
+        self.assertIn("pref ", self._render())
+
+    def test_previews_are_off_by_default(self):
+        self.assertNotIn("EXAMPLE HITS", self._render())
 
 
 if __name__ == "__main__":
