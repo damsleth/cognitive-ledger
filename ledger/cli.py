@@ -2604,8 +2604,10 @@ def main(argv=None) -> int:
     import_cm_parser.add_argument(
         "--preview",
         type=int,
-        default=4,
-        help="Number of full note previews to render in the dry-run report",
+        default=0,
+        help="Render N notes in full (frontmatter + body) below the table. "
+        "Off by default: at dozens of planned notes the previews buried the "
+        "mapping they were meant to illustrate",
     )
     import_cm_parser.add_argument("--json", action="store_true", dest="json")
 
