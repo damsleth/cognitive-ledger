@@ -632,19 +632,37 @@ def handle_discover_source_command(args):
     print(semantic_lib.format_source_search_human(result))
 
 
+def _resolve_baseline_output(raw: str) -> Path:
+    """Resolve --write-baseline against the note store, not the process cwd.
+
+    A baseline belongs with the notes it measures, so a relative path is taken
+    as relative to ``ledger_notes_dir``; that is what makes the documented
+    '08_indices/baseline.json' work from any directory. An absolute path must
+    still land inside the store (or the ledger root, which is the same
+    directory in a self-contained install) so baselines stay versioned.
+    """
+    config = get_config()
+    notes_dir = Path(config.ledger_notes_dir).resolve()
+    roots = {notes_dir, Path(config.ledger_root).resolve()}
+
+    candidate = Path(raw).expanduser()
+    if not candidate.is_absolute():
+        candidate = notes_dir / candidate
+    candidate = candidate.resolve()
+
+    if not any(candidate.is_relative_to(root) for root in roots):
+        print(
+            "error: --write-baseline must write inside the ledger store "
+            f"({notes_dir})",
+            file=sys.stderr,
+        )
+        print("hint: use a path like '08_indices/baseline.json'", file=sys.stderr)
+        raise SystemExit(2)
+    return candidate
+
+
 def handle_eval_command(args):
-    if args.write_baseline:
-        ledger_root = get_config().ledger_root
-        baseline_path = Path(args.write_baseline).resolve()
-        try:
-            baseline_path.relative_to(ledger_root)
-        except ValueError:
-            print(
-                f"error: --write-baseline path must be within ledger root ({ledger_root})",
-                file=sys.stderr,
-            )
-            print("hint: use a path like 'notes/08_indices/baseline.json'", file=sys.stderr)
-            raise SystemExit(2)
+    baseline_out = _resolve_baseline_output(args.write_baseline) if args.write_baseline else None
 
     try:
         backend = resolve_embed_backend(args.embed_backend)
@@ -664,21 +682,28 @@ def handle_eval_command(args):
             print(f"- {error}")
         raise SystemExit(2)
 
+    # Write before any output-mode branching: --write-baseline used to be
+    # honoured only under --json, so `ledger eval --write-baseline X` validated
+    # the path, ran the whole eval, printed, and silently wrote nothing.
+    baseline_written = None
+    if baseline_out is not None:
+        baseline_out.parent.mkdir(parents=True, exist_ok=True)
+        eval_lib.write_baseline_snapshot(
+            result,
+            cases_path=args.cases,
+            output_path=baseline_out,
+            generated_at=now_utc().strftime("%Y-%m-%dT%H:%M:%SZ"),
+        )
+        baseline_written = str(baseline_out)
+
     if getattr(args, "emit_ranks", False):
         for case_row in result.get("per_case", []):
             print(json.dumps(case_row, ensure_ascii=False))
+        if baseline_written:
+            print(f"baseline written: {baseline_written}", file=sys.stderr)
         return
 
     if args.json:
-        baseline_written = None
-        if args.write_baseline:
-            eval_lib.write_baseline_snapshot(
-                result,
-                cases_path=args.cases,
-                output_path=args.write_baseline,
-                generated_at=now_utc().strftime("%Y-%m-%dT%H:%M:%SZ"),
-            )
-            baseline_written = args.write_baseline
         out = eval_lib.eval_result_to_json(
             result,
             default_k=args.k,
@@ -693,20 +718,14 @@ def handle_eval_command(args):
 
     eval_lib.print_eval_result(result)
 
+    if baseline_written:
+        print(f"baseline written: {baseline_written}")
+
     if args.baseline:
         cmp = eval_lib.compare_with_baseline(result, args.baseline)
         print(eval_lib.format_baseline_comparison(cmp, k=result["k"]))
         if cmp.get("available") and cmp.get("regressed"):
             raise SystemExit(2)
-
-    if args.write_baseline:
-        eval_lib.write_baseline_snapshot(
-            result,
-            cases_path=args.cases,
-            output_path=args.write_baseline,
-            generated_at=now_utc().strftime("%Y-%m-%dT%H:%M:%SZ"),
-        )
-        print(f"baseline_written: {args.write_baseline}")
 
 
 def handle_context_command(args):
