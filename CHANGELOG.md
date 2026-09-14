@@ -17,10 +17,19 @@
      regression exit — so where the file landed depended on output mode and cwd.
   4. `--emit-ranks` returned before either write, so it silently wrote nothing.
 
-  Now: a relative path resolves against the note store (so the documented
-  `08_indices/baseline.json` works from anywhere), an absolute path must still
-  land inside the store, parent directories are created, and the write happens
-  once, before any output branching, in every mode.
+  The root cause is narrower than the naming suggests. `ledger_root` is the
+  code tree, and `ledger_notes_dir` **defaults to `ledger_root / "notes"`** — so
+  the two are the same directory in an unsplit install, and code written against
+  the wrong one works locally and only breaks once the store moves out. This
+  codebase had already disambiguated that with `layout.resolve_path`, which
+  takes both roots and treats a logical `notes/...` prefix as the store. The
+  eval command simply never called it.
+
+  Now it does: `--write-baseline` resolves through `layout.resolve_path`, so
+  `notes/08_indices/baseline.json` (the path the old hint already documented)
+  lands in the store, a bare relative path is repo-relative like everywhere
+  else, the containment check accepts either root, parents are created, and the
+  write happens once before any output branching.
 
 ### Changed
 - **`import-claude-memory` dry-run report is now a triage surface, not a dump.**
