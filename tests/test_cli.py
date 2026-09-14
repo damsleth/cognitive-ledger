@@ -238,12 +238,18 @@ class CLIEvalBaselinePathTests(unittest.TestCase):
             _capture(self.cli.handle_eval_command, args)
         self.assertEqual(ctx.exception.code, 2)
 
-    def test_write_baseline_resolves_relative_paths_against_the_note_store(self):
-        # The documented '08_indices/baseline.json' must work from any cwd, and
-        # must not depend on the notes living inside the ledger root.
-        resolved = self.cli._resolve_baseline_output("08_indices/baseline.json")
+    def test_write_baseline_uses_the_logical_notes_path_convention(self):
+        # 'notes/...' is this codebase's logical marker for the note store, and
+        # must resolve there even when the store lives outside the ledger root.
+        resolved = self.cli._resolve_baseline_output("notes/08_indices/baseline.json")
         expected = Path(self.config.ledger_notes_dir).resolve() / "08_indices" / "baseline.json"
         self.assertEqual(resolved, expected)
+
+    def test_write_baseline_treats_a_bare_relative_path_as_repo_relative(self):
+        # Same convention as layout.resolve_path everywhere else, rather than a
+        # second one invented for this flag.
+        resolved = self.cli._resolve_baseline_output("baseline.json")
+        self.assertEqual(resolved, Path(self.config.ledger_root).resolve() / "baseline.json")
 
     def test_write_baseline_accepts_an_absolute_path_inside_the_store(self):
         inside = Path(self.config.ledger_notes_dir).resolve() / "08_indices" / "b.json"
