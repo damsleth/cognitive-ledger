@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### Changed
+- **`import-claude-memory` dry-run report is now a triage surface, not a dump.**
+  The mapping table gained the two columns that made it reviewable, `updated`
+  date and the note's actual title, and lost `target`, whose
+  `00_inbox/pref__` prefix repeated the write mode and the type column on
+  every row, and `reason`, which was a pure function of `claude_type` restated
+  once per row. Rows now group by **origin project**, newest first: the one
+  dimension the table omitted entirely, and the axis triage actually runs on.
+  Table width follows the terminal (generous fallback when piped).
+- **`--preview` defaults to `0`.** The `EXAMPLE HITS` section rendered four
+  notes in full, frontmatter and body, below the mapping it was meant to
+  illustrate; at dozens of planned notes it buried the report. Still available
+  as `--preview N`.
+
+### Fixed
+- **`preferences` no longer renders as `prefe` in the import report.** The
+  ledger type was truncated with a blind `[:5]` slice; it now derives the
+  abbreviation from the layout prefix, so new note types need no lookup table.
+
 ### Removed
 - **The semantic embedding manifest no longer writes timeline entries.**
   `embed build` and `embed clean` logged every manifest write to

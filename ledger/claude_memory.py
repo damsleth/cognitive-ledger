@@ -21,9 +21,9 @@ than the YAAMS firehose. This module maps them onto the ledger note
 schema and writes them (to ``00_inbox/`` by default, or straight to the
 typed folders with ``mode="direct"``).
 
-The mapping is intentionally transparent: the dry-run report shows the
-ledger type, scope, and the heuristic reason for every file so the
-classification can be reviewed before anything lands.
+The mapping is intentionally transparent: the dry-run report tables every
+file with its date, ledger type, scope and title, grouped by origin
+project, so the classification can be reviewed before anything lands.
 
 Design mirrors :mod:`ledger.importers.backends.obsidian.importer` (scan → classify → write,
 with a JSON state file for idempotent re-import) but is self-contained
@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -706,7 +707,63 @@ def _compose_body(note: PlannedNote) -> str:
 # ---------------------------------------------------------------------------
 
 
-def render_report(plan: ImportPlan, *, mode: str, preview: int = 4) -> str:
+def _type_abbrev(note_type: str) -> str:
+    """``preferences`` → ``pref``, derived from the layout prefix so a new
+    note type needs no lookup table here."""
+    layout = NOTE_LAYOUTS.get(note_type)
+    return layout.prefix.rstrip("_") if layout else note_type[:7]
+
+
+# Claude's own memory types, shortened to keep the column narrow. Kept next to
+# the ledger type so a marker-driven reclassification (project -> loop/concept)
+# is visible as two adjacent columns instead of a repeated prose "reason".
+_CLAUDE_TYPE_ABBREV = {
+    "feedback": "fdbk",
+    "project": "proj",
+    "reference": "ref",
+    "user": "user",
+}
+
+
+def _render_mapping_table(planned: list[PlannedNote], width: int) -> list[str]:
+    """One line per note, grouped by origin project and newest first.
+
+    Origin project is the axis triage runs on: you review what came out of one
+    repo at a time.
+    """
+    groups: dict[str, list[PlannedNote]] = {}
+    for note in planned:
+        # decode_project_context yields "" for ~/code itself and for the
+        # home/meta roots: real notes, just with no repo to attribute them to.
+        groups.setdefault(note.project or "(unscoped)", []).append(note)
+    for notes in groups.values():
+        notes.sort(key=lambda n: n.updated, reverse=True)
+    order = sorted(groups, key=lambda p: groups[p][0].updated, reverse=True)
+
+    name_w = max((len(n.name) for n in planned), default=4)
+    name_w = min(name_w, 36)
+    head = f"{'updated':<10}  {'from':<4}  {'type':<7}  {'scope':<8}  {'name':<{name_w}}  title"
+    title_w = max(24, width - len(head) + len("title"))
+
+    lines = [head]
+    for project in order:
+        notes = groups[project]
+        lines.append("")
+        lines.append(f"── {project} ({len(notes)})")
+        for n in notes:
+            title = n.description or n.name
+            if len(title) > title_w:
+                title = title[: title_w - 1] + "…"
+            name = n.name if len(n.name) <= name_w else n.name[: name_w - 1] + "…"
+            lines.append(
+                f"{n.updated[:10]:<10}  "
+                f"{_CLAUDE_TYPE_ABBREV.get(n.claude_type, (n.claude_type or '-')[:4]):<4}  "
+                f"{_type_abbrev(n.note_type):<7}  {n.scope:<8}  {name:<{name_w}}  {title}"
+            )
+    return lines
+
+
+def render_report(plan: ImportPlan, *, mode: str, preview: int = 0) -> str:
     planned = plan.planned
     by_type: dict[str, int] = {}
     by_scope: dict[str, int] = {}
@@ -714,9 +771,14 @@ def render_report(plan: ImportPlan, *, mode: str, preview: int = 4) -> str:
         by_type[note.note_type] = by_type.get(note.note_type, 0) + 1
         by_scope[note.scope] = by_scope.get(note.scope, 0) + 1
 
+    # Fallback is generous on purpose: this command is routinely piped (rtk
+    # hook, `| less`), where there is no tty to measure and the stdlib default
+    # of 80 would truncate titles harder than a real terminal ever does.
+    width = shutil.get_terminal_size((150, 40)).columns
+
     lines: list[str] = []
     lines.append("Claude-memory → ledger import (DRY RUN)")
-    lines.append("=" * 52)
+    lines.append("=" * min(width, 78))
     lines.append(f"memory root : {plan.memory_root}")
     lines.append(f"write mode  : {mode}  (real run lands notes here)")
     lines.append(
@@ -727,8 +789,8 @@ def render_report(plan: ImportPlan, *, mode: str, preview: int = 4) -> str:
     lines.append(f"to import   : {len(planned)}   skipped (unchanged): {unchanged}")
     if promoted:
         lines.append(
-            f"skipped (already promoted): {len(promoted)} "
-            "— triage already moved these into a typed folder; re-importing "
+            f"skipped (already promoted): {len(promoted)}. "
+            "Triage already moved these into a typed folder; re-importing "
             "would fork a twin or reopen closed work. Update the typed note "
             "directly if the memory file has new content."
         )
@@ -744,28 +806,22 @@ def render_report(plan: ImportPlan, *, mode: str, preview: int = 4) -> str:
     lines.append("by ledger type : " + ", ".join(f"{k}={v}" for k, v in sorted(by_type.items())))
     lines.append("by scope       : " + ", ".join(f"{k}={v}" for k, v in sorted(by_scope.items())))
     lines.append("")
-    lines.append("MAPPING TABLE")
-    lines.append("-" * 52)
-    lines.append("claude_type  ledger_type/scope  target                                  reason")
-    for note in planned:
-        dest = note.target_rel
-        if len(dest) > 38:
-            dest = dest[:37] + "…"
-        lines.append(
-            f"{note.claude_type:<11}  {note.note_type[:5]:<5}/{note.scope:<8}  {dest:<38}  {note.reason}"
-        )
+    lines.append(f"MAPPING TABLE  ({len(planned)} notes, grouped by origin project)")
+    lines.append("-" * min(width, 78))
+    lines.extend(_render_mapping_table(planned, width))
 
-    lines.append("")
-    lines.append(f"EXAMPLE HITS (first {min(preview, len(planned))} rendered in full)")
-    lines.append("=" * 52)
-    # Prefer a diverse sample across ledger types for the previews.
-    chosen = _diverse_sample(planned, preview)
-    for note in chosen:
+    if preview:
         lines.append("")
-        lines.append(f"### {note.origin_path.name}  →  {note.target_rel}")
-        lines.append("```markdown")
-        lines.append(note.render().rstrip())
-        lines.append("```")
+        lines.append(f"EXAMPLE HITS (first {min(preview, len(planned))} rendered in full)")
+        lines.append("=" * min(width, 78))
+        # Prefer a diverse sample across ledger types for the previews.
+        chosen = _diverse_sample(planned, preview)
+        for note in chosen:
+            lines.append("")
+            lines.append(f"### {note.origin_path.name}  →  {note.target_rel}")
+            lines.append("```markdown")
+            lines.append(note.render().rstrip())
+            lines.append("```")
 
     return "\n".join(lines) + "\n"
 
