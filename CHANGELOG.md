@@ -25,7 +25,13 @@
   takes both roots and treats a logical `notes/...` prefix as the store. The
   eval command simply never called it.
 
-  Now it does: `--write-baseline` resolves through `layout.resolve_path`, so
+  `--baseline`, the read side, had the same defect and is fixed with it: it
+  read the path straight off the command line, so the file `--write-baseline
+  notes/08_indices/x.json` had just written was reported "not found" unless you
+  ran from the store. Fixing one flag and leaving its twin is how this survived
+  as long as it did.
+
+  Now both resolve through `layout.resolve_path`, so
   `notes/08_indices/baseline.json` (the path the old hint already documented)
   lands in the store, a bare relative path is repo-relative like everywhere
   else, the containment check accepts either root, parents are created, and the
