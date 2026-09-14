@@ -14,6 +14,7 @@ from ledger.validation import validate_query, validate_scope, validate_limit
 from ledger.errors import QueryValidationError, ScopeValidationError
 from ledger import browse as browse_lib
 from ledger import eval as eval_lib
+from ledger import layout
 from ledger import query as query_lib
 from ledger import semantic as semantic_lib
 from ledger.parsing import extract_link_tokens, normalize_section_name, shorten
@@ -633,30 +634,36 @@ def handle_discover_source_command(args):
 
 
 def _resolve_baseline_output(raw: str) -> Path:
-    """Resolve --write-baseline against the note store, not the process cwd.
+    """Resolve --write-baseline through the project's own path resolver.
 
-    A baseline belongs with the notes it measures, so a relative path is taken
-    as relative to ``ledger_notes_dir``; that is what makes the documented
-    '08_indices/baseline.json' work from any directory. An absolute path must
-    still land inside the store (or the ledger root, which is the same
-    directory in a self-contained install) so baselines stay versioned.
+    ``layout.resolve_path`` already disambiguates the two roots this codebase
+    has: a logical ``notes/...`` path belongs to the note store, anything else
+    relative is repo-relative, and an absolute path is taken as given. Using it
+    here is the point — the original bug was that this command hand-rolled its
+    own resolution (cwd-relative) and then range-checked the result against
+    ``ledger_root``, which is the code tree and only holds the notes in a
+    default, unsplit install.
+
+    The containment check stays: a baseline is an artefact you compare against
+    later, so it belongs in one of the two versioned roots rather than wherever
+    the shell happened to be.
     """
     config = get_config()
     notes_dir = Path(config.ledger_notes_dir).resolve()
-    roots = {notes_dir, Path(config.ledger_root).resolve()}
+    root = Path(config.ledger_root).resolve()
 
-    candidate = Path(raw).expanduser()
-    if not candidate.is_absolute():
-        candidate = notes_dir / candidate
-    candidate = candidate.resolve()
-
-    if not any(candidate.is_relative_to(root) for root in roots):
+    candidate = layout.resolve_path(
+        Path(raw).expanduser(),
+        ledger_root=root,
+        ledger_notes_dir=notes_dir,
+    )
+    if not any(candidate.is_relative_to(r) for r in (notes_dir, root)):
         print(
             "error: --write-baseline must write inside the ledger store "
-            f"({notes_dir})",
+            f"({notes_dir}) or the ledger root ({root})",
             file=sys.stderr,
         )
-        print("hint: use a path like '08_indices/baseline.json'", file=sys.stderr)
+        print("hint: use a logical path like 'notes/08_indices/baseline.json'", file=sys.stderr)
         raise SystemExit(2)
     return candidate
 
