@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+### Fixed
+- **`ledger eval --write-baseline` works again, from any directory and in any
+  output mode.** Four bugs stacked on one flag:
+
+  1. The containment guard checked `ledger_root`, but `08_indices/` lives under
+     `ledger_notes_dir`. Since the store moved out of the repo, the path in the
+     guard's own hint (`notes/08_indices/baseline.json`) was rejected, and no
+     valid path existed for a split install.
+  2. The path was `resolve()`d for the check and then written **unresolved**,
+     so the location validated and the location written could differ.
+  3. The write in the `--json` branch was the only one that used the checked
+     path; the human-output branch wrote separately, cwd-relative, after the
+     regression exit — so where the file landed depended on output mode and cwd.
+  4. `--emit-ranks` returned before either write, so it silently wrote nothing.
+
+  Now: a relative path resolves against the note store (so the documented
+  `08_indices/baseline.json` works from anywhere), an absolute path must still
+  land inside the store, parent directories are created, and the write happens
+  once, before any output branching, in every mode.
+
 ### Changed
 - **`import-claude-memory` dry-run report is now a triage surface, not a dump.**
   The mapping table gained the two columns that made it reviewable, `updated`
