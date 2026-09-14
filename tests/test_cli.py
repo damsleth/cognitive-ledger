@@ -218,8 +218,9 @@ class CLIEvalBaselinePathTests(unittest.TestCase):
         reset_config()
         self._tmp.cleanup()
 
-    def test_write_baseline_outside_ledger_root_exits_2(self):
-        # Path completely outside the ledger root should be rejected before any work happens
+    def test_write_baseline_outside_the_store_exits_2(self):
+        # An absolute path outside the store is still rejected: baselines are
+        # meant to stay versioned next to the notes they measure.
         outside = Path(self._tmp.name) / "elsewhere" / "baseline.json"
         args = SimpleNamespace(
             cases="/nonexistent/cases.yaml",
@@ -236,6 +237,17 @@ class CLIEvalBaselinePathTests(unittest.TestCase):
         with self.assertRaises(SystemExit) as ctx:
             _capture(self.cli.handle_eval_command, args)
         self.assertEqual(ctx.exception.code, 2)
+
+    def test_write_baseline_resolves_relative_paths_against_the_note_store(self):
+        # The documented '08_indices/baseline.json' must work from any cwd, and
+        # must not depend on the notes living inside the ledger root.
+        resolved = self.cli._resolve_baseline_output("08_indices/baseline.json")
+        expected = Path(self.config.ledger_notes_dir).resolve() / "08_indices" / "baseline.json"
+        self.assertEqual(resolved, expected)
+
+    def test_write_baseline_accepts_an_absolute_path_inside_the_store(self):
+        inside = Path(self.config.ledger_notes_dir).resolve() / "08_indices" / "b.json"
+        self.assertEqual(self.cli._resolve_baseline_output(str(inside)), inside)
 
 
 class CLIListingTests(unittest.TestCase):
