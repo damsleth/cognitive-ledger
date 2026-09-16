@@ -1107,13 +1107,13 @@ class LedgerConfig:
     Allowed values: closed | snoozed (or any value in loop_statuses).
     """
 
-    things3_orphan_action: str = "flag"
+    things3_orphan_action: str = "ignore"
     """What to do with Things tasks whose ledger loop has been deleted.
 
     Allowed values:
-      - ``flag``: add "[orphan]" tag to the Things task (default, safe)
+      - ``flag``: prefix the Things task title with "[orphan]" (one-way; there is no un-flag)
       - ``cancel``: cancel the orphaned task in Things
-      - ``ignore``: leave orphans untouched
+      - ``ignore``: leave orphans untouched (default)
     """
 
     # =========================================================================

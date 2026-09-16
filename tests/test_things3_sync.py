@@ -343,10 +343,18 @@ class TestClosedLoopCompletesTask(unittest.TestCase):
 
     def test_deleted_loop_is_still_an_orphan(self):
         task = _task(uuid="t-gone", notes=_make_marker("loop__vanished", "open"))
-        actions = reconcile(loops=[], tasks=[task], closed_slugs={"loop__other"})
+        actions = reconcile(
+            loops=[], tasks=[task], closed_slugs={"loop__other"}, orphan_action="flag"
+        )
         kinds = [a.kind for a in actions]
         self.assertIn("orphan_flag", kinds)
         self.assertNotIn("forward_complete", kinds)
+
+    def test_orphan_default_is_ignore(self):
+        """Default must not mutate a Things title; [orphan] has no un-flag."""
+        task = _task(uuid="t-gone", notes=_make_marker("loop__vanished", "open"))
+        actions = reconcile(loops=[], tasks=[task], closed_slugs={"loop__other"})
+        self.assertEqual([a.kind for a in actions], [])
 
     def test_already_completed_task_is_left_alone(self):
         """No churn on history — a completed task needs no second completion."""
