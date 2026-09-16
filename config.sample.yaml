@@ -113,7 +113,7 @@ first_run: true
 # things3_marker_prefix: "ledger:"  # embedded in task Notes to link back; don't change after first sync
 # things3_completed_maps_to: "closed"   # ledger status when Things task completed
 # things3_canceled_maps_to: "snoozed"  # ledger status when Things task cancelled
-# things3_orphan_action: "flag"     # flag | cancel | ignore orphaned tasks
+# things3_orphan_action: "ignore"   # ignore | flag | cancel orphaned tasks (flag is one-way: no un-flag)
 
 # LLM-judged signal seeding (Mechanism 3 — bootstrap the signal gate)
 # Run: ledger signal seed --from-history  (or --queries-file <path>)
