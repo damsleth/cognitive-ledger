@@ -8,10 +8,11 @@ referenced by the YAAMS Tier-2 integration roadmap (`.plans/35`) and its
 phases A–E. Cogled owns this file because cogled is the public-facing repo.
 
 It is the **Phase 0 contract spike** deliverable. It records both the
-contract as it *should* be at v1 and the **current-state drift** found on
-2026-06-08 — what the code actually does today vs. what the roadmap (written
-2026-05-03/05-15) assumed. Each phase inherits the field names pinned here;
-do not invent variants.
+contract as it *should* be at v1 and the drift found on 2026-06-08 — what the
+code did then vs. what the roadmap (written 2026-05-03/05-15) assumed. As of
+2026-09-16 every drift item in §2b is resolved and YAAMS emits the v1 contract;
+the drift list is kept as the record of what broke and how it is now pinned.
+Each phase inherits the field names pinned here; do not invent variants.
 
 Rule for both repos: never import the other as a package. All coupling goes
 through the three artifacts below. Either tool must still work standalone.
@@ -78,12 +79,15 @@ config key may override, but the default should be derived from
 
 ## 2. Inbox candidate file (YAAMS → cogled)
 
-Written by `format_note()` + `write_to_inbox()` (`yaams/promote/review.py:9`,
-`:53`). Filename: `<draft_type>__<slug>.md`.
+Written by `format_note()` + `write_to_inbox()` (`yaams/promote/review.py:31`,
+`:188`). Filename: `<draft_type>__<slug>.md`.
 
-### 2a. Current real output (2026-06-08)
+### 2a. Pre-v1 output (2026-06-08, historical)
 
-A live file from `~/yaams/ledger-inbox/`:
+The file below is what YAAMS emitted *before* the v1 drift fixes in §2b. It is
+kept as the before-picture; for what YAAMS writes today see §2c.
+
+A live file from the then-current `~/yaams/ledger-inbox/`:
 
 ```markdown
 ---
@@ -110,30 +114,44 @@ Kvalifikasjonen Avansert Førstehjelp (AFØR) tar minimum tre år å oppnå...
 - yaams:tier1 (promoted 2026-06-04)
 ```
 
-`confidence: 0.7`, `source: yaams`, `scope: personal`, `lang: en` are
-hardcoded (`review.py:31-34`).
+`confidence: 0.7`, `scope: personal`, `lang: en` are still hardcoded
+(`review.py:110-113`); `source:` is now `inferred` (drift 2 below).
 
-### 2b. Drift found (must be reconciled before Phase A)
+### 2b. Drift found (all reconciled — Phase A unblocked)
 
-1. **Wrong inbox location.** YAAMS writes to `~/yaams/ledger-inbox/`
-   (`yaams/cli/promote.py:179`, default). Cogled's real inbox is
-   `<ledger_notes_dir>/00_inbox/` — currently empty except `.gitkeep`. The
-   roadmap assumed YAAMS writes straight into cogled's inbox. **Decision (v1):**
-   point `promote.inbox_path` at `$(ledger paths --field ledger_notes_dir)/00_inbox`
-   so triage and rejection logging operate on the same files YAAMS produced.
+1. **Wrong inbox location — RESOLVED.** YAAMS wrote to `~/yaams/ledger-inbox/`
+   while cogled's real inbox is `<ledger_notes_dir>/00_inbox/`, so triage and
+   rejection logging never saw the files YAAMS produced. **Decision (v1):** point
+   `promote.inbox_path` at `$(ledger paths --field ledger_notes_dir)/00_inbox`.
 
-2. **`source: yaams` is out of cogled's enum.** Cogled's `source` is
-   `user | assistant | tool | inferred` (`ledger/parsing/frontmatter.py`).
-   On promotion + index, `yaams` won't normalize cleanly. **Decision (v1):**
+   Implemented as `_resolve_inbox_path` (`yaams/cli/promote.py:65`), which
+   resolves in three steps: explicit `promote.inbox_path` config wins; else
+   `<ledger_notes_dir>/00_inbox` derived from `ledger paths --field`; else the
+   legacy `~/yaams/ledger-inbox` staging dir when cogled is not installed. The
+   asymmetry noted at the time — promote staging outside the ledger while the
+   ingest digest wrote straight into it — is gone: both writers now target
+   `00_inbox/`. Pinned by three tests in `yaams/tests/test_promote_contract.py`.
+
+2. **`source: yaams` is out of cogled's enum — RESOLVED.** Cogled's `source` is
+   `user | assistant | tool | inferred` (`ledger/parsing/frontmatter.py`), so
+   `yaams` would not normalize cleanly on promotion + index. **Decision (v1):**
    YAAMS writes `source: inferred` and records origin in the provenance block
-   below (`promoted_by: yaams`). Keeps cogled's enum closed.
+   below (`promoted_by: yaams`), keeping cogled's enum closed.
 
-3. **No provenance — the Phase A blocker.** The stable candidate id
-   (`sha256(entity + ":" + ",".join(item_ids))[:16]`,
-   `yaams/promote/candidates.py:318`) and `source_item_ids` exist in YAAMS's
-   `promotion_candidates` table but **never reach the file**. When the user
-   deletes/rejects from the inbox, cogled has nothing to log that YAAMS can
-   match against. Phase A is impossible until YAAMS embeds these.
+   Emitted at `review.py:111`; asserted both ways (`source: inferred` present,
+   `source: yaams` absent) by `test_format_note_emits_contract_v1_provenance`.
+
+3. **No provenance — RESOLVED (was the Phase A blocker).** The stable candidate
+   id (`sha256(entity + ":" + ",".join(item_ids))[:16]`) and `source_item_ids`
+   lived only in YAAMS's `promotion_candidates` table and never reached the file,
+   so a delete/reject from the inbox gave cogled nothing to log that YAAMS could
+   match against.
+
+   `format_note` now emits the full provenance block — `contract_version`,
+   `promoted_by`, `yaams_candidate_id`, `yaams_entity`, `yaams_source_item_ids`
+   (§2c) — plus the bitemporal `valid_from` / `valid_from_confidence` bridge from
+   the source items' own event time (`enrich_candidate_event_time`). Phase A is
+   unblocked.
 
 4. **Timestamp format — RESOLVED 2026-08-21.** YAAMS wrote `created`/`updated`
    with `datetime.isoformat()`, which emits `+00:00`. Cogled's `sleep lint`
@@ -149,12 +167,32 @@ hardcoded (`review.py:31-34`).
    `yaams/synthesize/summarize.py:write_summary_to_inbox` now formats
    `%Y-%m-%dT%H:%M:%SZ`, handling naive and tz-aware `when` identically.
 
-   **Lint is the contract test.** Anything writing into `00_inbox/` should be
-   checked with `ledger sleep lint` before it is called done; a producer that
-   emits notes the sink rejects is a broken seam even when both sides pass their
-   own tests.
+   **Lint is the contract test — now enforced.** Anything writing into
+   `00_inbox/` must be checked with `ledger sleep lint` before it is called done;
+   a producer that emits notes the sink rejects is a broken seam even when both
+   sides pass their own tests. That check is no longer manual:
+   `test_yaams_written_inbox_notes_pass_ledger_lint`
+   (`yaams/tests/test_ledger_seam.py`) generates a promote note and two ingest
+   digests into a throwaway `LEDGER_NOTES_DIR`, runs `ledger sleep lint` against
+   them, and fails on a non-zero exit. Reverting the `Z` formatting reproduces
+   the original breakage as 4 lint errors.
 
-### 2c. Contract v1 inbox frontmatter (target)
+   The format itself is now single-sourced: `yaams.time.ledger_ts()` is the only
+   producer of ledger frontmatter timestamps, used by `format_note`, the
+   `valid_from` bridge, the conflict-block `conflict_checked_at`, and the ingest
+   digest. It had drifted across those writers, which is how one of them shipped
+   `+00:00`.
+
+5. **Duplicate ingest digests — RESOLVED.** `summary.to_inbox` wrote one note per
+   ingest run, so three runs on 2026-08-20 (10:12, 10:21, 10:55) produced three
+   near-identical digests that cogled's own `sleep duplicates` flagged at 0.75
+   title-jaccard against each other — YAAMS polluting the sink it writes to.
+   `write_summary_to_inbox` (`yaams/synthesize/summarize.py:323`) now writes one
+   note per **day**, `note__ingest_summary_YYYY_MM_DD.md`, appending each run as
+   a `## HH:MM` section and bumping `updated:` while `created:` stays at the
+   day's first run. `to_inbox` remains on by default.
+
+### 2c. Contract v1 inbox frontmatter (shipped)
 
 YAAMS must emit these fields. Cogled's reject path reads them into the
 rejection log; cogled's promote path preserves them (or strips into the
