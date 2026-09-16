@@ -135,7 +135,7 @@ def reconcile(
     blocked_project: str = "",
     completed_maps_to: str = "closed",
     canceled_maps_to: str = "snoozed",
-    orphan_action: str = "flag",
+    orphan_action: str = "ignore",
     closed_slugs: set[str] | None = None,
     snoozed_slugs: set[str] | None = None,
 ) -> list[Action]:

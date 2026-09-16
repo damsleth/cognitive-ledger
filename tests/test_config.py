@@ -345,7 +345,7 @@ class TestThings3Config(_LedgerEnvIsolation, unittest.TestCase):
         self.assertEqual(config.things3_marker_prefix, "ledger:")
         self.assertEqual(config.things3_completed_maps_to, "closed")
         self.assertEqual(config.things3_canceled_maps_to, "snoozed")
-        self.assertEqual(config.things3_orphan_action, "flag")
+        self.assertEqual(config.things3_orphan_action, "ignore")
 
     def test_scope_routing_yaml_load(self):
         with tempfile.TemporaryDirectory() as tmpdir:
