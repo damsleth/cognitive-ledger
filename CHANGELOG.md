@@ -2,7 +2,22 @@
 
 ## Unreleased
 
+### Changed
+- **`things3_orphan_action` now defaults to `ignore` instead of `flag`.** The
+  `flag` path prefixes the Things task title with `[orphan] ` and there is no
+  un-flag — a one-way mutation of the user's own task system, applied by a
+  default. It was also aimed at the wrong target: most tasks it flagged were
+  loops that had been *closed*, which `forward_complete` now completes properly.
+  `flag` and `cancel` remain available as opt-in.
+
 ### Fixed
+- **Three sleep-gate tests had rotted into always-failing.** The timeline
+  fixtures in `tests/test_maintenance.py` hardcoded `2026-08-27` as "last
+  sleep", but `days_since` is measured against the wall clock — so once the
+  calendar passed the 7-day threshold (~2026-09-03) the age gate started firing
+  in tests that were asserting the *volume* gate, and they failed for a reason
+  unrelated to what they check. Timestamps are now relative to now via a `_ts()`
+  helper.
 - **`ledger eval --write-baseline` works again, from any directory and in any
   output mode.** Four bugs stacked on one flag:
 
