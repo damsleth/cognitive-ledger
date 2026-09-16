@@ -329,7 +329,7 @@ real failed write.
 | `things3_marker_prefix` | `"ledger:"` | `LEDGER_THINGS3_MARKER_PREFIX` |
 | `things3_completed_maps_to` | `"closed"` | `LEDGER_THINGS3_COMPLETED_MAPS_TO` |
 | `things3_canceled_maps_to` | `"snoozed"` | `LEDGER_THINGS3_CANCELED_MAPS_TO` |
-| `things3_orphan_action` | `"flag"` | `LEDGER_THINGS3_ORPHAN_ACTION` |
+| `things3_orphan_action` | `"ignore"` | `LEDGER_THINGS3_ORPHAN_ACTION` |
 
 **Prerequisites:** Things3 app + Things CLI on PATH. Install the CLI from Things → Settings → General → "Enable Things URLs" is NOT required; the CLI is a separate tool: https://culturedcode.com/things/support/articles/2803573/
 
