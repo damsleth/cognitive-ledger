@@ -11,6 +11,15 @@
   `flag` and `cancel` remain available as opt-in.
 
 ### Fixed
+- **Briefing staleness is computed from `timeline.jsonl`, not `updated:`.**
+  `updated:` is bulk-stamped by maintenance operations — 273 notes shared a
+  single timestamp as of 2026-09-16 — so "days since last update" reported when
+  a script last ran, not when the loop last moved. Sorting, the `[stale >14d]`
+  tags, and nudges in `daily_briefing`, `daily_briefing_data` and
+  `weekly_review` now read the latest timeline event per note, built once per
+  briefing. A note with no timeline event at all still falls back to `updated:`;
+  overstating staleness produces a nudge you can dismiss, understating it drops
+  the loop off the list silently.
 - **Three sleep-gate tests had rotted into always-failing.** The timeline
   fixtures in `tests/test_maintenance.py` hardcoded `2026-08-27` as "last
   sleep", but `days_since` is measured against the wall clock — so once the
