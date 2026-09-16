@@ -1,11 +1,23 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from ledger.config import LedgerConfig, set_config, reset_config
 from ledger import maintenance
 from ledger.io.safe_write import append_timeline_entry
+
+
+def _ts(seconds_ago: int = 60) -> str:
+    """Timestamp relative to now.
+
+    The days_since gate is evaluated against the wall clock, so a hardcoded
+    date silently becomes "20 days since last sleep" as the calendar moves and
+    the test stops measuring what it claims.
+    """
+    moment = datetime.now(timezone.utc) - timedelta(seconds=seconds_ago)
+    return moment.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _write(path: Path, content: str) -> None:
@@ -370,7 +382,7 @@ def test_status_recommends_sleep_for_large_unlogged_drift(tmp_path, monkeypatch)
     try:
         _write(
             config.timeline_jsonl_path,
-            '{"ts":"2026-08-27T00:00:00Z","action":"sleep","path":"-","desc":"done"}\n',
+            '{"ts":"' + _ts() + '","action":"sleep","path":"-","desc":"done"}\n',
         )
         monkeypatch.setattr(
             maintenance,
@@ -409,7 +421,7 @@ def test_status_prints_gate_reasoning(tmp_path, monkeypatch, capsys):
     try:
         _write(
             config.timeline_jsonl_path,
-            '{"ts":"2026-08-27T00:00:00Z","action":"sleep","path":"-","desc":"done"}\n',
+            '{"ts":"' + _ts() + '","action":"sleep","path":"-","desc":"done"}\n',
         )
         monkeypatch.setattr(
             maintenance,
@@ -487,7 +499,7 @@ def test_volume_gate_counts_unique_note_paths(tmp_path, monkeypatch):
     try:
         repeated = [
             {
-                "ts": f"2026-08-27T00:00:{i:02d}Z",
+                "ts": _ts(30 - i),
                 "action": "updated",
                 "path": "notes/02_facts/fact__same.md",
                 "desc": str(i),
@@ -496,7 +508,7 @@ def test_volume_gate_counts_unique_note_paths(tmp_path, monkeypatch):
         ]
         events = [
             {
-                "ts": "2026-08-27T00:00:00Z",
+                "ts": _ts(60),
                 "action": "sleep",
                 "path": "-",
                 "desc": "done",
@@ -575,7 +587,7 @@ def test_status_handles_every_sync_state_without_missing_drift_count(tmp_path, m
     try:
         _write(
             config.timeline_jsonl_path,
-            '{"ts":"2026-08-27T00:00:00Z","action":"sleep","path":"-","desc":"done"}\n',
+            '{"ts":"' + _ts() + '","action":"sleep","path":"-","desc":"done"}\n',
         )
         for state in ("state_invalid", "unknown", "timeline_rewound", "clean"):
             report = {
