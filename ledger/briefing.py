@@ -91,8 +91,53 @@ def _days_since(ts_str: str, now: datetime) -> int:
     return max(0, (now.date() - ts.date()).days)
 
 
-def _loop_staleness(loop: BaseNote, now: datetime) -> int:
-    """Days since the loop was last updated."""
+def _logical_note_path(path: Path) -> str:
+    config = get_config()
+    return logical_path(
+        path,
+        ledger_root=config.ledger_root,
+        ledger_notes_dir=config.ledger_notes_dir,
+    ).as_posix()
+
+
+def _note_last_activity(timeline_jsonl_path: Path) -> dict[str, str]:
+    """Latest timeline timestamp per logical note path.
+
+    Built once per briefing: `timeline_for_note` would reload the whole log
+    for every loop. Timestamps are ISO-8601 `Z`, so they sort lexically.
+    """
+    latest: dict[str, str] = {}
+    for event in timeline_lib.load_timeline_jsonl(timeline_jsonl_path):
+        path = str(event.get("path", "")).replace("\\", "/").strip()
+        ts = str(event.get("ts", "")).strip()
+        if path and path != "-" and ts > latest.get(path, ""):
+            latest[path] = ts
+    return latest
+
+
+def _loop_staleness(
+    loop: BaseNote,
+    now: datetime,
+    last_activity: dict[str, str] | None = None,
+) -> int:
+    """Days since the loop last saw real work.
+
+    Prefers `timeline.jsonl` over the note's `updated:` field. `updated:` is
+    not a usable freshness signal: bulk operations stamp it across the corpus
+    at once (273 notes shared a single timestamp as of 2026-09-16), so
+    staleness derived from it reports when a script last ran, not when the
+    loop last moved. The timeline is the declared source of truth and only
+    records actual events.
+
+    A note with no timeline event at all falls back to `updated:` — a worse
+    signal, but the only one left. The asymmetry is deliberate: overstating
+    staleness produces a visible nudge you can dismiss, understating it drops
+    the loop off the list silently.
+    """
+    if last_activity is not None:
+        ts = last_activity.get(_logical_note_path(loop.path))
+        if ts:
+            return _days_since(ts, now)
     return _days_since(loop.updated, now)
 
 
@@ -123,15 +168,9 @@ def daily_briefing() -> str:
         maintenance status, and suggested actions.
     """
     config = get_config()
-    def _logical_note_path(path: Path) -> str:
-        return logical_path(
-            path,
-            ledger_root=config.ledger_root,
-            ledger_notes_dir=config.ledger_notes_dir,
-        ).as_posix()
-
     now = datetime.now(timezone.utc)
     nudge_log = _load_nudge_log()
+    last_activity = _note_last_activity(config.timeline_jsonl_path)
     lines: list[str] = ["# Daily Briefing", ""]
 
     # Open loops sorted by staleness
@@ -144,11 +183,11 @@ def daily_briefing() -> str:
         lines.append("")
 
         # Sort by staleness (most stale first)
-        all_active.sort(key=lambda l: _loop_staleness(l, now), reverse=True)
+        all_active.sort(key=lambda l: _loop_staleness(l, now, last_activity), reverse=True)
 
         nudge_candidates: list[BaseNote] = []
         for loop in all_active:
-            staleness = _loop_staleness(loop, now)
+            staleness = _loop_staleness(loop, now, last_activity)
             status_tag = f" [{loop.status}]" if loop.status == "blocked" else ""
             stale_tag = ""
             if staleness > 21:
@@ -170,7 +209,7 @@ def daily_briefing() -> str:
             lines.append("## Nudges")
             lines.append("")
             for loop in nudge_candidates[:5]:
-                staleness = _loop_staleness(loop, now)
+                staleness = _loop_staleness(loop, now, last_activity)
                 if staleness > 21:
                     lines.append(f"- **{loop.title}** - open {staleness}d. Close, delegate, or snooze?")
                 elif loop.status == "blocked" and staleness > 14:
@@ -214,7 +253,7 @@ def daily_briefing() -> str:
     lines.append("")
 
     # Suggested actions
-    stale_count = sum(1 for l in all_active if _loop_staleness(l, now) > 14)
+    stale_count = sum(1 for l in all_active if _loop_staleness(l, now, last_activity) > 14)
     inbox_path = inbox_dir(config.ledger_notes_dir)
     inbox_count = len(list(inbox_path.glob("*.md"))) if inbox_path.is_dir() else 0
 
@@ -249,25 +288,19 @@ def daily_briefing_data() -> dict[str, Any]:
     """Return the daily briefing as structured data suitable for JSON serialisation."""
     config = get_config()
 
-    def _logical_note_path(path: Path) -> str:
-        return logical_path(
-            path,
-            ledger_root=config.ledger_root,
-            ledger_notes_dir=config.ledger_notes_dir,
-        ).as_posix()
-
     now = datetime.now(timezone.utc)
     nudge_log = _load_nudge_log()
+    last_activity = _note_last_activity(config.timeline_jsonl_path)
 
     open_loops = get_notes("loops", loop_status="open")
     blocked_loops = get_notes("loops", loop_status="blocked")
     all_active = open_loops + blocked_loops
-    all_active.sort(key=lambda l: _loop_staleness(l, now), reverse=True)
+    all_active.sort(key=lambda l: _loop_staleness(l, now, last_activity), reverse=True)
 
     loops_out: list[dict[str, Any]] = []
     nudge_candidates: list[BaseNote] = []
     for loop in all_active:
-        staleness = _loop_staleness(loop, now)
+        staleness = _loop_staleness(loop, now, last_activity)
         entry: dict[str, Any] = {
             "title": loop.title,
             "path": _logical_note_path(loop.path),
@@ -280,7 +313,7 @@ def daily_briefing_data() -> dict[str, Any]:
 
     nudges_out: list[dict[str, Any]] = []
     for loop in nudge_candidates[:5]:
-        staleness = _loop_staleness(loop, now)
+        staleness = _loop_staleness(loop, now, last_activity)
         nudges_out.append({
             "title": loop.title,
             "path": _logical_note_path(loop.path),
@@ -302,7 +335,7 @@ def daily_briefing_data() -> dict[str, Any]:
         for e in recent[-10:]
     ] if recent else []
 
-    stale_count = sum(1 for l in all_active if _loop_staleness(l, now) > 14)
+    stale_count = sum(1 for l in all_active if _loop_staleness(l, now, last_activity) > 14)
     inbox_path = inbox_dir(config.ledger_notes_dir)
     inbox_count = len(list(inbox_path.glob("*.md"))) if inbox_path.is_dir() else 0
 
@@ -340,6 +373,7 @@ def weekly_review() -> str:
 
     # Week's timeline events
     events = timeline_lib.timeline_since(config.timeline_jsonl_path, since)
+    last_activity = _note_last_activity(config.timeline_jsonl_path)
 
     # Stats
     created = sum(1 for e in events if e.get("action") == "created")
@@ -364,12 +398,12 @@ def weekly_review() -> str:
     lines.append("")
 
     # Stale loops
-    stale = [l for l in open_loops if _loop_staleness(l, now) > 14]
+    stale = [l for l in open_loops if _loop_staleness(l, now, last_activity) > 14]
     if stale:
         lines.append(f"### Stale Loops ({len(stale)})")
         lines.append("")
         for loop in stale:
-            lines.append(f"- {loop.title} ({_loop_staleness(loop, now)}d since update)")
+            lines.append(f"- {loop.title} ({_loop_staleness(loop, now, last_activity)}d since update)")
         lines.append("")
 
     # Knowledge gaps
