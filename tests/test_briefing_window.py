@@ -62,3 +62,50 @@ class TestBriefingPersistsState:
         state = briefing_lib._load_briefing_state()
         assert "last_briefing_ts" in state
         assert state["last_briefing_ts"].endswith("Z")
+
+
+class TestLoopStaleness:
+    """`updated:` is bulk-stamped, so staleness reads the timeline instead."""
+
+    class _Loop:
+        def __init__(self, path: Path, updated: str):
+            self.path = path
+            self.updated = updated
+
+    def _loop(self, ledger, name: str, updated: str):
+        path = ledger.ledger_notes_dir / "05_open_loops" / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("x", encoding="utf-8")
+        return self._Loop(path, updated)
+
+    def _timeline(self, ledger, lines: list[str]) -> dict[str, str]:
+        ledger.timeline_jsonl_path.parent.mkdir(parents=True, exist_ok=True)
+        ledger.timeline_jsonl_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        return briefing_lib._note_last_activity(ledger.timeline_jsonl_path)
+
+    def test_bulk_touched_updated_does_not_mask_real_staleness(self, ledger):
+        """The whole point: a fresh `updated:` must not hide an idle loop."""
+        loop = self._loop(ledger, "loop__idle.md", "2026-06-10T00:00:00Z")
+        activity = self._timeline(ledger, [
+            '{"ts":"2026-05-12T00:00:00Z","action":"updated",'
+            '"path":"notes/05_open_loops/loop__idle.md","desc":"real work"}',
+        ])
+        assert briefing_lib._loop_staleness(loop, NOW) == 1
+        assert briefing_lib._loop_staleness(loop, NOW, activity) == 30
+
+    def test_latest_event_wins(self, ledger):
+        loop = self._loop(ledger, "loop__busy.md", "2026-01-01T00:00:00Z")
+        activity = self._timeline(ledger, [
+            '{"ts":"2026-05-12T00:00:00Z","action":"updated",'
+            '"path":"notes/05_open_loops/loop__busy.md","desc":"older"}',
+            '{"ts":"2026-06-09T00:00:00Z","action":"updated",'
+            '"path":"notes/05_open_loops/loop__busy.md","desc":"newer"}',
+        ])
+        assert briefing_lib._loop_staleness(loop, NOW, activity) == 2
+
+    def test_note_without_timeline_events_falls_back_to_updated(self, ledger):
+        loop = self._loop(ledger, "loop__unlogged.md", "2026-06-04T00:00:00Z")
+        activity = self._timeline(ledger, [
+            '{"ts":"2026-06-10T00:00:00Z","action":"sleep","path":"-","desc":"done"}',
+        ])
+        assert briefing_lib._loop_staleness(loop, NOW, activity) == 7
