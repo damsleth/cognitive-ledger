@@ -13,7 +13,7 @@ from .retrieval_types import (
     TimingInfo,
 )
 
-__version__ = "0.11.3"
+__version__ = "0.12.0"
 
 from .cli import main  # noqa: E402
 from .synthesize import answer, AnswerResult  # noqa: E402
