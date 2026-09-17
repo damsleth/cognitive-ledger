@@ -2,6 +2,11 @@
 
 ## 2026-09-17 (0.12.0)
 
+### Removed
+- **`memcore.rerank.rerank_timer_ms` and `reset_reranker_cache`** (and their
+  `ledger.rerank` re-exports) — dead code with no production callers.
+  Tests that reset reranker state now clear `_RERANKER_CACHE` directly.
+
 ### Changed
 - **`things3_orphan_action` now defaults to `ignore` instead of `flag`.** The
   `flag` path prefixes the Things task title with `[orphan] ` and there is no

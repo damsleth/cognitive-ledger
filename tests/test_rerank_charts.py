@@ -48,20 +48,6 @@ class RerankPureFunctionTests(unittest.TestCase):
         from ledger.rerank import rerank_pairs
         self.assertEqual(rerank_pairs("q", [], model_name="any"), [])
 
-    def test_rerank_timer_ms_returns_positive_float(self):
-        import time
-        from ledger.rerank import rerank_timer_ms
-        start = time.perf_counter()
-        out = rerank_timer_ms(start)
-        self.assertIsInstance(out, float)
-        self.assertGreaterEqual(out, 0.0)
-
-    def test_reset_reranker_cache_clears_state(self):
-        from ledger import rerank
-        rerank._RERANKER_CACHE["fake"] = object()
-        rerank.reset_reranker_cache()
-        self.assertEqual(rerank._RERANKER_CACHE, {})
-
     def test_get_reranker_returns_cached_when_present(self):
         from ledger import rerank
         sentinel = object()
@@ -69,11 +55,11 @@ class RerankPureFunctionTests(unittest.TestCase):
         try:
             self.assertIs(rerank.get_reranker("my-model"), sentinel)
         finally:
-            rerank.reset_reranker_cache()
+            rerank._RERANKER_CACHE.clear()
 
     def test_get_reranker_raises_when_sentence_transformers_missing(self):
         from ledger import rerank
-        rerank.reset_reranker_cache()
+        rerank._RERANKER_CACHE.clear()
 
         # Force an ImportError on `from sentence_transformers import CrossEncoder`
         original_st = sys.modules.pop("sentence_transformers", None)
@@ -90,7 +76,7 @@ class RerankPureFunctionTests(unittest.TestCase):
 
     def test_rerank_pairs_invokes_cached_model(self):
         from ledger import rerank
-        rerank.reset_reranker_cache()
+        rerank._RERANKER_CACHE.clear()
 
         class FakeModel:
             def __init__(self):
@@ -104,7 +90,7 @@ class RerankPureFunctionTests(unittest.TestCase):
         try:
             scores = rerank.rerank_pairs("query", [("q", "doc1"), ("q", "doc2")], model_name="fake-model")
         finally:
-            rerank.reset_reranker_cache()
+            rerank._RERANKER_CACHE.clear()
 
         self.assertEqual(scores, [0.5, 0.5])
         self.assertEqual(len(fake.calls), 1)
