@@ -44,12 +44,10 @@ def fuse_ranked_lists(
     list keep their first (best) rank, matching ``reciprocal_rank_fusion``'s
     accumulation over every occurrence.
     """
-    scores = reciprocal_rank_fusion(ranked_lists, k=k)
+    scores: dict[str, float] = {}
     first_seen: dict[str, int] = {}
-    position = 0
     for ranked in ranked_lists:
-        for item_key in ranked:
-            if item_key not in first_seen:
-                first_seen[item_key] = position
-                position += 1
+        for rank_idx, item_key in enumerate(ranked):
+            scores[item_key] = scores.get(item_key, 0.0) + 1.0 / (k + rank_idx + 1)
+            first_seen.setdefault(item_key, len(first_seen))
     return sorted(scores, key=lambda item_key: (-scores[item_key], first_seen[item_key]))
