@@ -15,7 +15,6 @@ score pairs (``pip install memcore[rerank]``).
 """
 from __future__ import annotations
 
-import time
 from typing import Any
 
 _RERANKER_CACHE: dict[str, Any] = {}
@@ -40,10 +39,6 @@ def get_reranker(model_name: str, max_length: int = 512) -> Any:
     model = CrossEncoder(model_name, max_length=max_length)
     _RERANKER_CACHE[cache_key] = model
     return model
-
-
-def reset_reranker_cache() -> None:
-    _RERANKER_CACHE.clear()
 
 
 def candidate_text(title: str, body: str, max_chars: int = 2048) -> str:
@@ -84,7 +79,3 @@ def rerank_pairs(
         convert_to_numpy=True,
     )
     return [float(s) for s in scores]
-
-
-def rerank_timer_ms(start: float) -> float:
-    return (time.perf_counter() - start) * 1000.0
