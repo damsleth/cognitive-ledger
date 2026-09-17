@@ -13,14 +13,10 @@ from memcore.rerank import (  # noqa: F401
     candidate_text,
     get_reranker,
     rerank_pairs,
-    rerank_timer_ms,
-    reset_reranker_cache,
 )
 
 __all__ = [
     "get_reranker",
-    "reset_reranker_cache",
     "candidate_text",
     "rerank_pairs",
-    "rerank_timer_ms",
 ]

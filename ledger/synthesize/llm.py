@@ -98,7 +98,11 @@ class SubprocessAdapter:
 
 
 class ClaudeCliAdapter:
-    """Drives ``claude -p --input-format text`` via stdin."""
+    """Drives ``claude -p --input-format text`` via stdin.
+
+    Thin wrapper: builds the claude-specific argv, then delegates to
+    ``SubprocessAdapter`` for the actual run/error-handling logic.
+    """
 
     backend_name = "claude"
 
@@ -112,12 +116,10 @@ class ClaudeCliAdapter:
         cmd = ["claude", "-p", "--input-format", "text"]
         if self.model_name:
             cmd += ["--model", self.model_name]
-        result = subprocess.run(
-            cmd, input=prompt, capture_output=True, text=True, timeout=self.timeout
-        )
-        if result.returncode != 0:
-            raise RuntimeError(f"claude CLI exited {result.returncode}: {result.stderr.strip()}")
-        return LLMResponse(text=result.stdout.strip(), backend=self.backend_name, model=self.model_name)
+        response = SubprocessAdapter(
+            command=cmd, model_name=self.model_name, timeout=self.timeout
+        ).complete(prompt, max_tokens=max_tokens, temperature=temperature)
+        return LLMResponse(text=response.text, backend=self.backend_name, model=self.model_name)
 
 
 class OllamaAdapter:
