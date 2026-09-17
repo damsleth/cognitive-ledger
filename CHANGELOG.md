@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2026-09-17 (0.12.0)
 
 ### Changed
 - **`things3_orphan_action` now defaults to `ignore` instead of `flag`.** The
