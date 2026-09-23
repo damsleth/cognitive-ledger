@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import datetime as _dt
+import re
 from pathlib import Path
 import time
 from typing import Any, Callable
@@ -480,11 +482,16 @@ def rank_query_semantic_hybrid(
         embeddings.ensure_openai_api_key()
 
     score_started = time.perf_counter()
+    # Only as-of reads may score superseded notes (see semantic_score_map).
+    # Passed only when needed: the embeddings module is an injectable seam,
+    # and older implementations do not take the keyword.
+    archive_kw = {"include_archive": True} if as_of is not None else {}
     semantic = embeddings.semantic_score_map(
         query=query,
         target="ledger",
         backend=backend,
         model=model,
+        **archive_kw,
     )
     if not semantic.get("available"):
         if semantic.get("reason") == "missing_index":
@@ -893,6 +900,30 @@ def _default_resolve_embed_model(backend: str, model: str | None) -> str:
     return _resolve(backend, model)
 
 
+# An explicit past year after a preposition: "in 2023", "during 2021",
+# Norwegian "i 2023" / "under 2023". Deliberately strict - a bare year ("the
+# 2019 server") or a relative cue ("before I moved") does not engage it.
+_TEMPORAL_YEAR_RE = re.compile(r"\b(?:in|during|i|under)\s+((?:19|20)\d{2})\b", re.IGNORECASE)
+
+
+def temporal_as_of(query: str, now_dt: _dt.datetime | None = None) -> _dt.datetime | None:
+    """As-of instant implied by an unambiguous year cue in *query*, else None.
+
+    A current or future year is the default lens already, so it yields None.
+    """
+    match = _TEMPORAL_YEAR_RE.search(query or "")
+    if not match:
+        return None
+    now = now_dt or _dt.datetime.now(_dt.timezone.utc)
+    year = int(match.group(1))
+    if year >= now.year:
+        return None
+    # ponytail: one mid-year instant; misses a note valid only for a slice of
+    # the year that excludes July. Upgrade: a year-window overlap check in
+    # apply_temporal_filter.
+    return _dt.datetime(year, 7, 1, tzinfo=_dt.timezone.utc)
+
+
 def rank_query(
     query: str,
     *,
@@ -909,6 +940,8 @@ def rank_query(
     as_of=None,
     changed_since=None,
 ) -> RetrievalResult:
+    if as_of is None:
+        as_of = temporal_as_of(query, now_dt)
     mode = resolve_retrieval_mode(retrieval_mode)
     if mode == "semantic_hybrid":
         result = rank_query_semantic_hybrid(

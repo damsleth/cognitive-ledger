@@ -145,6 +145,11 @@ All fields are optional — notes without them lint clean and retrieve identical
 It sets `valid_to` on the old note, writes `superseded_by`, copies `supersedes` onto the new note,
 and moves the old file to `09_archive/`. The old note is never deleted.
 Default retrieval hides notes with an expired `valid_to`; use `--as-of` to query historical state.
+A query with an explicit past year after a preposition ("in 2023", "i 2023") engages
+`--as-of <year>-07-01` by itself and says so on stderr; a bare year or a relative cue
+("before I moved") does not. Typed archive notes (`fact__`, `pref__`, ... in `09_archive/`)
+are embedded so an as-of read can rank them, but `embed search` and the contradiction scan
+never see them — YAAMS dedups promotions through `embed search`.
 
 **Prior score (cold-start ranking, always-on, applied as a TIE-BREAKER).** Before signal feedback accrues, a prior combining note confidence, half-life recency decay (default 180 days), and query relevance breaks ties between near-equal candidates. It is *not* a flat additive bonus: each candidate's prior contribution scales continuously to zero as its base (pre-prior) score gap to the local leader exceeds `prior_tie_band` (default 0.02, a 2% relative gap), so a clear semantic/lexical winner keeps rank-1 regardless of its prior. The blend is implemented once in `apply_prior_tiebreak` (in `ledger/retrieval.py`) and used by both the lexical and `semantic_hybrid` paths. Config keys (all optional, safe defaults): `prior_enabled` (true), `prior_weight` (0.10), `prior_tie_band` (0.02), `prior_w_importance` (0.30), `prior_w_recency` (0.30), `prior_w_relevance` (0.40), `prior_recency_half_life_days` (180.0). Env overrides: `LEDGER_PRIOR_ENABLED`, `LEDGER_PRIOR_WEIGHT`, `LEDGER_PRIOR_TIE_BAND`, `LEDGER_PRIOR_W_IMPORTANCE/RECENCY/RELEVANCE`, `LEDGER_PRIOR_HALF_LIFE`. Set `prior_enabled: false` to reproduce pre-prior scores as an A/B baseline.
 

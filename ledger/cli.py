@@ -272,6 +272,14 @@ def handle_query_command(args):
         raise SystemExit(2)
 
     _warn_if_index_stale(_retrieval_mode)
+    if as_of is None:
+        as_of = query_lib.temporal_as_of(validated_query)
+        if as_of is not None:
+            print(
+                f"note: reading as of {as_of.date()} from the year in the query "
+                f"(pass --as-of to override)",
+                file=sys.stderr,
+            )
 
     payload = rank_query(
         query=validated_query,
