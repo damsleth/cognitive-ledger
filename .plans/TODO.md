@@ -71,5 +71,4 @@ All deferred follow-ups also done in `bd70d3c` + `9e5bcce`:
 - Update README/CHANGELOG only for shipped user-facing behavior, not for plan edits.
 - Preserve existing uncommitted work unless the active task explicitly owns it.
 - [ ] Klassifisereren i claude_memory.classify er first-match-wins, og concept-in-title er hoyeste presedens. Det er nettopp derfor EN los markor (`convention`) kunne overstyre alle andre signaler og gjore en disambigueringsfakta til concept. Vurder a score signaler mot hverandre i stedet for a returnere pa forste treff, sa ingen enkelt markor kan kuppe klassifiseringen.
-- [ ] Sterkere form av den lukkede embed-todoen: query-varselet er passivt. Vurder a la `inbox triage` og `import-claude-memory --apply` selv koe/utfore en embed-rebuild nar de har promotert noter, sa vinduet lukkes automatisk i stedet for a kreve at brukeren leser stderr. `sleep index` gjor alt riktig alt - det mangler bare a bli kalt.
 - [ ] Scrub 6 agent Co-authored-by trailers from git history: branch backup/pre-history-scrub-$(date +%F), git filter-repo --message-callback (see ~/code/REPO-HEALTH.md), then force-push. Worktree must be clean first.
