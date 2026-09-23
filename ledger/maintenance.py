@@ -1539,7 +1539,7 @@ def cmd_sleep(as_json: bool = False) -> int:
     print("")
     print("5b. Contradiction scan (requires contradiction_enabled=true in config)")
     print("    ledger sleep contradictions --check   # dry run, see what would be done")
-    print("    ledger sleep contradictions --apply   # execute supersessions + inbox flags")
+    print("    ledger sleep contradictions --apply   # write conflict notes (+ supersessions if opted in)")
     print("")
     print("5c. Provenance stamp (mark corrected notes so confidence weighting can use it)")
     print("    ledger sleep provenance --check   # dry run, see what would be stamped")
@@ -1687,7 +1687,7 @@ def build_parser() -> argparse.ArgumentParser:
     contra_mode.add_argument(
         "--apply",
         action="store_true",
-        help="Execute supersessions and write conflict inbox notes",
+        help="Write conflict inbox notes (and supersessions, if contradiction_auto_supersede is on)",
     )
 
     provenance_parser = subparsers.add_parser(
