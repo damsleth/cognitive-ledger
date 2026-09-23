@@ -4,12 +4,13 @@ All NLI calls use a fake scorer injected via _pipeline_fn so no model download
 is needed.  Supersession uses the real ledger.bitemporal.supersede() against a
 tmp_path corpus.  The test matrix covers:
 
-  - Contradictory pair with distinct valid_from → auto-supersede
+  - Default (auto-supersede off) → every contradiction becomes a conflict note
+  - Opt-in auto-supersede: contradictory pair with distinct valid_from → supersede
   - Same valid_from (ambiguous) → inbox conflict note, no archive
   - Older note has higher confidence → review not auto
   - Identity note → always review
   - Neutral pair → ignore
-  - lang:no note at 0.88 → review (below 0.95 strict threshold)
+  - lang:no pair → always review, whatever the score
   - --check writes nothing
   - Idempotency: second run → zero new actions
   - contradiction_enabled=false → no-op (exits 0, writes nothing)
@@ -95,7 +96,9 @@ def _make_config(tmp_path: Path, *, contradiction_enabled: bool = True) -> Ledge
     config.contradiction_enabled = contradiction_enabled
     config.contradiction_auto_threshold = 0.85
     config.contradiction_review_threshold = 0.60
-    config.contradiction_auto_threshold_lang_no = 0.95
+    # Scan tests below exercise the opt-in auto path; the default is covered
+    # by TestDefaultIsAdvisory.
+    config.contradiction_auto_supersede = True
     config.contradiction_protect_higher_confidence = True
     set_config(config)
     # Create folder structure
@@ -166,8 +169,8 @@ class TestDecide:
     _BASE = dict(
         auto_threshold=0.85,
         review_threshold=0.60,
-        auto_threshold_lang_no=0.95,
         protect_higher_confidence=True,
+        auto_supersede=True,
     )
 
     def _pair(self, **kwargs) -> PairFacts:
@@ -236,22 +239,22 @@ class TestDecide:
         base = dict(self._BASE, protect_higher_confidence=False)
         assert decide(pair, **base) == Decision.SUPERSEDE
 
-    def test_lang_no_at_0_88_below_strict_threshold_goes_to_review(self):
-        # 0.88 < 0.95 strict threshold for Norwegian
-        pair = self._pair(
-            contradiction_score=0.88,
-            is_candidate_newer=True,
-            either_lang_no=True,
-        )
-        assert decide(pair, **self._BASE) == Decision.REVIEW
+    def test_lang_no_never_auto_resolves(self):
+        # XNLI has no Norwegian data: advisory at any score, even opted in.
+        for score in (0.88, 0.99):
+            pair = self._pair(
+                contradiction_score=score,
+                is_candidate_newer=True,
+                either_lang_no=True,
+            )
+            assert decide(pair, **self._BASE) == Decision.REVIEW
 
-    def test_lang_no_at_0_96_above_strict_threshold_supersedes(self):
-        pair = self._pair(
-            contradiction_score=0.96,
-            is_candidate_newer=True,
-            either_lang_no=True,
-        )
-        assert decide(pair, **self._BASE) == Decision.SUPERSEDE
+    def test_auto_supersede_off_by_default(self):
+        # T2 measured lang:en precision 0.862: a clear, newer, same-confidence
+        # contradiction still goes to a human unless auto is opted into.
+        pair = self._pair(contradiction_score=0.99, is_candidate_newer=True)
+        base = {k: v for k, v in self._BASE.items() if k != "auto_supersede"}
+        assert decide(pair, **base) == Decision.REVIEW
 
     def test_already_superseded_neighbor_ignored(self):
         pair = self._pair(
@@ -360,6 +363,40 @@ class TestDisabledNoOp:
 # ---------------------------------------------------------------------------
 # Full scan tests
 # ---------------------------------------------------------------------------
+
+class TestDefaultIsAdvisory:
+    """With default config a clear contradiction is filed, never archived."""
+
+    def test_clear_contradiction_becomes_conflict_note(self, tmp_path: Path):
+        config = _make_config(tmp_path)
+        config.contradiction_auto_supersede = False  # the shipped default
+        notes_dir = config.ledger_notes_dir
+        try:
+            old_note = notes_dir / "02_facts" / "fact__old.md"
+            _write(old_note, _note_content(
+                created=_TS_OLD, valid_from=_TS_OLD, confidence=0.7, body="The sky is green.",
+            ))
+            new_note = notes_dir / "02_facts" / "fact__new.md"
+            _write(new_note, _note_content(
+                created=_TS_NEW, valid_from=_TS_NEW, confidence=0.9, body="The sky is blue.",
+            ))
+
+            result = run_contradiction_scan(
+                apply=True,
+                _pipeline_fn=_fake_pipeline(contradiction=0.99),
+                _neighbor_fn=_make_neighbor_fn(
+                    [{"rel_path": "notes/02_facts/fact__old.md", "type": "fact"}]
+                ),
+            )
+
+            assert result.supersessions == 0
+            assert result.conflict_notes >= 1
+            assert old_note.exists(), "a live note must never be archived by default"
+            assert not (notes_dir / "09_archive" / "fact__old.md").exists()
+            assert list((notes_dir / "00_inbox").glob("conflict__*.md"))
+        finally:
+            reset_config()
+
 
 class TestScanAutoSupersede:
     """Contradictory pair with distinct valid_from → auto-supersede."""
