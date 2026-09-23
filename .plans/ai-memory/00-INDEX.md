@@ -90,7 +90,7 @@ Stage 2 (medium bets):
   12 provenance-weighted-confidence  [COMPLETE, archived]
 
 Stage 3 (larger bets — only behind proven gates):
-  13 associative-ppr-retrieval [gate: T5, needs 01 multi-hop; touches yaams NER]
+  13 associative-ppr-retrieval [KILLED 2026-09-23: live hit@1 0.783→0.652; reverted 7869218; archived]
   14 hierarchical-consolidation [gate: T6, needs 01; depends on 11 link infra]
   15 amem-memory-evolution      [proposal-only; builds on 11]
   16 umem-thompson-sampling     [BLOCKED behind 10]
