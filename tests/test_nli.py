@@ -284,12 +284,11 @@ class TestContradictionConfigDefaults:
         cfg = LedgerConfig()
         assert cfg.contradiction_review_threshold == pytest.approx(0.60)
 
-    def test_default_lang_no_threshold_stricter(self):
+    def test_default_auto_supersede_off(self):
         from ledger.config import LedgerConfig
 
-        cfg = LedgerConfig()
-        # Norwegian threshold must be strictly higher than English auto threshold.
-        assert cfg.contradiction_auto_threshold_lang_no > cfg.contradiction_auto_threshold
+        # T2 (2026-09-23): lang:en precision 0.862 < 0.9 floor for auto.
+        assert LedgerConfig().contradiction_auto_supersede is False
 
     def test_default_protect_higher_confidence(self):
         from ledger.config import LedgerConfig

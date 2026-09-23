@@ -3,6 +3,10 @@
 ## Unreleased
 
 ### Added
+- **`python -m ledger.contradiction --eval <t2.yaml>`** scores the labelled T2
+  contradiction pairs and reports precision/recall per language and threshold.
+  First result (2026-09-23, default model): `lang:en` precision 0.862 / recall
+  1.0 at both 0.60 and 0.85; `lang:no` 1.0 / 0.875 over only 14 pairs.
 - **A past year in the query reads the ledger as of that year.** "Where did I
   live in 2023?" now engages `--as-of 2023-07-01` by itself (announced on
   stderr; an explicit `--as-of` still wins). Deliberately strict: only a year
@@ -10,6 +14,14 @@
   I moved") are left alone.
 
 ### Changed
+- **The contradiction scan no longer archives notes by itself.** Auto-supersede
+  is now its own opt-in, `contradiction_auto_supersede` (default `false`); with
+  it off every contradiction becomes a conflict note in `00_inbox`. The T2
+  measurement above is why: at 0.862 precision about one auto-supersession in
+  seven would have retired a note that was still true, and until now enabling
+  the scan switched that on. A pair involving a `lang:no` note never
+  auto-resolves, even opted in, so `contradiction_auto_threshold_lang_no` is
+  gone (unknown config keys are ignored on load).
 - **`ledger inbox triage` refreshes the semantic index when it promotes notes.**
   In semantic modes a promoted note is unreachable until embedded, and the
   closing "Run `ledger sleep index`" hint left that window open until someone
@@ -18,6 +30,11 @@
   warns.
 
 ### Fixed
+- **NLI scoring works on transformers 5.** The pipeline was built with
+  `return_all_scores=True`, which transformers 5 silently ignores, returning
+  only the top label as a dict; `score_pair` then indexed it as a list and
+  crashed. The contradiction scan could not have run at all on this stack. It
+  now asks for `top_k=None` and accepts every output shape.
 - **`--as-of` can return archived notes in `semantic_hybrid`.** The default
   mode draws its semantic scores from the embedding index, which never covered
   `09_archive/`, so a superseded note scored 0 on the semantic arm and an as-of

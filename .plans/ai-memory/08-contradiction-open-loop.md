@@ -40,3 +40,31 @@ ledger ab run --baseline-ref main --candidate-ref HEAD --cases tests/fixtures/re
 
 ## Done when
 T2 precision/recall reported per language; AUTO_SUPERSEDE reframed to open-loop "needs decision"; auto-supersession enabled for `lang:en` only if precision>0.95 (else advisory-only documented); `lang:no` always advisory; no retrieval regression.
+
+## Verdict — 2026-09-23: advisory-only; auto-supersede opt-in, off
+
+T2 via the new `python -m ledger.contradiction --eval tests/fixtures/contradiction_t2.yaml` (default model, after fixing the transformers-5 crash in `nli.score_pair`):
+
+| lang | pairs | t | precision | recall | tp / fp / fn |
+|---|---|---|---|---|---|
+| en | 70 | 0.60 | 0.862 | 1.000 | 25 / 4 / 0 |
+| en | 70 | 0.85 | 0.862 | 1.000 | 25 / 4 / 0 |
+| no | 14 | 0.60 | 1.000 | 0.875 | 7 / 0 / 1 |
+| no | 14 | 0.85 | 1.000 | 0.875 | 7 / 0 / 1 |
+
+**Ship rule applied: en precision < 0.9 → advisory-only.** What shipped:
+- `decide()` returns SUPERSEDE only when the new `contradiction_auto_supersede` is on (default off) **and** neither note is `lang:no`. Previously enabling the scan switched auto-archiving on.
+- `contradiction_auto_threshold_lang_no` removed: `lang:no` never auto-resolves. Norwegian's 1.0 precision is 7 true positives — too few to trust.
+- **Deviation from the plan, on purpose:** the "needs decision" surface stays the existing inbox conflict note, not a `loop__` in `05_open_loops`. The conflict note already has idempotency, `ledger inbox conflicts`, and a resolver checklist; a loop would also be pushed into Things by `ledger loops sync`, turning every NLI guess into a personal task.
+- The 4 English false positives are worth reading before anyone retries a threshold: precision is flat from 0.60 to 0.85, so a higher threshold alone will not buy it back.
+
+The four `lang:en` false positives (all ≥ 0.93):
+
+| score | id | pair |
+|---|---|---|
+| 0.998 | t2_neg_07 | "Alex moved to Portland." vs "Bob moved to Portland." |
+| 0.935 | t2_neg_08 | "Riley lives in Austin." vs "River lives in Austin." |
+| 0.981 | t2_neg_35 | "Alex's home is in Seattle." vs "Alex has lived on the West Coast for several years." |
+| 0.937 | t2_neg_42 | "Avery is proficient in Go." vs "Avery writes backend services." |
+
+**Two of four are different subjects.** NLI reads "someone else did X" as contradicting X. A same-subject precheck (entity match before scoring) would halve the error — that is Plan 09's slot/entity keying, and the obvious first thing to try before revisiting auto. The other two are entailment-by-generalisation (Seattle ⊂ West Coast) and topic-adjacent, which no threshold separates.
