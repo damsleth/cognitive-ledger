@@ -3,6 +3,13 @@
 ## Unreleased
 
 ### Added
+- **`attribute` frontmatter slot, and the contradiction scan adjudicates it.**
+  An optional lowercase slug naming the state a note fills (`employer`,
+  `kim.residence`, `jan.employer`). Two live notes with the same slot cannot
+  both be current, so the scan files them as a conflict note even when NLI
+  sees no clash in the wording — the "signed a lease in Portland" vs "lives in
+  Seattle" case. Needs no model or index, never auto-resolves, idempotent like
+  the NLI path. `ledger sleep lint` rejects a slot that is not a slug.
 - **`python -m ledger.contradiction --eval <t2.yaml>`** scores the labelled T2
   contradiction pairs and reports precision/recall per language and threshold.
   First result (2026-09-23, default model): `lang:en` precision 0.862 / recall

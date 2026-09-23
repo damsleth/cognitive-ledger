@@ -1458,3 +1458,53 @@ class TestScopeFiltering:
         rel_paths = [n["rel_path"] for n in neighbors]
         assert "notes/02_facts/fact__work.md" in rel_paths
         assert "notes/02_facts/fact__home.md" in rel_paths
+
+
+class TestAttributeSlot:
+    """Plan 09: two live notes on the same slot are filed for review."""
+
+    def _scan(self, tmp_path, nli_score=0.05, apply=True):
+        return run_contradiction_scan(
+            apply=apply,
+            _pipeline_fn=_fake_pipeline(contradiction=nli_score),
+            _neighbor_fn=_make_neighbor_fn([]),
+        )
+
+    def test_same_slot_collides_even_when_nli_misses(self, tmp_path: Path):
+        config = _make_config(tmp_path)
+        notes_dir = config.ledger_notes_dir
+        try:
+            _write(notes_dir / "02_facts" / "fact__lives_seattle.md", _note_content(
+                body="Alex lives in Seattle.", extra_fm="attribute: residence\n"))
+            _write(notes_dir / "02_facts" / "fact__lease_portland.md", _note_content(
+                body="Alex signed a lease in Portland.", extra_fm="attribute: residence\n"))
+            _write(notes_dir / "02_facts" / "fact__employer.md", _note_content(
+                body="Alex works at Acme.", extra_fm="attribute: employer\n"))
+
+            result = self._scan(tmp_path)
+
+            notes = list((notes_dir / "00_inbox").glob("conflict__*.md"))
+            assert result.conflict_notes == 1 and len(notes) == 1
+            text = notes[0].read_text(encoding="utf-8")
+            assert "attribute slot `residence`" in text
+            assert "fact__employer" not in text
+            # Never auto-resolved, even with auto-supersede on in this config.
+            assert (notes_dir / "02_facts" / "fact__lives_seattle.md").exists()
+
+            # Idempotent: a second run files nothing new.
+            assert self._scan(tmp_path).conflict_notes == 0
+        finally:
+            reset_config()
+
+    def test_check_mode_writes_nothing(self, tmp_path: Path):
+        config = _make_config(tmp_path)
+        notes_dir = config.ledger_notes_dir
+        try:
+            for name in ("a", "b"):
+                _write(notes_dir / "02_facts" / f"fact__{name}.md",
+                       _note_content(body=name, extra_fm="attribute: diet\n"))
+            result = self._scan(tmp_path, apply=False)
+            assert result.conflict_notes == 1
+            assert not list((notes_dir / "00_inbox").glob("conflict__*.md"))
+        finally:
+            reset_config()
