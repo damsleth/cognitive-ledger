@@ -22,8 +22,8 @@ Nothing in Stage 1-3 ships without passing `ledger_ab`. This is the single most 
 - [x] **Validate and tune the existing `semantic_rerank` mode.** Shipped in `395c74d` after T1 improved hit@1 by 0.0256; `LEDGER_RERANK_INPUT_K` and the tuning space landed in `a02920e`. Source: report B1.
 - [x] **Run T1**: `semantic_hybrid` vs `semantic_rerank`, including candidate-pool tuning. Gate passed (exit 0) in `395c74d`. Source: report B1 + T1.
 - [x] **Document the weighted_sum > RRF decision in-repo.** Recorded in `AGENTS.md`, `config.sample.yaml`, and `LedgerConfig.fusion`; raw YAAMS append-only storage is also explicit. Source: report B2.
-- [ ] **Consume event-time into the bitemporal fields.** Populate `valid_from` from the YAAMS source timestamp **[bridge]** (see YAAMS emit task), make `--as-of` the default retrieval lens when query parsing detects a temporal scope, and ensure notes with `valid_to < now` down-rank but never delete. Source: report A1.
-- [ ] **Validate the `prior` tie-breaker** via the `prior_enabled: false` ablation. Confirm recency+importance+relevance is doing useful work and that `prior_tie_band 0.02` earns its place. Source: report B3a + T4.
+- [x] **Consume event-time into the bitemporal fields.** (a)+(c) shipped earlier; (b) auto-as-of shipped `26b2b61` 2026-09-23. Populate `valid_from` from the YAAMS source timestamp **[bridge]** (see YAAMS emit task), make `--as-of` the default retrieval lens when query parsing detects a temporal scope, and ensure notes with `valid_to < now` down-rank but never delete. Source: report A1.
+- [x] **Validate the `prior` tie-breaker** — 2026-09-23: neutral on live + fixture, defaults kept (verdict in `.plans/done/ai-memory/07-*.md`). via the `prior_enabled: false` ablation. Confirm recency+importance+relevance is doing useful work and that `prior_tie_band 0.02` earns its place. Source: report B3a + T4.
 
 ---
 

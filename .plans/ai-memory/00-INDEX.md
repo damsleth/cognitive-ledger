@@ -79,8 +79,8 @@ Stage 0 (COMPLETE, archived):
   03 eval-gate-mandatory ────┘
 
 Stage 1 (04-05 COMPLETE; active plans below):
-  06 bitemporal-event-time [(a)+(c) shipped, (b) auto-as-of still open; touches yaams]
-  07 validate-prior-tiebreaker      [needs 01]
+  06 bitemporal-event-time          [COMPLETE 2026-09-23, archived]
+  07 validate-prior-tiebreaker      [COMPLETE 2026-09-23: neutral, defaults kept; archived]
 
 Stage 2 (medium bets):
   08 contradiction→open-loop  [gate: T2, needs 02]
@@ -103,7 +103,7 @@ Stage 3 (larger bets — only behind proven gates):
 
 ## The 16 plans
 
-Completed plans 01–05 and 12 are archived under `.plans/done/ai-memory/`.
+Completed plans 01–07 and 12 are archived under `.plans/done/ai-memory/`.
 Plans 01–03 shipped in `a481e5c`, plan 04 passed T1 and shipped in `395c74d`,
 plan 05 is captured in the contributor/config documentation, and plan 12
 shipped off by default after a quality-tied A/B in v0.9.0.
