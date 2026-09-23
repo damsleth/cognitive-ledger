@@ -1246,7 +1246,18 @@ class LedgerConfig:
 
     @property
     def semantic_root(self) -> Path:
-        """Path to semantic index root."""
+        """Path to semantic index root: with the corpus, next to its manifest.
+
+        It used to hang off ledger_root, which is the code tree once the store
+        moves out. Every notes dir run from one checkout then shared one set of
+        index files, so an eval or A/B run against another corpus (the fixture,
+        in scripts/ab_gate.sh) rebuilt over the live index in place.
+        """
+        return self.ledger_notes_dir / ".smart-env" / "semantic"
+
+    @property
+    def legacy_semantic_root(self) -> Path:
+        """Pre-0.13 index location; read once by embeddings._adopt_legacy_index."""
         return self.ledger_root / ".smart-env" / "semantic"
 
     @property

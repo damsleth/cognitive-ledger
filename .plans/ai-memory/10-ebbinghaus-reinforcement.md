@@ -33,3 +33,9 @@ Moderate — reinforcement can create rich-get-richer feedback loops. Mitigation
 
 ## Done when
 Per-note Ebbinghaus strength computed from `signals.jsonl`; the 20-signal cliff becomes a continuous ramp (still tie-breaker, never linear); `LEDGER_SIGNAL_REINFORCE` knob added; T4 shows the ramp dominates 10–25 signals with no general/negative regression.
+
+## Status — 2026-09-23: blocked on data, not built
+
+The strength curve ramps on `retrieval_hit` / `preference_applied` events. Live `ledger signal stats`: 133 real signals, of which **1 `retrieval_hit` and 0 `preference_applied`** (119 affirmation, 7 stale_flag, 6 correction). A ramp computed from one reinforcement event is inert, and T4 ("the ramp dominates the 10-25 signal regime") cannot be measured on a corpus with one such signal. It also stacks on `score_weight_signal`, which stays 0.0 by the 2026-06-20 decision (A/B: no band/weight combination helped signal cases without regressing general).
+
+**Unblock when:** `retrieval_hit` + `preference_applied` reach ~25 real events (so T4's 10-25 band exists), e.g. once `signals_auto_capture` or `query --pick` is in regular use. Then build step 1-4 as written, behind `LEDGER_SIGNAL_REINFORCE` default off. Plan 16 stays blocked behind this.
