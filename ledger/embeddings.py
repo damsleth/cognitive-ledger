@@ -438,11 +438,35 @@ def embed_query_text(
     return vectors
 
 
+def _adopt_legacy_index(target: str, backend: str, model: str) -> None:
+    """Move this corpus's index from the old ledger_root location, once.
+
+    Only when the new location is empty and the legacy index says it was built
+    from *this* notes dir (`source_root`). The old location was shared by every
+    corpus run from the checkout, so its files may belong to another one.
+    """
+    cfg = get_config()
+    new_dir = semantic_dir(target, backend, model)
+    old_dir = cfg.legacy_semantic_root / target / new_dir.name
+    if new_dir.exists() or old_dir == new_dir or not (old_dir / "index.json").is_file():
+        return
+    try:
+        source_root = json.loads((old_dir / "index.json").read_text(encoding="utf-8")).get("source_root")
+    except (OSError, ValueError):
+        return
+    owner = cfg.ledger_notes_dir if target == "ledger" else cfg.source_notes_dir
+    if not source_root or Path(source_root).resolve() != Path(owner).resolve():
+        return
+    new_dir.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(old_dir), str(new_dir))
+
+
 def load_semantic_index(
     target: str,
     backend: str,
     model: str,
 ) -> tuple[dict[str, Any] | None, np.ndarray | None]:
+    _adopt_legacy_index(target, backend, model)
     index_path = semantic_index_path(target, backend, model)
     vectors_path = semantic_vectors_path(target, backend, model)
     if not index_path.is_file() or not vectors_path.is_file():

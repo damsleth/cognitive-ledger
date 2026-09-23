@@ -1319,7 +1319,7 @@ def _generate_semantic_index() -> None:
     code, output = _run_subprocess(cmd, required=False)
     if code == 0:
         model_key = f"{backend}__{sanitize_model_key(model)}"
-        print(f"  -> .smart-env/semantic/ledger/{model_key}/{{index.json,vectors.npy}}")
+        print(f"  -> {_relative(config.semantic_root / 'ledger' / model_key)}/{{index.json,vectors.npy}}")
         print("  -> notes/08_indices/semantic_manifest.json")
         return
 
