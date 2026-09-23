@@ -1445,6 +1445,53 @@ def _cmd_index_impl() -> int:
     return 0
 
 
+def _paths_changed_since_last_sleep() -> set[str] | None:
+    """Logical note paths touched since the last `sleep` event; None if never slept."""
+    entries = _timeline_jsonl_entries(get_config().timeline_jsonl_path)
+    sleeps = [i for i, entry in enumerate(entries) if entry[2] == "sleep"]
+    if not sleeps:
+        return None
+    return {path for _l, _ts, _a, path, _d in entries[sleeps[-1] + 1:] if _is_tracked_path(path)}
+
+
+def cmd_links(*, apply: bool = False, all_notes: bool = False, as_json: bool = False) -> int:
+    """Propose [[links]] between related notes (plan 11); write them with --apply."""
+    from ledger import link_proposals as lp
+
+    only = None if all_notes else _paths_changed_since_last_sleep()
+    proposals = lp.propose_links(only=only)
+    written: list[str] = []
+    if apply and proposals:
+        from ledger.embeddings import append_timeline_entry
+
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        for proposal in proposals:
+            if lp.apply_link(proposal, now):
+                written.append(proposal.source)
+        for source in sorted(set(written)):
+            targets = [p.target for p in proposals if p.source == source]
+            # Action "linked", not "updated": maintenance, not work on the
+            # note, so the briefing does not read it as fresh activity.
+            append_timeline_entry("linked", source, "sleep links: +" + ", ".join(Path(t).stem for t in targets))
+    if as_json:
+        print(json.dumps({
+            "scope": "all" if only is None else "changed_since_last_sleep",
+            "proposals": [p.__dict__ for p in proposals],
+            "applied": bool(apply),
+            "notes_written": sorted(set(written)),
+        }, ensure_ascii=False))
+        return 0
+    scope = "all notes" if only is None else f"{len(only)} note(s) changed since last sleep"
+    print(f"Link proposals ({scope}, floor {lp.FLOOR}): {len(proposals)}")
+    for p in proposals:
+        print(f"  {p.score:.3f}  {Path(p.source).stem}  ->  [[{Path(p.target).stem}]]")
+    if apply:
+        print(f"Wrote {len(written)} link(s) into {len(set(written))} note(s).")
+    elif proposals:
+        print("Dry run. Re-run with --apply to write them under ## Links.")
+    return 0
+
+
 def cmd_sleep(as_json: bool = False) -> int:
     _notes_dir, _indices_dir, _timeline = _config_paths()
 
@@ -1490,6 +1537,12 @@ def cmd_sleep(as_json: bool = False) -> int:
             "title": "Provenance stamp",
             "command": "ledger sleep provenance --check",
             "guidance": "Stamp provenance:corrected on corrected notes. Use --apply to write.",
+        },
+        {
+            "step": "5d",
+            "title": "Propose links",
+            "command": "ledger sleep links",
+            "guidance": "Review [[link]] proposals between related notes. Use --apply to write them.",
         },
         {
             "step": 6,
@@ -1684,6 +1737,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Explicitly accept unresolved drift when replacing an existing baseline",
     )
 
+    links_parser = subparsers.add_parser(
+        "links",
+        help="Propose [[links]] between related notes (dry run unless --apply)",
+    )
+    links_parser.add_argument("--apply", action="store_true", help="Write proposals under ## Links")
+    links_parser.add_argument("--all", action="store_true", dest="all_notes",
+                              help="Consider every note, not only those changed since the last sleep")
+
     contradictions_parser = subparsers.add_parser(
         "contradictions",
         help="NLI-based contradiction scan (check | apply)",
@@ -1746,6 +1807,8 @@ def main(argv: list[str] | None = None) -> int:
             accept_drift=bool(args.accept_drift),
             as_json=as_json,
         )
+    if args.command == "links":
+        return cmd_links(apply=bool(args.apply), all_notes=bool(args.all_notes), as_json=as_json)
     if args.command == "contradictions":
         from ledger.contradiction import cmd_sleep_contradictions
         return cmd_sleep_contradictions(apply=bool(getattr(args, "apply", False)))

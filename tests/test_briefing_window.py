@@ -109,3 +109,13 @@ class TestLoopStaleness:
             '{"ts":"2026-06-10T00:00:00Z","action":"sleep","path":"-","desc":"done"}',
         ])
         assert briefing_lib._loop_staleness(loop, NOW, activity) == 7
+
+    def test_sleep_links_do_not_count_as_activity(self, ledger):
+        loop = self._loop(ledger, "loop__idle2.md", "2026-06-10T00:00:00Z")
+        activity = self._timeline(ledger, [
+            '{"ts":"2026-05-12T00:00:00Z","action":"updated",'
+            '"path":"notes/05_open_loops/loop__idle2.md","desc":"real work"}',
+            '{"ts":"2026-06-10T00:00:00Z","action":"linked",'
+            '"path":"notes/05_open_loops/loop__idle2.md","desc":"sleep links"}',
+        ])
+        assert briefing_lib._loop_staleness(loop, NOW, activity) == 30
