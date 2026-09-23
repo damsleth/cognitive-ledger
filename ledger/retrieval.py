@@ -849,15 +849,11 @@ def _build_archive_candidates() -> list[RetrievalCandidate]:
     so they need to be loaded separately when --as-of widens the candidate pool.
     Returns an empty list if the archive directory does not exist.
     """
-    config = _cfg()
-    archive_dir = config.ledger_notes_dir / "09_archive"
-    if not archive_dir.is_dir():
-        return []
+    from ledger.layout import typed_archive_notes
 
+    config = _cfg()
     candidates: list[RetrievalCandidate] = []
-    for note_path in sorted(archive_dir.glob("*.md")):
-        if note_path.name == ".gitkeep":
-            continue
+    for note_path in typed_archive_notes(config.ledger_notes_dir):
         try:
             frontmatter, body = read_note_for_retrieval(note_path)
         except Exception:
