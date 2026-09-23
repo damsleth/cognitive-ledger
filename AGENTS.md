@@ -283,6 +283,8 @@ importer state locks.
 - **auto-supersede** — opt-in only (`contradiction_auto_supersede: true`): score ≥ `contradiction_auto_threshold` (default 0.85) + candidate strictly newer + no confidence inversion + neither note `lang:no` → calls `supersede()`, moves old note to `09_archive/`. **Keep it off.** On the T2 fixture (2026-09-23, `python -m ledger.contradiction --eval tests/fixtures/contradiction_t2.yaml`) the default model scored `lang:en` precision **0.862** at both 0.60 and 0.85 (recall 1.0) — below the 0.9 floor for any auto-resolution, i.e. about one auto-archive in seven would retire a note that is still true.
 - **ignore** — score below review threshold → no action.
 
+**Attribute slots.** A note may carry `attribute: <slug>` (`employer`, `kim.residence`; qualify with a subject when the note is about someone else). Two live notes on the same slot are filed as a conflict note before the NLI pass — this catches implicit conflicts NLI misses, needs no model, and never auto-resolves.
+
 Hard rules (not config-overridable): identity notes are never auto-superseded; duplicate conflict inbox records for the same pair are not created; re-running on an already-resolved pair is a no-op.
 
 **Norwegian caveat.** The default model (`MoritzLaurer/mDeBERTa-v3-base-mnli-xnli`) is trained on MNLI + XNLI (15 languages); Norwegian is not among them. NLI accuracy on `lang:no` notes is unvalidated, so a pair involving a `lang:no` note never auto-resolves, even with auto-supersede on. (The 14 Norwegian T2 pairs scored precision 1.0 / recall 0.875 — too few to trust.)

@@ -89,6 +89,11 @@ frontmatter:
                     # must resolve to an existing note (dangling ref = error)
     supersedes:     # list of notes/…/note.md logical paths this note replaces
                     # written by the supersede() primitive in ledger/bitemporal.py
+  attribute:        # optional state slot this note fills (plan 09), e.g. `employer`,
+                    # `kim.residence`. Two live notes with the same slot cannot both be
+                    # current, so the contradiction scan files them for review even when
+                    # NLI misses the clash. Qualify with a subject when the note is about
+                    # someone else (`jan.employer`); a bare slot means the user.
 
   # Enum definitions
   enums:
@@ -166,6 +171,11 @@ frontmatter:
       optional: true
       item_type: string
       note: "list of logical notes/... paths this note replaces"
+    attribute:
+      type: string
+      optional: true
+      pattern: "^[a-z0-9æøå][a-z0-9æøå_.-]*$"
+      note: "state slot; notes sharing one are adjudicated by the contradiction scan"
 
 # Timeline specification
 timeline:

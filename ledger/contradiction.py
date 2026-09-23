@@ -438,6 +438,7 @@ def _build_conflict_note(
     body_a: str,
     body_b: str,
     now: dt.datetime,
+    reason: str | None = None,
 ) -> str:
     """Produce a lint-clean 00_inbox note describing the contradiction."""
     ts = _to_iso(now)
@@ -461,7 +462,7 @@ def _build_conflict_note(
     content = (
         f"{fm_text}\n"
         f"# Contradiction review: {Path(rel_a).stem} vs {Path(rel_b).stem}\n\n"
-        f"NLI contradiction score: **{score:.3f}**\n\n"
+        f"{reason or f'NLI contradiction score: **{score:.3f}**'}\n\n"
         f"Human review required — auto-supersession was not triggered.\n\n"
         f"## Note A\n\n"
         f"`{rel_a}`\n\n"
@@ -587,6 +588,9 @@ def run_contradiction_scan(
     # Collect candidates: notes that are new or have changed since last scan
     candidates: list[tuple[str, Path, str, dict[str, Any], str]] = []
     # (rel_path, abs_path, content_hash, frontmatter_dict, body_text)
+    # Live notes per `attribute` slot, changed or not: the partner of a
+    # collision is usually an old, unchanged note.
+    slots: dict[str, list[tuple[str, str]]] = {}
 
     for note_type in sorted(_SCAN_NOTE_TYPES):
         layout = NOTE_LAYOUTS.get(note_type)
@@ -609,6 +613,9 @@ def run_contradiction_scan(
             if _is_superseded(fm):
                 # Already superseded notes are skipped as candidates
                 continue
+            slot = str(fm.get("attribute", "") or "").strip().lower()
+            if slot:
+                slots.setdefault(slot, []).append((rel, body))
             if state.scanned_hashes.get(rel) == h:
                 # Unchanged since last scan — skip
                 continue
@@ -643,10 +650,6 @@ def run_contradiction_scan(
         missing_embed_index=missing_embed_index,
     )
 
-    if missing_embed_index:
-        # Report that embedding build is needed; do not crash
-        return scan_result
-
     from ledger.nli import contradiction_score as nli_score
 
     neighbor_fn = _neighbor_fn or _get_semantic_neighbors
@@ -667,6 +670,50 @@ def run_contradiction_scan(
             if all(p in _ct for p in parts):
                 return Path(_cp_str)
         return None
+
+    # Attribute-slot pass (plan 09). Two live notes claiming the same slot
+    # ("residence", "kim.employer") cannot both be current, whatever NLI makes
+    # of their wording - this catches the implicit conflicts NLI misses (a new
+    # lease vs "lives in"). No model needed; filed for review like any other
+    # conflict, never auto-resolved: the slot says *that* they clash, not
+    # which one is stale.
+    for slot, members in sorted(slots.items()):
+        for i, (rel_a, body_a) in enumerate(members):
+            for rel_b, body_b in members[i + 1:]:
+                pk = _pair_key(rel_a, rel_b)
+                if pk in state.resolved_pairs or pk in seen_pairs:
+                    continue
+                seen_pairs.add(pk)
+                scan_result.conflict_notes += 1
+                if not apply:
+                    scan_result.pair_results.append(PairResult(
+                        candidate_ref=rel_a, neighbor_ref=rel_b, contradiction_score=1.0,
+                        decision=Decision.REVIEW, action_taken="dry_run_slot_conflict",
+                    ))
+                    continue
+                if _cached_existing_conflict_note(pk) is None:
+                    now = _now_utc()
+                    filename = _make_conflict_note_filename(rel_a, rel_b, now)
+                    inbox_dir.mkdir(parents=True, exist_ok=True)
+                    content = _build_conflict_note(
+                        rel_a, rel_b, 1.0, body_a, body_b, now,
+                        reason=f"Both notes claim the attribute slot `{slot}`.",
+                    )
+                    safe_write_text(inbox_dir / filename, content)
+                    _conflict_note_texts[str(inbox_dir / filename)] = content
+                    _append_conflict_timeline(f"notes/00_inbox/{filename}", rel_a, rel_b, 1.0)
+                scan_result.pair_results.append(PairResult(
+                    candidate_ref=rel_a, neighbor_ref=rel_b, contradiction_score=1.0,
+                    decision=Decision.REVIEW, action_taken="slot_conflict_noted",
+                ))
+                state.resolved_pairs[pk] = Decision.REVIEW.value
+
+    if missing_embed_index:
+        # Report that embedding build is needed; do not crash. The slot pass
+        # above needs no index, so its state is kept.
+        if apply and scan_result.conflict_notes:
+            save_state(indices_dir, state)
+        return scan_result
 
     for candidate_ref, candidate_abs, content_h, cand_fm, cand_body in candidates:
         # `candidates` was snapshotted before this loop. Under --apply an earlier

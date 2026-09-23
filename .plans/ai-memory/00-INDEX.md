@@ -84,7 +84,7 @@ Stage 1 (04-05 COMPLETE; active plans below):
 
 Stage 2 (medium bets):
   08 contradiction→open-loop  [COMPLETE 2026-09-23: T2 en precision 0.862 → advisory-only; archived]
-  09 attribute-slot-model     [gate: T3, needs 02+03, builds on 06+08]
+  09 attribute-slot-model     [COMPLETE 2026-09-23: ledger side shipped, NER suggestion → yaams; archived]
   10 ebbinghaus-reinforcement [gate: T4, needs 01]
   11 amem-link-generation     [needs sleep pipeline]
   12 provenance-weighted-confidence  [COMPLETE, archived]
