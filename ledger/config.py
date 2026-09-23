@@ -262,7 +262,6 @@ def _apply_env_overrides(config: "LedgerConfig") -> "LedgerConfig":
         "LEDGER_WEIGHT_SIGNAL": "score_weight_signal",
         "LEDGER_CONTRADICTION_AUTO_THRESHOLD": "contradiction_auto_threshold",
         "LEDGER_CONTRADICTION_REVIEW_THRESHOLD": "contradiction_review_threshold",
-        "LEDGER_CONTRADICTION_AUTO_THRESHOLD_LANG_NO": "contradiction_auto_threshold_lang_no",
         "LEDGER_PRIOR_WEIGHT": "prior_weight",
         "LEDGER_PRIOR_W_IMPORTANCE": "prior_w_importance",
         "LEDGER_PRIOR_W_RECENCY": "prior_w_recency",
@@ -292,6 +291,7 @@ def _apply_env_overrides(config: "LedgerConfig") -> "LedgerConfig":
     bool_mappings = {
         "LEDGER_SIGNALS_AUTO_CAPTURE": "signals_auto_capture",
         "LEDGER_CONTRADICTION_ENABLED": "contradiction_enabled",
+        "LEDGER_CONTRADICTION_AUTO_SUPERSEDE": "contradiction_auto_supersede",
         "LEDGER_CONTRADICTION_PROTECT_HIGHER_CONFIDENCE": "contradiction_protect_higher_confidence",
         "LEDGER_PRIOR_ENABLED": "prior_enabled",
         "LEDGER_PROVENANCE_WEIGHTING": "provenance_weighting_enabled",
@@ -928,6 +928,8 @@ class LedgerConfig:
     contradiction_auto_threshold: float = 0.85
     """Contradiction probability above which auto-supersession is attempted.
 
+    Only consulted when `contradiction_auto_supersede` is on.
+
     Both temporal ordering and confidence rules are applied before any
     auto-supersession fires — see spec for the full decision tree.
     """
@@ -939,12 +941,16 @@ class LedgerConfig:
     review rather than auto-resolved. Below review_threshold the pair is ignored.
     """
 
-    contradiction_auto_threshold_lang_no: float = 0.95
-    """Stricter auto-supersession threshold for lang:no and mixed-language notes.
+    contradiction_auto_supersede: bool = False
+    """Let the scan archive a note by itself instead of filing a conflict note.
 
-    XNLI has no Norwegian training data; mDeBERTa-v3 accuracy on Norwegian
-    text is unvalidated. A stricter threshold reduces false auto-supersessions
-    on Norwegian-language content. See ledger/nli.py for the full caveat.
+    Off, and meant to stay off: on the T2 fixture (2026-09-23) the default NLI
+    model reached precision 0.862 for lang:en, below the 0.9 floor for any
+    auto-resolution, so roughly one auto-supersession in seven would archive a
+    note that was still true. With this off every contradiction above
+    `contradiction_review_threshold` becomes a conflict note for a human.
+    lang:no and mixed-language pairs never auto-resolve, even when this is on:
+    XNLI has no Norwegian training data.
     """
 
     contradiction_protect_higher_confidence: bool = True

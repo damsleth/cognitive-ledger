@@ -3,20 +3,21 @@
 Detects when a note contradicts an existing note using a local NLI classifier
 and resolves the contradiction via one of three actions:
 
-  auto-supersede  — contradiction above auto_threshold + unambiguous temporal
-                    ordering + no confidence inversion → supersede(old, new)
-  review          — contradiction in [review_threshold, auto_threshold), or
-                    high score with ambiguous ordering / confidence inversion,
-                    or lang:no note below 0.95 → conflict note in 00_inbox
+  review          — contradiction at or above review_threshold → conflict
+                    note in 00_inbox for a human to decide (the default)
+  auto-supersede  — opt-in only (contradiction_auto_supersede): score above
+                    auto_threshold + unambiguous temporal ordering + no
+                    confidence inversion → supersede(old, new). Off because
+                    the T2 fixture measured lang:en precision at 0.862.
   ignore          — score below review_threshold → no action
 
 NORWEGIAN CAVEAT
 ----------------
 The NLI model (MoritzLaurer/mDeBERTa-v3-base-mnli-xnli) is trained on MNLI +
 XNLI covering 15 languages.  Norwegian is *not* one of them.  NLI accuracy on
-Norwegian notes is therefore unvalidated.  A stricter auto threshold
-(contradiction_auto_threshold_lang_no, default 0.95) is applied when either
-note has lang:no.  This caveat appears in nli.py as well.
+Norwegian notes is therefore unvalidated, so a pair involving a lang:no note
+never auto-resolves, even with auto-supersede on.  This caveat appears in
+nli.py as well.
 
 HARD RULES (not config-overridable)
 ------------------------------------
@@ -145,8 +146,8 @@ def decide(
     *,
     auto_threshold: float,
     review_threshold: float,
-    auto_threshold_lang_no: float,
     protect_higher_confidence: bool,
+    auto_supersede: bool = False,
 ) -> Decision:
     """Decide what action to take for a contradiction pair.
 
@@ -157,13 +158,13 @@ def decide(
     1. Already superseded neighbor → IGNORE.
     2. Score < review_threshold → IGNORE.
     3. Either note is identity → REVIEW (hard rule 1).
-    4. Choose effective auto threshold: lang:no notes use the stricter value.
-    5. Score >= effective auto threshold AND unambiguous ordering:
+    4. Auto-supersede off, or either note lang:no → REVIEW.
+    5. Score >= auto threshold AND unambiguous ordering:
        a. If protect_higher_confidence AND neighbor is OLDER AND has strictly
           higher confidence than candidate → downgrade to REVIEW.
        b. Otherwise → SUPERSEDE.
-    6. Score in [review_threshold, effective_auto_threshold) OR ambiguous
-       ordering → REVIEW.
+    6. Score in [review_threshold, auto_threshold) OR ambiguous ordering
+       → REVIEW.
     """
     if pair.neighbor_already_superseded:
         return Decision.IGNORE
@@ -177,9 +178,10 @@ def decide(
     if pair.neighbor_is_identity or pair.candidate_is_identity:
         return Decision.REVIEW
 
-    effective_auto = auto_threshold_lang_no if pair.either_lang_no else auto_threshold
+    if not auto_supersede or pair.either_lang_no:
+        return Decision.REVIEW
 
-    if score >= effective_auto and pair.is_candidate_newer is True:
+    if score >= auto_threshold and pair.is_candidate_newer is True:
         # Candidate is strictly newer than neighbor. Check confidence guard.
         if (
             protect_higher_confidence
@@ -779,8 +781,8 @@ def run_contradiction_scan(
                 pair_facts,
                 auto_threshold=config.contradiction_auto_threshold,
                 review_threshold=config.contradiction_review_threshold,
-                auto_threshold_lang_no=config.contradiction_auto_threshold_lang_no,
                 protect_higher_confidence=config.contradiction_protect_higher_confidence,
+                auto_supersede=config.contradiction_auto_supersede,
             )
 
             if decision == Decision.IGNORE:
@@ -1098,3 +1100,61 @@ def cmd_sleep_contradictions(*, apply: bool = False) -> int:
         print("Dry run — no files written. Re-run with --apply to execute.")
 
     return 0
+
+
+# ---------------------------------------------------------------------------
+# T2 evaluation (plan 08): precision/recall of the NLI scorer on labelled pairs
+# ---------------------------------------------------------------------------
+
+
+def eval_t2(
+    path: Path | str,
+    *,
+    thresholds: tuple[float, ...] = (0.60, 0.85),
+    score_fn: Callable[[str, str], float] | None = None,
+) -> dict[str, Any]:
+    """Score the T2 fixture and report precision/recall per language and threshold.
+
+    Split by language because the default model has no Norwegian training data:
+    a pooled number would hide exactly the finding the gate exists to surface.
+    """
+    import yaml
+
+    if score_fn is None:
+        from ledger.nli import contradiction_score
+
+        model = get_config().contradiction_model
+        score_fn = lambda a, b: contradiction_score(a, b, model_name=model)  # noqa: E731
+
+    entries = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or []
+    scored = [(e, float(score_fn(e["note_a"], e["note_b"]))) for e in entries]
+
+    report: dict[str, Any] = {}
+    for lang in sorted({str(e["lang"]) for e, _ in scored}):
+        rows = [(e["relation"] == "contradiction", s) for e, s in scored if str(e["lang"]) == lang]
+        per_threshold = {}
+        for t in thresholds:
+            tp = sum(1 for pos, s in rows if pos and s >= t)
+            fp = sum(1 for pos, s in rows if not pos and s >= t)
+            fn = sum(1 for pos, s in rows if pos and s < t)
+            per_threshold[f"{t:.2f}"] = {
+                "tp": tp, "fp": fp, "fn": fn,
+                "precision": tp / (tp + fp) if tp + fp else None,
+                "recall": tp / (tp + fn) if tp + fn else None,
+            }
+        report[lang] = {"pairs": len(rows), "thresholds": per_threshold}
+    return report
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(prog="python -m ledger.contradiction")
+    parser.add_argument("--eval", dest="eval_path", required=True, help="T2 fixture YAML")
+    args = parser.parse_args()
+    result = eval_t2(args.eval_path)
+    for lang, block in result.items():
+        for t, m in block["thresholds"].items():
+            p = "n/a" if m["precision"] is None else f"{m['precision']:.3f}"
+            r = "n/a" if m["recall"] is None else f"{m['recall']:.3f}"
+            print(f"lang={lang} pairs={block['pairs']} t={t} precision={p} recall={r} tp={m['tp']} fp={m['fp']} fn={m['fn']}")

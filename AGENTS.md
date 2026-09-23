@@ -279,13 +279,13 @@ importer state locks.
 
 **Contradiction scan** (`ledger sleep contradictions`) uses a local NLI classifier to detect pairs of notes whose content contradicts each other. Three outcomes:
 
-- **auto-supersede** — score ≥ `contradiction_auto_threshold` (default 0.85) + candidate is strictly newer + no confidence inversion → calls `supersede()`, moves old note to `09_archive/`.
-- **review** — score ≥ `contradiction_review_threshold` (default 0.60) but below auto threshold, or ordering is ambiguous, or confidence guard fires, or either note is in `01_identity/` → writes a **conflict note** to `notes/00_inbox/` (filename `conflict__{timestamp}__{stem_a}__{stem_b}.md`, tags `[conflict, nli, review]`, checklist for human resolver).
+- **review** (the default for every contradiction) — score ≥ `contradiction_review_threshold` (default 0.60) → writes a **conflict note** to `notes/00_inbox/` (filename `conflict__{timestamp}__{stem_a}__{stem_b}.md`, tags `[conflict, nli, review]`, checklist for human resolver). List them with `ledger inbox conflicts`.
+- **auto-supersede** — opt-in only (`contradiction_auto_supersede: true`): score ≥ `contradiction_auto_threshold` (default 0.85) + candidate strictly newer + no confidence inversion + neither note `lang:no` → calls `supersede()`, moves old note to `09_archive/`. **Keep it off.** On the T2 fixture (2026-09-23, `python -m ledger.contradiction --eval tests/fixtures/contradiction_t2.yaml`) the default model scored `lang:en` precision **0.862** at both 0.60 and 0.85 (recall 1.0) — below the 0.9 floor for any auto-resolution, i.e. about one auto-archive in seven would retire a note that is still true.
 - **ignore** — score below review threshold → no action.
 
 Hard rules (not config-overridable): identity notes are never auto-superseded; duplicate conflict inbox records for the same pair are not created; re-running on an already-resolved pair is a no-op.
 
-**Norwegian caveat.** The default model (`MoritzLaurer/mDeBERTa-v3-base-mnli-xnli`) is trained on MNLI + XNLI (15 languages); Norwegian is not among them. NLI accuracy on `lang:no` notes is unvalidated. A stricter auto threshold (`contradiction_auto_threshold_lang_no`, default 0.95) applies when either note has `lang:no`. If your corpus is predominantly Norwegian, hand-check ~20 real Norwegian pairs before trusting auto-resolution and rely on the review path until validated.
+**Norwegian caveat.** The default model (`MoritzLaurer/mDeBERTa-v3-base-mnli-xnli`) is trained on MNLI + XNLI (15 languages); Norwegian is not among them. NLI accuracy on `lang:no` notes is unvalidated, so a pair involving a `lang:no` note never auto-resolves, even with auto-supersede on. (The 14 Norwegian T2 pairs scored precision 1.0 / recall 0.875 — too few to trust.)
 
 The scan is off by default (`contradiction_enabled: false`). Enable in `~/.config/ledger/config.yaml` once the NLI model is downloaded and validated.
 
@@ -298,7 +298,7 @@ The scan is off by default (`contradiction_enabled: false`). Enable in `~/.confi
 | `contradiction_neighbors_k` | `8` | `LEDGER_CONTRADICTION_NEIGHBORS_K` |
 | `contradiction_auto_threshold` | `0.85` | `LEDGER_CONTRADICTION_AUTO_THRESHOLD` |
 | `contradiction_review_threshold` | `0.60` | `LEDGER_CONTRADICTION_REVIEW_THRESHOLD` |
-| `contradiction_auto_threshold_lang_no` | `0.95` | `LEDGER_CONTRADICTION_AUTO_THRESHOLD_LANG_NO` |
+| `contradiction_auto_supersede` | `false` | `LEDGER_CONTRADICTION_AUTO_SUPERSEDE` |
 | `contradiction_protect_higher_confidence` | `true` | `LEDGER_CONTRADICTION_PROTECT_HIGHER_CONFIDENCE` |
 
 ### Things3 ⇄ Open Loops Sync

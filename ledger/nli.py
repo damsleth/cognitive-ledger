@@ -10,11 +10,8 @@ NORWEGIAN CAVEAT
 The default model (MoritzLaurer/mDeBERTa-v3-base-mnli-xnli) is trained on
 MNLI + XNLI data covering 15 languages.  Norwegian (Bokmål or Nynorsk) is
 *not* one of the XNLI languages.  Empirical accuracy on Norwegian-language
-notes is therefore unvalidated.  The config key
-``contradiction_auto_threshold_lang_no`` (default 0.95) exists to apply a
-stricter gate before any auto-supersession fires on Norwegian / mixed-language
-content.  If your corpus is predominantly Norwegian, treat NLI scores as noisy
-signals and rely on the review path rather than auto-supersession.
+notes is therefore unvalidated, and a pair involving a Norwegian or
+mixed-language note never auto-resolves: it always goes to the review path.
 
 INJECTION SEAM
 --------------
@@ -95,10 +92,12 @@ def get_nli_pipeline(model_name: str, device: str = "auto") -> Any:
     if device != "auto":
         pipeline_kwargs["device"] = device
 
+    # top_k=None, not return_all_scores=True: transformers 5 silently ignores
+    # the latter and returns only the top label, which crashed score_pair.
     nli_pipe = pipeline(
         "text-classification",
         model=model_name,
-        return_all_scores=True,
+        top_k=None,
         **pipeline_kwargs,
     )
     _NLI_PIPELINE_CACHE[cache_key] = nli_pipe
@@ -151,7 +150,14 @@ def score_pair(
         # concatenated string turns the task into single-sequence classification
         # and can produce noisy contradiction scores.
         result = pipe({"text": premise, "text_pair": hypothesis})
-        raw = result[0] if isinstance(result[0], list) else result
+        # Shape varies by transformers version: one dict, a list of dicts, or
+        # a batch of one (list of lists).
+        if isinstance(result, dict):
+            raw = [result]
+        elif result and isinstance(result[0], list):
+            raw = result[0]
+        else:
+            raw = result
 
     # Normalise label names to lowercase without hyphens.
     scores: dict[str, float] = {}
