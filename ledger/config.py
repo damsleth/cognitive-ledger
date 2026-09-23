@@ -802,6 +802,7 @@ class LedgerConfig:
         "progressive_disclosure",
         "semantic_hybrid",
         "semantic_rerank",
+        "associative",
     )
     """Available retrieval modes. Default: precomputed_index (best MRR + fast).
     compressed_attention was removed after A/B testing showed hit@k regression.

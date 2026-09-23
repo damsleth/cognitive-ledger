@@ -924,6 +924,88 @@ def temporal_as_of(query: str, now_dt: _dt.datetime | None = None) -> _dt.dateti
     return _dt.datetime(year, 7, 1, tzinfo=_dt.timezone.utc)
 
 
+# Associative mode (plan 13): Personalized PageRank over the [[link]] graph.
+# ponytail: no persisted .npz and no entity nodes - the graph is rebuilt per
+# query from candidate bodies (cheap at a few hundred notes). Persist it at
+# sleep, and add YAAMS NER entity nodes, when latency or recall asks for it.
+ASSOC_POOL = 30      # hybrid candidates re-ranked
+ASSOC_SEEDS = 5      # restart distribution: the hybrid top-N, score-weighted
+ASSOC_RESTART = 0.5  # PPR teleport probability
+ASSOC_ITERATIONS = 30
+ASSOC_WEIGHT = 0.2   # boost for mass that arrived through links
+
+
+def _associative_boost(results: list, candidates: list) -> dict[str, float]:
+    """Propagated PPR mass per rel_path, normalised to [0, 1].
+
+    Only mass that *arrived via links* counts (r - restart·seed): the seeds'
+    own restart mass would just re-boost what hybrid already ranked top.
+    Symmetric degree normalisation keeps a mega-hub note from soaking up
+    everything - in a personal corpus the owner links to half of it.
+    """
+    import numpy as np
+    from ledger.parsing.links import extract_links
+
+    rels = [str(result_get(c, "rel_path", "")) for c in candidates]
+    index = {r: i for i, r in enumerate(rels) if r}
+    by_stem = {Path(r).stem: i for r, i in index.items()}
+    n = len(rels)
+    adjacency = np.zeros((n, n), dtype=np.float32)
+    for i, c in enumerate(candidates):
+        for link in extract_links(str(result_get(c, "body", "") or "")):
+            j = by_stem.get(Path(link.target).stem)
+            if j is not None and j != i:
+                adjacency[i, j] = adjacency[j, i] = 1.0
+    degree = adjacency.sum(axis=1)
+    if not degree.any():
+        return {}
+    inv_sqrt = np.where(degree > 0, 1.0 / np.sqrt(np.maximum(degree, 1e-12)), 0.0)
+    walk = adjacency * inv_sqrt[:, None] * inv_sqrt[None, :]
+
+    seed = np.zeros(n, dtype=np.float32)
+    for res in results[:ASSOC_SEEDS]:
+        i = index.get(str(result_get(res, "rel_path", "")))
+        if i is not None:
+            seed[i] = max(float(result_get(res, "score", 0.0)), 0.0)
+    if seed.sum() <= 0:
+        return {}
+    seed /= seed.sum()
+    rank = seed.copy()
+    for _ in range(ASSOC_ITERATIONS):
+        rank = ASSOC_RESTART * seed + (1.0 - ASSOC_RESTART) * (walk @ rank)
+    arrived = np.maximum(rank - ASSOC_RESTART * seed, 0.0)
+    peak = float(arrived.max())
+    if peak <= 0:
+        return {}
+    return {rels[i]: float(arrived[i] / peak) for i in range(n) if arrived[i] > 0}
+
+
+def rank_query_associative(query: str, *, limit: int = 8, **kwargs) -> RetrievalResult:
+    """semantic_hybrid, then re-rank its pool by link-propagated PPR mass."""
+    base = rank_query_semantic_hybrid(query=query, limit=max(limit, ASSOC_POOL), **kwargs)
+    results = list(getattr(base, "results", []))
+    boost: dict[str, float] = {}
+    if results:
+        candidates = (
+            retrieval_lib.build_candidates_with_archive()
+            if kwargs.get("as_of") is not None
+            else retrieval_lib.build_candidates(use_cache=True)
+        )
+        boost = _associative_boost(results, candidates)
+    for res in results:
+        extra = ASSOC_WEIGHT * boost.get(str(result_get(res, "rel_path", "")), 0.0)
+        if extra:
+            res.score = float(res.score) + extra
+            res.reasons = list(res.reasons) + [f"assoc=+{extra:.3f}"]
+    results.sort(key=lambda r: -float(r.score))
+    base.results = results[:limit]
+    base.retrieval_mode = "associative"
+    # Empty boost = no link edges or no seeds: this *is* plain semantic_hybrid.
+    base.effective_retrieval_mode = "associative" if boost else "semantic_hybrid"
+    base.shortlist_size = len(results)
+    return base
+
+
 def rank_query(
     query: str,
     *,
@@ -945,6 +1027,21 @@ def rank_query(
     mode = resolve_retrieval_mode(retrieval_mode)
     if mode == "semantic_hybrid":
         result = rank_query_semantic_hybrid(
+            query=query,
+            scope=scope,
+            limit=limit,
+            aliases_path=_aliases_path(aliases_path),
+            now_dt=now_dt,
+            embed_backend=embed_backend,
+            embed_model=embed_model,
+            prf_enabled=prf_enabled,
+            load_embeddings_module=load_embeddings_module,
+            resolve_embed_model=resolve_embed_model,
+            as_of=as_of,
+            changed_since=changed_since,
+        )
+    elif mode == "associative":
+        result = rank_query_associative(
             query=query,
             scope=scope,
             limit=limit,
