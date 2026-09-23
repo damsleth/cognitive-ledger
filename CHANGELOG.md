@@ -11,6 +11,12 @@
   warns.
 
 ### Fixed
+- **The mandatory retrieval gate actually runs.** `scripts/ab_gate.sh` (and so
+  `.github/workflows/retrieval-gate.yml`) named no corpus. With no user config
+  — always the case in CI — the notes-dir guard refused to start, and the
+  script reported the resulting exit 1 as "UNKNOWN exit code". The gate never
+  measured anything. It now runs against the fixture corpus with the
+  corpus-relative cases file; `CORPUS`/`CASES` still override.
 - **A lone concept word in a memory's title no longer outranks the body.**
   `claude_memory.classify` returned on first match with the title check first,
   so one marker in a kebab-case slug beat every other signal — the same shape
