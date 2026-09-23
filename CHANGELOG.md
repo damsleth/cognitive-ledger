@@ -11,6 +11,13 @@
   warns.
 
 ### Fixed
+- **A lone concept word in a memory's title no longer outranks the body.**
+  `claude_memory.classify` returned on first match with the title check first,
+  so one marker in a kebab-case slug beat every other signal — the same shape
+  that once filed a naming-disambiguation fact as a concept. A title marker now
+  wins over open-work language only when the body also uses concept language;
+  with no competing signal it still decides. Reclassifies 0 of 136 live memory
+  files: a guard, not a behaviour change.
 - **The stale-index warning no longer fires on notes the index never embeds.**
   It scanned every folder, but the index covers only facts, preferences, goals,
   loops and concepts — so every inbox or archive note, including each cron

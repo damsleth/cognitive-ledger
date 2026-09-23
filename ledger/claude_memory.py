@@ -242,10 +242,14 @@ def classify(claude_type: str, name: str, body: str) -> Classification:
         # Who the user is → stable fact, from the user.
         return Classification("facts", "user", "user → fact (about the user)")
 
-    # The title is the strongest signal: an "architecture"/"philosophy" note
-    # is a concept even if its body mentions follow-up work.
-    if _TITLE_CONCEPT_MARKERS.search(name_l):
-        return Classification("concepts", "assistant", "concept marker in title → concept")
+    # A title marker outranks open-work language only when the body agrees.
+    # Alone it is one word in a slug, and letting it beat every other signal is
+    # how a single loose marker ("convention") once filed a disambiguation fact
+    # as a concept. With no competing signal it still decides: the body-marker
+    # check below also sees the title.
+    body_l = body.lower()
+    if _TITLE_CONCEPT_MARKERS.search(name_l) and _CONCEPT_MARKERS.search(body_l):
+        return Classification("concepts", "assistant", "concept marker in title + body → concept")
 
     if ctype == "project" and _LOOP_MARKERS.search(text):
         return Classification("loops", "assistant", "project + open-work markers → loop")
