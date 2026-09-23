@@ -255,6 +255,7 @@ ledger sleep sync --check && ledger sleep sync --apply
 ledger sleep sleep
 ledger sleep lint
 ledger sleep index
+ledger sleep links                     # propose [[links]] for notes changed since last sleep (--all, --apply)
 ledger sleep contradictions --check    # dry-run NLI contradiction scan (requires contradiction_enabled=true)
 ledger sleep contradictions --apply    # execute: auto-supersede or write conflict notes to 00_inbox
 ledger migrate bitemporal --check   # preview valid_from / valid_to back-fill
@@ -276,6 +277,8 @@ ledger inbox cleanup --apply   # reap
 Safe because this is an explicit maintenance sweep, not the write path. Expect
 locks held by the running process to survive, including timeline, index, or
 importer state locks.
+
+**Link proposals** (`ledger sleep links`) suggest `[[links]]` between related notes from the vectors already in the semantic index (no model load): top 5 neighbours with cosine in [0.80, 0.97), both directions, minus links that exist. Above 0.97 a pair is a near-duplicate for `sleep duplicates`, not a link. Dry run by default; `--apply` appends `- [[stem]]` under `## Links`, bumps `updated`, and logs a `linked` timeline event — which the briefing does not count as activity. Links only: nothing rewrites what a note says.
 
 **Contradiction scan** (`ledger sleep contradictions`) uses a local NLI classifier to detect pairs of notes whose content contradicts each other. Three outcomes:
 

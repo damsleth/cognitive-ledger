@@ -85,15 +85,15 @@ Stage 1 (04-05 COMPLETE; active plans below):
 Stage 2 (medium bets):
   08 contradiction→open-loop  [COMPLETE 2026-09-23: T2 en precision 0.862 → advisory-only; archived]
   09 attribute-slot-model     [COMPLETE 2026-09-23: ledger side shipped, NER suggestion → yaams; archived]
-  10 ebbinghaus-reinforcement [gate: T4, needs 01]
-  11 amem-link-generation     [needs sleep pipeline]
+  10 ebbinghaus-reinforcement [BLOCKED 2026-09-23: 1 retrieval_hit in 133 signals; see plan]
+  11 amem-link-generation     [COMPLETE 2026-09-23: `ledger sleep links`, neutral gate; archived]
   12 provenance-weighted-confidence  [COMPLETE, archived]
 
 Stage 3 (larger bets — only behind proven gates):
   13 associative-ppr-retrieval [gate: T5, needs 01 multi-hop; touches yaams NER]
   14 hierarchical-consolidation [gate: T6, needs 01; depends on 11 link infra]
   15 amem-memory-evolution      [proposal-only; builds on 11]
-  16 umem-thompson-sampling     [needs 10 stable first]
+  16 umem-thompson-sampling     [BLOCKED behind 10]
 ```
 
 **Hard gates that change the plan** (from report "Benchmarks that change the plan"):

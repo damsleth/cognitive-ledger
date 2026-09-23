@@ -34,3 +34,7 @@ Moderate — exploration costs immediate precision by design. Contained: default
 
 ## Done when
 Semantic-aware Thompson exploration available behind `LEDGER_EXPLORE_RATE` (default 0.0), reorders only within the uncertainty band, logs exploration as signals feeding Plan 10; A/B shows no meaningful general regression; explore/exploit trade-off documented. Default stays off pending longitudinal evidence.
+
+## Status — 2026-09-23: blocked (precondition unmet)
+
+Needs Plan 10 stable first, and Plan 10 is blocked on data: the live ledger has 1 `retrieval_hit` and 0 `preference_applied` among 133 signals, and `score_weight_signal` is 0.0 by the 2026-06-20 A/B decision. Exploration against a signal that is not applied to ranking explores nothing. Unblocks with Plan 10.
