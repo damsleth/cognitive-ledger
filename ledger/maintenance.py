@@ -38,7 +38,7 @@ from ledger import timeline as timeline_lib
 TAG_PATTERN = re.compile(r"^[a-zæøå][a-zæøå0-9_-]*$")
 TIMESTAMP_PATTERN = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")
 TIMELINE_LINE_PATTERN = re.compile(
-    r"^([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z) \| (created|updated|archived|deleted|closed|sleep) \| (.+?) \| (.*)$"
+    r"^([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z) \| (created|updated|archived|deleted|closed|sleep|linked) \| (.+?) \| (.*)$"
 )
 
 from ledger.schema_values import (
