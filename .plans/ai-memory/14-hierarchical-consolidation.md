@@ -40,3 +40,19 @@ Measure: compression ratio (synthesis tokens / child tokens) and information ret
 
 ## Done when
 Sleep builds a regenerable synthesis layer (clustered, child-linked, staleness-hashed, never-hand-edited, never a supersedes target); collapsed-tree retrieval available but browse-only unless T6 retention ≥90%; compression/retention numbers recorded.
+
+## Status — 2026-09-23: clustering slice measured; synthesis blocked on an LLM backend
+
+**Blocked:** `synth_backend` is `dummy` in the live config — no model to write synthesis notes. Configuring one (e.g. the claude CLI adapter) means editing `~/.config/ledger/config.yaml` and spending ~60 model calls; that is the owner's decision, not a default to flip.
+
+**Measured (no LLM):** average-linkage agglomerative clustering, cosine distance, over the 554 live bge-m3 vectors (archive excluded):
+
+| distance | clusters | singletons | clusters ≥3 | notes covered by ≥3 |
+|---|---|---|---|---|
+| 0.35 | 331 | 205 | 48 | 193 |
+| **0.45** | 170 | 76 | **58** | **406** |
+| 0.55 | 38 | 10 | 22 | 532 (top two: 132, 114 — too coarse) |
+
+At 0.45 the clusters are coherent topics, not one mega-cluster: NOCOS Azure operations (41), YAAMS autoresearch (27 — seven dated `yaams_autoresearch_junXX` run notes, exactly what a synthesis node should roll up), NOCOS 3.0 (24), owa tooling (20). So T6 is not dead on structure; flat clustering is enough, no UMAP/GMM.
+
+**Next when unblocked:** synthesise the 58 clusters at 0.45 into `07_synthesis/` behind the invariants above, then T6 (retention on the live cases, synthesis-only slice). Start with the autoresearch cluster — its children are near-duplicates by date, the cleanest retention test.

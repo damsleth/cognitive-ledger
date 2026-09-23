@@ -40,3 +40,7 @@ Auto-apply remains disabled regardless of results. A future plan may enable auto
 
 ## Done when
 Evolution *proposals* are generated as reviewable diffs during sleep, never auto-applied, scoped to Context sections only, with a drift-detection eval fixture demonstrating the harness can catch a bad edit. Auto-apply stays off.
+
+## Status — 2026-09-23: not started
+
+Its deliverable is a drift-detection eval that does not exist yet, plus an LLM re-summariser, and `synth_backend` is `dummy`. Both are plan-sized. It also builds on Plan 14's staleness machinery, which is blocked on the same backend. Start after Plan 14.
