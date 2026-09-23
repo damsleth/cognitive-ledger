@@ -23,6 +23,7 @@ LEDGER_NOTES_GITIGNORE_LINES = (
     "08_indices/.session_baseline",
     "08_indices/.last_dirty_paths_hash",
     "08_indices/note_index.json",
+    ".smart-env/",  # embedding index: rebuildable, binary, several MB
 )
 
 # Minimal template content (generated inline, no external file dependency)
