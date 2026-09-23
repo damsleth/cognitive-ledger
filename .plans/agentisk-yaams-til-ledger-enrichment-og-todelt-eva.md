@@ -189,7 +189,7 @@ Når forkortelseslanen fungerer, generaliseres den samme discover -> classify ->
 - [x] Reconcile stale plan evidence before coding. In particular, `.plans/ai-memory/06-bitemporal-event-time.md` still says YAAMS event-time wiring is missing, while `enrich_candidate_event_time()` and its tests now implement the source-derived `valid_from` path. Mark implemented substeps as done; retain still-open temporal query/ranking work. _(2026-08-30: plan 06 + index reconciled — (a)/(c) shipped, (b) auto-as-of open.)_
 - [x] Freeze a consistent read-only YAAMS scenario with SQLite backup semantics, not a raw file copy while WAL writes may be active. Keep the private DB outside Git. _(2026-08-30: `yaams scripts/promotion_freeze.py` → `~/brain/promotion_fixture.db`.)_
 - [x] Write a non-sensitive scenario manifest containing DB schema version, file hash, item count, max `ingested_at`, max raw row/item boundary, source counts, candidate counts, query-feedback hash, YAAMS commit, ledger commit and config hashes with secrets removed. _(2026-08-30: `yaams scripts/promotion_scenario.json`.)_
-- [ ] Define train/dev/holdout splits before evaluating a new design:
+- [x] Define train/dev/holdout splits before evaluating a new design: _(shipped in yaams `22e6b6f`, `scripts/promotion_splits.py`: thread-grouped, hash-assigned 80/10/10 so a group never changes split on re-freeze; ingestion bound enforced by the fixture cursor. `--check` OK 2026-09-23.)_
   - time split by `ingested_at`, not source `timestamp`, so late-arriving historic data is included exactly once;
   - entity/thread grouping to prevent near-identical messages leaking across splits;
   - a frozen holdout that no proposer prompt or tuning agent sees.
@@ -452,6 +452,13 @@ Each PR must update tests in the owning repo. Cross-repo behavior needs matching
 - Letting synthetic judge votes activate or train live ranking without human validation.
 - Auto-resolving contradictions or rewriting existing notes during the first rollout.
 - Treating fluent candidate prose as evidence of truth.
+
+## Status 2026-09-23 (reconciled against yaams)
+
+- **PR 1** (audit + contract) — yaams `2899ad7`. **PR 2** (abbreviation discovery + Phase 0 splits) — `22e6b6f`. **PR 3** (run state: `promotion_runs` migration 0008, stage machine, `promote export --run-id [--jsonl]`) — `dc81c9c`; all Phase 1 candidate fields exist in the live DB (`run_id, candidate_schema_version, proposed_action, target_path, evidence_map, generator_confidence, stage, gate_status`).
+- `promotion_freeze.py --check` and `promotion_splits.py --check` both pass on the frozen fixture (87,718 items).
+- **Phase 0 exit condition** ("two consecutive baseline runs identical") is not yet checkable: no proposer run exists to repeat until PR 4.
+- **Blocked: PR 4 needs the abbreviation gold set labelled by a human.** `~/brain/feed/eval/promotion_abbrev_worksheet.csv` has 130 rows and every label column (`relation_type, long_form, context, notes`) is empty. A model-labelled gold set would be exactly the synthetic-verdict-as-truth confusion this plan forbids, so this waits for the owner.
 
 ## Next action
 
