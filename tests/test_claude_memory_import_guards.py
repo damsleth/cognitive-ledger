@@ -63,6 +63,19 @@ class TestClassify(unittest.TestCase):
         cls = classify("project", "migrate-outlook-addin", "TODO: next step is to migrate the RG")
         self.assertEqual(cls.note_type, "loops")
 
+    def test_lone_title_marker_does_not_outrank_open_work(self):
+        """One word in a slug must not beat the body's own evidence."""
+        cls = classify("project", "retrieval-architecture", "TODO: follow-up to wire the reranker")
+        self.assertEqual(cls.note_type, "loops")
+
+    def test_title_marker_corroborated_by_body_still_wins(self):
+        cls = classify(
+            "project",
+            "retrieval-architecture",
+            "The architecture has three tiers. Next step: document tier 2.",
+        )
+        self.assertEqual(cls.note_type, "concepts")
+
 
 class TestExistingExternalIds(unittest.TestCase):
     def test_indexes_typed_notes_and_ignores_inbox(self):
