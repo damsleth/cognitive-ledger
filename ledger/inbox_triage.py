@@ -584,5 +584,15 @@ def run_interactive_triage(notes_dir: Path | None = None) -> int:
     )
     for err in summary.get("errors", []):
         print(f"  ! {err}")
-    print("Run `ledger sleep index` to refresh the tier-2 index.")
+    if summary["accepted"]:
+        # Promoted notes are unreachable in semantic modes until embedded, so
+        # rebuild now instead of leaving a stderr hint to act on. The triage is
+        # already applied; a failed build (missing deps, MPS OOM) must only
+        # warn, never lose it.
+        print("Refreshing the semantic index for promoted notes...")
+        try:
+            from ledger.maintenance import _generate_semantic_index
+            _generate_semantic_index()
+        except Exception as exc:  # noqa: BLE001
+            print(f"WARN: index refresh failed ({exc}); run `ledger sleep index`.")
     return 0
