@@ -57,6 +57,9 @@ SLEEP_UNLOGGED_CHANGE_THRESHOLD = 50
 SLEEP_DRIFT_STATES = frozenset({"state_invalid", "timeline_rewound"})
 
 
+_ATTRIBUTE_SLOT_PATTERN = re.compile(r"^[a-z0-9æøå][a-z0-9æøå_.-]*$")
+
+
 @dataclass
 class LintCounters:
     errors: int = 0
@@ -766,6 +769,13 @@ def _lint_note(path: Path, counters: LintCounters) -> None:
     # Applicable to fact-like types (01_identity, 02_facts, 03_preferences,
     # 04_goals, 06_concepts, 09_archive). 00_inbox notes are exempt.
     _lint_bitemporal(path, frontmatter, fm_raw_value, counters)
+
+    # --- Attribute slot (plan 09): optional; when present, a lowercase slug
+    # so two notes about the same slot collide on an exact string match.
+    slot = str(frontmatter.get("attribute", "") or "").strip()
+    if slot and not _ATTRIBUTE_SLOT_PATTERN.match(slot):
+        _lint_error(path, f"invalid attribute slot (want a lowercase slug like `employer` or `kim.residence`): {slot}")
+        counters.errors += 1
 
 
 def _lint_timeline(timeline: Path, counters: LintCounters) -> None:

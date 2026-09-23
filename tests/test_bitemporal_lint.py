@@ -398,3 +398,16 @@ def test_archive_note_with_valid_bitemporal_passes(tmp_path):
         reset_config()
 
     assert rc == 0
+
+
+@pytest.mark.parametrize("slot,errors", [("residence", 0), ("jan.employer", 0), ("Home City", 1)])
+def test_attribute_slot_must_be_a_lowercase_slug(tmp_path, slot, errors):
+    config = _make_temp_config(tmp_path)
+    try:
+        note = config.ledger_notes_dir / "02_facts" / "fact__slot.md"
+        _write(note, f"---\n{_BASE_FM}attribute: {slot}\n---\n\n# A fact\n\n## Statement\n\nX.\n")
+        counters = maintenance.LintCounters()
+        maintenance._lint_note(note, counters)
+        assert counters.errors == errors
+    finally:
+        reset_config()
