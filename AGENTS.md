@@ -64,12 +64,18 @@ If none apply: don't write. Noise kills retrieval.
 pipx install cognitive-ledger
 ledger import obsidian init --vault /path/to/obsidian-vault
 ledger import obsidian import --vault /path/to/obsidian-vault
-ledger import obsidian bootstrap --root ~/Code/notes
+ledger import obsidian bootstrap --vault /path/to/obsidian-vault
 ledger import obsidian watch --vault /path/to/obsidian-vault
 ledger import obsidian queue sync --vault /path/to/obsidian-vault
 ledger import obsidian doctor --vault /path/to/obsidian-vault
 ledger import obsidian daemon start|status|stop --vault /path/to/vault   # macOS
 ```
+
+The drop-in writes a **standalone ledger inside the vault**
+(`<vault>/cognitive-ledger/notes/`), not into `ledger_notes_dir`. It is for
+vaults with no separate ledger. Where a ledger already exists and YAAMS indexes
+the vault, do not run it against that vault — it would start a second,
+parallel ledger.
 
 ### Retrieve & Eval
 
