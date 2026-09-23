@@ -668,9 +668,10 @@ def notes_newer_than_index(target: str = "ledger") -> list[str]:
     if not notes_dir.is_dir():
         return []
     stale: list[str] = []
-    for note in notes_dir.glob("*/*.md"):
-        if note.parent.name == "08_indices":
-            continue
+    # Only the folders the index actually embeds. Scanning every folder made
+    # inbox and archive notes - which no rebuild will ever embed - trip the
+    # warning permanently, so it cried wolf on every cron ingest summary.
+    for note in collect_ledger_notes():
         try:
             mtime = dt.datetime.fromtimestamp(note.stat().st_mtime, tz=dt.timezone.utc)
         except OSError:
