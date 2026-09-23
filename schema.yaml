@@ -188,6 +188,7 @@ timeline:
     - deleted    # removed entirely
     - closed     # loop resolved (alternative to updated for loops)
     - sleep      # consolidation marker
+    - linked     # `sleep links --apply` added [[links]]; not counted as activity
   timestamp_format: "ISO 8601 UTC"
   # Optional activity classification on JSONL events (not in markdown format)
   activity_types:

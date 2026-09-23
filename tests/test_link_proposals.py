@@ -52,3 +52,11 @@ def test_appends_to_an_existing_links_section(corpus):
     lp.apply_link(lp.LinkProposal("notes/02_facts/fact__a.md", "notes/02_facts/fact__b.md", 0.9), "t")
     text = path.read_text(encoding="utf-8")
     assert "## Links\n\n- [[fact__far]]\n- [[fact__b]]\n\n## Notes" in text
+
+
+def test_timeline_lint_accepts_linked_events():
+    """`sleep links --apply` writes action 'linked'; lint used to call it invalid format."""
+    from ledger.maintenance import TIMELINE_LINE_PATTERN
+
+    line = "2026-09-23T17:21:39Z | linked | notes/02_facts/fact__a.md | sleep links: +fact__b"
+    assert TIMELINE_LINE_PATTERN.match(line)

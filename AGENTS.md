@@ -513,7 +513,7 @@ Pattern: `{type}__{slug}.md` where slug is lowercase with underscores.
 ```
 
 Timeline format: `{ISO timestamp} | {action} | {path} | {description}`
-Actions: created, updated, archived, deleted, closed, sleep
+Actions: created, updated, archived, deleted, closed, sleep, linked (written only by `ledger sleep links --apply`)
 
 ### Templates
 
