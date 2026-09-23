@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import platform
 import sys
 from pathlib import Path
@@ -37,13 +38,16 @@ def run_doctor(config: ObsidianLedgerConfig) -> tuple[int, list[str]]:
     else:
         lines.append("warn: .obsidian not found; treating root as a generic markdown note base")
 
-    try:
-        config.ledger_root.mkdir(parents=True, exist_ok=True)
-        probe = config.ledger_root / ".write_probe"
-        probe.write_text("ok", encoding="utf-8")
-        probe.unlink(missing_ok=True)
-        lines.append("ok: ledger root is writable")
-    except OSError:
+    # A diagnostic must not mutate the vault: probing by mkdir left an empty
+    # `cognitive-ledger/` behind in vaults that were never initialized.
+    # Check the nearest existing ancestor instead: "could init create it?"
+    target = config.ledger_root
+    while not target.exists() and target != target.parent:
+        target = target.parent
+    if os.access(target, os.W_OK):
+        suffix = "" if config.ledger_root.exists() else " (not initialized; run `init`)"
+        lines.append(f"ok: ledger root is writable{suffix}")
+    else:
         errors += 1
         lines.append("error: ledger root is not writable")
 
