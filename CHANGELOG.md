@@ -3,6 +3,12 @@
 ## Unreleased
 
 ### Added
+- **`ledger sleep links`** proposes `[[links]]` between related notes, using
+  the vectors already in the semantic index (no model load): top 5 neighbours
+  at cosine 0.80–0.97, both directions, skipping links that exist and
+  near-duplicates. Dry run by default; `--apply` writes them under `## Links`.
+  Floor calibrated on the live corpus: 74 proposals across 67 of 554 notes.
+  Added to the sleep checklist as step 5d.
 - **`attribute` frontmatter slot, and the contradiction scan adjudicates it.**
   An optional lowercase slug naming the state a note fills (`employer`,
   `kim.residence`, `jan.employer`). Two live notes with the same slot cannot
