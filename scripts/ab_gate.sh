@@ -3,9 +3,15 @@
 # Run from repo root: bash scripts/ab_gate.sh
 # Exit 0/3 = pass; exit 2/4 = fail.
 # ponytail: gate script; nonzero on regression or invalid setup, zero on win/tie.
-CASES="${CASES:-tests/fixtures/retrieval_eval_cases.yaml}"
+# The fixture corpus, never live notes: CI has no user config, and without an
+# explicit notes dir the config guard refuses to start, so the gate used to
+# die with exit 1 before measuring anything. CASES is corpus-relative - the
+# harness requires the cases file to live inside the corpus.
+CORPUS="${CORPUS:-$(pwd)/tests/fixtures/corpus/notes}"
+CASES="${CASES:-08_indices/retrieval_eval_cases.yaml}"
 
-ledger ab run \
+LEDGER_NOTES_DIR="$CORPUS" ledger ab run \
+  --corpus "$CORPUS" \
   --baseline-ref main \
   --candidate-ref HEAD \
   --cases "$CASES" \
