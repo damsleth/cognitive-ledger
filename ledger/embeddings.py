@@ -20,7 +20,7 @@ from typing import Any
 
 import numpy as np
 from ledger.config import get_config
-from ledger.layout import logical_path, note_type_dir
+from ledger.layout import logical_path, note_type_dir, typed_archive_notes
 from ledger.io import append_timeline_entry as append_timeline_entry_safe
 from ledger.parsing import extract_title, parse_frontmatter_text, strip_private_tags
 from ledger.text import sha1_text
@@ -37,7 +37,9 @@ LEDGER_EMBED_NOTE_TYPES = {
     "notes/04_goals": "goal",
     "notes/05_open_loops": "loop",
     "notes/06_concepts": "concept",
+    "notes/09_archive": "archive",
 }
+ARCHIVE_REL_PREFIX = "notes/09_archive/"
 LEDGER_EMBED_LAYOUT_NAMES = ("facts", "preferences", "goals", "loops", "concepts")
 
 INDEX_ITEM_FIELDS = (
@@ -215,6 +217,10 @@ def collect_ledger_notes() -> list[Path]:
         if not note_dir.is_dir():
             continue
         files.extend(sorted(note_dir.glob("*.md")))
+    # Superseded notes too: --as-of widens the candidate pool to the archive,
+    # and in semantic modes a note without a vector scores 0 on the semantic
+    # arm, so an as-of read could never surface what it exists to surface.
+    files.extend(typed_archive_notes(ledger_notes_dir))
     return files
 
 
@@ -908,7 +914,16 @@ def semantic_score_map(
     model: str | None = None,
     source_root: Path | None = None,
     allow_api_on_source: bool = False,
+    include_archive: bool = False,
 ) -> dict[str, Any]:
+    """Cosine scores for *query* against a target index.
+
+    Superseded notes are indexed for ``--as-of`` reads only. Everyone else
+    (``embed search``, which YAAMS uses for promotion dedup; the contradiction
+    scan's neighbour lookup) must not see them: an updated fact would dedup
+    against its own archived predecessor, and every supersession would
+    resurface as a conflict. So they are dropped unless *include_archive*.
+    """
     del source_root  # Reserved for future target-specific query-time checks.
 
     target, backend = _validate_semantic_search_inputs(target, backend, allow_api_on_source)
@@ -965,6 +980,8 @@ def semantic_score_map(
 
     for idx in ranked_rows:
         item = dict(items[idx])
+        if not include_archive and str(item.get("rel_path", "")).startswith(ARCHIVE_REL_PREFIX):
+            continue
         cosine = float(scores[idx])
         item["cosine_similarity"] = cosine
         results.append(item)

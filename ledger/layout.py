@@ -94,6 +94,22 @@ def notes_subdir_path(ledger_notes_dir: Path, subdir: str) -> Path:
     return Path(ledger_notes_dir) / subdir
 
 
+def typed_archive_notes(ledger_notes_dir: Path) -> list[Path]:
+    """Archived notes that carry a typed prefix (``fact__``, ``pref__``, ...).
+
+    `supersede()` only ever archives typed notes, so these are the notes an
+    ``--as-of`` read can mean. The rest of ``09_archive`` is retired inbox
+    capture (cron ingest summaries): no validity window, so an as-of read
+    would treat each as valid for all time and flood the pool. Decided by
+    filename so callers on the query path pay no file reads.
+    """
+    archive = Path(ledger_notes_dir) / "09_archive"
+    if not archive.is_dir():
+        return []
+    prefixes = tuple(layout.prefix for layout in NOTE_LAYOUTS.values())
+    return sorted(p for p in archive.glob("*.md") if p.name.startswith(prefixes))
+
+
 def indices_dir(ledger_notes_dir: Path) -> Path:
     return notes_subdir_path(ledger_notes_dir, INDICES_SUBDIR)
 

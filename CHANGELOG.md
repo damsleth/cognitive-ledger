@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Added
+- **A past year in the query reads the ledger as of that year.** "Where did I
+  live in 2023?" now engages `--as-of 2023-07-01` by itself (announced on
+  stderr; an explicit `--as-of` still wins). Deliberately strict: only a year
+  after "in"/"during"/"i"/"under", and only a past one. Relative cues ("before
+  I moved") are left alone.
+
 ### Changed
 - **`ledger inbox triage` refreshes the semantic index when it promotes notes.**
   In semantic modes a promoted note is unreachable until embedded, and the
@@ -11,6 +18,15 @@
   warns.
 
 ### Fixed
+- **`--as-of` can return archived notes in `semantic_hybrid`.** The default
+  mode draws its semantic scores from the embedding index, which never covered
+  `09_archive/`, so a superseded note scored 0 on the semantic arm and an as-of
+  read could not surface the very note it exists for. Typed archive notes are
+  now embedded (+61 on the live corpus). `semantic_score_map` drops them unless
+  an as-of read asks, so `embed search` — YAAMS promotion dedup — and the
+  contradiction scan see exactly what they saw before. Untyped archive entries
+  (retired ingest summaries) stay out of both the index and the as-of pool.
+
 - **The mandatory retrieval gate actually runs.** `scripts/ab_gate.sh` (and so
   `.github/workflows/retrieval-gate.yml`) named no corpus. With no user config
   — always the case in CI — the notes-dir guard refused to start, and the

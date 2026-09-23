@@ -2,7 +2,8 @@
 #
 # Fixture corpus: tests/fixtures/corpus/
 # Run eval:       LEDGER_ROOT=tests/fixtures/corpus ledger eval --cases tests/fixtures/retrieval_eval_cases.yaml --k 3 --strict-cases
-# Run A/B:        LEDGER_ROOT=tests/fixtures/corpus ledger ab run --baseline-ref main --candidate-ref HEAD --cases tests/fixtures/retrieval_eval_cases.yaml --k 3
+# Run A/B:        bash scripts/ab_gate.sh   (the harness needs the cases file inside the corpus;
+#                 it reads the copy at tests/fixtures/corpus/notes/08_indices/ - keep the two in sync)
 #
 # Case taxonomy:
 #   gen_*       General positive cases (~25) — straightforward query→note, covers all folder types.
@@ -273,6 +274,12 @@
   scope: all
   expected_any:
     - notes/09_archive/fact__employer_2021.md
+
+- query: "Where did Alex live in 2023?"
+  id: temporal_7_year_cue
+  scope: all
+  expected_any:
+    - notes/09_archive/fact__home_city_2023.md
 
 # ── Negative cases ─────────────────────────────────────────────────────────────
 # These queries should NOT match any note above the score threshold.
