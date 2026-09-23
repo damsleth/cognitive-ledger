@@ -2,7 +2,20 @@
 
 ## Unreleased
 
+### Changed
+- **`ledger inbox triage` refreshes the semantic index when it promotes notes.**
+  In semantic modes a promoted note is unreachable until embedded, and the
+  closing "Run `ledger sleep index`" hint left that window open until someone
+  acted on it. It now runs the same build `sleep index` does. The triage is
+  already applied at that point, so a failed build (missing deps, MPS OOM) only
+  warns.
+
 ### Fixed
+- **The stale-index warning no longer fires on notes the index never embeds.**
+  It scanned every folder, but the index covers only facts, preferences, goals,
+  loops and concepts — so every inbox or archive note, including each cron
+  ingest summary, kept the warning on permanently and trained people to ignore
+  it. It now checks exactly the notes `embed build` collects.
 - **`ledger import obsidian doctor` no longer writes to the vault.** It probed
   writability by creating `<vault>/cognitive-ledger/` and a probe file, so
   merely diagnosing a vault that was never initialized left an empty folder

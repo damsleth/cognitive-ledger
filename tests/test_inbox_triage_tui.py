@@ -104,3 +104,45 @@ def test_pilot_toggle_and_commit(notes_dir):
     # two facts promoted, inbox emptied
     assert len(list((notes_dir / "02_facts").glob("*.md"))) == 2
     assert len(list((notes_dir / "00_inbox").glob("*.md"))) == 0
+
+
+def _run_triage_with_summary(monkeypatch, summary, index_fn):
+    """Drive run_interactive_triage past the TUI with a canned summary."""
+    import ledger.inbox_triage as triage
+    import ledger.maintenance as maintenance
+
+    class _FakeApp:
+        def __init__(self, *a, **k):
+            self.summary = summary
+
+        def run(self):
+            pass
+
+    monkeypatch.setattr(triage, "load_candidates_for_triage", lambda _d=None: ["c"])
+    monkeypatch.setattr(triage, "_suggested_types", lambda *a: {})
+    monkeypatch.setattr(triage, "_build_textual", lambda: _FakeApp)
+    monkeypatch.setattr(triage.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(triage.sys.stdout, "isatty", lambda: True)
+    monkeypatch.setattr(maintenance, "_generate_semantic_index", index_fn)
+    return triage.run_interactive_triage()
+
+
+def test_triage_refreshes_index_only_when_notes_were_promoted(monkeypatch):
+    calls = []
+    summary = {"accepted": 2, "rejected": 0, "failed": 0}
+    assert _run_triage_with_summary(monkeypatch, summary, lambda: calls.append(1)) == 0
+    assert calls == [1]
+
+    calls.clear()
+    summary = {"accepted": 0, "rejected": 3, "failed": 0}
+    _run_triage_with_summary(monkeypatch, summary, lambda: calls.append(1))
+    assert calls == []
+
+
+def test_failed_index_refresh_does_not_fail_the_triage(monkeypatch, capsys):
+    def boom():
+        raise RuntimeError("MPS backend out of memory")
+
+    summary = {"accepted": 1, "rejected": 0, "failed": 0}
+    assert _run_triage_with_summary(monkeypatch, summary, boom) == 0
+    assert "run `ledger sleep index`" in capsys.readouterr().out

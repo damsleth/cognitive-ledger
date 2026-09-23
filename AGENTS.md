@@ -103,8 +103,9 @@ candidate pool is drawn from the embedding index first, so a note that was never
 embedded cannot be retrieved at all and an edited one ranks on its old content.
 The failure is bimodal and silent — which makes "I imported it and the query
 still misses" look like bad retrieval rather than a stale index. `ledger query`
-therefore checks note mtimes against the index build time and warns on **stderr**
-(so `--json` output stays clean):
+therefore checks the mtimes of the notes the index embeds (facts, preferences,
+goals, loops, concepts — not inbox, identity or archive) against the index build
+time and warns on **stderr** (so `--json` output stays clean):
 
 ```
 warning: 2 note(s) changed since the semantic index was built (...). In
@@ -115,6 +116,8 @@ ledger sleep index
 
 Rebuild with `ledger sleep index` (which also regenerates the semantic index) or
 `ledger embed build --target ledger`. The check is one `stat` per note.
+`ledger inbox triage` rebuilds by itself when it promotes notes; a failed build
+there only warns, the triage stays applied.
 
 **`LEDGER_EMBEDDINGS_OFFLINE`** — set to `1` or `true` to skip model downloads and use only locally cached sentence-transformer weights (`local_files_only=True`). Useful in air-gapped environments or to avoid accidental downloads during `ledger embed build`. Accepted values: `1`, `true`, `yes`, `on`.
 
