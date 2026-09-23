@@ -37,6 +37,18 @@
   warns.
 
 ### Fixed
+- **Each corpus owns its embedding index; eval and A/B runs no longer overwrite
+  the live one.** The index files lived under `ledger_root/.smart-env` — the
+  code tree once the store moved out — while the manifest lived with the notes.
+  So every notes dir run from one checkout shared one set of index files, and
+  running the A/B harness against the fixture corpus rebuilt over the live
+  index in place (observed 2026-09-23: 615 items → 25 until rebuilt; the test
+  suite also wrote stray indexes there). The index now lives at
+  `<ledger_notes_dir>/.smart-env/`. An existing index is moved there on first
+  use, but only if its recorded `source_root` is this notes dir — the old
+  location was shared, so it may hold another corpus's files. `ledger init`
+  now gitignores `.smart-env/`; **existing stores need `.smart-env/` in their
+  `.gitignore`** or the vectors show up as untracked files.
 - **NLI scoring works on transformers 5.** The pipeline was built with
   `return_all_scores=True`, which transformers 5 silently ignores, returning
   only the top label as a dict; `score_pair` then indexed it as a list and
