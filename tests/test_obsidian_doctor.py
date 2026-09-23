@@ -202,3 +202,17 @@ class TestDoctorReports(unittest.TestCase):
 
 if __name__ == "__main__":
   unittest.main()
+
+
+class TestDoctorIsReadOnly(unittest.TestCase):
+  def test_uninitialized_vault_is_left_untouched(self):
+    """doctor used to mkdir the ledger root just to probe writability."""
+    with TemporaryDirectory() as tmp:
+      vault = Path(tmp) / "vault"
+      (vault / ".obsidian").mkdir(parents=True)
+      config = default_config(vault)
+
+      code, lines = run_doctor(config)
+
+      self.assertFalse(config.ledger_root.exists())
+      self.assertIn("ok: ledger root is writable (not initialized; run `init`)", lines)

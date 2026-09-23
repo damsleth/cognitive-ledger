@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- **`ledger import obsidian doctor` no longer writes to the vault.** It probed
+  writability by creating `<vault>/cognitive-ledger/` and a probe file, so
+  merely diagnosing a vault that was never initialized left an empty folder
+  behind in it. It now checks the nearest existing ancestor with `os.access`
+  and reports an absent ledger root as not yet initialized.
+
 ## 2026-09-17 (0.12.0)
 
 ### Removed
