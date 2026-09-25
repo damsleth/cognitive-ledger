@@ -56,3 +56,9 @@ Sleep builds a regenerable synthesis layer (clustered, child-linked, staleness-h
 At 0.45 the clusters are coherent topics, not one mega-cluster: NOCOS Azure operations (41), YAAMS autoresearch (27 — seven dated `yaams_autoresearch_junXX` run notes, exactly what a synthesis node should roll up), NOCOS 3.0 (24), owa tooling (20). So T6 is not dead on structure; flat clustering is enough, no UMAP/GMM.
 
 **Next when unblocked:** synthesise the 58 clusters at 0.45 into `07_synthesis/` behind the invariants above, then T6 (retention on the live cases, synthesis-only slice). Start with the autoresearch cluster — its children are near-duplicates by date, the cleanest retention test.
+
+## Backend choice — 2026-09-25
+
+**TypeSafe Jev cannot write the synthesis notes.** Its API (yaams `.plans/jev-experiments.md`) returns scores, not text: `noul` answers a [0, 1] per criterion, `choice` a label + probabilities, which is why output tokens are free. Synthesis is generation, so `synth_backend` still needs a generator (`claude -p` via the subprocess adapter, or a local model), ~60 calls for the 58 clusters at 0.45.
+
+**Jev does fit the T6 gate.** Retention = "can this eval query be answered from synthesis nodes alone" is a scoring question: one `noul` per (synthesis note, eval query) with criterion "this note answers the query", at $0.042/M input tokens, cacheable, and a different model family from the generator (so the generator doesn't grade itself). Reuse yaams' planned T0 client (`yaams/jev.py`) rather than a second client here; pin `jev-1.13.0`. Keep the mechanical `ledger eval` synthesis-only slice as the primary gate; Jev retention is the second opinion, calibrated against a human-checked subset before it can veto.
