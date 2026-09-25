@@ -1,6 +1,6 @@
 # AI-Memory Research → Implementation: Orchestration Index
 
-**Source:** `.plans/AI-Memory-Research.md` ("Porting AI-Memory Research into YAAMS + cognitive-ledger") and `.plans/cognitive-ledger-AI-Memory-Research-TODO.md`.
+**Source:** `.plans/ai-memory/AI-Memory-Research.md` ("Porting AI-Memory Research into YAAMS + cognitive-ledger") and `.plans/cognitive-ledger-AI-Memory-Research-TODO.md`.
 
 **What this is:** 16 self-contained implementation plans, each runnable by a single Sonnet subagent inside the `cognitive-ledger` repo (a few also touch the separate `yaams` repo at `/Users/damsleth/code/yaams`). Each plan carries its own report context inline, real file:line anchors, an eval gate, and explicit accept/reject criteria — so a subagent needs *only* its plan file, not the whole report.
 
@@ -85,14 +85,14 @@ Stage 1 (04-05 COMPLETE; active plans below):
 Stage 2 (medium bets):
   08 contradiction→open-loop  [COMPLETE 2026-09-23: T2 en precision 0.862 → advisory-only; archived]
   09 attribute-slot-model     [COMPLETE 2026-09-23: ledger side shipped, NER suggestion → yaams; archived]
-  10 ebbinghaus-reinforcement [BLOCKED 2026-09-23: 1 retrieval_hit in 133 signals; see plan]
+  10 ebbinghaus-reinforcement [BLOCKED 2026-09-23: 1 retrieval_hit in 133 signals; parked: only 3 cited tier2 rows in yaams, see plan]
   11 amem-link-generation     [COMPLETE 2026-09-23: `ledger sleep links`, neutral gate; archived]
   12 provenance-weighted-confidence  [COMPLETE, archived]
 
 Stage 3 (larger bets — only behind proven gates):
   13 associative-ppr-retrieval [KILLED 2026-09-23: live hit@1 0.783→0.652; reverted 7869218; archived]
   14 hierarchical-consolidation [gate: T6, needs 01; depends on 11 link infra]
-  15 amem-memory-evolution      [proposal-only; builds on 11]
+  15 amem-memory-evolution      [KILLED 2026-09-25: highest drift risk, no evidence of value (11 was neutral); archived]
   16 umem-thompson-sampling     [BLOCKED behind 10]
 ```
 
@@ -103,7 +103,7 @@ Stage 3 (larger bets — only behind proven gates):
 
 ## The 16 plans
 
-Completed plans 01–07 and 12 are archived under `.plans/done/ai-memory/`.
+Completed plans 01–09, 11–13 and killed plan 15 are archived under `.plans/done/ai-memory/`.
 Plans 01–03 shipped in `a481e5c`, plan 04 passed T1 and shipped in `395c74d`,
 plan 05 is captured in the contributor/config documentation, and plan 12
 shipped off by default after a quality-tied A/B in v0.9.0.

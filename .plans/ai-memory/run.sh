@@ -22,9 +22,9 @@ REPO="$(cd "$PLANS_DIR/../.." && pwd)"   # cognitive-ledger repo root
 stage_plans () {
   case "$1" in
     0) echo "" ;;
-    1) echo "06 07" ;;
-    2) echo "08 09 10 11" ;;
-    3) echo "13 14 15 16" ;;
+    1) echo "" ;;
+    2) echo "10" ;;
+    3) echo "14 16" ;;
     *) return 1 ;;
   esac
 }
