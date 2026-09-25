@@ -70,4 +70,3 @@ All deferred follow-ups also done in `bd70d3c` + `9e5bcce`:
 - Strip private fenced content from every index, prompt, JSON output, and web/search snippet.
 - Update README/CHANGELOG only for shipped user-facing behavior, not for plan edits.
 - Preserve existing uncommitted work unless the active task explicitly owns it.
-- [ ] Scrub 6 agent Co-authored-by trailers from git history: branch backup/pre-history-scrub-$(date +%F), git filter-repo --message-callback (see ~/code/REPO-HEALTH.md), then force-push. Worktree must be clean first.
