@@ -38,3 +38,7 @@ Semantic-aware Thompson exploration available behind `LEDGER_EXPLORE_RATE` (defa
 ## Status — 2026-09-23: blocked (precondition unmet)
 
 Needs Plan 10 stable first, and Plan 10 is blocked on data: the live ledger has 1 `retrieval_hit` and 0 `preference_applied` among 133 signals, and `score_weight_signal` is 0.0 by the 2026-06-20 A/B decision. Exploration against a signal that is not applied to ranking explores nothing. Unblocks with Plan 10.
+
+## Unblock path — 2026-09-25
+
+The `retrieval_hit` count will not grow on its own: real recall goes through the yaams MCP server, not `ledger query --pick`, so ledger-side capture never fires. The realistic source is yaams itself. yaams records which items an answer cited (`item-usage-signals`, `stats --usage`), and since 2026-09-25 its `tier2_ledger` source is current again (573 items, `ingest.tier2_ledger` added to the live config). A small bridge that emits a ledger `retrieval_hit` for each cited `tier2_ledger` item (mapping `source_id` → `notes/...` path, `synthetic: false` since a real answer used it) would produce the events this plan ramps on. Measured 2026-09-25 (read-only on `~/brain/feed/data.db`): `query_results` holds only **3 cited `tier2_ledger` rows** across all time (1,117 surfaced), so the bridge would yield a trickle, not the ~25 events T4 needs. Treat this plan as **parked**: build the bridge only if yaams citation volume grows (its own `item-usage-signals` plan waits on the same MCP traffic), and revisit once cited `tier2_ledger` rows pass ~25.
