@@ -43,10 +43,17 @@ Shipped in the yaams repo (verified 2026-06-17 against `~/code/yaams` history):
   `promote.conflict_detection` (yaams CHANGELOG). `35-…-roadmap.md` was just
   their index page.
 
-Open (no shipping evidence — re-author the plan if resuming):
-- ❓ `41-web-interface-v1.md` — Phase 4 graph view + Phase 5 polish. Last web
-  entry is 0.3.1 (Phase 3 backlinks); no graph view shipped. Includes the
-  `Corpus._rebuild_link_maps()` private-link-stripping fix.
+- ✅ `41-web-interface-v1.md` — Phase 4 graph view + Phase 5 polish shipped in
+  `b012ef5` / `d23beaf`; `Corpus._rebuild_link_maps()` strips private fences
+  before link extraction. Plan in `done/` (verified 2026-09-25).
+
+## Active queue (reviewed 2026-09-25)
+
+- `agentisk-yaams-til-ledger-enrichment-og-todelt-eva.md` — PR 1-3 shipped;
+  PR 4 waits on an owner skim of the agent-labelled abbreviation gold set.
+- `cognitive-ledger-AI-Memory-Research-TODO.md` → `ai-memory/00-INDEX.md` —
+  plan 14 waits on a `synth_backend` decision; 10/16 parked on signal data;
+  15 killed. The source report moved to `ai-memory/AI-Memory-Research.md`.
 
 ## Memanto-inspired plans — DONE (2026-06-17, archived to `done/`)
 
