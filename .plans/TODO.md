@@ -54,6 +54,23 @@ Shipped in the yaams repo (verified 2026-06-17 against `~/code/yaams` history):
 - `cognitive-ledger-AI-Memory-Research-TODO.md` → `ai-memory/00-INDEX.md` —
   plan 14 waits on a `synth_backend` decision; 10/16 parked on signal data;
   15 killed. The source report moved to `ai-memory/AI-Memory-Research.md`.
+- `codebase-review-2026-10-08.md` — bugfix batches, run in order:
+  1. Gate (B1–B3). B1: an A/A A/B run reports "beneficial"; a quality tie must return 3. B1 blocks every other gated plan here.
+  2. Privacy and safety (B4–B8). B4: the documented ```` ```private ```` fence is never stripped. B5: `--doctor --fix` unlinks held locks.
+  3. Lint and doctor (B9–B12).
+  B11 note: the bitemporal back-fill exists but was never applied, and 591 notes are pending.
+  The plan also lists owner ops and decisions D1–D4 (register `ledger mcp`, `synth_backend`, identity limit, CI embeddings).
+- `improvement-plan-2026-10-08.md`: I1–I7, ordered by leverage. Start after B1.
+  - I1: the CI retrieval gate has never run (it triggers on PRs only, and there are none); make it run on push.
+  - I2: negatives can fail the gate.
+  - I3: live eval suite with negatives, Norwegian, loop and identity cases.
+  - I4: identity asymmetry in `semantic_hybrid`.
+  - I5: schema enum test plus lint rules.
+  - I6: compact MCP replies.
+  - I7: fresh RRF/PRF/signal A/B baselines.
+
+> 2026-10-08: the "`.plans/` is gitignored" note above is stale. Active plans are
+> tracked; only `ab_results/`, `done/` and `DONE.md` are ignored.
 
 ## Memanto-inspired plans — DONE (2026-06-17, archived to `done/`)
 
