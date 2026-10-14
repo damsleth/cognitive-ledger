@@ -3,6 +3,12 @@
 ## Unreleased
 
 ### Changed
+- **Negative eval cases can fail the A/B gate.** `ledger ab run` compared
+  only hit@1, hit@k and MRR, so a change that started returning confident
+  junk for unanswerable (`expected_none`) queries still passed. A rise in
+  `false_positive_rate` is now a regression, and a drop counts as an
+  improvement. The comparison only happens when both refs measured negatives,
+  and the rate gets its own row in the report.
 - **MCP ranking tools reply compactly by default.** `ledger_query`,
   `ledger_recall_as_of` and `ledger_changed_since` return `query`, `scope`,
   `effective_retrieval_mode` and `results`.
