@@ -141,6 +141,18 @@ def create_server(*, config=None, allow_write: bool = False, with_yaams: bool = 
             scope = validate_scope(scope, allow_all=False)
             return scrub_for_egress(_write_inbox_note(text, title=title, tags=tags, scope=scope))
 
+        @mcp.tool()
+        def ledger_signal(signal_type: str, note: str = "", query: str = "",
+                          detail: str = "", rating: int | None = None) -> dict:
+            """Log feedback on retrieval (write-gated). Log only on clear evidence:
+            retrieval_hit when a returned note was actually used in your answer;
+            retrieval_miss when a query found nothing useful; correction /
+            affirmation when the user corrects or confirms a note; stale_flag when
+            a note is outdated; preference_applied when a preference note shaped
+            your output; rating (1-10) for an explicit user rating. Never log
+            speculatively. `note` is the result's rel_path (notes/...)."""
+            return _log_signal(signal_type, note=note, query=query, detail=detail, rating=rating)
+
     if with_yaams:
         @mcp.tool()
         def yaams_query(query: str, limit: int = 10) -> dict:
@@ -210,6 +222,39 @@ def _write_inbox_note(text: str, *, title: str = "", tags: str = "", scope: str 
         ledger_notes_dir=cfg.ledger_notes_dir,
     )
     return {"created": str(path), "status": "captured_to_inbox"}
+
+
+# Feedback an agent may report. supersession / contradiction_flagged /
+# llm_judged are written by the ledger itself, never by a client.
+_AGENT_SIGNALS = {
+    "retrieval_hit": "note", "retrieval_miss": "query", "correction": "note",
+    "affirmation": "note", "stale_flag": "note", "preference_applied": "note",
+    "rating": "rating",
+}
+
+
+def _log_signal(signal_type: str, *, note: str = "", query: str = "",
+                detail: str = "", rating: int | None = None) -> dict:
+    """Validate and append one agent-reported signal (channel ``mcp``)."""
+    from ledger.config import get_config
+    from ledger.signals import append_signal
+
+    needs = _AGENT_SIGNALS.get(signal_type)
+    if needs is None:
+        raise ValueError(f"signal_type must be one of: {', '.join(sorted(_AGENT_SIGNALS))}")
+    note = str(note or "").strip()
+    if needs == "note":
+        if not note.startswith("notes/") or ".." in note:
+            raise ValueError("note must be a result rel_path like notes/02_facts/fact__x.md")
+        if not (get_config().ledger_notes_dir / note[len("notes/"):]).is_file():
+            raise ValueError(f"note not found: {note}")
+    if needs == "query" and not str(query or "").strip():
+        raise ValueError("retrieval_miss needs the query that found nothing")
+    if needs == "rating" and rating is None:
+        raise ValueError("rating needs a 1-10 rating")
+    entry = append_signal(signal_type, query=query, note=note, detail=detail,
+                          rating=rating, channel="mcp")
+    return {"logged": entry}
 
 
 def run(allow_write: bool = False, with_yaams: bool = False) -> None:
