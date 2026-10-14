@@ -92,7 +92,7 @@ class LedgerABDecisionTests(unittest.TestCase):
         self.assertEqual(result["decision"], "beneficial")
         self.assertEqual(result["exit_code"], self.ledger_ab.EXIT_BENEFICIAL)
 
-    def test_tie_beneficial_when_latency_within_threshold(self):
+    def test_tie_neutral_when_latency_within_threshold(self):
         result = self.ledger_ab.decide_outcome(
             baseline_quality={"hit1": 0.8, "hitk": 0.9, "mrr": 0.85},
             candidate_quality={"hit1": 0.8, "hitk": 0.9, "mrr": 0.85},
@@ -103,10 +103,10 @@ class LedgerABDecisionTests(unittest.TestCase):
             latency_tol_pct=0.05,
             latency_tol_ms=2.0,
         )
-        self.assertEqual(result["decision"], "beneficial")
-        self.assertEqual(result["exit_code"], self.ledger_ab.EXIT_BENEFICIAL)
+        self.assertEqual(result["decision"], "neutral")
+        self.assertEqual(result["exit_code"], self.ledger_ab.EXIT_NEUTRAL)
 
-    def test_tie_neutral_when_latency_exceeds_threshold(self):
+    def test_tie_regression_when_latency_exceeds_threshold(self):
         result = self.ledger_ab.decide_outcome(
             baseline_quality={"hit1": 0.8, "hitk": 0.9, "mrr": 0.85},
             candidate_quality={"hit1": 0.8, "hitk": 0.9, "mrr": 0.85},
@@ -117,8 +117,9 @@ class LedgerABDecisionTests(unittest.TestCase):
             latency_tol_pct=0.05,
             latency_tol_ms=2.0,
         )
-        self.assertEqual(result["decision"], "neutral")
-        self.assertEqual(result["exit_code"], self.ledger_ab.EXIT_NEUTRAL)
+        self.assertEqual(result["decision"], "regression")
+        self.assertEqual(result["exit_code"], self.ledger_ab.EXIT_REGRESSION)
+        self.assertEqual(result["regressed_metrics"], ["latency_eval_p95"])
 
     def test_retrieval_modes_include_semantic_hybrid(self):
         self.assertIn("semantic_hybrid", self.ledger_ab.RETRIEVAL_MODES)
@@ -515,13 +516,17 @@ class LedgerABSmokeIntegrationTests(unittest.TestCase):
                     str(corpus_dir),
                     "--out-dir",
                     str(out_dir),
+                    # A/A: wide latency tolerance so single-run timing noise
+                    # cannot turn the expected neutral tie into a regression.
+                    "--latency-tol-pct",
+                    "100",
                 ],
                 cwd=str(ROOT),
                 capture_output=True,
                 text=True,
             )
 
-            self.assertIn(process.returncode, {0, 3})
+            self.assertEqual(process.returncode, 3, process.stdout + process.stderr)
 
             json_report = Path(out_dir) / "ab_eval.json"
             md_report = Path(out_dir) / "ab_eval.md"
@@ -568,13 +573,17 @@ class LedgerABSmokeIntegrationTests(unittest.TestCase):
                     str(corpus_dir),
                     "--out-dir",
                     str(out_dir),
+                    # A/A: wide latency tolerance so single-run timing noise
+                    # cannot turn the expected neutral tie into a regression.
+                    "--latency-tol-pct",
+                    "100",
                 ],
                 cwd=str(ROOT),
                 capture_output=True,
                 text=True,
             )
 
-            self.assertIn(process.returncode, {0, 3})
+            self.assertEqual(process.returncode, 3, process.stdout + process.stderr)
             payload = json.loads((Path(out_dir) / "ab_eval.json").read_text(encoding="utf-8"))
             self.assertTrue(payload["settings"]["cold_query"])
             self.assertTrue(payload["baseline"]["latency"]["query"]["cold_query"])
@@ -603,13 +612,17 @@ class LedgerABSmokeIntegrationTests(unittest.TestCase):
                     str(corpus_dir),
                     "--out-dir",
                     str(out_dir),
+                    # A/A: wide latency tolerance so single-run timing noise
+                    # cannot turn the expected neutral tie into a regression.
+                    "--latency-tol-pct",
+                    "100",
                 ],
                 cwd=str(ROOT),
                 capture_output=True,
                 text=True,
             )
 
-            self.assertIn(process.returncode, {0, 3})
+            self.assertEqual(process.returncode, 3, process.stdout + process.stderr)
             payload = json.loads((Path(out_dir) / "ab_eval.json").read_text(encoding="utf-8"))
             self.assertEqual(payload["settings"]["runs"], 1)
             self.assertEqual(payload["settings"]["eval_runs"], 1)
