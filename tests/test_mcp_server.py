@@ -124,6 +124,30 @@ class TestToolsAgainstCorpus:
             _write_inbox_note("will fail", title="Doomed")
         assert not list((ledger.ledger_notes_dir / "00_inbox").glob("note__doomed*.md"))
 
+    def test_query_reply_is_compact_unless_verbose(self, ledger):
+        import json
+
+        server = create_server(config=ledger)
+
+        def reply(args):
+            result = asyncio.run(server.call_tool("ledger_query", args))
+            content = result[0] if isinstance(result, tuple) else result
+            return json.loads(content[0].text)
+
+        compact = reply({"query": "deploy", "limit": 3})
+        verbose = reply({"query": "deploy", "limit": 3, "verbose": True})
+        assert set(compact) == {"query", "scope", "effective_retrieval_mode", "results"}
+        assert compact["results"] and "reasons" not in compact["results"][0]
+        assert "timing" in verbose and "reasons" in verbose["results"][0]
+        assert len(json.dumps(compact)) < len(json.dumps(verbose))
+        assert len(json.dumps(compact)) < 2000
+
+    def test_view_is_validated(self, ledger):
+        server = create_server(config=ledger)
+        with pytest.raises(Exception):
+            asyncio.run(server.call_tool("ledger_changed_since",
+                                         {"query": "deploy", "since": "2026-01-01", "view": "everything"}))
+
     def test_signal_tool_gated_and_validated(self, ledger):
         import json
 

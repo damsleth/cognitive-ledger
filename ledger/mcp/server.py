@@ -41,6 +41,40 @@ def scrub_for_egress(obj: Any) -> Any:
 
 
 MAX_LIMIT = 50
+SNIPPET_CHARS = 300
+_VIEWS = ("index", "context", "detail")
+_COMPACT_KEYS = ("query", "scope", "effective_retrieval_mode", "results")
+
+
+def _rank_reply(payload, *, view: str, verbose: bool) -> dict:
+    """Serialise a ranking for MCP: compact by default, full diagnostics on request.
+
+    The CLI's `query --json` shape is unchanged; this projection is MCP-only.
+    Pool sizes, timing, semantic stats and per-result score reasons cost ~5 KB
+    per 3-result reply and are debugging output, not recall.
+    """
+    from ledger.query import query_result_to_json
+
+    if view not in _VIEWS:
+        raise ValueError(f"view must be one of: {', '.join(_VIEWS)}")
+    out = query_result_to_json(payload, view=view)
+    if verbose:
+        return scrub_for_egress(out)
+    compact = {key: out.get(key) for key in _COMPACT_KEYS}
+    results = []
+    for item in out.get("results", []):
+        item = {k: v for k, v in item.items() if k != "reasons"}
+        snippet = item.get("snippet")
+        statement = str(item.get("statement") or "")
+        if isinstance(snippet, str):
+            # The snippet is usually the statement's opening; don't send it twice.
+            if statement and statement.startswith(snippet.rstrip(" …").strip()[:100]):
+                item.pop("snippet")
+            elif len(snippet) > SNIPPET_CHARS:
+                item["snippet"] = snippet[:SNIPPET_CHARS].rstrip() + "…"
+        results.append(item)
+    compact["results"] = results
+    return scrub_for_egress(compact)
 
 
 def _check_query(query: str, limit: int) -> int:
@@ -74,7 +108,7 @@ def create_server(*, config=None, allow_write: bool = False, with_yaams: bool = 
     """Build (but do not run) the FastMCP server with ledger tools."""
     FastMCP = _require_mcp()
     from ledger.config import get_config, set_config
-    from ledger.query import query_result_to_json, rank_query
+    from ledger.query import rank_query
     from ledger.validation import validate_scope
 
     if config is not None:
@@ -83,17 +117,20 @@ def create_server(*, config=None, allow_write: bool = False, with_yaams: bool = 
     mcp = FastMCP("cognitive-ledger")
 
     @mcp.tool()
-    def ledger_query(query: str, scope: str = "all", limit: int = 8, view: str = "context") -> dict:
-        """Rank ledger notes for a query. Returns scored results with trust verdicts."""
+    def ledger_query(query: str, scope: str = "all", limit: int = 8, view: str = "context",
+                     verbose: bool = False) -> dict:
+        """Rank ledger notes for a query. Returns scored results with trust verdicts.
+        view: index | context | detail. verbose: add ranking diagnostics."""
         limit = _check_query(query, limit)
         scope = validate_scope(scope)
         payload = rank_query(query=query, scope=scope, limit=limit,
                              aliases_path=get_config().aliases_path,
                              retrieval_mode=get_config().retrieval_mode)
-        return scrub_for_egress(query_result_to_json(payload, view=view))
+        return _rank_reply(payload, view=view, verbose=verbose)
 
     @mcp.tool()
-    def ledger_recall_as_of(query: str, as_of: str, scope: str = "all", limit: int = 8) -> dict:
+    def ledger_recall_as_of(query: str, as_of: str, scope: str = "all", limit: int = 8,
+                            view: str = "context", verbose: bool = False) -> dict:
         """Recall notes valid at a point in time (YYYY-MM-DD or full ISO)."""
         limit = _check_query(query, limit)
         scope = validate_scope(scope)
@@ -101,10 +138,11 @@ def create_server(*, config=None, allow_write: bool = False, with_yaams: bool = 
                              aliases_path=get_config().aliases_path,
                              retrieval_mode=get_config().retrieval_mode,
                              as_of=_parse_date(as_of))
-        return scrub_for_egress(query_result_to_json(payload, view="context"))
+        return _rank_reply(payload, view=view, verbose=verbose)
 
     @mcp.tool()
-    def ledger_changed_since(query: str, since: str, scope: str = "all", limit: int = 8) -> dict:
+    def ledger_changed_since(query: str, since: str, scope: str = "all", limit: int = 8,
+                             view: str = "context", verbose: bool = False) -> dict:
         """Return notes matching *query* created/updated on or after *since*."""
         limit = _check_query(query, limit)
         scope = validate_scope(scope)
@@ -112,7 +150,7 @@ def create_server(*, config=None, allow_write: bool = False, with_yaams: bool = 
                              aliases_path=get_config().aliases_path,
                              retrieval_mode=get_config().retrieval_mode,
                              changed_since=_parse_date(since))
-        return scrub_for_egress(query_result_to_json(payload, view="context"))
+        return _rank_reply(payload, view=view, verbose=verbose)
 
     @mcp.tool()
     def ledger_context() -> dict:
