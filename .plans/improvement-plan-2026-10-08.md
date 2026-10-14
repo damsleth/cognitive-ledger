@@ -49,6 +49,11 @@ Two causes:
 So B1 keeps latency advisory: a slow tie is `neutral`, with the metric named in the reason.
 - Before latency can block: interleave the runs (ABBA) or take min-of-N, and add an absolute floor (no latency verdict when baseline p95 < ~10 ms).
 - Accept: 10 A/A runs on the fixture corpus give zero latency misses, and a deliberate `time.sleep` in the candidate is caught.
+- Status 2026-10-14: deferred (YAGNI).
+  - Latency is advisory, so it cannot produce false regressions today.
+  - A blocking latency gate costs a doubled A/B runtime (ABBA), plus renaming the `*_p95_ms` fields across `decide_outcome`, the report and `ab_charts`.
+  - Nothing in this project has needed it. Pick it up when a real latency regression slips through.
+  - Cheapest first step then: compare medians instead of p95-of-5. On the A/A data that alone passes (candidate median 34 ms vs threshold 34.6 ms), though barely.
 
 ## I2. Negatives and language cohorts must be able to fail the gate
 
@@ -71,6 +76,12 @@ and the eval cannot see a Norwegian regression.
   cases. Extend it with Norwegian fixture notes and cases, and keep the corpus-local copy that
   `ab_gate.sh` actually reads (`tests/fixtures/corpus/notes/08_indices/retrieval_eval_cases.yaml`) in sync.
 - Accept: `ledger eval --cases <live> --k 3 --strict-cases` runs; per-category and per-lang numbers recorded here.
+- Status 2026-10-14:
+  - Fixture half shipped. `ledger eval` reports hit@k by case `lang`.
+  - New fixture content: 3 Norwegian notes, 3 Norwegian cases and a Norwegian negative.
+  - The two archive cases now carry `as_of`. Fixture hit@3 is 0.977 over 43 cases.
+  - Live half: 29 drafted candidates in `~/brain/ledger/08_indices/retrieval_eval_cases.draft.yaml`, for the owner to review and append. Nothing reads that file.
+    - 12 Norwegian, 5 identity, 4 open loops, 8 negatives (3 Norwegian).
 
 ## I4. Identity notes in `semantic_hybrid`: measure the asymmetry
 
@@ -85,6 +96,14 @@ in semantic modes overstates it; fix that sentence.
 - Measure with the I3 identity cases: rank of the identity note in `semantic_hybrid` vs `legacy`.
 - Only if identity cases miss: embed the 5 identity files and A/B it (`ab_gate.sh`). Otherwise leave it.
   Identity is in the boot payload anyway.
+- Measured 2026-10-14 on the live corpus with 5 identity-targeted queries:
+  - `semantic_hybrid`: 4 of 5 identity notes not in the top 20; `id__family` at rank 19.
+  - `legacy`: all 5 at rank 1-2.
+  - So identity is effectively unreachable through `ledger query` and MCP in the default mode.
+- Fix on branch `feat/embed-identity` (embed `01_identity`), A/B on a copy of the live corpus, `semantic_hybrid`:
+  - Official 46 live cases: **regression** (exit 2). hit@1 0.783 → 0.739, mrr 0.830 → 0.808; hit@3 unchanged. Two cases lose rank 1.
+  - The same cases plus the 5 drafted identity cases: **beneficial** (exit 0). hit@1 0.706 → 0.725, hit@3 0.784 → 0.882, mrr 0.749 → 0.804.
+- Held back by the exit-2 rule. Merge `feat/embed-identity` once the owner has approved identity cases into the live set and `ledger ab run` is not a regression there. Not yet checked: which notes took rank 1 from the two cases.
 
 ## I5. Schema consistency: a test, then the lint rules the schema already declares
 
@@ -134,6 +153,16 @@ run behind them in the repo. After B1 and I2, rerun once and save the reports un
 - `LEDGER_WEIGHT_SIGNAL=0.1` vs `0`.
 
 Update AGENTS.md only if a verdict flips.
+
+Status 2026-10-14: run on a copy of the live corpus (46 official cases, `semantic_hybrid`), same code on both arms, one env var flipped.
+
+| Knob | Exit | hit@1 | hit@3 | mrr | Verdict |
+|---|---|---|---|---|---|
+| `LEDGER_FUSION=rrf` | 2 | 0.783 → 0.652 | 0.870 → 0.848 | 0.830 → 0.755 | keep weighted_sum |
+| `LEDGER_PRF_ENABLED=1` | 2 | 0.783 → 0.739 | 0.870 → 0.870 | 0.830 → 0.810 | keep off |
+| `LEDGER_WEIGHT_SIGNAL=0.1` | 3 | tied | tied | tied | keep 0 |
+
+No verdict flipped. The cited numbers in AGENTS.md were refreshed, since the old RRF figures were from June.
 
 ## Deferred / cut (copilot second review, agreed)
 
