@@ -201,7 +201,7 @@ point your client at it:
 ```bash
 pip install 'cognitive-ledger[mcp]'
 # client config: command = "ledger", args = ["mcp"]
-ledger mcp --allow-write    # also expose ledger_remember (captures to inbox)
+ledger mcp --allow-write    # also expose ledger_remember (inbox capture) and ledger_signal (retrieval feedback)
 ledger mcp --with-yaams     # also expose a yaams_query tool (tier-1 search)
 ```
 
