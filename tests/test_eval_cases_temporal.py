@@ -85,6 +85,31 @@ def test_ranker_without_as_of_raises_instead_of_dropping_it(tmp_cfg, tmp_path):
         run_eval(p, k=3, rank_query_fn=ranker)
 
 
+def test_hits_are_broken_down_by_case_lang(tmp_cfg, tmp_path):
+    def ranker(query, scope="all", limit=50, **kwargs):
+        path = "notes/02_facts/fact__x.md" if "hit" in query else "notes/02_facts/fact__y.md"
+        return {"results": [{"path": path, "rel_path": path, "score": 0.9}]}
+
+    p = _write_cases(tmp_path, """\
+        - id: en1
+          query: hit me
+          expected_any:
+            - notes/02_facts/fact__x.md
+        - id: no1
+          query: hit meg
+          lang: "no"
+          expected_any:
+            - notes/02_facts/fact__x.md
+        - id: no2
+          query: bom
+          lang: "no"
+          expected_any:
+            - notes/02_facts/fact__x.md
+    """)
+    by_lang = run_eval(p, k=3, rank_query_fn=ranker)["by_lang"]
+    assert by_lang == {"en": {"cases": 1, "hitk": 1.0}, "no": {"cases": 2, "hitk": 0.5}}
+
+
 def test_missing_expected_path_warns_without_strict(tmp_cfg, tmp_path, capsys):
     cases = parse_eval_cases(_write_cases(tmp_path, """\
         - id: gone
