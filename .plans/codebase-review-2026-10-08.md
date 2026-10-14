@@ -25,6 +25,24 @@ Corpus: 02_facts 381, 03_preferences 81, 06_concepts 55, 05_open_loops 19
 (10 open / 8 snoozed / 1 closed), 04_goals 6, 01_identity 5, 00_inbox 30
 (oldest 22.7 days), 09_archive 344 (261 `note__`, 81 `loop__`), 07_projects empty.
 
+## Status (2026-10-14)
+
+All 12 code items shipped on stacked branches. Full suite: 1649 passed.
+
+| Branch | Items | Live check |
+|---|---|---|
+| `fix/review-batch1-gate` | B1, B2, B3 | The gate on identical retrieval exits 3. B2 warns on `dev_gth_next_action`. The B3 preview gives hit@3 0.870 → 0.957. |
+| `fix/review-batch2-privacy` (on batch 1) | B4–B8 | — |
+| `fix/review-batch3-lint` (on batch 2) | B9–B12 | Doctor on live shows only 12 unheld locks; the false index finding is gone. Lint flags 56 archive notes and 101 inferred notes. |
+
+- B5 also covers a third unflocked unlink: the stale-item lock in `cleanup_inbox`.
+- B12 also adds `linked` to the markdown parser, which used to drop those events on migration.
+- B11 decision, by measurement on a copy of the live corpus:
+  - With the `updated` bump, migrating 591 notes moved hit@1 0.783 → 0.761.
+  - With the original `updated` restored, every case ranked identically.
+  - So the bump is dropped (`ledger/bitemporal.py`), with the rationale in AGENTS.md.
+  - The owner step is now a plain `--apply` + `sleep index` (see Ops).
+
 ## Rules for every item
 
 - Branch per batch off `main`; `.venv/bin/python -m pytest -q` green before merge.
@@ -223,7 +241,9 @@ ledger sleep index                      # 3 loops edited after the 2026-10-06 in
 ledger signal summarize                 # summary is from 2026-06-20 (131 vs 133 signals)
 ledger inbox triage                     # 30 items, oldest 22.7 days
 # fix or drop case dev_gth_next_action in 08_indices/retrieval_eval_cases.yaml (B2)
-# B11 sequence, after the B11 code fix: eval, migrate bitemporal --apply, sleep index, eval
+ledger migrate bitemporal --apply       # after batch 3 merges (no updated bump; measured ranking-neutral)
+ledger --doctor --fix                   # reaps the 12 unheld lock files (held ones are left alone)
+# add as_of to the 5 history cases (dates listed under B3)
 rm ~/brain/ledger/08_indices/timeline.jsonl.tmp   # 0-byte leftover from May; check size first
 ```
 
