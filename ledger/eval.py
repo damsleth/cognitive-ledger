@@ -41,7 +41,7 @@ def _result_rel_path(result: ScoredResult | dict[str, Any]) -> str:
     return result["rel_path"]
 
 
-_SCALAR_CASE_KEYS = {"id", "query", "scope", "as_of"}
+_SCALAR_CASE_KEYS = {"id", "query", "scope", "as_of", "lang"}
 
 
 def parse_case_as_of(raw: Any) -> dt.datetime | None:
@@ -414,6 +414,7 @@ def run_eval(
     rr_total = 0.0
     failed = []
     per_case: list[dict[str, Any]] = []
+    by_lang: dict[str, list[int]] = {}  # lang -> [positive cases, hits within k]
 
     # Score threshold for "false positive" in negative cases.
     neg_max_score: float = float(getattr(get_config(), "negative_eval_max_score", 0.5))
@@ -475,6 +476,9 @@ def run_eval(
         if best_rank is not None and best_rank <= k:
             hitk_count += 1
         rr_total += (1.0 / best_rank) if best_rank else 0.0
+        cohort = by_lang.setdefault(str(case.get("lang") or "en").strip().lower(), [0, 0])
+        cohort[0] += 1
+        cohort[1] += int(best_rank is not None and best_rank <= k)
 
         if best_rank is None or best_rank > k:
             failed.append(
@@ -552,6 +556,10 @@ def run_eval(
         "negative_pass_count": neg_pass_count,
         "false_positive_rate": false_positive_rate,
         "abstain_accuracy": abstain_accuracy,
+        "by_lang": {
+            lang: {"cases": n, "hitk": hits / n}
+            for lang, (n, hits) in sorted(by_lang.items())
+        },
     }
     if emit_ranks:
         out["per_case"] = per_case
@@ -576,6 +584,11 @@ def print_eval_result(result: dict[str, Any]) -> None:
             f"negative_eval: {neg_pass}/{neg_total} pass "
             f"(abstain_accuracy={abstain:.3f}, false_positive_rate={fpr:.3f})"
         )
+
+    by_lang = result.get("by_lang") or {}
+    if len(by_lang) > 1:
+        parts = ", ".join(f"{lang} {v['hitk']:.3f} ({v['cases']})" for lang, v in by_lang.items())
+        print(f"hit@{k} by lang: {parts}")
 
     hitk_ok = result["hitk"] >= 0.80
     mrr_ok = result["mrr"] >= 0.65
