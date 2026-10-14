@@ -250,7 +250,14 @@ ledger --doctor --fix                   # reaps the 12 unheld lock files (held o
 rm ~/brain/ledger/08_indices/timeline.jsonl.tmp   # 0-byte leftover from May; check size first
 ```
 
-## Decisions needed (owner)
+## Decisions (owner, decided 2026-10-14)
+
+- D1: register `ledger mcp --allow-write` in Claude Code, plus a new `ledger_signal` tool (shipped). Registration waits until the main checkout has pulled the branch.
+- D2: `synth_backend: claude`, `synth_model: haiku`, set in `~/.config/ledger/config.yaml` (dotfiles-private). `ledger answer` was verified to return a cited answer.
+- D3: identity is capped at 6 and types may repeat. Enforced in lint (I5); AGENTS.md is updated.
+- D4: CI stays lexical; a semantic gate is run locally.
+
+## Decisions needed (owner) — original framing
 
 - D1. Register `ledger mcp` with Claude Code / Codex at all? The `yaams` MCP already does
   recall, and it has cited a ledger note only 3 times (ai-memory plan 10).
