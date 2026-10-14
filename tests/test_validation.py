@@ -313,6 +313,41 @@ class TestSanitizeFilename(unittest.TestCase):
     self.assertEqual(result, "note-about-stuff")
 
 
+class TestSchemaLintRules(unittest.TestCase):
+  """Lint enforces what schema.yaml declares (warnings, never hard errors)."""
+
+  BASE = {
+    "created": "2026-01-01T00:00:00Z", "updated": "2026-01-01T00:00:00Z",
+    "tags": ["t"], "confidence": 0.9, "source": "user", "scope": "dev", "lang": "en",
+  }
+
+  def _issues(self, rel_path, **extra):
+    from ledger.validation import validate_frontmatter_fields
+    return validate_frontmatter_fields({**self.BASE, **extra}, rel_path=rel_path)
+
+  def test_identity_needs_valid_identity_type(self):
+    self.assertTrue(any("identity_type" in i for i in self._issues("notes/01_identity/id__x.md")))
+    self.assertTrue(any("invalid identity_type" in i
+                        for i in self._issues("notes/01_identity/id__x.md", identity_type="hobby")))
+    self.assertEqual(self._issues("notes/01_identity/id__x.md", identity_type="narratives"), [])
+
+  def test_status_only_on_loops(self):
+    self.assertTrue(any("non-loop" in i for i in self._issues("notes/02_facts/fact__x.md", status="open")))
+    loop = self._issues("notes/05_open_loops/loop__x.md", status="open")
+    self.assertFalse(any("non-loop" in i for i in loop))
+
+  def test_provenance_enum_and_tag_cap(self):
+    self.assertTrue(any("invalid provenance" in i
+                        for i in self._issues("notes/02_facts/fact__x.md", provenance="vibes")))
+    many = self._issues("notes/02_facts/fact__x.md", tags=[f"t{n}" for n in range(11)])
+    self.assertTrue(any("11 tags" in i for i in many))
+
+  def test_all_new_rules_are_warnings(self):
+    issues = self._issues("notes/02_facts/fact__x.md", status="open", provenance="vibes",
+                          tags=[f"t{n}" for n in range(11)])
+    self.assertTrue(issues and all(i.endswith("[warning]") for i in issues))
+
+
 class TestInferredConfidenceThreshold(unittest.TestCase):
   """AGENTS.md: inferred claims are hypotheses, confidence < 0.7."""
 

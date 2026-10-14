@@ -22,7 +22,10 @@ from ledger.errors import (
     PathValidationError,
 )
 from ledger.schema_values import (
+    IDENTITY_TYPE_VALUES,
     LANG_VALUES,
+    MAX_TAGS,
+    PROVENANCE_VALUES,
     QUERY_SCOPE_VALUES,
     SCOPE_VALUES,
     SOURCE_VALUES,
@@ -296,10 +299,8 @@ def infer_note_type_from_path(rel_path: str) -> str | None:
         return "open_loop"
     if "/06_concepts/" in normed:
         return "concept"
-    if "/07_reflections/" in normed:
-        return "reflection"
-    if "/08_people/" in normed:
-        return "person"
+    if "/07_projects/" in normed:
+        return "project"
     if "/09_archive/" in normed:
         return "archive"
     return None
@@ -359,6 +360,27 @@ def validate_frontmatter_fields(
     if via and via not in VIA_VALUES:
         issues.append(f"invalid via: {via}")
 
+    provenance = str(frontmatter.get("provenance", "")).strip().lower()
+    if provenance and provenance not in PROVENANCE_VALUES:
+        issues.append(f"invalid provenance: {provenance} [warning]")
+
+    # schema.yaml: identity_type is required on identity notes.
+    if "/01_identity/" in f"/{rel_path}":
+        identity_type = str(frontmatter.get("identity_type", "")).strip().lower()
+        if not identity_type:
+            issues.append("identity note missing 'identity_type' [warning]")
+        elif identity_type not in IDENTITY_TYPE_VALUES:
+            issues.append(f"invalid identity_type: {identity_type} [warning]")
+
+    # status belongs to open loops; on a fact or preference it reads as a
+    # task state that nothing tracks. (Archive keeps closed loops' status.)
+    in_typed_folder = any(
+        f"/{folder}/" in f"/{rel_path}"
+        for folder in ("01_identity", "02_facts", "03_preferences", "04_goals", "06_concepts")
+    )
+    if in_typed_folder and status:
+        issues.append(f"'status: {status}' on a non-loop note (status is for open loops) [warning]")
+
     # --- tags ---
     raw_tags = frontmatter.get("tags")
     if isinstance(raw_tags, list):
@@ -370,6 +392,8 @@ def validate_frontmatter_fields(
     for tag in tags:
         if tag and not _TAG_PATTERN.match(tag):
             issues.append(f"invalid tag: {tag}")
+    if len(tags) > MAX_TAGS:
+        issues.append(f"{len(tags)} tags (max {MAX_TAGS}) [warning]")
 
     # --- confidence ---
     confidence_raw = frontmatter.get("confidence", "")
@@ -411,8 +435,11 @@ def validate_note_body(
     issues: list[str] = []
 
     # --- large file ---
+    # Untyped note__ captures (cron ingest summaries) are long by design; the
+    # word budget is for atomic notes, so it skips them.
     words = len(body.split())
-    if words > large_file_word_threshold:
+    is_capture = Path(rel_path).name.startswith("note__")
+    if words > large_file_word_threshold and not is_capture:
         issues.append(f"large file ({words} words) [warning]")
 
     # --- open-loop structural checks ---
