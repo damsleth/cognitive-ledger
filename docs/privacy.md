@@ -15,20 +15,31 @@ YAML frontmatter.  Notes are plain files in a user-controlled directory.
 
 - Raw chat transcripts (explicitly prohibited by the golden rules; see `AGENTS.md`).
 - Credentials, tokens, API keys, or secrets.
-- Content inside ```` ```private ``` ```` fences (stripped before indexing).
+- Content inside `<private>…</private>` tags or ```` ```private ```` fences (stripped before indexing).
 
 ---
 
 ## Redaction and private fences
 
-Any Markdown block delimited by ```` ```private ```` / ```` ``` ```` is treated
-as **private content** and must not appear in:
+Two syntaxes mark **private content**:
+
+- `<private>…</private>` tags, inline or across lines;
+- a fenced block opened by a line starting with ```` ```private ```` and closed
+  by a line containing only ```` ``` ````. An unclosed fence hides everything to
+  the end of the note.
+
+Private content must not appear in:
 
 - `08_indices/note_index.json`
 - Embedding vectors (`08_indices/embeddings/`)
 - LLM-judge prompts (signals, contradiction, eval)
 - Web search snippets (`/search` endpoint)
 - `backlinks` fields in JSON responses
+- MCP tool output (`ledger mcp`)
+
+An index built before a note gained a private section, or before the fence
+syntax was honoured (2026-10), may still hold that text. Rebuild with
+`ledger embed build --target ledger` and `ledger sleep index`.
 
 The `redact()` function in `ledger/conventions.py` also strips secrets matching
 common patterns (Bearer tokens, JWTs, high-entropy strings).  `ledger --doctor`

@@ -48,6 +48,14 @@
   warns.
 
 ### Fixed
+- **```` ```private ```` fences are stripped, as the docs promised.**
+  `docs/privacy.md` and `docs/trust-boundaries.md` told users to hide content
+  in a ```` ```private ```` code fence, but the stripper only removed
+  `<private>` tags. A note written per the docs would have reached
+  embeddings, MCP output and judge prompts. No live note used the fence
+  form. Both syntaxes are now stripped by the one function every egress path
+  uses; an unclosed fence hides the rest of the note. `ledger --doctor` now
+  also flags `<private>` text found in the index.
 - **`ledger ab run` no longer reports a quality tie as `beneficial`.** A tie
   within latency tolerance was exit 0, so an A/A run, or any off-by-default
   change, passed as a win. A tie within tolerance is now `neutral` (exit 3),
