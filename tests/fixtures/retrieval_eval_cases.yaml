@@ -236,8 +236,8 @@
 
 # ── Temporal cases ─────────────────────────────────────────────────────────────
 # temporal_1–4: current-state queries — should PASS with baseline lexical mode.
-# temporal_5–6: as-of archive queries — EXPECTED TO FAIL with baseline;
-#               09_archive is not scanned by rank_lexical. Gate Plan 06 (A1).
+# temporal_5–6: history queries; `as_of` puts them inside the archived note's
+#               validity window, so they rank with 09_archive included.
 
 - query: "What city does Alex currently call home?"
   id: temporal_1
@@ -266,12 +266,14 @@
 - query: "Where did Alex live before moving to Oslo?"
   id: temporal_5
   scope: all
+  as_of: 2023-06-01
   expected_any:
     - notes/09_archive/fact__home_city_2023.md
 
 - query: "What company did Alex work for before Crayon?"
   id: temporal_6
   scope: all
+  as_of: 2021-06-01
   expected_any:
     - notes/09_archive/fact__employer_2021.md
 
@@ -280,6 +282,39 @@
   scope: all
   expected_any:
     - notes/09_archive/fact__home_city_2023.md
+
+# ── Norwegian cases ────────────────────────────────────────────────────────────
+# The live corpus is mixed no/en (embed model bge-m3 was chosen for that); these
+# keep a Norwegian retrieval regression visible. `lang` feeds the per-language
+# breakdown in `ledger eval`.
+
+- query: "Hvordan kommer Alex seg til jobben?"
+  id: no_1
+  scope: all
+  lang: "no"
+  expected_any:
+    - notes/02_facts/fact__sykler_til_jobb.md
+
+- query: "Når liker Alex å ha møter?"
+  id: no_2
+  scope: all
+  lang: "no"
+  expected_any:
+    - notes/03_preferences/pref__ingen_morgenmoter.md
+    - notes/03_preferences/pref__meeting_style.md
+
+- query: "Hva er dugnad i borettslaget?"
+  id: no_3
+  scope: all
+  lang: "no"
+  expected_any:
+    - notes/06_concepts/concept__dugnad.md
+
+- query: "Hva blir været i Bergen i morgen?"
+  id: neg_no_1
+  scope: all
+  lang: "no"
+  expected_none: true
 
 # ── Negative cases ─────────────────────────────────────────────────────────────
 # These queries should NOT match any note above the score threshold.
