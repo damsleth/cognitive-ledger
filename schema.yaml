@@ -9,8 +9,12 @@ types:
   identity:
     prefix: "id__"
     folder: "notes/01_identity"
-    description: "Core identity documents: mission, beliefs, models, strategies, narratives"
+    description: "Core identity documents: mission, beliefs, models, strategies, narratives, voice (capped by limits.max_identity_notes; types may repeat)"
     extra_fields: [identity_type]
+  capture:
+    prefix: "note__"
+    folder: "notes/00_inbox"
+    description: "Untyped inbox capture (MCP ledger_remember, ingest summaries); triaged into a typed note or retired to 09_archive"
   fact:
     prefix: "fact__"
     folder: "notes/02_facts"
@@ -67,6 +71,8 @@ frontmatter:
                  # idempotent re-import (match-and-update, not duplicate)
     things_uuid: # Things3 task UUID written by `ledger loops sync`; used as
                  # the primary key for round-trip sync (slug is the fallback)
+    things_list_id: # loops only: Things area/project UUID that routes this
+                 # loop's task, overriding things3_scope_routing
     provenance:  # origin-act trust class (plan 42); see enums.provenance below.
                  # Distinct from `source` (who) and `via` (channel): this answers
                  # "how trustworthy is the act that created this note". Absent =
@@ -179,7 +185,8 @@ frontmatter:
 
 # Timeline specification
 timeline:
-  path: "notes/08_indices/timeline.md"
+  path: "notes/08_indices/timeline.jsonl"       # source of truth
+  view: "notes/08_indices/timeline.md"          # generated from the JSONL; do not edit
   format: "{timestamp} | {action} | {path} | {description}"
   actions:
     - created    # new note
@@ -221,7 +228,7 @@ limits:
   max_words: 400          # warn if exceeded
   max_tags: 10            # per note
   max_links: 20           # per note
-  max_identity_notes: 6   # one per identity_type
+  max_identity_notes: 6   # cap; identity_type may repeat (decided 2026-10-14)
   sleep_interval_days: 7  # recommended
   sleep_change_threshold: 25
 

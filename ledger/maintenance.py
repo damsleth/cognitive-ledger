@@ -853,11 +853,21 @@ def _lint_timeline(timeline: Path, counters: LintCounters) -> None:
         prev_ts = ts
 
 
+def _lint_identity_count(notes_dir: Path, counters: LintCounters) -> None:
+    """Identity notes load at every boot, so their number is capped (types may repeat)."""
+    from ledger.schema_values import MAX_IDENTITY_NOTES
+
+    identity = sorted((Path(notes_dir) / "01_identity").glob("*.md"))
+    if len(identity) > MAX_IDENTITY_NOTES:
+        print(f"WARN: 01_identity - {len(identity)} identity notes (max {MAX_IDENTITY_NOTES}); merge or demote some")
+        counters.warnings += 1
+
+
 def cmd_lint(as_json: bool = False) -> int:
     import io
     import contextlib
 
-    _notes_dir, _indices_dir, timeline = _config_paths()
+    notes_dir, _indices_dir, timeline = _config_paths()
 
     if as_json:
         buf = io.StringIO()
@@ -866,6 +876,7 @@ def cmd_lint(as_json: bool = False) -> int:
             for path in _iter_note_files(include_indices=False):
                 _lint_note(path, counters)
             _lint_timeline(timeline, counters)
+            _lint_identity_count(notes_dir, counters)
 
         issues: list[dict[str, str]] = []
         for line in buf.getvalue().splitlines():
@@ -910,6 +921,7 @@ def cmd_lint(as_json: bool = False) -> int:
         _lint_note(path, counters)
 
     _lint_timeline(timeline, counters)
+    _lint_identity_count(notes_dir, counters)
 
     print("\nErrors:", counters.errors)
     print("Warnings:", counters.warnings)

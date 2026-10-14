@@ -98,10 +98,12 @@ ledger context --format boot # session boot payload
 ledger context --format identity  # identity notes only
 ```
 
-**Stale-index warning.** In a semantic mode (`semantic_hybrid`, `semantic`) the
-candidate pool is drawn from the embedding index first, so a note that was never
-embedded cannot be retrieved at all and an edited one ranks on its old content.
-The failure is bimodal and silent — which makes "I imported it and the query
+**Stale-index warning.** In `semantic_hybrid` the semantic half of the score
+comes from the embedding index: a note that was never embedded scores 0 there
+and survives only on lexical overlap (so it usually loses to embedded notes),
+and an edited one ranks on its old content. Candidates themselves come from the
+notes on disk (`build_candidates`), so the note is reachable, just badly ranked.
+The failure is silent — which makes "I imported it and the query
 still misses" look like bad retrieval rather than a stale index. `ledger query`
 therefore checks the mtimes of the notes the index embeds (facts, preferences,
 goals, loops, concepts — not inbox, identity or archive) against the index build
@@ -179,7 +181,9 @@ ledger signal purge --synthetic            # roll back all seeded events
 ```
 
 Signal types: `retrieval_hit`, `retrieval_miss`, `correction`, `affirmation`,
-`stale_flag`, `preference_applied`, `rating`, `llm_judged`.
+`stale_flag`, `preference_applied`, `rating`, `llm_judged`, plus the
+ledger-written `supersession` and `contradiction_flagged`. Agents connected
+over MCP log the feedback types through `ledger_signal` (needs `--allow-write`).
 
 **Synthetic signals and the activation gate.** `ledger signal seed` writes events tagged `synthetic: true`. These are down-weighted by `synthetic_weight` (default 0.5) in `summarize_signals` — a seeded hit counts as half a real hit. The 20-signal gate (`signal_min_entries`) counts only real (non-synthetic) signals so seeding cannot artificially unlock ranking. `signal stats` reports `real_total` alongside the overall count. Roll back with `ledger signal purge --synthetic` then `ledger signal summarize`.
 
@@ -463,7 +467,7 @@ purpose:
 | `00_inbox/`       | Temporary capture zone. Notes here should be reviewed    |
 |                   | and either promoted or discarded during consolidation.   |
 | `01_identity/`    | Core identity documents (mission, beliefs, mental        |
-|                   | models, strategies, narratives). Max 5 files.            |
+|                   | models, strategies, narratives, voice). Max 6 files.     |
 | `02_facts/`       | Stable truths sourced from the user or external tools.   |
 | `03_preferences/` | Recorded user preferences, styles or habits.             |
 | `04_goals/`       | Long-term objectives and commitments.                    |
@@ -495,6 +499,13 @@ specification. Required fields:
 | valid_to      | ISO 8601 UTC | *optional* — when the fact ceased; null = currently valid            |
 | superseded_by | string       | *optional* — logical path to replacement; requires `valid_to`        |
 | supersedes    | list         | *optional* — logical paths this note replaces; written by supersede()|
+| identity_type | enum         | **identity only**: mission, beliefs, models, strategies, narratives, voice |
+| via           | enum         | *optional* ingest channel: claude-memory, obsidian, yaams, manual, mcp |
+| origin        | string       | *optional* — locator of the upstream artifact                        |
+| external_id   | string       | *optional* — stable upstream key for idempotent re-import            |
+| provenance    | enum         | *optional* trust class: explicit_statement, validated, corrected, observed, imported, inferred |
+| attribute     | slug         | *optional* — state slot (`employer`, `kim.residence`); see contradiction scan |
+| things_uuid / things_list_id | string | *loops*: written by / routing for `ledger loops sync`  |
 
 ### File naming
 
@@ -508,6 +519,7 @@ Pattern: `{type}__{slug}.md` where slug is lowercase with underscores.
 | goal       | `goal__`    | `notes/04_goals/`                   |
 | open loop  | `loop__`    | `notes/05_open_loops/`              |
 | concept    | `concept__` | `notes/06_concepts/`                |
+| capture    | `note__`    | `notes/00_inbox/` (untyped; triaged or retired to `09_archive/`) |
 
 ### Creating a note (convention)
 
@@ -641,7 +653,9 @@ mission, beliefs, mental models, decision strategies, and personal narratives.
 These are high-signal, small files that provide rich context for interpreting
 requests.
 
-- Max 5 files (one per `identity_type`: mission, beliefs, models, strategies, narratives)
+- At most 6 files (`limits.max_identity_notes`). Each carries an `identity_type`
+  (mission, beliefs, models, strategies, narratives, voice); types may repeat.
+  Lint warns past the cap.
 - Always loaded at boot (via context profile or session-start hook)
 - Receive a retrieval score boost (identity notes surface above similarly-relevant notes)
 - Distinct from `06_concepts/` (general frameworks) — identity is *personal* axioms
