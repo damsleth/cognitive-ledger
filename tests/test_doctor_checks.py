@@ -93,6 +93,35 @@ class TestNewDoctorChecks:
         fixed_ids = [f.id for f in payload.findings if getattr(f, "fixed", False)]
         assert "stale_lock_files" in fixed_ids
 
+    def test_held_lock_survives_doctor_fix_and_inbox_cleanup(self, tmp_path):
+        import fcntl
+        import os
+
+        from ledger.inbox import cleanup_inbox
+
+        root, notes = _make_config(tmp_path, create_notes_dir=True)
+        inbox = notes / "00_inbox"
+        inbox.mkdir(parents=True, exist_ok=True)
+        held = inbox / "orphan_held.md.lock"      # orphan: no .md sibling
+        unheld = inbox / "orphan_free.md.lock"
+        held.touch()
+        unheld.touch()
+        fd = os.open(str(held), os.O_RDWR)
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        try:
+            run_doctor(fix=True)
+            assert held.exists(), "doctor --fix removed a held lock"
+            assert not unheld.exists()
+
+            unheld.touch()
+            result = cleanup_inbox(notes_dir=notes, apply=True)
+            assert held.exists(), "inbox cleanup removed a held lock"
+            assert not unheld.exists()
+            assert "orphan_held.md.lock" in result["orphaned_locks"]
+        finally:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+            os.close(fd)
+
     def test_private_fence_in_index_fires(self, tmp_path):
         root, notes = _make_config(tmp_path, create_notes_dir=True)
         index_json = notes / "08_indices" / "note_index.json"
