@@ -9,7 +9,6 @@ Verifies that:
 from __future__ import annotations
 
 import json
-import re
 import tempfile
 from pathlib import Path
 
@@ -73,8 +72,44 @@ More public content here.
 
 
 def _strip_private_fences(text: str) -> str:
-    """Reference implementation: strip private fenced blocks from note text."""
-    return re.sub(r"```private\n.*?```", "", text, flags=re.DOTALL)
+    """The production stripper: every egress path goes through it."""
+    from ledger.parsing import strip_private_tags
+
+    return strip_private_tags(text)
+
+
+class TestFenceAndTagForms:
+    """Both documented syntaxes are stripped by the one production function."""
+
+    def test_tag_form(self):
+        out = _strip_private_fences("a <private>SECRET</private> b")
+        assert "SECRET" not in out and "a " in out and " b" in out
+
+    def test_both_forms_in_one_note(self):
+        note = "Top\n```private\nFENCE_SECRET\n```\nMid <private>TAG_SECRET</private> end"
+        out = _strip_private_fences(note)
+        assert "FENCE_SECRET" not in out and "TAG_SECRET" not in out
+        assert "Top" in out and "Mid" in out and "end" in out
+
+    def test_unterminated_fence_strips_to_end(self):
+        out = _strip_private_fences("Public\n```private\nLEAK_IF_KEPT\nmore\n")
+        assert "LEAK_IF_KEPT" not in out and "more" not in out
+        assert "Public" in out
+
+    def test_ordinary_code_fence_kept(self):
+        note = "Intro\n```python\nprint('keep me')\n```\nOutro"
+        assert _strip_private_fences(note) == note
+
+    def test_fence_with_uppercase_and_trailing_text(self):
+        out = _strip_private_fences("x\n```PRIVATE note to self\nHIDDEN\n```\ny")
+        assert "HIDDEN" not in out and "x" in out and "y" in out
+
+    def test_mcp_egress_scrubs_fence_form(self):
+        from ledger.mcp.server import scrub_for_egress
+
+        payload = {"results": [{"snippet": "ok\n```private\nMCP_SECRET\n```\nfine"}]}
+        out = scrub_for_egress(payload)["results"][0]["snippet"]
+        assert "MCP_SECRET" not in out and "ok" in out and "fine" in out
 
 
 class TestPrivateFenceStripping:
