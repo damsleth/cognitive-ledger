@@ -57,7 +57,7 @@ queries require `--scope all` to be explicit.
 
 - **note_index.json** — generated locally; not committed to git by default.
 - **Embeddings** — float vectors only; no raw note text is stored in the vector index.
-- **Private fences** — content inside ```` ```private ``` ```` is stripped before any index write, LLM prompt, or web snippet.
+- **Private sections**: content inside `<private>…</private>` tags or ```` ```private ```` fences is stripped before any index write, LLM prompt, web snippet, or MCP response. See `docs/privacy.md`.
 
 An agent must never forward raw indexed content to a remote service
 without the owner's explicit consent.

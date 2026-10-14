@@ -26,7 +26,7 @@ def _require_mcp():
 
 
 def scrub_for_egress(obj: Any) -> Any:
-    """Recursively strip <private>…</private> content from any string in *obj*.
+    """Recursively strip private sections (tags and fences) from any string in *obj*.
 
     The retrieval path already strips private fences at candidate-build time;
     this is a belt-and-braces gate on every value that leaves via MCP.

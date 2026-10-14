@@ -184,7 +184,8 @@ def run_doctor(config_path_arg: str | None = None, fix: bool = False) -> DoctorP
       index_json = notes_dir_p / "08_indices" / "note_index.json"
       if index_json.is_file():
         raw = index_json.read_text(encoding="utf-8", errors="replace")
-        if "```private" in raw or "<!-- private" in raw:
+        lowered = raw.lower()
+        if "```private" in lowered or "<private>" in lowered or "<!-- private" in lowered:
           payload.findings.append(DoctorFinding(
             id="private_fence_in_index",
             severity="error",
