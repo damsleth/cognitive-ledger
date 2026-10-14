@@ -32,6 +32,7 @@ DEFAULT_LOCAL_MODEL = "TaylorAI/bge-micro-v2"
 DEFAULT_OPENAI_MODEL = "text-embedding-3-small"
 
 LEDGER_EMBED_NOTE_TYPES = {
+    "notes/01_identity": "identity",
     "notes/02_facts": "fact",
     "notes/03_preferences": "pref",
     "notes/04_goals": "goal",
@@ -40,7 +41,10 @@ LEDGER_EMBED_NOTE_TYPES = {
     "notes/09_archive": "archive",
 }
 ARCHIVE_REL_PREFIX = "notes/09_archive/"
-LEDGER_EMBED_LAYOUT_NAMES = ("facts", "preferences", "goals", "loops", "concepts")
+# Identity is embedded too: un-embedded notes score 0 on the semantic arm, and
+# on the live corpus 4 of 5 identity notes fell out of the top 20 in
+# semantic_hybrid for queries aimed straight at them (rank 1-2 in legacy).
+LEDGER_EMBED_LAYOUT_NAMES = ("identity", "facts", "preferences", "goals", "loops", "concepts")
 
 INDEX_ITEM_FIELDS = (
     "id",
