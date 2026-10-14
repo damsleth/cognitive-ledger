@@ -5,8 +5,10 @@ This module owns eval-case parsing/validation and benchmark metrics.
 
 from __future__ import annotations
 
+import datetime as dt
 import json
 import re
+import sys
 from pathlib import Path
 from typing import Any, Callable
 
@@ -38,6 +40,23 @@ def _result_rel_path(result: ScoredResult | dict[str, Any]) -> str:
         return result.rel_path
     return result["rel_path"]
 
+
+_SCALAR_CASE_KEYS = {"id", "query", "scope", "as_of"}
+
+
+def parse_case_as_of(raw: Any) -> dt.datetime | None:
+    """Parse a case's ``as_of`` (YYYY-MM-DD or ISO 8601) to an aware UTC datetime.
+
+    Empty means "no temporal filter". Raises ValueError on anything else, so a
+    typo fails validation instead of silently evaluating against today.
+    """
+    text = str(raw or "").strip()
+    if not text:
+        return None
+    parsed = dt.datetime.fromisoformat(text.replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=dt.timezone.utc)
+    return parsed.astimezone(dt.timezone.utc)
 
 
 def parse_yaml_scalar(value: str) -> str:
@@ -72,6 +91,10 @@ def parse_eval_cases(path: str | Path) -> list[dict[str, Any]]:
     with a score above ``negative_eval_max_score`` (from config, default 0.5).
     They are tracked separately from positive cases and contribute to a
     ``false_positive_rate`` metric.
+
+    Either shape may carry ``as_of: YYYY-MM-DD`` to rank as of that date
+    (archive included, valid-time filtered), for history cases that expect a
+    note in ``09_archive``.
     """
     cases = []
     current = None
@@ -91,12 +114,13 @@ def parse_eval_cases(path: str | Path) -> list[dict[str, Any]]:
                 "id": "",
                 "query": "",
                 "scope": "all",
+                "as_of": "",
                 "expected_any": [],
                 "expected_none": False,
             }
             key, value = stripped[2:].split(":", 1)
             key = key.strip()
-            if key in {"id", "query", "scope"}:
+            if key in _SCALAR_CASE_KEYS:
                 current[key] = parse_yaml_scalar(value)
             in_expected = key == "expected_any"
             in_expected_none = False
@@ -109,7 +133,7 @@ def parse_eval_cases(path: str | Path) -> list[dict[str, Any]]:
         if field_match:
             key = field_match.group(1)
             value = field_match.group(2)
-            if key in {"id", "query", "scope"}:
+            if key in _SCALAR_CASE_KEYS:
                 current[key] = parse_yaml_scalar(value)
                 in_expected = False
                 in_expected_none = False
@@ -227,6 +251,13 @@ def validate_eval_cases(cases: list[dict[str, Any]], strict_cases: bool = False)
         if scope not in get_config().query_scopes:
             errors.append(f"{case_label}: invalid scope '{scope}'")
 
+        try:
+            parse_case_as_of(case.get("as_of"))
+        except ValueError:
+            errors.append(
+                f"{case_label}: invalid as_of {case.get('as_of')!r} (use YYYY-MM-DD or ISO 8601)"
+            )
+
         expected_none = bool(case.get("expected_none", False))
 
         # Mutual exclusion: expected_none and expected_any cannot coexist.
@@ -244,24 +275,25 @@ def validate_eval_cases(cases: list[dict[str, Any]], strict_cases: bool = False)
             errors.append(f"{case_label}: expected_any must contain at least one path")
             continue
 
-        if not strict_cases:
-            continue
-
+        # Path problems are errors under --strict-cases; otherwise they are
+        # warned on stderr (JSON output unchanged) instead of scoring as a
+        # silent miss.
+        path_problems = errors if strict_cases else []
         for expected_path in expected:
             raw = str(expected_path).strip()
             if not raw:
-                errors.append(f"{case_label}: expected_any contains an empty path")
+                path_problems.append(f"{case_label}: expected_any contains an empty path")
                 continue
             candidate_path = Path(raw)
             if candidate_path.is_absolute():
-                errors.append(
+                path_problems.append(
                     f"{case_label}: expected_any path must be repo-relative notes/... (got absolute: {raw})"
                 )
                 continue
 
             rel_path = candidate_path.as_posix()
             if not rel_path.startswith("notes/"):
-                errors.append(
+                path_problems.append(
                     f"{case_label}: expected_any path must start with 'notes/' (got: {raw})"
                 )
                 continue
@@ -277,11 +309,15 @@ def validate_eval_cases(cases: list[dict[str, Any]], strict_cases: bool = False)
                 try:
                     resolved.relative_to(get_config().ledger_notes_dir.resolve())
                 except ValueError:
-                    errors.append(f"{case_label}: expected_any path escapes ledger paths (got: {raw})")
+                    path_problems.append(f"{case_label}: expected_any path escapes ledger paths (got: {raw})")
                     continue
 
             if not resolved.is_file():
-                errors.append(f"{case_label}: expected_any path not found (got: {raw})")
+                path_problems.append(f"{case_label}: expected_any path not found (got: {raw})")
+
+        if not strict_cases:
+            for problem in path_problems:
+                print(f"warning: {problem}", file=sys.stderr)
 
     return errors
 
@@ -294,8 +330,14 @@ def _invoke_rank_query(
     retrieval_mode: str,
     embed_backend: str,
     embed_model: str | None,
+    as_of: dt.datetime | None = None,
 ) -> RetrievalResult | dict[str, Any]:
-    """Call rank_query function with best-effort compatibility across signatures."""
+    """Call rank_query function with best-effort compatibility across signatures.
+
+    ``as_of`` rides along on every attempt: a ranker that cannot take it
+    raises instead of silently evaluating a history case against today.
+    """
+    temporal = {"as_of": as_of} if as_of is not None else {}
     try:
         return rank_query_fn(
             query,
@@ -304,6 +346,7 @@ def _invoke_rank_query(
             retrieval_mode=retrieval_mode,
             embed_backend=embed_backend,
             embed_model=embed_model,
+            **temporal,
         )
     except TypeError:
         try:
@@ -312,6 +355,7 @@ def _invoke_rank_query(
                 scope=scope,
                 limit=limit,
                 retrieval_mode=retrieval_mode,
+                **temporal,
             )
         except TypeError:
             if retrieval_mode != "legacy":
@@ -320,6 +364,7 @@ def _invoke_rank_query(
                 query,
                 scope=scope,
                 limit=limit,
+                **temporal,
             )
 
 
@@ -385,6 +430,7 @@ def run_eval(
             retrieval_mode=retrieval_mode,
             embed_backend=embed_backend,
             embed_model=embed_model,
+            as_of=parse_case_as_of(case.get("as_of")),
         )
 
         results = _payload_results(payload)
