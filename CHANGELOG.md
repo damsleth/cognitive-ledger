@@ -48,6 +48,13 @@
   warns.
 
 ### Fixed
+- **`ledger --doctor --fix` and `ledger inbox cleanup` no longer delete held
+  locks.** Doctor unlinked every `*.lock` under the notes tree. Inbox cleanup
+  unlinked orphan inbox locks, and the locks of the stale items it removed,
+  without checking for a holder. Deleting a held lock lets a waiter and a
+  newcomer both think they own it. All three paths now go through
+  `reap_unheld_locks`, which removes a lock only after a non-blocking flock
+  succeeds. `orphaned_locks` is still reported.
 - **```` ```private ```` fences are stripped, as the docs promised.**
   `docs/privacy.md` and `docs/trust-boundaries.md` told users to hide content
   in a ```` ```private ```` code fence, but the stripper only removed

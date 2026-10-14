@@ -152,27 +152,30 @@ def run_doctor(config_path_arg: str | None = None, fix: bool = False) -> DoctorP
   except Exception:
     pass
 
-  # Check for stale lock files.
+  # Check for accumulated lock files nobody holds. FileLock never unlinks on
+  # release, so these pile up; only a lock a non-blocking flock proves unheld
+  # may go, or a waiter and a newcomer could both believe they hold it.
   try:
     notes_dir_p = getattr(cfg, "ledger_notes_dir", None)
     if notes_dir_p:
       notes_dir_p = Path(notes_dir_p)
       if notes_dir_p.exists():
-        stale_locks = list(notes_dir_p.rglob("*.lock"))
-        if stale_locks:
+        from ledger.inbox import reap_unheld_locks
+
+        unheld = reap_unheld_locks(notes_dir=notes_dir_p, apply=False)
+        if unheld:
           finding = DoctorFinding(
             id="stale_lock_files",
             severity="warning",
-            message=f"Found {len(stale_locks)} lock file(s) in notes directory",
-            hint="Remove stale .lock files to prevent accidental data loss",
+            message=f"Found {len(unheld)} unheld lock file(s) in notes directory",
+            hint="Run: ledger --doctor --fix (or ledger inbox cleanup --apply); held locks are left alone",
             fixable=True,
           )
           payload.findings.append(finding)
           if fix:
-            for lf in stale_locks:
-              lf.unlink(missing_ok=True)
+            removed = reap_unheld_locks(notes_dir=notes_dir_p, apply=True)
             finding.fixed = True
-            finding.fix_detail = f"Removed {len(stale_locks)} lock file(s)"
+            finding.fix_detail = f"Removed {len(removed)} unheld lock file(s)"
   except Exception:
     pass
 
