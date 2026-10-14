@@ -3,6 +3,14 @@
 ## Unreleased
 
 ### Added
+- **MCP `ledger_signal` (with `--allow-write`).** Agents can log retrieval
+  feedback directly: `retrieval_hit` when a returned note was used, plus
+  `retrieval_miss`, `correction`, `affirmation`, `stale_flag`,
+  `preference_applied` and `rating`.
+  - Each type must carry what it needs, and a referenced note must exist.
+  - Ledger-internal types (`supersession`, `contradiction_flagged`, `llm_judged`) are refused.
+  - Entries are tagged `channel: mcp`.
+  - Recall had run through yaams, so hit signals barely accrued. This is the route that feeds signal-aware ranking.
 - **Eval cases take `as_of: YYYY-MM-DD`.** A history case that expects a note
   in `09_archive` ranks as of that date (archive included, valid-time
   filtered) instead of failing by design. A malformed date fails validation,
