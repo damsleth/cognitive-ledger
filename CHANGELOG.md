@@ -43,6 +43,13 @@
   warns.
 
 ### Fixed
+- **`ledger ab run` no longer reports a quality tie as `beneficial`.** A tie
+  within latency tolerance was exit 0, so an A/A run, or any off-by-default
+  change, passed as a win. A tie within tolerance is now `neutral` (exit 3),
+  as AGENTS.md and `scripts/ab_gate.sh` already said. A tie that misses the
+  latency threshold is now a `regression` (exit 2) naming the slow metric. It
+  used to be `neutral`, which let an off-by-default change that slowed
+  retrieval through as acceptable.
 - **Each corpus owns its embedding index; eval and A/B runs no longer overwrite
   the live one.** The index files lived under `ledger_root/.smart-env` — the
   code tree once the store moved out — while the manifest lived with the notes.
