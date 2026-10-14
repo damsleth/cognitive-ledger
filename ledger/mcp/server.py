@@ -194,7 +194,13 @@ def _write_inbox_note(text: str, *, title: str = "", tags: str = "", scope: str 
     fm = {"created": now, "updated": now, "tags": tag_list,
           "confidence": 0.5, "source": "assistant", "scope": scope,
           "lang": infer_lang(body), "via": "mcp"}
-    write_markdown(path, fm, body)
+    try:
+        write_markdown(path, fm, body)
+    except BaseException:
+        # Drop our empty claim so failed captures don't pile up as 0-byte notes.
+        if path.is_file() and path.stat().st_size == 0:
+            path.unlink(missing_ok=True)
+        raise
     append_timeline_entry(
         cfg.timeline_path,
         "created",

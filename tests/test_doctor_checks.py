@@ -150,6 +150,18 @@ class TestNewDoctorChecks:
         assert findings["timeline_jsonl_malformed"].severity == "error"
         assert "timeline.jsonl:2" in findings["timeline_jsonl_malformed"].message
 
+    def test_bad_ts_and_out_of_order_events_are_reported(self, tmp_path):
+        root, notes = _make_config(tmp_path, create_notes_dir=True)
+        (notes / "08_indices" / "timeline.jsonl").write_text(
+            '{"ts": "2026-02-01T00:00:00Z", "action": "created", "path": "a", "desc": "x"}\n'
+            '{"ts": "2026-01-01T00:00:00Z", "action": "created", "path": "b", "desc": "x"}\n'
+            '{"ts": "garbage", "action": "created", "path": "c", "desc": "x"}\n',
+            encoding="utf-8",
+        )
+        findings = {f.id: f for f in run_doctor().findings}
+        assert "timeline.jsonl:3" in findings["timeline_jsonl_malformed"].message
+        assert "timeline.jsonl:2" in findings["timeline_jsonl_out_of_order"].message
+
     def test_stale_timeline_md_is_regenerated_from_jsonl(self, tmp_path):
         root, notes = _make_config(tmp_path, create_notes_dir=True)
         idx = notes / "08_indices"

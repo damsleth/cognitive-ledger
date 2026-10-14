@@ -173,9 +173,12 @@ def reap_unheld_locks(
     very much exists, in whatever typed folder it landed in. 42 of them were
     sitting in ``05_open_loops/`` when this was written.
 
-    Safe because it is an explicit maintenance sweep, not the write path: a lock
-    is only removed if a non-blocking flock succeeds, which proves no process
-    holds it, and the unlink happens while we hold it.
+    Safe because a lock is only removed if a non-blocking flock succeeds, which
+    proves no process holds it, and the unlink happens while we hold it. A
+    waiter that opened the file before the unlink would then lock an orphaned
+    inode; ``FileLock`` re-checks that the path still names its inode after
+    acquiring and retries if not, so that waiter cannot share the lock with a
+    newcomer.
     """
     import fcntl
     import os

@@ -112,13 +112,20 @@ def run_doctor(config_path_arg: str | None = None, fix: bool = False) -> DoctorP
             finding.fixed = True
             finding.fix_detail = f"Migrated {len(events)} event(s) into {jsonl_path.name}"
         else:
-          jsonl_errors, _warnings = timeline_lib.check_timeline_jsonl(jsonl_path)
+          jsonl_errors, jsonl_warnings = timeline_lib.check_timeline_jsonl(jsonl_path)
           if jsonl_errors:
             payload.findings.append(DoctorFinding(
               id="timeline_jsonl_malformed",
               severity="error",
               message=f"{len(jsonl_errors)} malformed timeline.jsonl line(s); first: {jsonl_errors[0]}",
               hint="Fix the named line(s) by hand; these events are invisible to every timeline view",
+            ))
+          if jsonl_warnings:
+            payload.findings.append(DoctorFinding(
+              id="timeline_jsonl_out_of_order",
+              severity="warning",
+              message=f"{len(jsonl_warnings)} out-of-order timeline.jsonl event(s); first: {jsonl_warnings[0]}",
+              hint="Usually clock skew between writers; the markdown view sorts, but ts-based readers may not",
             ))
           if not timeline_lib.timeline_markdown_is_current(jsonl_path, tl_path):
             finding = DoctorFinding(
