@@ -217,7 +217,8 @@ def cleanup_inbox(
 ) -> dict[str, list[str]]:
     """Remove orphaned lock files and archive stale auto-generated inbox items.
 
-    Orphaned locks: a .lock file with no corresponding .md file.
+    Orphaned locks: a .lock file with no corresponding .md file. Reported
+    only; every lock is removed solely by ``reap_unheld_locks``, under a flock.
     Stale auto-generated: session__* or uncommitted_note_changes* files older
     than stale_days days. These are produced by the ledger pipeline itself and
     accumulate when sessions end without cleanup.
@@ -252,12 +253,12 @@ def cleanup_inbox(
 
     _AUTO_PREFIXES = ("session__", "session_notes__", "uncommitted_note_changes")
 
+    # Report only: deleting a lock without proving nobody holds it races a
+    # live writer. reap_unheld_locks (below) removes them under a flock.
     for lock_file in sorted(inbox.glob("*.lock")):
         md_file = lock_file.with_suffix("")
         if not md_file.exists():
             orphaned_locks.append(lock_file.name)
-            if apply:
-                lock_file.unlink()
 
     for md_file in sorted(inbox.glob("*.md")):
         if not any(md_file.name.startswith(p) for p in _AUTO_PREFIXES):
@@ -289,9 +290,7 @@ def cleanup_inbox(
                     md_file.unlink()
             else:
                 md_file.unlink()
-                lock_file = md_file.with_suffix(".md.lock")
-                if lock_file.exists():
-                    lock_file.unlink()
+                # Its .md.lock, if any, is reaped below once unheld.
 
     return {
         "orphaned_locks": orphaned_locks,
