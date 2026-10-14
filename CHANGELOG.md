@@ -3,6 +3,11 @@
 ## Unreleased
 
 ### Changed
+- **`ledger eval` breaks hit@k down by case `lang`.** It prints the breakdown
+  when cases span more than one language. The fixture corpus gains three
+  Norwegian notes, three Norwegian cases and a Norwegian negative, so a
+  regression on Norwegian text shows in CI. The two archive history cases now
+  carry `as_of`. Fixture hit@3 is 0.977 over 43 cases (was 0.925 over 40).
 - **Lint enforces what `schema.yaml` declares.** All the new rules are
   warnings:
   - identity notes need a valid `identity_type`;
