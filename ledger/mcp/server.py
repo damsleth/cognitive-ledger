@@ -67,8 +67,11 @@ def _rank_reply(payload, *, view: str, verbose: bool) -> dict:
         snippet = item.get("snippet")
         statement = str(item.get("statement") or "")
         if isinstance(snippet, str):
-            # The snippet is usually the statement's opening; don't send it twice.
-            if statement and statement.startswith(snippet.rstrip(" …").strip()[:100]):
+            # The snippet is usually the statement's opening; don't send it
+            # twice. Only drop it when *all* of it repeats the statement: a
+            # loop snippet appends " Next: <action>", which must survive.
+            core = snippet.rstrip(" …").strip()
+            if statement and core and statement.startswith(core):
                 item.pop("snippet")
             elif len(snippet) > SNIPPET_CHARS:
                 item["snippet"] = snippet[:SNIPPET_CHARS].rstrip() + "…"
@@ -271,6 +274,25 @@ _AGENT_SIGNALS = {
 }
 
 
+def _contained_note(note: str, notes_dir) -> str:
+    """Return the canonical notes/... path for *note*, or raise.
+
+    The note must resolve (symlinks followed) to an existing file inside the
+    corpus: `notes//etc/passwd`, `notes/../x` and links pointing outside are
+    all refused, so a client can never make a signal reference a foreign file.
+    """
+    from pathlib import Path
+
+    suffix = note[len("notes/"):] if note.startswith("notes/") else None
+    if not suffix or Path(suffix).is_absolute():
+        raise ValueError("note must be a result path like notes/02_facts/fact__x.md")
+    root = Path(notes_dir).resolve()
+    target = (root / suffix).resolve()
+    if not target.is_relative_to(root) or not target.is_file():
+        raise ValueError(f"note not found in the ledger: {note}")
+    return "notes/" + target.relative_to(root).as_posix()
+
+
 def _log_signal(signal_type: str, *, note: str = "", query: str = "",
                 detail: str = "", rating: int | None = None) -> dict:
     """Validate and append one agent-reported signal (channel ``mcp``)."""
@@ -281,13 +303,16 @@ def _log_signal(signal_type: str, *, note: str = "", query: str = "",
     if needs is None:
         raise ValueError(f"signal_type must be one of: {', '.join(sorted(_AGENT_SIGNALS))}")
     note = str(note or "").strip()
-    if needs == "note":
-        if not note.startswith("notes/") or ".." in note:
-            raise ValueError("note must be a result rel_path like notes/02_facts/fact__x.md")
-        if not (get_config().ledger_notes_dir / note[len("notes/"):]).is_file():
-            raise ValueError(f"note not found: {note}")
+    if needs == "note" and not note:
+        raise ValueError(f"{signal_type} needs the note (a result's path, notes/...)")
+    if note:
+        note = _contained_note(note, get_config().ledger_notes_dir)
     if needs == "query" and not str(query or "").strip():
         raise ValueError("retrieval_miss needs the query that found nothing")
+    if rating is not None and (
+        isinstance(rating, bool) or not isinstance(rating, int) or not 1 <= rating <= 10
+    ):
+        raise ValueError("rating must be an integer from 1 to 10")
     if needs == "rating" and rating is None:
         raise ValueError("rating needs a 1-10 rating")
     entry = append_signal(signal_type, query=query, note=note, detail=detail,
