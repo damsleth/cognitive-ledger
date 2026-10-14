@@ -71,30 +71,68 @@ def run_doctor(config_path_arg: str | None = None, fix: bool = False) -> DoctorP
   except Exception:
     pass
 
-  # Check timeline.md exists.
+  # Check the timeline: timeline.jsonl is the source of truth, timeline.md a
+  # generated view of it.
   try:
-    from ledger.layout import timeline_path
+    from ledger.layout import timeline_jsonl_path, timeline_path
+    from ledger import timeline as timeline_lib
     notes_dir_p = getattr(cfg, "ledger_notes_dir", None)
     if notes_dir_p:
       notes_dir_p = Path(notes_dir_p)
       if notes_dir_p.exists():
         tl_path = timeline_path(notes_dir_p)
-        if not tl_path.is_file():
+        jsonl_path = timeline_jsonl_path(notes_dir_p)
+        if not jsonl_path.is_file() and not tl_path.is_file():
           finding = DoctorFinding(
             id="timeline_missing",
             severity="warning",
-            message=f"Timeline file missing: {tl_path}",
-            hint="Run: ledger init to create timeline.md",
+            message=f"Timeline missing: {jsonl_path}",
+            hint="Run: ledger --doctor --fix (or ledger init)",
             fixable=True,
           )
           payload.findings.append(finding)
           if fix:
-            from ledger.timeline import TIMELINE_MARKDOWN_HEADER
             from ledger.io.safe_write import safe_write_text
             tl_path.parent.mkdir(parents=True, exist_ok=True)
-            safe_write_text(tl_path, TIMELINE_MARKDOWN_HEADER)
+            safe_write_text(jsonl_path, "")
+            safe_write_text(tl_path, timeline_lib.TIMELINE_MARKDOWN_HEADER)
             finding.fixed = True
-            finding.fix_detail = f"Created {tl_path}"
+            finding.fix_detail = f"Created {jsonl_path.name} and {tl_path.name}"
+        elif not jsonl_path.is_file():
+          finding = DoctorFinding(
+            id="timeline_jsonl_missing",
+            severity="warning",
+            message="timeline.md exists but timeline.jsonl (the source of truth) does not",
+            hint="Run: ledger --doctor --fix to migrate the markdown events into timeline.jsonl",
+            fixable=True,
+          )
+          payload.findings.append(finding)
+          if fix:
+            events = timeline_lib.ensure_timeline_jsonl(tl_path, jsonl_path)
+            finding.fixed = True
+            finding.fix_detail = f"Migrated {len(events)} event(s) into {jsonl_path.name}"
+        else:
+          jsonl_errors, _warnings = timeline_lib.check_timeline_jsonl(jsonl_path)
+          if jsonl_errors:
+            payload.findings.append(DoctorFinding(
+              id="timeline_jsonl_malformed",
+              severity="error",
+              message=f"{len(jsonl_errors)} malformed timeline.jsonl line(s); first: {jsonl_errors[0]}",
+              hint="Fix the named line(s) by hand; these events are invisible to every timeline view",
+            ))
+          if not timeline_lib.timeline_markdown_is_current(jsonl_path, tl_path):
+            finding = DoctorFinding(
+              id="timeline_md_stale",
+              severity="warning",
+              message="timeline.md is missing or out of date with timeline.jsonl",
+              hint="Run: ledger --doctor --fix to regenerate it",
+              fixable=True,
+            )
+            payload.findings.append(finding)
+            if fix:
+              timeline_lib.regenerate_timeline_markdown(jsonl_path, tl_path)
+              finding.fixed = True
+              finding.fix_detail = f"Regenerated {tl_path.name} from {jsonl_path.name}"
   except Exception:
     pass
 
@@ -128,12 +166,20 @@ def run_doctor(config_path_arg: str | None = None, fix: bool = False) -> DoctorP
     if notes_dir_p:
       notes_dir_p = Path(notes_dir_p)
       if notes_dir_p.exists():
-        embed_dir = notes_dir_p / "08_indices" / "embeddings"
-        if not embed_dir.is_dir() or not any(embed_dir.iterdir()):
+        from ledger.embeddings import (
+          configured_model_for_backend,
+          semantic_index_path,
+          semantic_vectors_path,
+        )
+        backend = str(getattr(cfg, "embed_backend", "local") or "local")
+        model = configured_model_for_backend(backend)
+        index_file = semantic_index_path("ledger", backend, model)
+        vectors_file = semantic_vectors_path("ledger", backend, model)
+        if not (index_file.is_file() and vectors_file.is_file()):
           payload.findings.append(DoctorFinding(
             id="semantic_index_missing",
             severity="info",
-            message="Semantic embedding index not found",
+            message=f"Semantic embedding index not found for {backend}/{model} ({index_file.parent})",
             hint="Run: ledger embed build --target ledger",
           ))
   except Exception:

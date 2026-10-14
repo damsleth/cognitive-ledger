@@ -129,6 +129,10 @@ ledger migrate bitemporal --apply     # write valid_from / valid_to + timeline e
 ledger sleep lint                     # flags invalid timestamps, ordering errors, dangling refs
 ```
 
+`migrate bitemporal` does **not** bump `updated`. A validity back-fill is
+metadata, not a content edit; bumping it re-dated 591 notes for the recency
+prior and cost hit@1 (0.783 → 0.761 on a copy of the live corpus, 2026-10-14).
+
 Four optional frontmatter fields track *when a fact was true* (valid-time), separate from
 `created`/`updated` (transaction time). Applicable to `01_identity`, `02_facts`,
 `03_preferences`, `04_goals`, `06_concepts`, and `09_archive`; `00_inbox` is exempt.

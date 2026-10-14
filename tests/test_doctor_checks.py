@@ -122,6 +122,47 @@ class TestNewDoctorChecks:
             fcntl.flock(fd, fcntl.LOCK_UN)
             os.close(fd)
 
+    def test_semantic_index_found_where_embed_build_writes_it(self, tmp_path):
+        from ledger.embeddings import (
+            configured_model_for_backend,
+            semantic_index_path,
+            semantic_vectors_path,
+        )
+
+        root, notes = _make_config(tmp_path, create_notes_dir=True)
+        assert "semantic_index_missing" in [f.id for f in run_doctor().findings]
+        model = configured_model_for_backend("local")
+        index_file = semantic_index_path("ledger", "local", model)
+        index_file.parent.mkdir(parents=True, exist_ok=True)
+        index_file.write_text("{}", encoding="utf-8")
+        semantic_vectors_path("ledger", "local", model).write_bytes(b"\0")
+        assert "semantic_index_missing" not in [f.id for f in run_doctor().findings]
+
+    def test_malformed_timeline_jsonl_is_an_error_with_line_number(self, tmp_path):
+        root, notes = _make_config(tmp_path, create_notes_dir=True)
+        jsonl = notes / "08_indices" / "timeline.jsonl"
+        jsonl.write_text(
+            '{"ts": "2026-01-01T00:00:00Z", "action": "created", "path": "a", "desc": "x"}\n'
+            "not json at all\n",
+            encoding="utf-8",
+        )
+        findings = {f.id: f for f in run_doctor().findings}
+        assert findings["timeline_jsonl_malformed"].severity == "error"
+        assert "timeline.jsonl:2" in findings["timeline_jsonl_malformed"].message
+
+    def test_stale_timeline_md_is_regenerated_from_jsonl(self, tmp_path):
+        root, notes = _make_config(tmp_path, create_notes_dir=True)
+        idx = notes / "08_indices"
+        (idx / "timeline.jsonl").write_text(
+            '{"ts": "2026-01-01T00:00:00Z", "action": "created", "path": "notes/02_facts/fact__a.md", "desc": "x"}\n',
+            encoding="utf-8",
+        )
+        (idx / "timeline.md").write_text("# Timeline\n\nhand-edited\n", encoding="utf-8")
+        assert "timeline_md_stale" in [f.id for f in run_doctor().findings]
+        run_doctor(fix=True)
+        assert "fact__a.md" in (idx / "timeline.md").read_text(encoding="utf-8")
+        assert "timeline_md_stale" not in [f.id for f in run_doctor().findings]
+
     def test_private_fence_in_index_fires(self, tmp_path):
         root, notes = _make_config(tmp_path, create_notes_dir=True)
         index_json = notes / "08_indices" / "note_index.json"

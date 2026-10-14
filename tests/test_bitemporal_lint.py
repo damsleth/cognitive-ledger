@@ -373,6 +373,29 @@ def test_inbox_note_with_bad_bitemporal_dates_exempt(tmp_path, capsys):
 # ---------------------------------------------------------------------------
 
 
+def test_typed_archive_note_without_valid_to_warns(tmp_path, capsys):
+    """An archived loop with no valid_to reads as valid forever in --as-of."""
+    config = _make_temp_config(tmp_path)
+    try:
+        _write(
+            config.ledger_notes_dir / "09_archive" / "loop__done_thing.md",
+            f"---\n{_BASE_FM}status: closed\n---\n\n# Done\n\n## Next Action\n\n- [x] it\n",
+        )
+        _write(
+            config.ledger_notes_dir / "09_archive" / "note__ingest_summary_x.md",
+            f"---\n{_BASE_FM}---\n\n# Ingest summary\n\nUntyped, not embedded.\n",
+        )
+        _write(config.timeline_path, _EMPTY_TIMELINE)
+        rc = maintenance.cmd_lint()
+        out = capsys.readouterr().out
+    finally:
+        reset_config()
+
+    assert rc == 0
+    no_valid_to = [line for line in out.splitlines() if "archived note has no valid_to" in line]
+    assert len(no_valid_to) == 1 and "loop__done_thing.md" in no_valid_to[0]
+
+
 def test_archive_note_with_valid_bitemporal_passes(tmp_path):
     """A 09_archive note with valid bitemporal fields should lint clean."""
     config = _make_temp_config(tmp_path)
