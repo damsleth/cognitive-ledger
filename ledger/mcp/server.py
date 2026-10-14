@@ -40,6 +40,20 @@ def scrub_for_egress(obj: Any) -> Any:
     return obj
 
 
+MAX_LIMIT = 50
+
+
+def _check_query(query: str, limit: int) -> int:
+    """Reject an empty query and clamp *limit* to 1..MAX_LIMIT.
+
+    Raising makes FastMCP return a protocol-level ``isError`` result. Without
+    this, ``limit=-1`` or ``limit=100000`` returned the whole corpus (~650 KB).
+    """
+    if not str(query or "").strip():
+        raise ValueError("query must not be empty")
+    return max(1, min(int(limit), MAX_LIMIT))
+
+
 def _parse_date(raw: str | None):
     """Parse a date or ISO timestamp; naive values are assumed UTC.
 
@@ -49,7 +63,10 @@ def _parse_date(raw: str | None):
     """
     if not raw:
         return None
-    parsed = dt.datetime.fromisoformat(raw)
+    try:
+        parsed = dt.datetime.fromisoformat(raw)
+    except ValueError:
+        raise ValueError(f"invalid date {raw!r}: use YYYY-MM-DD or ISO 8601") from None
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=dt.timezone.utc)
 
 
@@ -68,6 +85,7 @@ def create_server(*, config=None, allow_write: bool = False, with_yaams: bool = 
     @mcp.tool()
     def ledger_query(query: str, scope: str = "all", limit: int = 8, view: str = "context") -> dict:
         """Rank ledger notes for a query. Returns scored results with trust verdicts."""
+        limit = _check_query(query, limit)
         scope = validate_scope(scope)
         payload = rank_query(query=query, scope=scope, limit=limit,
                              aliases_path=get_config().aliases_path,
@@ -77,6 +95,7 @@ def create_server(*, config=None, allow_write: bool = False, with_yaams: bool = 
     @mcp.tool()
     def ledger_recall_as_of(query: str, as_of: str, scope: str = "all", limit: int = 8) -> dict:
         """Recall notes valid at a point in time (YYYY-MM-DD or full ISO)."""
+        limit = _check_query(query, limit)
         scope = validate_scope(scope)
         payload = rank_query(query=query, scope=scope, limit=limit,
                              aliases_path=get_config().aliases_path,
@@ -87,6 +106,7 @@ def create_server(*, config=None, allow_write: bool = False, with_yaams: bool = 
     @mcp.tool()
     def ledger_changed_since(query: str, since: str, scope: str = "all", limit: int = 8) -> dict:
         """Return notes matching *query* created/updated on or after *since*."""
+        limit = _check_query(query, limit)
         scope = validate_scope(scope)
         payload = rank_query(query=query, scope=scope, limit=limit,
                              aliases_path=get_config().aliases_path,
@@ -100,19 +120,25 @@ def create_server(*, config=None, allow_write: bool = False, with_yaams: bool = 
         from ledger.context import build_context
         return scrub_for_egress({"context": build_context(get_config().ledger_notes_dir)})
 
-    @mcp.tool()
-    def ledger_answer(question: str, scope: str = "all", limit: int = 5) -> dict:
-        """Synthesize a grounded, cited answer to a question (plan 45)."""
-        scope = validate_scope(scope)
-        from ledger.synthesize import answer as synth_answer
-        result = synth_answer(question, scope=scope, limit=limit)
-        return scrub_for_egress(result.to_dict())
+    # Only advertise a cited answer when something can write one: with the
+    # default `dummy` backend the tool returned a placeholder, never citations.
+    if str(get_config().synth_backend or "dummy").strip().lower() != "dummy":
+        @mcp.tool()
+        def ledger_answer(question: str, scope: str = "all", limit: int = 5) -> dict:
+            """Synthesize a grounded, cited answer to a question (plan 45)."""
+            limit = _check_query(question, limit)
+            scope = validate_scope(scope)
+            from ledger.synthesize import answer as synth_answer
+            result = synth_answer(question, scope=scope, limit=limit)
+            return scrub_for_egress(result.to_dict())
 
     if allow_write:
         @mcp.tool()
-        def ledger_remember(text: str, title: str = "", tags: str = "", scope: str = "all") -> dict:
+        def ledger_remember(text: str, title: str = "", tags: str = "", scope: str = "meta") -> dict:
             """Capture a note into the inbox for later human triage (write-gated)."""
-            scope = validate_scope(scope)
+            if not str(text or "").strip():
+                raise ValueError("text must not be empty")
+            scope = validate_scope(scope, allow_all=False)
             return scrub_for_egress(_write_inbox_note(text, title=title, tags=tags, scope=scope))
 
     if with_yaams:
@@ -121,6 +147,7 @@ def create_server(*, config=None, allow_write: bool = False, with_yaams: bool = 
             """Search tier-1 (YAAMS) digital exhaust. Requires yaams on PATH."""
             import json
             import subprocess
+            limit = _check_query(query, limit)
             try:
                 proc = subprocess.run(
                     ["yaams", "query", query, "--top-k", str(limit), "--format", "json"],
@@ -138,27 +165,44 @@ def create_server(*, config=None, allow_write: bool = False, with_yaams: bool = 
     return mcp
 
 
-def _write_inbox_note(text: str, *, title: str = "", tags: str = "", scope: str = "all") -> dict:
-    """Write a minimal inbox capture and return its path. Human triages later."""
+def _write_inbox_note(text: str, *, title: str = "", tags: str = "", scope: str = "meta") -> dict:
+    """Write a lint-clean inbox capture and return its path. Human triages later."""
     from ledger.config import get_config
     from ledger.inbox import _inbox_dir
-    from ledger.text import write_markdown
+    from ledger.io.safe_write import append_timeline_entry
+    from ledger.text import infer_lang, write_markdown
 
+    cfg = get_config()
     now = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    inbox = _inbox_dir(get_config().ledger_notes_dir)
+    inbox = _inbox_dir(cfg.ledger_notes_dir)
     inbox.mkdir(parents=True, exist_ok=True)
     slug_src = (title or text).strip().lower()
-    slug = "".join(c if c.isalnum() else "_" for c in slug_src)[:40].strip("_") or "capture"
-    path = inbox / f"{slug}.md"
-    n = 1
-    while path.exists():
-        path = inbox / f"{slug}_{n}.md"
-        n += 1
-    tag_list = [t.strip() for t in tags.split(",") if t.strip()]
-    fm = {"created": now, "updated": now, "tags": tag_list,
-          "confidence": 0.5, "source": "assistant", "scope": scope, "via": "mcp"}
+    slug = "".join(c if c.isascii() and c.isalnum() else "_" for c in slug_src)[:40].strip("_") or "capture"
+    # Claim the filename with O_EXCL so two concurrent captures cannot pick
+    # the same name; the atomic write below then replaces our own empty file.
+    n = 0
+    while True:
+        path = inbox / (f"note__{slug}.md" if n == 0 else f"note__{slug}_{n}.md")
+        try:
+            with open(path, "x", encoding="utf-8"):
+                break
+        except FileExistsError:
+            n += 1
+    tag_list = [t.strip().lower().replace(" ", "_") for t in tags.split(",") if t.strip()]
     heading = f"# {title}\n\n" if title else ""
-    write_markdown(path, fm, f"{heading}{text.strip()}")
+    body = f"{heading}{text.strip()}"
+    fm = {"created": now, "updated": now, "tags": tag_list,
+          "confidence": 0.5, "source": "assistant", "scope": scope,
+          "lang": infer_lang(body), "via": "mcp"}
+    write_markdown(path, fm, body)
+    append_timeline_entry(
+        cfg.timeline_path,
+        "created",
+        path,
+        "captured via MCP ledger_remember",
+        root_dir=cfg.ledger_root,
+        ledger_notes_dir=cfg.ledger_notes_dir,
+    )
     return {"created": str(path), "status": "captured_to_inbox"}
 
 

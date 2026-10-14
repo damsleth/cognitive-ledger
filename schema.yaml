@@ -61,7 +61,7 @@ frontmatter:
   # and the upstream artifact. Tolerated by lint; documented here so they
   # are first-class rather than incidental.
   optional:
-    via:         # ingest channel: claude-memory | obsidian | yaams | manual
+    via:         # ingest channel: claude-memory | obsidian | yaams | manual | mcp
     origin:      # locator for the upstream artifact (file path / URI)
     external_id: # stable upstream key, e.g. "<project>/<name>" — enables
                  # idempotent re-import (match-and-update, not duplicate)

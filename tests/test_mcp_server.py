@@ -38,7 +38,17 @@ class TestToolRegistration:
     def test_read_tools_present(self):
         names = _tool_names(create_server(allow_write=False))
         assert {"ledger_query", "ledger_recall_as_of", "ledger_changed_since",
-                "ledger_context", "ledger_answer"} <= names
+                "ledger_context"} <= names
+
+    def test_answer_registered_only_with_a_real_backend(self, tmp_path):
+        from ledger.config import LedgerConfig, reset_config
+        try:
+            dummy = LedgerConfig(ledger_root=tmp_path, synth_backend="dummy")
+            assert "ledger_answer" not in _tool_names(create_server(config=dummy))
+            real = LedgerConfig(ledger_root=tmp_path, synth_backend="ollama")
+            assert "ledger_answer" in _tool_names(create_server(config=real))
+        finally:
+            reset_config()
 
     def test_remember_absent_when_write_disabled(self):
         assert "ledger_remember" not in _tool_names(create_server(allow_write=False))
@@ -86,3 +96,43 @@ class TestToolsAgainstCorpus:
         captures = list(inbox.glob("*.md"))
         assert captures, "expected an inbox capture"
         assert "remember to ship" in captures[0].read_text(encoding="utf-8")
+
+    def test_remember_capture_is_lint_clean_and_logged(self, ledger):
+        from ledger.mcp.server import _write_inbox_note
+        from ledger.parsing import parse_frontmatter_text
+        from ledger.validation import validate_frontmatter_fields
+
+        first = Path(_write_inbox_note("ship the release og sjekk loggen", title="Ship it")["created"])
+        second = Path(_write_inbox_note("ship the release og sjekk loggen", title="Ship it")["created"])
+        assert first.name == "note__ship_it.md" and second.name == "note__ship_it_1.md"
+        fm, _ = parse_frontmatter_text(first.read_text(encoding="utf-8"))
+        assert validate_frontmatter_fields(fm, rel_path="notes/00_inbox/" + first.name) == []
+        assert fm["scope"] == "meta" and fm["via"] == "mcp" and fm["lang"] in {"en", "no", "mixed"}
+        timeline = ledger.timeline_path.with_suffix(".jsonl")
+        logged = timeline.read_text(encoding="utf-8") if timeline.exists() else ledger.timeline_path.read_text(encoding="utf-8")
+        assert "note__ship_it.md" in logged
+
+    def test_remember_rejects_all_scope(self, ledger):
+        server = create_server(config=ledger, allow_write=True)
+        with pytest.raises(Exception):
+            asyncio.run(server.call_tool("ledger_remember", {"text": "x", "scope": "all"}))
+
+    @pytest.mark.parametrize("tool,args", [
+        ("ledger_query", {"query": ""}),
+        ("ledger_query", {"query": "   "}),
+        ("ledger_recall_as_of", {"query": "deploy", "as_of": "garbage"}),
+        ("ledger_changed_since", {"query": "deploy", "since": "last tuesday"}),
+    ])
+    def test_bad_input_is_a_tool_error(self, ledger, tool, args):
+        server = create_server(config=ledger)
+        with pytest.raises(Exception) as exc:
+            asyncio.run(server.call_tool(tool, args))
+        assert "empty" in str(exc.value) or "YYYY-MM-DD" in str(exc.value)
+
+    @pytest.mark.parametrize("limit", [0, -1, 51, 100000])
+    def test_limit_is_clamped(self, ledger, limit):
+        from ledger.mcp.server import MAX_LIMIT, _check_query
+        assert 1 <= _check_query("deploy", limit) <= MAX_LIMIT
+        server = create_server(config=ledger)
+        result = asyncio.run(server.call_tool("ledger_query", {"query": "deploy", "limit": limit}))
+        assert "deploy" in str(result).lower()
