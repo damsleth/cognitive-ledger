@@ -48,6 +48,17 @@
   warns.
 
 ### Fixed
+- **MCP tools validate their input.** An empty query is an error. `limit` is
+  clamped to 1–50: `limit=-1` or `limit=100000` used to return the whole
+  corpus (~650 KB). A malformed date names the expected format.
+- **MCP `ledger_answer` is listed only when a synthesis backend is
+  configured.** With the default `dummy` backend it returned a placeholder
+  with no citations, while advertising a cited answer.
+- **MCP `ledger_remember` captures pass lint.** They were written with
+  `scope: all` (not a scope), no `lang`, and an unknown `via: mcp`. Scope now
+  defaults to `meta` and `all` is rejected, `lang` is inferred, and `mcp` is a
+  valid `via`. Files are named `note__<slug>.md` and claimed with `O_EXCL`, so
+  concurrent captures cannot collide. Each capture appends a timeline entry.
 - **`ledger --doctor --fix` and `ledger inbox cleanup` no longer delete held
   locks.** Doctor unlinked every `*.lock` under the notes tree. Inbox cleanup
   unlinked orphan inbox locks, and the locks of the stale items it removed,

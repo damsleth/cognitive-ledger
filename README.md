@@ -194,8 +194,9 @@ ledger answer "open questions on deployment" --limit 5 --backend claude --json
 ### Use the ledger from an MCP client (Claude Desktop, Cursor, …)
 
 `ledger mcp` runs a stdio Model Context Protocol server exposing the ledger's
-read verbs (query, recall-as-of, changed-since, context, answer). Install the
-extra and point your client at it:
+read verbs (query, recall-as-of, changed-since, context, plus answer when a
+`synth_backend` is configured). `limit` is capped at 50. Install the extra and
+point your client at it:
 
 ```bash
 pip install 'cognitive-ledger[mcp]'
