@@ -192,5 +192,41 @@ class TestEnsureParentDir(unittest.TestCase):
             self.assertEqual(result, path)
 
 
+class TestFileLockSurvivesReaping(unittest.TestCase):
+    """A waiter whose lock file is reaped must not end up sharing the lock."""
+
+    def test_waiter_retries_after_lock_file_is_unlinked(self):
+        import fcntl
+        import threading
+        import time
+
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "note.md"
+            lock_path = target.with_suffix(".md.lock")
+            # Play the reaper: hold the lock so the waiter blocks on this inode.
+            reaper_fd = os.open(str(lock_path), os.O_RDWR | os.O_CREAT, 0o644)
+            fcntl.flock(reaper_fd, fcntl.LOCK_EX)
+
+            held_inode = {}
+
+            def waiter():
+                with FileLock(target) as lock:
+                    held_inode["fd"] = os.fstat(lock._fd).st_ino
+                    held_inode["path"] = os.stat(lock_path).st_ino
+
+            thread = threading.Thread(target=waiter)
+            thread.start()
+            time.sleep(0.2)           # waiter has opened the old inode and blocks
+            os.unlink(lock_path)      # reaper unlinks while holding
+            fcntl.flock(reaper_fd, fcntl.LOCK_UN)
+            os.close(reaper_fd)
+            thread.join(timeout=5)
+
+            self.assertFalse(thread.is_alive())
+            # The waiter must hold the lock on the file the path names now,
+            # not on the orphaned inode a newcomer could never contend for.
+            self.assertEqual(held_inode["fd"], held_inode["path"])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -112,6 +112,18 @@ class TestToolsAgainstCorpus:
         logged = timeline.read_text(encoding="utf-8") if timeline.exists() else ledger.timeline_path.read_text(encoding="utf-8")
         assert "note__ship_it.md" in logged
 
+    def test_failed_capture_leaves_no_empty_note(self, ledger, monkeypatch):
+        from ledger import text as text_mod
+        from ledger.mcp.server import _write_inbox_note
+
+        def boom(*_args, **_kwargs):
+            raise OSError("disk full")
+
+        monkeypatch.setattr(text_mod, "write_markdown", boom)
+        with pytest.raises(OSError):
+            _write_inbox_note("will fail", title="Doomed")
+        assert not list((ledger.ledger_notes_dir / "00_inbox").glob("note__doomed*.md"))
+
     def test_remember_rejects_all_scope(self, ledger):
         server = create_server(config=ledger, allow_write=True)
         with pytest.raises(Exception):

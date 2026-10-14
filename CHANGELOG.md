@@ -48,6 +48,19 @@
   warns.
 
 ### Fixed
+- **`FileLock` cannot be shared through a reaped lock file.** A writer that
+  had opened a lock file before maintenance unlinked it would then lock the
+  orphaned inode, while a newcomer locked a fresh file at the same path, and
+  both believed they held the lock. After acquiring, `FileLock` now checks
+  that the path still names its inode and retries if not.
+- **Private fences: CRLF, `~~~private`, indented examples.** A CRLF closing
+  fence was not recognised, so stripping ran to the end of the note; derived
+  indexes lost the public text, though nothing leaked. `~~~private` fences
+  are now stripped. A fence indented 4+ spaces is a Markdown code example and
+  is kept.
+- **Timeline checks reject a malformed `ts`**, which readers silently drop.
+  `ledger --doctor` now reports out-of-order events instead of discarding the
+  warning. A failed MCP capture no longer leaves an empty `note__*.md` behind.
 - **`ledger migrate bitemporal` no longer bumps `updated`.** Back-filling
   `valid_from`/`valid_to` is metadata, but the bump re-dated every touched
   note for the recency prior. On a copy of the live corpus (591 notes pending)
