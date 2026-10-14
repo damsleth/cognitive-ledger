@@ -533,7 +533,10 @@ def _migrate_one_note(
     - Set valid_from = <created> date at midnight UTC, if missing.
     - For archive notes also set valid_to = <updated> date at midnight UTC,
       if valid_to is missing.
-    - Bump updated timestamp when writing.
+    - Leave ``updated`` alone: a validity back-fill is metadata, not a content
+      edit, and bumping it re-dates the whole corpus for the recency prior.
+      Measured 2026-10-14 on a copy of the live corpus (591 notes): with the
+      bump hit@1 0.783 -> 0.761; without it every case ranked unchanged.
     - Idempotent: if nothing would change, return False.
     """
     text = abs_path.read_text(encoding="utf-8")
@@ -565,9 +568,6 @@ def _migrate_one_note(
         if updated_raw and not _is_null(updated_raw):
             date_str = _extract_date_portion(updated_raw)
             fm["valid_to"] = _date_only_to_midnight_utc(date_str)
-
-    # Bump transaction-time updated.
-    fm["updated"] = _to_iso(_now_utc())
 
     content = serialize_frontmatter(fm) + "\n" + body.lstrip("\n")
     safe_write_text(abs_path, content)

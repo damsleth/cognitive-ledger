@@ -683,6 +683,16 @@ def _lint_bitemporal(
             _lint_error(path, f"superseded_by references non-existent note: {superseded_by_raw}")
             counters.errors += 1
 
+    # A typed archive note is embedded for --as-of reads; without valid_to it
+    # reads as valid for all time, so a closed loop or retired fact comes back
+    # as current history. (Untyped note__ ingest summaries are not embedded.)
+    if "/09_archive/" in f"/{rel}" and not valid_to_raw:
+        from ledger.layout import NOTE_LAYOUTS
+
+        if path.name.startswith(tuple(item.prefix for item in NOTE_LAYOUTS.values())):
+            _lint_warn(path, "archived note has no valid_to; run `ledger migrate bitemporal --check`")
+            counters.warnings += 1
+
     # Warn when valid_from is absent on eligible notes that carry other
     # bitemporal fields, or on any eligible note (migration suggestion).
     if is_eligible and not valid_from_raw and has_any_bitemporal:
@@ -779,6 +789,27 @@ def _lint_note(path: Path, counters: LintCounters) -> None:
 
 
 def _lint_timeline(timeline: Path, counters: LintCounters) -> None:
+    from ledger.layout import TIMELINE_JSONL_FILENAME
+    from ledger.timeline import check_timeline_jsonl, timeline_markdown_is_current
+
+    # timeline.jsonl is the source of truth; timeline.md is generated from it.
+    print("\nValidating timeline.jsonl...")
+    jsonl = timeline.with_name(TIMELINE_JSONL_FILENAME)
+    if not jsonl.is_file():
+        print("WARN: timeline.jsonl not found")
+        counters.warnings += 1
+    else:
+        jsonl_errors, jsonl_warnings = check_timeline_jsonl(jsonl)
+        for issue in jsonl_errors:
+            print(f"ERROR: {issue}")
+        for issue in jsonl_warnings:
+            print(f"WARN: {issue}")
+        counters.errors += len(jsonl_errors)
+        counters.warnings += len(jsonl_warnings)
+        if not timeline_markdown_is_current(jsonl, timeline):
+            print("WARN: timeline.md is missing or out of date (run: ledger --doctor --fix)")
+            counters.warnings += 1
+
     print("\nValidating timeline...")
     if not timeline.is_file():
         print("WARN: timeline.md not found")

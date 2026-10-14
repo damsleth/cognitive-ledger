@@ -119,6 +119,17 @@ class TestMigrateBitemporal:
         assert fm["valid_from"] == "2024-01-01T00:00:00Z"
         assert fm["valid_to"] == "2025-01-01T00:00:00Z"
 
+    def test_backfill_leaves_updated_alone(self, tmp_config):
+        """A validity back-fill is not a content edit: `updated` must not move,
+        or the recency prior re-dates every migrated note (hit@1 regressed)."""
+        notes_dir = tmp_config.ledger_notes_dir
+        note = notes_dir / "09_archive" / "loop__closed.md"
+        _write(note, _note(created="2024-01-01T00:00:00Z", updated="2025-01-01T12:00:00Z"))
+
+        migrate_bitemporal(apply=True)
+
+        assert str(_read_fm(note)["updated"]) == "2025-01-01T12:00:00Z"
+
     def test_rerun_is_noop(self, tmp_config):
         """Running migration twice leaves notes unchanged the second time."""
         notes_dir = tmp_config.ledger_notes_dir

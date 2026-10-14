@@ -313,5 +313,24 @@ class TestSanitizeFilename(unittest.TestCase):
     self.assertEqual(result, "note-about-stuff")
 
 
+class TestInferredConfidenceThreshold(unittest.TestCase):
+  """AGENTS.md: inferred claims are hypotheses, confidence < 0.7."""
+
+  def _issues(self, confidence):
+    from ledger.validation import validate_frontmatter_fields
+    fm = {
+      "created": "2026-01-01T00:00:00Z", "updated": "2026-01-01T00:00:00Z",
+      "tags": ["t"], "confidence": confidence, "source": "inferred",
+      "scope": "dev", "lang": "en",
+    }
+    return [i for i in validate_frontmatter_fields(fm) if "inferred" in i]
+
+  def test_below_threshold_clean(self):
+    self.assertEqual(self._issues(0.69), [])
+
+  def test_at_threshold_warns(self):
+    self.assertEqual(len(self._issues(0.7)), 1)
+
+
 if __name__ == "__main__":
   unittest.main()

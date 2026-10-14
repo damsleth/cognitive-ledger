@@ -380,9 +380,10 @@ def validate_frontmatter_fields(
     if confidence is not None:
         if confidence < 0 or confidence > 1:
             issues.append(f"confidence out of range: {confidence_raw}")
-        if source == "inferred" and confidence > 0.8:
+        # AGENTS.md / schema.yaml: inferred claims are hypotheses, < 0.7.
+        if source == "inferred" and confidence >= 0.7:
             issues.append(
-                f"inferred note has high confidence ({confidence} > 0.8) [warning]"
+                f"inferred note has high confidence ({confidence} >= 0.7) [warning]"
             )
 
     return issues
