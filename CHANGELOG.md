@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Changed
+- **MCP ranking tools reply compactly by default.** `ledger_query`,
+  `ledger_recall_as_of` and `ledger_changed_since` return `query`, `scope`,
+  `effective_retrieval_mode` and `results`.
+  - Per-result score `reasons` are dropped, as is a snippet that only repeats the statement.
+  - Pool sizes, timing and semantic stats come back with `verbose: true`.
+  - All three tools take `view` (`index` | `context` | `detail`).
+  - A 3-result reply on the live corpus went from 4.9 KB to 3.0 KB.
+  - The CLI's `query --json` is unchanged.
+
 ### Added
 - **MCP `ledger_signal` (with `--allow-write`).** Agents can log retrieval
   feedback directly: `retrieval_hit` when a returned note was used, plus
