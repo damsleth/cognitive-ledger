@@ -124,6 +124,29 @@ class TestToolsAgainstCorpus:
             _write_inbox_note("will fail", title="Doomed")
         assert not list((ledger.ledger_notes_dir / "00_inbox").glob("note__doomed*.md"))
 
+    def test_signal_tool_gated_and_validated(self, ledger):
+        import json
+
+        assert "ledger_signal" not in _tool_names(create_server(config=ledger))
+        server = create_server(config=ledger, allow_write=True)
+        assert "ledger_signal" in _tool_names(server)
+
+        asyncio.run(server.call_tool("ledger_signal", {
+            "signal_type": "retrieval_hit", "note": "notes/02_facts/fact__deploy.md", "query": "deploy"}))
+        logged = [json.loads(line) for line in ledger.signals_path.read_text(encoding="utf-8").splitlines()]
+        assert logged[-1]["type"] == "retrieval_hit" and logged[-1]["channel"] == "mcp"
+
+        for bad in (
+            {"signal_type": "llm_judged", "note": "notes/02_facts/fact__deploy.md"},
+            {"signal_type": "retrieval_hit", "note": "notes/02_facts/fact__missing.md"},
+            {"signal_type": "retrieval_hit", "note": "../etc/passwd"},
+            {"signal_type": "retrieval_miss"},
+            {"signal_type": "rating"},
+        ):
+            with pytest.raises(Exception):
+                asyncio.run(server.call_tool("ledger_signal", bad))
+        assert len(ledger.signals_path.read_text(encoding="utf-8").splitlines()) == 1
+
     def test_remember_rejects_all_scope(self, ledger):
         server = create_server(config=ledger, allow_write=True)
         with pytest.raises(Exception):
