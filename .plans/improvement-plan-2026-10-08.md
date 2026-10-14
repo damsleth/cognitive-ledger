@@ -32,7 +32,9 @@ The "mandatory eval gate" is therefore enforced only by agent discipline.
   - `ab_gate.sh` and `run_gate.sh` now run on a temporary copy of the fixture corpus. Before this, both rewrote the tracked `note_index.json`.
   - `run_gate.sh` returns its real exit code and runs in `release.yml`.
   - Checked locally in a CI-like environment (no user config, worktree code): the gate prints NEUTRAL for both HEAD/HEAD and `origin/main`/HEAD; `run_gate.sh` exits 0 at hit@3 0.925.
-  - Not verified on GitHub: `workflow_dispatch` only exists once this is on the default branch. After merging, run `gh workflow run retrieval-gate.yml`, then `gh run watch`.
+  - Verified on GitHub 2026-10-14: the merge push to main started the gate's first run ever (run 38603957513).
+    - Result: NEUTRAL, exit 3, quality tied with the previous main.
+    - The latency band missed again on the hosted runner, reported as advisory. That is I8 confirmed outside this machine.
 
 ## I8. Latency measurement cannot carry a hard gate (found while doing I1)
 
