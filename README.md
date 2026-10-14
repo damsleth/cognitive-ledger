@@ -331,7 +331,7 @@ ledger notes --type identity       # browse identity notes
 
 ## Privacy Fences
 
-Wrap sensitive content in `<private>...</private>` tags to prevent it from entering the retrieval index, search results, or generated artifacts:
+Wrap sensitive content in `<private>...</private>` tags, or in a fenced block opened with ```` ```private ````, to prevent it from entering the retrieval index, search results, MCP output, or generated artifacts:
 
 ```markdown
 Public context here.

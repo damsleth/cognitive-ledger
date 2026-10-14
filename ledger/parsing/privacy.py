@@ -1,7 +1,10 @@
 """Privacy fence support for content stripping.
 
-Strips <private>...</private> tagged sections from text before
-content enters candidates, indexes, or generated artifacts.
+Strips private sections from text before content enters candidates,
+indexes, or generated artifacts. Two syntaxes are honoured:
+
+- ``<private>...</private>`` tags (inline or multiline)
+- fenced code blocks opened with a line starting ```` ```private ````
 """
 
 from __future__ import annotations
@@ -10,16 +13,26 @@ import re
 
 _OPEN_TAG_RE = re.compile(r"<private>", re.IGNORECASE)
 _CLOSE_TAG_RE = re.compile(r"</private>", re.IGNORECASE)
+# A ```private fence runs to the next line that is only ``` (or to end of
+# text when unterminated: fail closed, never leak the tail).
+_PRIVATE_FENCE_RE = re.compile(
+    r"^[ \t]*```private\b[^\n]*(?:\n.*?)?(?:\n[ \t]*```[ \t]*$|\Z)",
+    re.IGNORECASE | re.MULTILINE | re.DOTALL,
+)
 
 
 def strip_private_tags(text: str) -> str:
-    """Remove all <private>...</private> fenced sections from text.
+    """Remove all private sections (``<private>`` tags and ```` ```private ```` fences).
 
-    Handles multiline content, multiple occurrences, nested fences,
+    Tags: handles multiline content, multiple occurrences, nested fences,
     and case-insensitive tags. Uses balanced-tag matching to strip
     outermost fence spans correctly.
     """
-    if "<private>" not in text.lower():
+    lowered = text.lower()
+    if "```private" in lowered:
+        text = _PRIVATE_FENCE_RE.sub("", text)
+        lowered = text.lower()
+    if "<private>" not in lowered:
         return text
 
     result: list[str] = []
