@@ -24,7 +24,7 @@ Format: `<ISO timestamp> | <action> | <path> | <description>`
 """
 
 MARKDOWN_LINE_RE = re.compile(
-    r"^([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z) \| (created|updated|archived|deleted|closed|sleep) \| (.+?) \| (.*)$"
+    r"^([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z) \| (created|updated|archived|deleted|closed|sleep|linked) \| (.+?) \| (.*)$"
 )
 
 
@@ -132,6 +132,51 @@ def render_timeline_markdown(events: list[dict[str, Any]]) -> str:
             f"{event.get('ts', '')} | {event.get('action', '')} | {event.get('path', '')} | {event.get('desc', '')}"
         )
     return "\n".join(lines).rstrip() + "\n"
+
+
+def check_timeline_jsonl(timeline_jsonl_path: Path | str) -> tuple[list[str], list[str]]:
+    """Validate the timeline source of truth line by line.
+
+    ``load_timeline_jsonl`` skips bad lines silently, so a corrupt event would
+    otherwise vanish from every view. Returns ``(errors, warnings)``: a line
+    that is not a JSON object with ``ts`` and ``action`` is an error naming its
+    line number; a timestamp earlier than one before it is a warning.
+    """
+    path = Path(timeline_jsonl_path)
+    errors: list[str] = []
+    warnings: list[str] = []
+    if not path.is_file():
+        return errors, warnings
+    latest = ""
+    for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        try:
+            obj = json.loads(stripped)
+        except json.JSONDecodeError:
+            errors.append(f"timeline.jsonl:{lineno} - not valid JSON")
+            continue
+        if not isinstance(obj, dict) or not obj.get("ts") or not obj.get("action"):
+            errors.append(f"timeline.jsonl:{lineno} - event missing 'ts' or 'action'")
+            continue
+        ts = str(obj["ts"])
+        if latest and ts < latest:
+            warnings.append(f"timeline.jsonl:{lineno} - out of order: {ts} after {latest}")
+        latest = max(latest, ts)
+    return errors, warnings
+
+
+def timeline_markdown_is_current(
+    timeline_jsonl_path: Path | str,
+    timeline_md_path: Path | str,
+) -> bool:
+    """True when the generated markdown view matches what the JSONL renders to."""
+    md_path = Path(timeline_md_path)
+    if not md_path.is_file():
+        return False
+    events = sorted(load_timeline_jsonl(timeline_jsonl_path), key=lambda item: str(item.get("ts", "")))
+    return md_path.read_text(encoding="utf-8") == render_timeline_markdown(events)
 
 
 def regenerate_timeline_markdown(

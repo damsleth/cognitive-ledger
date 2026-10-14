@@ -48,6 +48,23 @@
   warns.
 
 ### Fixed
+- **`ledger migrate bitemporal` no longer bumps `updated`.** Back-filling
+  `valid_from`/`valid_to` is metadata, but the bump re-dated every touched
+  note for the recency prior. On a copy of the live corpus (591 notes pending)
+  it moved hit@1 from 0.783 to 0.761; without the bump every case ranked
+  unchanged.
+- **`ledger sleep lint` checks what the spec says.** An inferred note now
+  warns at confidence ≥ 0.7 (the hypothesis line) instead of > 0.8. A typed
+  archive note without `valid_to` now warns, since it reads as valid forever
+  in `--as-of`. On the live corpus that surfaces 101 and 56 notes respectively.
+- **Doctor and lint validate `timeline.jsonl`, the source of truth.** A
+  malformed line is an error naming its line number; until now every reader
+  skipped it silently. A missing or stale `timeline.md` is a warning, and
+  `ledger --doctor --fix` regenerates it. A markdown-only timeline is migrated.
+  Also, the markdown parser now accepts `linked` events, so a migration no
+  longer drops `sleep links` history.
+- **`ledger --doctor` finds the semantic index where `embed build` writes it.**
+  It looked in `08_indices/embeddings/` and reported a built index as missing.
 - **MCP tools validate their input.** An empty query is an error. `limit` is
   clamped to 1–50: `limit=-1` or `limit=100000` used to return the whole
   corpus (~650 KB). A malformed date names the expected format.
