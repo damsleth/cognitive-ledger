@@ -4,7 +4,8 @@ Strips private sections from text before content enters candidates,
 indexes, or generated artifacts. Two syntaxes are honoured:
 
 - ``<private>...</private>`` tags (inline or multiline)
-- fenced code blocks opened with a line starting ```` ```private ````
+- fenced code blocks opened with a line starting ```` ```private ```` (or
+  ``~~~private``)
 """
 
 from __future__ import annotations
@@ -13,10 +14,12 @@ import re
 
 _OPEN_TAG_RE = re.compile(r"<private>", re.IGNORECASE)
 _CLOSE_TAG_RE = re.compile(r"</private>", re.IGNORECASE)
-# A ```private fence runs to the next line that is only ``` (or to end of
-# text when unterminated: fail closed, never leak the tail).
+# A ```private fence runs to the next line that is only the same fence marker
+# (or to end of text when unterminated: fail closed, never leak the tail).
+# Markdown rules: up to 3 spaces of indent (4+ is an indented code example,
+# kept), and CRLF line endings close a fence like LF does.
 _PRIVATE_FENCE_RE = re.compile(
-    r"^[ \t]*```private\b[^\n]*(?:\n.*?)?(?:\n[ \t]*```[ \t]*$|\Z)",
+    r"^ {0,3}(?P<fence>```|~~~)private\b[^\n]*(?:\n.*?)?(?:\n {0,3}(?P=fence)[ \t]*\r?$|\Z)",
     re.IGNORECASE | re.MULTILINE | re.DOTALL,
 )
 
@@ -29,7 +32,7 @@ def strip_private_tags(text: str) -> str:
     outermost fence spans correctly.
     """
     lowered = text.lower()
-    if "```private" in lowered:
+    if "```private" in lowered or "~~~private" in lowered:
         text = _PRIVATE_FENCE_RE.sub("", text)
         lowered = text.lower()
     if "<private>" not in lowered:

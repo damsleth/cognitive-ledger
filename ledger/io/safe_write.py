@@ -58,27 +58,39 @@ class FileLock:
         # Create parent directories if needed
         self.lock_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Open lock file (create if needed)
-        self._fd = os.open(
-            str(self.lock_path),
-            os.O_RDWR | os.O_CREAT,
-            0o644,
-        )
-
-        try:
-            flags = fcntl.LOCK_EX
-            if not self.blocking:
-                flags |= fcntl.LOCK_NB
-            fcntl.flock(self._fd, flags)
-        except BlockingIOError:
+        flags = fcntl.LOCK_EX
+        if not self.blocking:
+            flags |= fcntl.LOCK_NB
+        while True:
+            # Open lock file (create if needed)
+            self._fd = os.open(
+                str(self.lock_path),
+                os.O_RDWR | os.O_CREAT,
+                0o644,
+            )
+            try:
+                fcntl.flock(self._fd, flags)
+            except BlockingIOError:
+                os.close(self._fd)
+                self._fd = None
+                raise NoteWriteError(
+                    str(self.path),
+                    "file is locked by another process",
+                )
+            # The lock file may have been unlinked (and maybe recreated) while
+            # we waited: maintenance reaps unheld locks. A flock on an orphaned
+            # inode excludes nobody, so only keep it if the path still names
+            # the inode we hold; otherwise retry on the current file.
+            held = os.fstat(self._fd)
+            try:
+                current = os.stat(self.lock_path)
+            except FileNotFoundError:
+                current = None
+            if current is not None and (current.st_dev, current.st_ino) == (held.st_dev, held.st_ino):
+                return self
+            fcntl.flock(self._fd, fcntl.LOCK_UN)
             os.close(self._fd)
             self._fd = None
-            raise NoteWriteError(
-                str(self.path),
-                "file is locked by another process",
-            )
-
-        return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         """Release the file lock."""
