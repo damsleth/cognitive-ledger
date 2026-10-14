@@ -142,6 +142,23 @@ class TestToolsAgainstCorpus:
         assert len(json.dumps(compact)) < len(json.dumps(verbose))
         assert len(json.dumps(compact)) < 2000
 
+    def test_compact_keeps_a_loop_next_action(self, monkeypatch):
+        import ledger.query as query_mod
+        from ledger.mcp.server import _rank_reply
+
+        statement = "Long loop statement " * 8   # > 100 chars
+        rows = [
+            {"path": "notes/05_open_loops/loop__a.md", "statement": statement,
+             "snippet": statement + " Next: call the vendor", "reasons": ["x"]},
+            {"path": "notes/02_facts/fact__b.md", "statement": "Same text.",
+             "snippet": "Same text.", "reasons": ["y"]},
+        ]
+        monkeypatch.setattr(query_mod, "query_result_to_json",
+                            lambda payload, view: {"query": "q", "results": [dict(r) for r in rows]})
+        out = _rank_reply(object(), view="context", verbose=False)["results"]
+        assert "Next: call the vendor" in out[0]["snippet"]
+        assert "snippet" not in out[1] and "reasons" not in out[1]
+
     def test_view_is_validated(self, ledger):
         server = create_server(config=ledger)
         with pytest.raises(Exception):
@@ -160,12 +177,21 @@ class TestToolsAgainstCorpus:
         logged = [json.loads(line) for line in ledger.signals_path.read_text(encoding="utf-8").splitlines()]
         assert logged[-1]["type"] == "retrieval_hit" and logged[-1]["channel"] == "mcp"
 
+        outside = ledger.ledger_root / "outside.md"
+        outside.write_text("x", encoding="utf-8")
+        (ledger.ledger_notes_dir / "02_facts" / "fact__link.md").symlink_to(outside)
         for bad in (
             {"signal_type": "llm_judged", "note": "notes/02_facts/fact__deploy.md"},
             {"signal_type": "retrieval_hit", "note": "notes/02_facts/fact__missing.md"},
             {"signal_type": "retrieval_hit", "note": "../etc/passwd"},
+            {"signal_type": "retrieval_hit", "note": "notes//etc/passwd"},
+            {"signal_type": "retrieval_hit", "note": "notes/02_facts/../../outside.md"},
+            {"signal_type": "retrieval_hit", "note": "notes/02_facts/fact__link.md"},
             {"signal_type": "retrieval_miss"},
+            {"signal_type": "retrieval_miss", "query": "q", "note": "notes//etc/passwd"},
             {"signal_type": "rating"},
+            {"signal_type": "rating", "rating": 0},
+            {"signal_type": "rating", "rating": 100},
         ):
             with pytest.raises(Exception):
                 asyncio.run(server.call_tool("ledger_signal", bad))
