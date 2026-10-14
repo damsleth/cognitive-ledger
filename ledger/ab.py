@@ -382,6 +382,7 @@ def run_quality_eval(
         "k": int(result.get("k", k)),
         "negative_cases": int(result.get("negative_cases", 0)),
         "false_positive_rate": float(result.get("false_positive_rate", 0.0)),
+        "by_lang": result.get("by_lang", {}),
     }
 
 
@@ -859,6 +860,23 @@ def build_markdown_report(payload: dict[str, Any]) -> str:
                 f"| {metric} | {b_val:.6f} | {c_val:.6f} | {delta:+.6f} |"
             )
         lines.append("")
+
+        # Per-language cohorts: reported, not gated. A Norwegian drop hidden by
+        # an English gain shows here. Older refs may not report cohorts.
+        b_lang = baseline["quality"].get("by_lang") or {}
+        c_lang = candidate["quality"].get("by_lang") or {}
+        if len(set(b_lang) | set(c_lang)) > 1:
+            lines.append(f"| hit@k by lang | Baseline | Candidate | Delta |")
+            lines.append("| --- | ---: | ---: | ---: |")
+            for lang in sorted(set(b_lang) | set(c_lang)):
+                b_hit = b_lang.get(lang, {}).get("hitk")
+                c_hit = c_lang.get(lang, {}).get("hitk")
+                if b_hit is None or c_hit is None:
+                    lines.append(f"| {lang} | {b_hit if b_hit is not None else 'n/a'} | {c_hit if c_hit is not None else 'n/a'} | n/a |")
+                else:
+                    n = c_lang[lang].get("cases", 0)
+                    lines.append(f"| {lang} ({n}) | {b_hit:.6f} | {c_hit:.6f} | {c_hit - b_hit:+.6f} |")
+            lines.append("")
 
     if baseline.get("latency") and candidate.get("latency"):
         lines.append("## Latency")
