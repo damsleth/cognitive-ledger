@@ -104,6 +104,22 @@ class TestFenceAndTagForms:
         out = _strip_private_fences("x\n```PRIVATE note to self\nHIDDEN\n```\ny")
         assert "HIDDEN" not in out and "x" in out and "y" in out
 
+    def test_crlf_fence_closes_and_keeps_the_tail(self):
+        out = _strip_private_fences("Public\r\n```private\r\nSECRET\r\n```\r\nAfter")
+        assert "SECRET" not in out and "Public" in out and "After" in out
+
+    def test_tilde_fence(self):
+        out = _strip_private_fences("a\n~~~private\nTILDE_SECRET\n~~~\nb")
+        assert "TILDE_SECRET" not in out and "a" in out and "b" in out
+
+    def test_indented_example_is_code_not_a_fence(self):
+        note = "How to hide things:\n\n    ```private\n    example\n    ```\n\nDone."
+        assert _strip_private_fences(note) == note
+
+    def test_privateer_fence_is_not_private(self):
+        note = "x\n```privateer\nkeep\n```\ny"
+        assert _strip_private_fences(note) == note
+
     def test_mcp_egress_scrubs_fence_form(self):
         from ledger.mcp.server import scrub_for_egress
 

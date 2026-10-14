@@ -134,6 +134,9 @@ def render_timeline_markdown(events: list[dict[str, Any]]) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
+_TS_RE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")
+
+
 def check_timeline_jsonl(timeline_jsonl_path: Path | str) -> tuple[list[str], list[str]]:
     """Validate the timeline source of truth line by line.
 
@@ -161,6 +164,10 @@ def check_timeline_jsonl(timeline_jsonl_path: Path | str) -> tuple[list[str], li
             errors.append(f"timeline.jsonl:{lineno} - event missing 'ts' or 'action'")
             continue
         ts = str(obj["ts"])
+        if not _TS_RE.match(ts):
+            # Readers sort and filter by ts; a bad one silently drops the event.
+            errors.append(f"timeline.jsonl:{lineno} - invalid ts {ts!r} (want YYYY-MM-DDTHH:MM:SSZ)")
+            continue
         if latest and ts < latest:
             warnings.append(f"timeline.jsonl:{lineno} - out of order: {ts} after {latest}")
         latest = max(latest, ts)
