@@ -380,6 +380,8 @@ def run_quality_eval(
         "mrr": float(result.get("mrr", 0.0)),
         "cases": int(result.get("cases", 0)),
         "k": int(result.get("k", k)),
+        "negative_cases": int(result.get("negative_cases", 0)),
+        "false_positive_rate": float(result.get("false_positive_rate", 0.0)),
     }
 
 
@@ -575,6 +577,22 @@ def decide_outcome(
 
     regressed = [key for key in QUALITY_KEYS if deltas[key] < -EPSILON]
     improved = [key for key in QUALITY_KEYS if deltas[key] > EPSILON]
+
+    # Negative cases (expected_none) gate too, lower is better: a change that
+    # starts returning confident junk for unanswerable queries is a regression
+    # even when hit@k/mrr hold. Only compared when both sides measured
+    # negatives (an older baseline ref may not report them).
+    if int(baseline_quality.get("negative_cases", 0) or 0) and int(
+        candidate_quality.get("negative_cases", 0) or 0
+    ):
+        fp_delta = float(candidate_quality["false_positive_rate"]) - float(
+            baseline_quality["false_positive_rate"]
+        )
+        deltas["false_positive_rate"] = fp_delta
+        if fp_delta > EPSILON:
+            regressed.append("false_positive_rate")
+        elif fp_delta < -EPSILON:
+            improved.append("false_positive_rate")
 
     if regressed:
         return {
@@ -830,7 +848,10 @@ def build_markdown_report(payload: dict[str, Any]) -> str:
         lines.append("| Metric | Baseline | Candidate | Delta |")
         lines.append("| --- | ---: | ---: | ---: |")
         quality_deltas = decision.get("quality_deltas", {})
-        for metric in QUALITY_KEYS:
+        report_keys = list(QUALITY_KEYS)
+        if "false_positive_rate" in quality_deltas:
+            report_keys.append("false_positive_rate")  # lower is better
+        for metric in report_keys:
             b_val = float(baseline["quality"].get(metric, 0.0))
             c_val = float(candidate["quality"].get(metric, 0.0))
             delta = float(quality_deltas.get(metric, c_val - b_val))

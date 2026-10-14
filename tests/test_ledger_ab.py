@@ -106,6 +106,29 @@ class LedgerABDecisionTests(unittest.TestCase):
         self.assertEqual(result["decision"], "neutral")
         self.assertEqual(result["exit_code"], self.ledger_ab.EXIT_NEUTRAL)
 
+    def _fp_decision(self, base_fp, cand_fp, base_neg=8, cand_neg=8):
+        quality = {"hit1": 0.8, "hitk": 0.9, "mrr": 0.85}
+        return self.ledger_ab.decide_outcome(
+            baseline_quality={**quality, "negative_cases": base_neg, "false_positive_rate": base_fp},
+            candidate_quality={**quality, "negative_cases": cand_neg, "false_positive_rate": cand_fp},
+            baseline_eval_p95_ms=100.0, candidate_eval_p95_ms=100.0,
+            baseline_query_p95_ms=80.0, candidate_query_p95_ms=80.0,
+            latency_tol_pct=0.05, latency_tol_ms=2.0,
+        )
+
+    def test_false_positive_rise_is_a_regression(self):
+        result = self._fp_decision(0.125, 0.25)
+        self.assertEqual(result["exit_code"], self.ledger_ab.EXIT_REGRESSION)
+        self.assertIn("false_positive_rate", result["regressed_metrics"])
+
+    def test_false_positive_drop_is_beneficial(self):
+        result = self._fp_decision(0.25, 0.125)
+        self.assertEqual(result["exit_code"], self.ledger_ab.EXIT_BENEFICIAL)
+
+    def test_false_positive_ignored_without_negatives_on_both_sides(self):
+        result = self._fp_decision(0.0, 0.5, base_neg=0)
+        self.assertEqual(result["exit_code"], self.ledger_ab.EXIT_NEUTRAL)
+
     def test_tie_neutral_and_named_when_latency_exceeds_threshold(self):
         result = self.ledger_ab.decide_outcome(
             baseline_quality={"hit1": 0.8, "hitk": 0.9, "mrr": 0.85},
