@@ -249,6 +249,7 @@ def main() -> int:
             "failed": quality.get("failed", []),
             "negative_cases": int(quality.get("negative_cases", 0)),
             "false_positive_rate": float(quality.get("false_positive_rate", 0.0)),
+            "by_lang": quality.get("by_lang", {}),
         },
         "latency": {
             "eval": {"summary": {f"{key}_ms" if key != "count" else key: value for key, value in ab_lib.summarize_distribution(eval_samples).items()}, "samples_ms": eval_samples},
