@@ -618,23 +618,31 @@ def decide_outcome(
         },
     }
 
+    # A quality tie is neutral, never a win: an A/A run or an off-by-default
+    # change must not read as "beneficial". Latency only decides whether a tie
+    # is acceptable (neutral) or a regression.
     if eval_ok and query_ok:
         return {
-            "decision": "beneficial",
-            "reason": "quality tied and candidate met latency tie-break thresholds",
-            "exit_code": EXIT_BENEFICIAL,
+            "decision": "neutral",
+            "reason": "quality tied and candidate stayed within latency thresholds",
+            "exit_code": EXIT_NEUTRAL,
             "quality_deltas": deltas,
             "regressed_metrics": regressed,
             "improved_metrics": improved,
             "latency": latency_info,
         }
 
+    slow = [
+        name
+        for name, ok in (("latency_eval_p95", eval_ok), ("latency_query_p95", query_ok))
+        if not ok
+    ]
     return {
-        "decision": "neutral",
-        "reason": "quality tied but candidate failed latency tie-break thresholds",
-        "exit_code": EXIT_NEUTRAL,
+        "decision": "regression",
+        "reason": f"quality tied but latency regressed in: {', '.join(slow)}",
+        "exit_code": EXIT_REGRESSION,
         "quality_deltas": deltas,
-        "regressed_metrics": regressed,
+        "regressed_metrics": slow,
         "improved_metrics": improved,
         "latency": latency_info,
     }
@@ -968,7 +976,8 @@ def build_markdown_report(payload: dict[str, Any]) -> str:
         "- If quality improves on any metric (with no regressions), mark `beneficial`."
     )
     lines.append(
-        "- If quality ties, require candidate p95 for both eval/query to stay within threshold."
+        "- If quality ties, mark `neutral` when candidate p95 for both eval/query stays"
+        " within threshold, else `regression` (latency)."
     )
 
     return "\n".join(lines) + "\n"
