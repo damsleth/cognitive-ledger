@@ -26,6 +26,27 @@ The "mandatory eval gate" is therefore enforced only by agent discipline.
 - `tests/fixtures/run_gate.sh:6-10` swallows the eval exit code (it `echo`s it, then exits 0) and hardcodes
   `.venv/bin/python`. Make it `exec ledger eval ...`, then wire it into `release.yml`, which runs only `pytest -q` today.
 - Accept: a deliberate regression commit on a scratch branch pushed with `workflow_dispatch` turns the gate red; an identical commit reads NEUTRAL (needs B1).
+- Status 2026-10-14: shipped on `fix/improve-i1-ci-gate`. It is stacked on batch 3, because it needs B1.
+  - Triggers: push to main (against `github.event.before`), PR (against `origin/main`), dispatch.
+  - Paths widened; `MODE=legacy` pinned with the D4 note.
+  - `ab_gate.sh` and `run_gate.sh` now run on a temporary copy of the fixture corpus. Before this, both rewrote the tracked `note_index.json`.
+  - `run_gate.sh` returns its real exit code and runs in `release.yml`.
+  - Checked locally in a CI-like environment (no user config, worktree code): the gate prints NEUTRAL for both HEAD/HEAD and `origin/main`/HEAD; `run_gate.sh` exits 0 at hit@3 0.925.
+  - Not verified on GitHub: `workflow_dispatch` only exists once this is on the default branch. After merging, run `gh workflow run retrieval-gate.yml`, then `gh run watch`.
+
+## I8. Latency measurement cannot carry a hard gate (found while doing I1)
+
+On the fixture corpus in legacy mode, identical code (A/A) failed the eval-latency band twice in a row:
+- baseline samples 31–33 ms, candidate 33–41 ms;
+- p95 33 → 42 ms against a threshold of 37 ms.
+
+Two causes:
+- The sides run sequentially, candidate second, so any ordering bias lands on the candidate.
+- p95 of 5 samples is the max sample.
+
+So B1 keeps latency advisory: a slow tie is `neutral`, with the metric named in the reason.
+- Before latency can block: interleave the runs (ABBA) or take min-of-N, and add an absolute floor (no latency verdict when baseline p95 < ~10 ms).
+- Accept: 10 A/A runs on the fixture corpus give zero latency misses, and a deliberate `time.sleep` in the candidate is caught.
 
 ## I2. Negatives and language cohorts must be able to fail the gate
 
