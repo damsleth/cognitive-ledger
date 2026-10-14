@@ -21,5 +21,18 @@ STATUS_VALUES: frozenset[str] = frozenset({"open", "closed", "blocked", "snoozed
 VIA_VALUES: frozenset[str] = frozenset({"claude-memory", "obsidian", "yaams", "manual", "mcp"})
 PROVENANCE_FIELDS: frozenset[str] = frozenset({"via", "origin", "external_id"})
 
+# `provenance:` frontmatter field: origin-act trust class (plan 42). Not to be
+# confused with PROVENANCE_FIELDS above (the ingest-channel triad).
+PROVENANCE_VALUES: frozenset[str] = frozenset(
+    {"explicit_statement", "validated", "corrected", "observed", "imported", "inferred"}
+)
+IDENTITY_TYPE_VALUES: frozenset[str] = frozenset(
+    {"mission", "beliefs", "models", "strategies", "narratives", "voice"}
+)
+
+# schema.yaml `limits`. Identity: a cap, not one-per-type (decided 2026-10-14).
+MAX_TAGS = 10
+MAX_IDENTITY_NOTES = 6
+
 # Query-time scope filter accepts "all" as a wildcard in addition to SCOPE_VALUES.
 QUERY_SCOPE_VALUES: frozenset[str] = SCOPE_VALUES | {"all"}
