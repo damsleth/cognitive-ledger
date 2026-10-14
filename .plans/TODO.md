@@ -60,7 +60,13 @@ Shipped in the yaams repo (verified 2026-06-17 against `~/code/yaams` history):
   3. Lint and doctor (B9–B12).
   B11 note: the bitemporal back-fill exists but was never applied, and 591 notes are pending.
   The plan also lists owner ops and decisions D1–D4 (register `ledger mcp`, `synth_backend`, identity limit, CI embeddings).
-- `improvement-plan-2026-10-08.md`: I1–I7, ordered by leverage. Start after B1.
+- 2026-10-14 progress:
+  - All of B1–B12 shipped, on stacked branches `fix/review-batch1-gate` → `-batch2-privacy` → `-batch3-lint`.
+    - batch3 also carries the codex review fixes (`FileLock` inode recheck, fence edge cases).
+  - I1 is on `fix/improve-i1-ci-gate`, on top of batch 3.
+  - None of these is merged yet: fast-forward `fix/improve-i1-ci-gate` into main.
+  - Open: I2–I8 and owner decisions D1–D4.
+- `improvement-plan-2026-10-08.md`: I1–I8, ordered by leverage. Start after B1.
   - I1: the CI retrieval gate has never run (it triggers on PRs only, and there are none); make it run on push.
   - I2: negatives can fail the gate.
   - I3: live eval suite with negatives, Norwegian, loop and identity cases.

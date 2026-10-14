@@ -73,6 +73,9 @@ All 12 code items shipped on stacked branches. Full suite: 1649 passed.
 - Status 2026-10-14: shipped on `fix/review-batch1-gate`.
   - The gate invocation, run with the worktree code against `main`, exits 3 (`neutral`).
   - Smoke tests pass `--latency-tol-pct 100`, so single-run timing noise cannot turn the A/A tie into a regression.
+  - Revised on `fix/improve-i1-ci-gate`: a tie with latency over threshold is also `neutral` (3), not `regression` (2).
+    - Identical code failed the latency band twice in the CI simulation, so latency is advisory and named in the reason.
+    - See improvement plan I8 for what it takes to make latency blocking.
 
 ### B2. Live eval cases: one dangling path blocks `--strict-cases`
 - Claim: case `dev_gth_next_action` in `~/brain/ledger/08_indices/retrieval_eval_cases.yaml`

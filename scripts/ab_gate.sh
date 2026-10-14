@@ -7,17 +7,32 @@
 # explicit notes dir the config guard refuses to start, so the gate used to
 # die with exit 1 before measuring anything. CASES is corpus-relative - the
 # harness requires the cases file to live inside the corpus.
-CORPUS="${CORPUS:-$(pwd)/tests/fixtures/corpus/notes}"
+# BASELINE_REF: what HEAD is compared against. CI passes origin/main on a PR
+# (a PR checkout has no local `main`) and the pre-push commit on a push.
+# MODE: pin both arms to one retrieval mode (CI uses legacy: no embeddings).
+# The run rewrites derived files (note_index.json) inside the corpus, so the
+# default is a throwaway copy of the fixture corpus, not the tracked one.
+if [ -z "${CORPUS:-}" ]; then
+  CORPUS="$(mktemp -d)/notes"
+  cp -R "$(pwd)/tests/fixtures/corpus/notes" "$CORPUS"
+fi
 CASES="${CASES:-08_indices/retrieval_eval_cases.yaml}"
+BASELINE_REF="${BASELINE_REF:-main}"
+
+set --
+if [ -n "${MODE:-}" ]; then
+  set -- --baseline-mode "$MODE" --candidate-mode "$MODE"
+fi
 
 LEDGER_NOTES_DIR="$CORPUS" ledger ab run \
   --corpus "$CORPUS" \
-  --baseline-ref main \
+  --baseline-ref "$BASELINE_REF" \
   --candidate-ref HEAD \
   --cases "$CASES" \
   --k 3 \
   --eval-runs 5 \
-  --query-runs 3
+  --query-runs 3 \
+  "$@"
 code=$?
 
 case $code in
