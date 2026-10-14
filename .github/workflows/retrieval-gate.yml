@@ -1,13 +1,36 @@
 name: Retrieval gate
 
+# Work lands on main by push far more often than by PR, so the gate runs on
+# both: a push is compared against the commit before it, a PR against main.
 on:
-  pull_request:
+  push:
+    branches: [main]
     paths:
       - ledger/retrieval.py
       - ledger/query.py
       - ledger/scoring.py
       - ledger/signals.py
       - ledger/config.py
+      - ledger/ab.py
+      - ledger/eval.py
+      - ledger/embeddings.py
+      - ledger/semantic.py
+      - tests/fixtures/corpus/**
+      - scripts/ab_gate.sh
+  pull_request:
+    paths:  # same list as push
+      - ledger/retrieval.py
+      - ledger/query.py
+      - ledger/scoring.py
+      - ledger/signals.py
+      - ledger/config.py
+      - ledger/ab.py
+      - ledger/eval.py
+      - ledger/embeddings.py
+      - ledger/semantic.py
+      - tests/fixtures/corpus/**
+      - scripts/ab_gate.sh
+  workflow_dispatch:
 
 jobs:
   ab-gate:
@@ -15,7 +38,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          fetch-depth: 0  # needed so --baseline-ref main has full history
+          fetch-depth: 0  # the baseline ref needs full history
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12"
@@ -26,4 +49,10 @@ jobs:
       - name: Run retrieval gate
         env:
           LEDGER_EMBEDDINGS_OFFLINE: "1"
+          # A PR checkout has no local `main`; a push compares to its parent.
+          BASELINE_REF: ${{ github.event_name == 'push' && github.event.before || 'origin/main' }}
+          # Lexical on purpose: CI installs no [embeddings] extra or model, so a
+          # semantic run would stop at exit 4. A semantic gate needs both plus a
+          # model cache (decision D4 in .plans/codebase-review-2026-10-08.md).
+          MODE: legacy
         run: bash scripts/ab_gate.sh

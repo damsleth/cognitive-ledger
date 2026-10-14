@@ -619,30 +619,28 @@ def decide_outcome(
     }
 
     # A quality tie is neutral, never a win: an A/A run or an off-by-default
-    # change must not read as "beneficial". Latency only decides whether a tie
-    # is acceptable (neutral) or a regression.
-    if eval_ok and query_ok:
-        return {
-            "decision": "neutral",
-            "reason": "quality tied and candidate stayed within latency thresholds",
-            "exit_code": EXIT_NEUTRAL,
-            "quality_deltas": deltas,
-            "regressed_metrics": regressed,
-            "improved_metrics": improved,
-            "latency": latency_info,
-        }
-
+    # change must not read as "beneficial". Latency is reported, not gated:
+    # identical code failed the latency band twice in a row on the fixture
+    # corpus (eval p95 33 -> 42 ms; sides run sequentially, p95 of 5 samples
+    # is the max), so a slow tie names the metric but stays neutral.
+    # ponytail: advisory latency; make it blocking only after ABBA
+    # interleaving / min-of-N and an absolute floor (improvement plan I8).
     slow = [
         name
         for name, ok in (("latency_eval_p95", eval_ok), ("latency_query_p95", query_ok))
         if not ok
     ]
+    reason = (
+        f"quality tied; latency over threshold (advisory) in: {', '.join(slow)}"
+        if slow
+        else "quality tied and candidate stayed within latency thresholds"
+    )
     return {
-        "decision": "regression",
-        "reason": f"quality tied but latency regressed in: {', '.join(slow)}",
-        "exit_code": EXIT_REGRESSION,
+        "decision": "neutral",
+        "reason": reason,
+        "exit_code": EXIT_NEUTRAL,
         "quality_deltas": deltas,
-        "regressed_metrics": slow,
+        "regressed_metrics": regressed,
         "improved_metrics": improved,
         "latency": latency_info,
     }
@@ -976,8 +974,8 @@ def build_markdown_report(payload: dict[str, Any]) -> str:
         "- If quality improves on any metric (with no regressions), mark `beneficial`."
     )
     lines.append(
-        "- If quality ties, mark `neutral` when candidate p95 for both eval/query stays"
-        " within threshold, else `regression` (latency)."
+        "- If quality ties, mark `neutral`; a p95 over the latency threshold is named"
+        " in the reason but is advisory, not blocking."
     )
 
     return "\n".join(lines) + "\n"

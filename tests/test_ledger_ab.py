@@ -106,7 +106,7 @@ class LedgerABDecisionTests(unittest.TestCase):
         self.assertEqual(result["decision"], "neutral")
         self.assertEqual(result["exit_code"], self.ledger_ab.EXIT_NEUTRAL)
 
-    def test_tie_regression_when_latency_exceeds_threshold(self):
+    def test_tie_neutral_and_named_when_latency_exceeds_threshold(self):
         result = self.ledger_ab.decide_outcome(
             baseline_quality={"hit1": 0.8, "hitk": 0.9, "mrr": 0.85},
             candidate_quality={"hit1": 0.8, "hitk": 0.9, "mrr": 0.85},
@@ -117,9 +117,10 @@ class LedgerABDecisionTests(unittest.TestCase):
             latency_tol_pct=0.05,
             latency_tol_ms=2.0,
         )
-        self.assertEqual(result["decision"], "regression")
-        self.assertEqual(result["exit_code"], self.ledger_ab.EXIT_REGRESSION)
-        self.assertEqual(result["regressed_metrics"], ["latency_eval_p95"])
+        self.assertEqual(result["decision"], "neutral")
+        self.assertEqual(result["exit_code"], self.ledger_ab.EXIT_NEUTRAL)
+        self.assertIn("latency_eval_p95", result["reason"])
+        self.assertFalse(result["latency"]["eval"]["passed"])
 
     def test_retrieval_modes_include_semantic_hybrid(self):
         self.assertIn("semantic_hybrid", self.ledger_ab.RETRIEVAL_MODES)
