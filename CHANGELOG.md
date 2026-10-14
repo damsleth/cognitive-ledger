@@ -3,6 +3,22 @@
 ## Unreleased
 
 ### Changed
+- **Lint enforces what `schema.yaml` declares.** All the new rules are
+  warnings:
+  - identity notes need a valid `identity_type`;
+  - more than 6 identity notes warns (a cap; types may repeat, decided 2026-10-14);
+  - `status` on a non-loop note warns;
+  - `provenance` must be in its enum;
+  - more than 10 tags warns.
+
+  A test now keeps `ledger/schema_values.py` equal to the `schema.yaml` enums and limits. `note__` captures no longer get the large-file warning; on the live corpus that is 60 of the old 92 warnings.
+
+  Spec and doc drift fixed alongside:
+  - the timeline path now names `timeline.jsonl`;
+  - `things_list_id` and the `note__` capture type are documented;
+  - phantom `07_reflections` and `08_people` folders are removed from type inference;
+  - AGENTS.md gains the full frontmatter table, the identity rule and the complete signal-type list;
+  - the generic template's frontmatter is no longer shadowed by its comment block.
 - **Negative eval cases can fail the A/B gate.** `ledger ab run` compared
   only hit@1, hit@k and MRR, so a change that started returning confident
   junk for unanswerable (`expected_none`) queries still passed. A rise in
