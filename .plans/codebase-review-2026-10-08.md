@@ -52,6 +52,9 @@ Corpus: 02_facts 381, 03_preferences 81, 06_concepts 55, 05_open_loops 19
   - Fix `test_head_vs_head_smoke` (:493), `_with_cold_query` (:545) and `_with_runs_shortcut` (:583) to assert exit 3.
   - Update the policy prose at `ledger/ab.py:968` and the reason strings.
 - Accept: `bash scripts/ab_gate.sh` on a branch identical to main (fixture corpus) → prints NEUTRAL.
+- Status 2026-10-14: shipped on `fix/review-batch1-gate`.
+  - The gate invocation, run with the worktree code against `main`, exits 3 (`neutral`).
+  - Smoke tests pass `--latency-tol-pct 100`, so single-run timing noise cannot turn the A/A tie into a regression.
 
 ### B2. Live eval cases: one dangling path blocks `--strict-cases`
 - Claim: case `dev_gth_next_action` in `~/brain/ledger/08_indices/retrieval_eval_cases.yaml`
@@ -79,6 +82,13 @@ Corpus: 02_facts 381, 03_preferences 81, 06_concepts 55, 05_open_loops 19
 
   This tests validity, not just archive inclusion.
 - Accept: live eval hit@3 rises with no other case changing (owner adds `as_of` to the 5 cases).
+- Status 2026-10-14: B2 and B3 code shipped on `fix/review-batch1-gate`.
+  - Preview on a scratch copy of the live cases, with each `as_of` the day before the note's `valid_to`:
+    hit@1 0.783 → 0.870, hit@3 0.870 → 0.957, mrr 0.830 → 0.915.
+  - Still failing: `dev_gth_next_action` (dangling, B2) and `history_v019_deployment` (a real ranking miss inside its window).
+  - Owner adds to `08_indices/retrieval_eval_cases.yaml`:
+    `as_of: 2026-04-27` on `dev_norwegian_llm_loop` and `loop_verditakst`;
+    `as_of: 2026-02-08` on `history_v019_deployment`, `history_une_script` and `history_brkh_visit`.
 
 ## Batch 2: privacy and data safety
 

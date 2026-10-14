@@ -3,6 +3,11 @@
 ## Unreleased
 
 ### Added
+- **Eval cases take `as_of: YYYY-MM-DD`.** A history case that expects a note
+  in `09_archive` ranks as of that date (archive included, valid-time
+  filtered) instead of failing by design. A malformed date fails validation,
+  and a ranker that cannot take `as_of` raises instead of quietly scoring the
+  case against today.
 - **`ledger sleep links`** proposes `[[links]]` between related notes, using
   the vectors already in the semantic index (no model load): top 5 neighbours
   at cosine 0.80–0.97, both directions, skipping links that exist and
@@ -50,6 +55,9 @@
   latency threshold is now a `regression` (exit 2) naming the slow metric. It
   used to be `neutral`, which let an off-by-default change that slowed
   retrieval through as acceptable.
+- **`ledger eval` warns about expected paths that no longer exist.** Without
+  `--strict-cases`, a case pointing at a deleted note scored as a silent miss.
+  It is now named on stderr; `--json` output is unchanged.
 - **Each corpus owns its embedding index; eval and A/B runs no longer overwrite
   the live one.** The index files lived under `ledger_root/.smart-env` — the
   code tree once the store moved out — while the manifest lived with the notes.
