@@ -240,7 +240,11 @@ latency regression.
 bash scripts/ab_gate.sh   # 0 = beneficial, 3 = neutral (ok if change is off-by-default), 2 = STOP
 ```
 
-The same gate runs automatically on PRs via `.github/workflows/retrieval-gate.yml`.
+The same gate runs automatically via `.github/workflows/retrieval-gate.yml`:
+on PRs, on push to `main` (against the previous commit), and on manual
+dispatch. CI pins lexical mode (`MODE=legacy`) because it has no embedding
+model. A quality tie is exit 3 even when latency misses its band: latency is
+advisory until the harness interleaves its runs (improvement plan I8).
 
 ```bash
 ledger ab run --baseline-ref main --candidate-ref HEAD   # uses ledger_notes_dir from config.yaml

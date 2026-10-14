@@ -48,6 +48,16 @@
   warns.
 
 ### Fixed
+- **The CI retrieval gate actually runs.** It triggered only on pull
+  requests, and work lands on `main` by push, so it had never run. It now also
+  runs on push to `main`, comparing against the previous commit, and on
+  manual dispatch. It compares against `origin/main` on a PR, because a PR
+  checkout has no local `main`. The path filter now covers `ab.py`, `eval.py`,
+  `embeddings.py`, `semantic.py` and the fixture corpus, and lexical mode is
+  pinned explicitly, since CI installs no embedding model.
+  - `scripts/ab_gate.sh` takes `BASELINE_REF` and `MODE`.
+  - `tests/fixtures/run_gate.sh` exits with the eval's status (it always exited 0) and is part of the release workflow.
+  - Both scripts run on a temporary copy of the fixture corpus instead of rewriting its tracked `note_index.json`.
 - **`FileLock` cannot be shared through a reaped lock file.** A writer that
   had opened a lock file before maintenance unlinked it would then lock the
   orphaned inode, while a newcomer locked a fresh file at the same path, and
@@ -106,11 +116,11 @@
   also flags `<private>` text found in the index.
 - **`ledger ab run` no longer reports a quality tie as `beneficial`.** A tie
   within latency tolerance was exit 0, so an A/A run, or any off-by-default
-  change, passed as a win. A tie within tolerance is now `neutral` (exit 3),
-  as AGENTS.md and `scripts/ab_gate.sh` already said. A tie that misses the
-  latency threshold is now a `regression` (exit 2) naming the slow metric. It
-  used to be `neutral`, which let an off-by-default change that slowed
-  retrieval through as acceptable.
+  change, passed as a win. Every quality tie is now `neutral` (exit 3), as
+  AGENTS.md and `scripts/ab_gate.sh` already said; only a quality change can
+  give 0 or 2. Latency is advisory: a slow tie names the metric in its
+  reason. Identical code failed the latency band twice in a row (eval p95
+  33 → 42 ms), so latency cannot carry a hard gate yet.
 - **`ledger eval` warns about expected paths that no longer exist.** Without
   `--strict-cases`, a case pointing at a deleted note scored as a silent miss.
   It is now named on stderr; `--json` output is unchanged.
