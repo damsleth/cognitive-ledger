@@ -114,3 +114,27 @@ def handle_audit(args):
     except (ValueError, OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
+
+
+def handle_behaviour(args):
+    from ledger.behaviour import run_suite
+    try:
+        result = run_suite(Path(args.cases), get_config().ledger_notes_dir,
+                           command=shlex.split(args.behaviour_command) if args.behaviour_command else None,
+                           model=args.behaviour_model,
+                           instructions=args.instructions.read_text() if args.instructions else "",
+                           runs=args.runs, timeout=args.timeout)
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False))
+        else:
+            for arm, stats in result["totals"].items():
+                print(f"{arm}: {stats['passed']}/{stats['total']} passed")
+            print(f"Agent pass-rate delta: {result['agent_pass_rate_delta']}")
+            for row in result["results"]:
+                if not row["passed"]:
+                    print(f"FAIL {row['case']} {row['arm']}: {', '.join(row['failures'])}")
+        candidate = result["totals"]["candidate"]
+        return 0 if candidate["passed"] == candidate["total"] else 5
+    except (ValueError, OSError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
