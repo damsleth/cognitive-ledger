@@ -75,6 +75,13 @@ def test_invalid_agent_output_is_not_a_pass(tmp_path):
     assert result["totals"]["candidate"]["passed"] == 0
 
 
+def test_missing_field_does_not_satisfy_null_assertion(tmp_path):
+    case = {"id": "null", "kind": "agent", "scenario": "x", "checks": {"json_equals": {"absent": None}}}
+    result = run_suite(write_cases(tmp_path, [case]), tmp_path,
+                       command=[sys.executable, "-c", "print('{}')"], model="fixture")
+    assert result["totals"]["candidate"]["passed"] == 0
+
+
 def test_command_side_effect_assertions(tmp_path):
     case = {"id": "files", "kind": "command",
             "command": ["{python}", "-c", "from pathlib import Path; Path('result').write_text('done')"],

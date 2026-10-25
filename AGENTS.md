@@ -399,9 +399,11 @@ notes/09_archive/      superseded notes (do not delete)
 
 **Codex** (`AGENTS.md` in repo root already covers this).
 
-**Automated maintenance** (cron or Claude Code `/schedule`):
+**Automated maintenance:** use the owner's configured scheduler and current
+scheduling preferences (for example, `takt`). Schedule the following command
+daily; inspect the scheduler's help for its registration syntax:
 ```
-0 6 * * * /path/to/cognitive-ledger/scripts/sheep-auto.sh
+/path/to/cognitive-ledger/scripts/sheep-auto.sh
 ```
 
 **Troubleshooting:**
