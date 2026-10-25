@@ -85,3 +85,19 @@ def test_cli_manifest_json(tmp_path, capsys):
     data = json.loads(capsys.readouterr().out)
     assert data["semantic_reviewed"] is False
     assert len(data["bundle"]["documents"]) == 2
+
+
+def test_model_cannot_directly_enqueue(tmp_path, capsys):
+    from ledger.cli import main
+    manifest, _ = setup(tmp_path)
+    assert main(["audit", "instructions", "--manifest", str(manifest),
+                 "--command", "not-executed", "--enqueue"]) == 1
+    assert "reviewed report" in capsys.readouterr().err
+
+
+def test_stale_review_rejected_after_source_edit(tmp_path):
+    manifest, bundle = setup(tmp_path)
+    data = review(bundle)
+    (tmp_path / "SKILL.md").write_text("New procedure")
+    with pytest.raises(ValueError, match="bundle_hash"):
+        validate_findings(build_bundle(manifest, tmp_path), data)

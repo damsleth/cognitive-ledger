@@ -6,6 +6,7 @@ import sys
 import shlex
 import subprocess
 from pathlib import Path
+import yaml
 
 from ledger.config import get_config
 from ledger.conventions import emit_action, action_envelope
@@ -84,6 +85,8 @@ def handle_audit(args):
     from ledger.improvements import sync
     try:
         root = get_config().ledger_notes_dir
+        if args.enqueue and not args.findings:
+            raise ValueError("Enqueue requires --findings from a reviewed report; model output is report-only")
         bundle = build_bundle(args.manifest, root, max_chars=args.max_chars, max_files=args.max_files)
         findings = []
         reviewed = False
@@ -111,7 +114,7 @@ def handle_audit(args):
             if not reviewed:
                 print("Use --json for the evidence bundle; --command or --findings for semantic review.")
         return 0
-    except (ValueError, OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
+    except (ValueError, OSError, RuntimeError, yaml.YAMLError, subprocess.TimeoutExpired) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
 
@@ -135,6 +138,6 @@ def handle_behaviour(args):
                     print(f"FAIL {row['case']} {row['arm']}: {', '.join(row['failures'])}")
         candidate = result["totals"]["candidate"]
         return 0 if candidate["passed"] == candidate["total"] else 5
-    except (ValueError, OSError) as exc:
+    except (ValueError, OSError, yaml.YAMLError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1

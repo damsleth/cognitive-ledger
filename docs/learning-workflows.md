@@ -56,8 +56,9 @@ No external model is called by default. Reviews must match the current bundle
 hash and cite exposed quotes and original line numbers. Conflicts, divergence,
 and missing guidance require two source documents. These checks establish
 traceability, not semantic correctness: scope interpretation remains reviewable.
-`--enqueue` explicitly appends findings to the improvement log; it edits no
-instructions or notes. Saved findings are rejected after the bundle changes.
+`--enqueue` requires `--findings` from a reviewed report; direct model output
+is report-only. It explicitly appends findings to the improvement log and
+edits no instructions or notes. Saved findings are rejected after the bundle changes.
 
 ## Behaviour evaluation
 
