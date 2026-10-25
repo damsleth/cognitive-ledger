@@ -58,3 +58,38 @@ and missing guidance require two source documents. These checks establish
 traceability, not semantic correctness: scope interpretation remains reviewable.
 `--enqueue` explicitly appends findings to the improvement log; it edits no
 instructions or notes. Saved findings are rejected after the bundle changes.
+
+## Behaviour evaluation
+
+```sh
+ledger eval behaviour --cases tests/fixtures/behaviour_cases.yaml --json
+ledger eval behaviour --cases local-cases.yaml --command 'reviewer --json' \
+  --model <model-id> --instructions /path/to/lesson-routing.md --runs 3 --json
+```
+
+YAML suites contain a nonempty `cases` list. Each case has `id`, `kind`,
+`checks`, and optional `setup.files` (relative filename to text mapping).
+Command cases supply a `command` argv list with optional `{python}`,
+`{project}`, and `{workspace}` substitutions. Checks support `exit_code`,
+`stdout_contains`, `stdout_absent`, `files_absent`, and `files_contain`.
+Each case runs in a fresh disposable workspace with a temporary ledger path.
+Commands are trusted executables, not sandboxed: use fixture-only commands.
+
+Agent cases supply `scenario`, `setup.memory_refs` (explicit logical note
+paths), and `checks.json_equals` (dotted response keys to expected values).
+The scenario must ask for a JSON decision in the relevant fields. These
+cases require an explicit command and recorded model identifier. Configure
+the command to disable tools, memory, project instructions, and persistence.
+
+Baseline receives the scenario alone; candidate also receives the selected
+notes and optional workflow instructions. Both arms use the same command,
+alternating order across repetitions. There is no LLM judge: parsed fields
+are checked directly. Note hashes, prompt hashes, suite hash, command, model,
+latency, failures, and redacted response excerpts accompany the totals.
+Never put transcripts into cases. Private sections are stripped before prompts.
+
+Missing references fail setup before execution; explicit references bypass
+retrieval. These tests measure application of supplied guidance, not retrieval
+quality or actual agent tool execution. Small samples are descriptive. Command
+cases have no baseline; agent deltas exclude command cases. Exit codes: 0 all
+candidate checks passed; 5 completed with failed checks; 1 invalid setup.

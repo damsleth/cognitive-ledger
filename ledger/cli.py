@@ -2451,6 +2451,12 @@ def main(argv=None) -> int:
     embed_search_parser.add_argument("--json", action="store_true", dest="json")
 
     eval_parser = subparsers.add_parser("eval", help="Evaluate retrieval quality against benchmark cases")
+    eval_parser.add_argument("eval_kind", nargs="?", choices=["behaviour"])
+    eval_parser.add_argument("--command", dest="behaviour_command", help="Tool-free agent command for behaviour cases")
+    eval_parser.add_argument("--model", dest="behaviour_model", help="Model identifier recorded with behaviour results")
+    eval_parser.add_argument("--instructions", type=Path, help="Candidate-only workflow instructions")
+    eval_parser.add_argument("--runs", type=int, default=1, help="Behaviour repetitions per case")
+    eval_parser.add_argument("--timeout", type=float, default=120, help="Behaviour subprocess timeout")
     eval_parser.add_argument("--cases", required=True, help="Path to retrieval_eval_cases.yaml")
     eval_parser.add_argument("--k", type=int, default=3)
     eval_parser.add_argument(
@@ -2913,6 +2919,9 @@ def main(argv=None) -> int:
     }
 
     try:
+        if args.command == "eval" and args.eval_kind == "behaviour":
+            from ledger.learning_cli import handle_behaviour
+            return handle_behaviour(args)
         if args.command == "audit":
             from ledger.learning_cli import handle_audit
             return handle_audit(args)
