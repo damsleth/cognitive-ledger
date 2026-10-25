@@ -1,0 +1,17 @@
+cases:
+  - id: resolve_requires_evidence
+    kind: command
+    command: ['{python}', '-m', ledger, improvements, resolve, missing]
+    checks:
+      exit_code: 1
+      files_absent: [notes/08_indices/improvements.jsonl]
+  - id: audit_does_not_write_notes
+    kind: command
+    setup:
+      files:
+        sources.yaml: "sources:\n  - path: missing.md\n"
+    command: ['{python}', '-m', ledger, audit, instructions, --manifest, sources.yaml, --json]
+    checks:
+      exit_code: 0
+      stdout_contains: [missing_source]
+      files_absent: [notes/08_indices/improvements.jsonl]
