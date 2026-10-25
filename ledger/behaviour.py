@@ -62,6 +62,9 @@ def load_cases(path: Path) -> list[dict]:
                 raise ValueError(f"{name} must be a nonempty list of strings")
             if name in {"json_equals", "files_contain"} and (not isinstance(value, dict) or not value):
                 raise ValueError(f"{name} must be a nonempty mapping")
+            if name == "json_equals" and any(not isinstance(k, str) or not k or
+                                             any(not part for part in k.split('.')) for k in value):
+                raise ValueError("json_equals keys must be nonempty dotted field paths")
         if kind == "command" and (not isinstance(case.get("command"), list) or not case["command"]
                                    or any(not isinstance(v, str) for v in case["command"])):
             raise ValueError("Command cases require an argv list")
@@ -136,8 +139,9 @@ def _check(checks: dict, process, workspace: Path, *, agent: bool) -> list[str]:
             return failures + ["invalid_json_response"]
         for dotted, value in checks["json_equals"].items():
             actual = output
+            missing = object()
             for key in dotted.split("."):
-                actual = actual.get(key) if isinstance(actual, dict) else None
+                actual = actual.get(key, missing) if isinstance(actual, dict) else missing
             if actual != value:
                 failures.append("json_equals:" + dotted)
     return failures

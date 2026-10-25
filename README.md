@@ -93,6 +93,24 @@ Invoke `/notes` in your agent session:
 
 Or try `ledger briefing` for a daily status overview.
 
+### Turn lessons into improvements
+
+The `cj-notes` skill routes lessons into checks, skill fixes, memory, tasks,
+or skips. The CLI tracks recurring signal failures and can audit selected
+instruction sources or evaluate behaviour against supplied memory:
+
+```bash
+ledger improvements list
+ledger improvements resolve <id> --artifact <commit-or-file>
+ledger audit instructions --manifest sources.yaml --json
+ledger eval behaviour --cases tests/fixtures/behaviour_cases.yaml --json
+```
+
+Reads leave the corpus unchanged. Audits call a model only with an explicit
+`--command`; findings require review before enqueueing. See
+[learning workflows](docs/learning-workflows.md) for manifests, lifecycle,
+agent evaluation, and limits.
+
 ## Plugging Into an Existing Notes Repository
 
 You don't need to move your notes. Bootstrap the ledger inside your existing notes tree:

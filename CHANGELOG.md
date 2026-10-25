@@ -2,7 +2,23 @@
 
 ## Unreleased
 
+### Added
+- **Learning workflows:** `ledger improvements` gives recurring signal
+  failures a durable resolve/dismiss/defer lifecycle, with new matching
+  evidence reopening issues and a compact briefing summary.
+- **`ledger audit instructions`** builds bounded, redacted evidence from an
+  explicit source manifest. Optional semantic reviews must cite exposed
+  source lines and match the bundle version; reviewed findings can enter
+  the improvement queue. Direct model output is report-only.
+- **`ledger eval behaviour`** checks disposable command fixtures and paired
+  agent decisions with/without explicit memory. Reports record context
+  hashes, model/command, latency and failures; they do not claim tool-use
+  compliance. `scripts/benchmark_learning.py` measures these workflows
+  against a live corpus while checking its content remains unchanged.
+
 ### Changed
+- Maintenance setup in AGENTS.md follows the owner's scheduler preference
+  rather than prescribing a raw crontab entry.
 - **`ledger eval` breaks hit@k down by case `lang`.** It prints the breakdown
   when cases span more than one language. The fixture corpus gains three
   Norwegian notes, three Norwegian cases and a Norwegian negative, so a
