@@ -2140,6 +2140,8 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="Cognitive Ledger retrieval helpers")
     parser.add_argument("-v", "--version", action="version", version=f"ledger {__version__}")
     subparsers = parser.add_subparsers(dest="command")
+    from ledger.learning_cli import register as register_learning
+    register_learning(subparsers)
 
     loops_parser = subparsers.add_parser("loops", help="List loops (default: open)")
     loops_parser.add_argument("loops_command", nargs="?", choices=["sync"], default=None,
@@ -2911,6 +2913,9 @@ def main(argv=None) -> int:
     }
 
     try:
+        if args.command == "improvements":
+            from ledger.learning_cli import handle
+            return handle(args)
         if args.command in {"loops", "notes"}:
             handle_listing_command(args)
             return 0
