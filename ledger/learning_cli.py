@@ -3,12 +3,27 @@ from __future__ import annotations
 
 import json
 import sys
+import shlex
+import subprocess
+from pathlib import Path
 
 from ledger.config import get_config
 from ledger.conventions import emit_action, action_envelope
 
 
 def register(subparsers):
+    audit = subparsers.add_parser("audit", help="Audit explicitly selected instruction sources")
+    audits = audit.add_subparsers(dest="audit_command", required=True)
+    p = audits.add_parser("instructions")
+    p.add_argument("--manifest", type=Path, required=True)
+    p.add_argument("--max-chars", type=int, default=60000)
+    p.add_argument("--max-files", type=int, default=100)
+    mode = p.add_mutually_exclusive_group()
+    mode.add_argument("--command", dest="reviewer_command", help="Explicit reviewer command; receives JSON evidence on stdin")
+    mode.add_argument("--findings", type=Path, help="Validate a saved review against the current bundle")
+    p.add_argument("--timeout", type=float, default=120)
+    p.add_argument("--enqueue", action="store_true", help="Explicitly append validated findings to improvements")
+    p.add_argument("--json", action="store_true")
     parser = subparsers.add_parser("improvements", help="Act on recurring signal patterns")
     commands = parser.add_subparsers(dest="improvement_command", required=True)
     for name in ("list", "show", "sync", "resolve", "dismiss", "defer", "reopen"):
@@ -61,3 +76,41 @@ def handle(args):
     except KeyError:
         print("error: improvement not found", file=sys.stderr)
         return 4
+
+
+def handle_audit(args):
+    from ledger.instruction_audit import build_bundle, audit_prompt, validate_findings, queue_items
+    from ledger.synthesize.llm import SubprocessAdapter
+    from ledger.improvements import sync
+    try:
+        root = get_config().ledger_notes_dir
+        bundle = build_bundle(args.manifest, root, max_chars=args.max_chars, max_files=args.max_files)
+        findings = []
+        reviewed = False
+        reviewer = getattr(args, "reviewer_command", None)
+        if reviewer:
+            if args.timeout <= 0:
+                raise ValueError("Timeout must be positive")
+            response = SubprocessAdapter(shlex.split(reviewer), timeout=args.timeout).complete(audit_prompt(bundle))
+            findings = validate_findings(bundle, json.loads(response.text))
+            reviewed = True
+        elif args.findings:
+            findings = validate_findings(bundle, json.loads(args.findings.read_text()))
+            reviewed = True
+        result = {"bundle": bundle, "semantic_reviewed": reviewed,
+                  "findings": bundle["deterministic_findings"] + findings}
+        if args.enqueue:
+            result["enqueued"] = sync(root, queue_items(result["findings"]))
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False))
+        else:
+            print(f"Sources: {len(bundle['documents'])}; omitted: {len(bundle['omitted'])}; "
+                  f"findings: {len(result['findings'])}; semantic review: {reviewed}")
+            for finding in result["findings"]:
+                print(f"[{finding['kind']}] {finding['subject']}: {finding['suggested_action']}")
+            if not reviewed:
+                print("Use --json for the evidence bundle; --command or --findings for semantic review.")
+        return 0
+    except (ValueError, OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
