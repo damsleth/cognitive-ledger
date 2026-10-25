@@ -173,6 +173,13 @@ def daily_briefing() -> str:
     nudge_log = _load_nudge_log()
     last_activity = _note_last_activity(config.timeline_jsonl_path)
     lines: list[str] = ["# Daily Briefing", ""]
+    from ledger.improvements import summary as improvement_summary
+    improvements = improvement_summary(config.ledger_notes_dir)
+    if improvements["open"]:
+        lines.extend([f"## Improvements ({improvements['open']} open)", ""])
+        for item in improvements["items"]:
+            lines.append(f"- {item['id']}: {item['suggested_action']}")
+        lines.extend(["", "Run `ledger improvements list` for evidence and actions.", ""])
 
     # Open loops sorted by staleness
     open_loops = get_notes("loops", loop_status="open")
@@ -287,6 +294,7 @@ def daily_briefing() -> str:
 
 def daily_briefing_data() -> dict[str, Any]:
     """Return the daily briefing as structured data suitable for JSON serialisation."""
+    from ledger.improvements import summary as improvement_summary
     config = get_config()
 
     now = datetime.now(timezone.utc)
@@ -356,6 +364,7 @@ def daily_briefing_data() -> dict[str, Any]:
         "suggestions": suggestions,
         "closed_recently": closed_recent,
         "inbox_count": inbox_count,
+        "improvements": improvement_summary(config.ledger_notes_dir),
     }
 
 
