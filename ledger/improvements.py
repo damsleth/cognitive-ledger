@@ -120,7 +120,7 @@ def sync(notes_dir: Path, items: list[dict] | None = None) -> int:
             if item["id"] in previous and items is not None:
                 old = previous[item["id"]]
                 item = {**old, **item, "state": old["state"]}
-                if _has_new(item.get("evidence_checkpoint", {}),
+                if old["state"] in {"resolved", "dismissed"} and _has_new(item.get("evidence_checkpoint", {}),
                             old.get("disposition_checkpoint", {})):
                     item.update(state="open", recurrence=True)
             if item != previous.get(item["id"]):

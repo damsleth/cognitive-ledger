@@ -2913,6 +2913,9 @@ def main(argv=None) -> int:
     }
 
     try:
+        if args.command == "audit":
+            from ledger.learning_cli import handle_audit
+            return handle_audit(args)
         if args.command == "improvements":
             from ledger.learning_cli import handle
             return handle(args)
