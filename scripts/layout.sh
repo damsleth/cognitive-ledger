@@ -12,4 +12,6 @@ identity = NOTE_LAYOUTS["identity"]
 print(INDICES_SUBDIR, identity.subdir, identity.prefix)
 '
 )"
+# ponytail: hooks must not write into the corpus root if Python is broken.
+: "${LEDGER_INDICES_SUBDIR:=08_indices}" "${LEDGER_IDENTITY_SUBDIR:=01_identity}" "${LEDGER_IDENTITY_PREFIX:=id__}"
 unset _ledger_layout_root _ledger_layout_python
