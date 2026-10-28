@@ -109,7 +109,7 @@ def test_pilot_toggle_and_commit(notes_dir):
 def _run_triage_with_summary(monkeypatch, summary, index_fn):
     """Drive run_interactive_triage past the TUI with a canned summary."""
     import ledger.inbox_triage as triage
-    import ledger.maintenance as maintenance
+    import ledger.maintenance.index as maintenance
 
     class _FakeApp:
         def __init__(self, *a, **k):

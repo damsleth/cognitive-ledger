@@ -6,6 +6,7 @@ from pathlib import Path
 
 from ledger.config import LedgerConfig, set_config, reset_config
 from ledger import maintenance
+from ledger.maintenance import index, status
 from ledger.io.safe_write import append_timeline_entry
 
 
@@ -144,7 +145,7 @@ def test_generate_semantic_index_honors_configured_model(tmp_path, monkeypatch):
         captured["cmd"] = command
         return 0, ""
 
-    monkeypatch.setattr(maintenance, "_run_subprocess", fake_run)
+    monkeypatch.setattr(index, "_run_subprocess", fake_run)
     try:
         maintenance._generate_semantic_index()
     finally:
@@ -167,7 +168,7 @@ def test_generate_semantic_index_falls_back_to_backend_default(tmp_path, monkeyp
         captured["cmd"] = command
         return 0, ""
 
-    monkeypatch.setattr(maintenance, "_run_subprocess", fake_run)
+    monkeypatch.setattr(index, "_run_subprocess", fake_run)
     try:
         maintenance._generate_semantic_index()
     finally:
@@ -385,7 +386,7 @@ def test_status_recommends_sleep_for_large_unlogged_drift(tmp_path, monkeypatch)
             '{"ts":"' + _ts() + '","action":"sleep","path":"-","desc":"done"}\n',
         )
         monkeypatch.setattr(
-            maintenance,
+            status,
             "_compute_sync_report",
             lambda: {
                 "state_invalid": False,
@@ -424,7 +425,7 @@ def test_status_prints_gate_reasoning(tmp_path, monkeypatch, capsys):
             '{"ts":"' + _ts() + '","action":"sleep","path":"-","desc":"done"}\n',
         )
         monkeypatch.setattr(
-            maintenance,
+            status,
             "_compute_sync_report",
             lambda: {
                 "state_invalid": False,
@@ -458,7 +459,7 @@ def test_age_gate_requires_work_since_last_sleep(tmp_path, monkeypatch):
             config.timeline_jsonl_path,
             '{"ts":"2026-08-01T00:00:00Z","action":"sleep","path":"-","desc":"done"}\n',
         )
-        monkeypatch.setattr(maintenance, "_compute_sync_report", lambda: clean_report)
+        monkeypatch.setattr(status, "_compute_sync_report", lambda: clean_report)
 
         idle_payload = maintenance._status_payload()
         with_work_gate = next(
@@ -519,7 +520,7 @@ def test_volume_gate_counts_unique_note_paths(tmp_path, monkeypatch):
             config.timeline_jsonl_path,
             "".join(json.dumps(event) + "\n" for event in events),
         )
-        monkeypatch.setattr(maintenance, "_compute_sync_report", lambda: clean_report)
+        monkeypatch.setattr(status, "_compute_sync_report", lambda: clean_report)
 
         repeated_payload = maintenance._status_payload()
         assert repeated_payload["changes_since"] == 25
@@ -563,7 +564,7 @@ def test_status_counts_changes_from_jsonl_not_generated_markdown(tmp_path, monke
             "2026-08-27T00:00:01Z | updated | notes/02_facts/fact__also_md_only.md | direct edit\n",
         )
         monkeypatch.setattr(
-            maintenance,
+            status,
             "_compute_sync_report",
             lambda: {
                 "state_invalid": False,
@@ -596,7 +597,7 @@ def test_status_handles_every_sync_state_without_missing_drift_count(tmp_path, m
                 "timeline_rewound": state == "timeline_rewound",
                 "unlogged_paths": [],
             }
-            monkeypatch.setattr(maintenance, "_compute_sync_report", lambda: report)
+            monkeypatch.setattr(status, "_compute_sync_report", lambda: report)
             payload = maintenance._status_payload()
             assert payload["sync_drift"] == state
             assert payload["unlogged_change_count"] == 0

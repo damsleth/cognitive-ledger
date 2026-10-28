@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from ledger import browse, context, inbox, maintenance, retrieval, voice
+from ledger.maintenance import index
 from ledger.config import LedgerConfig, reset_config, set_config
 
 
@@ -113,8 +114,9 @@ def test_cross_root_indices_browse_and_context_paths_are_logical(tmp_path):
         retrieval_mod = importlib.reload(retrieval)
         maintenance_mod = importlib.reload(maintenance)
 
-        with patch.object(maintenance_mod, "_generate_semantic_index", return_value=None):
+        with patch.object(index, "_generate_semantic_index", return_value=None) as semantic_index:
             assert maintenance_mod.cmd_index() == 0
+            semantic_index.assert_called_once_with()
 
         note_index = json.loads((notes_root / "08_indices" / "note_index.json").read_text(encoding="utf-8"))
         assert "notes/02_facts/fact__naming.md" in note_index["entries"]
