@@ -48,3 +48,15 @@ def test_layout_registry():
                     violations.append(f"{key[0]}:{token.start[0]}: {literal}")
     assert not violations, "Folder literals belong in ledger.layout:\n" + "\n".join(violations)
     assert used_allowlist == FOLDER_LITERAL_ALLOWLIST.keys(), "Remove stale exceptions"
+
+
+def test_schema_yaml_types_agree_with_registry():
+    import yaml
+    from pathlib import Path
+
+    from ledger.layout import NOTE_LAYOUTS, NOTES_ROOT_NAME
+
+    schema = yaml.safe_load((Path(__file__).resolve().parents[1] / "schema.yaml").read_text())
+    by_prefix = {spec["prefix"]: spec["folder"] for spec in schema["types"].values()}
+    for layout in NOTE_LAYOUTS.values():
+        assert by_prefix.get(layout.prefix) == f"{NOTES_ROOT_NAME}/{layout.subdir}", layout.name
