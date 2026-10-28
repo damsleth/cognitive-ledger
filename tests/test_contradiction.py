@@ -1037,7 +1037,7 @@ class TestMissingEmbedIndex:
 
             # Patch semantic_score_map to report index unavailable
             unavailable_result = {"available": False, "results": []}
-            with mock.patch("ledger.contradiction.semantic_score_map", return_value=unavailable_result, create=True):
+            with mock.patch("ledger.embeddings.semantic_score_map", return_value=unavailable_result, create=True):
                 # Also patch the import inside the function
                 with mock.patch.dict("sys.modules", {}):
                     # Force the index probe to return unavailable
@@ -1066,7 +1066,7 @@ class TestMissingEmbedIndex:
             import unittest.mock as mock
 
             unavailable_result = {"available": False, "results": []}
-            with mock.patch("ledger.contradiction.semantic_score_map", return_value=unavailable_result, create=True):
+            with mock.patch("ledger.embeddings.semantic_score_map", return_value=unavailable_result, create=True):
                 rc = cmd_sleep_contradictions(apply=False)
 
             assert rc == 0
@@ -1132,7 +1132,7 @@ class TestMissingNli:
         )
 
         try:
-            with mock.patch("ledger.contradiction.run_contradiction_scan", return_value=result):
+            with mock.patch("ledger.contradiction.cli.run_contradiction_scan", return_value=result):
                 rc = cmd_sleep_contradictions(apply=False)
         finally:
             reset_config()
