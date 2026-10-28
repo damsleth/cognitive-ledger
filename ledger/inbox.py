@@ -23,7 +23,7 @@ from ledger.layout import (
     rejected_candidates_path,
     resolve_path,
 )
-from ledger.io.safe_write import append_timeline_entry, safe_write_text
+from ledger.io.safe_write import FileLock, append_timeline_entry, safe_append_line, safe_write_text
 from ledger.parsing.frontmatter import (
     parse_frontmatter_text,
     serialize_frontmatter,
@@ -160,54 +160,10 @@ def reap_unheld_locks(
     notes_dir: Path | None = None,
     apply: bool = False,
 ) -> list[str]:
-    """Remove ``*.lock`` files across the notes tree that nobody holds.
+    """Reap unheld locks using the same I/O layer that owns acquisition."""
+    from ledger.io.safe_write import reap_unheld_locks as reap
 
-    ``FileLock`` deliberately does not unlink on release — unlinking after
-    releasing the flock lets a waiter and a newcomer both believe they hold the
-    lock. The files therefore accumulate, and ``cleanup_inbox`` never caught
-    them: it only looked in ``00_inbox`` and only at locks whose ``.md`` sibling
-    was *missing*. A batch import leaves one lock per note next to a note that
-    very much exists, in whatever typed folder it landed in. 42 of them were
-    sitting in ``05_open_loops/`` when this was written.
-
-    Safe because a lock is only removed if a non-blocking flock succeeds, which
-    proves no process holds it, and the unlink happens while we hold it. A
-    waiter that opened the file before the unlink would then lock an orphaned
-    inode; ``FileLock`` re-checks that the path still names its inode after
-    acquiring and retries if not, so that waiter cannot share the lock with a
-    newcomer.
-    """
-    import fcntl
-    import os
-
-    nd = Path(notes_dir) if notes_dir else Path(get_config().ledger_notes_dir)
-    if not nd.is_dir():
-        return []
-
-    reaped: list[str] = []
-    for lock_file in sorted(nd.rglob("*.lock")):
-        fd = None
-        try:
-            fd = os.open(str(lock_file), os.O_RDWR)
-            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            continue          # someone holds it — leave it alone
-        except OSError:
-            continue
-        else:
-            reaped.append(str(lock_file.relative_to(nd)))
-            if apply:
-                try:
-                    lock_file.unlink()
-                except OSError:
-                    reaped.pop()
-        finally:
-            if fd is not None:
-                try:
-                    fcntl.flock(fd, fcntl.LOCK_UN)
-                finally:
-                    os.close(fd)
-    return reaped
+    return reap(notes_dir or get_config().ledger_notes_dir, apply=apply)
 
 
 def cleanup_inbox(
@@ -469,9 +425,7 @@ def reject_inbox_item(
     }
 
     rejected_path = rejected_candidates_path(nd)
-    rejected_path.parent.mkdir(parents=True, exist_ok=True)
-    with rejected_path.open("a", encoding="utf-8") as fh:
-        fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+    safe_append_line(rejected_path, json.dumps(record, ensure_ascii=False))
 
     removed = False
     if remove:
@@ -566,75 +520,61 @@ def clear_rejections(
     Returns:
         Number of well-formed records that were removed.
     """
-    import os
-    import tempfile
-
     config = get_config()
     nd = notes_dir or config.ledger_notes_dir
     rpath = rejected_candidates_path(nd)
 
-    if not rpath.exists():
-        return 0
+    with FileLock(rpath):
+        if not rpath.exists():
+            return 0
 
-    raw_lines = rpath.read_text(encoding="utf-8").splitlines(keepends=True)
+        raw_lines = rpath.read_text(encoding="utf-8").splitlines(keepends=True)
 
-    if before is None:
-        # Count valid lines then truncate.
+        if before is None:
+            # Count valid lines then truncate.
+            removed = 0
+            for line in raw_lines:
+                stripped = line.strip()
+                if not stripped:
+                    continue
+                try:
+                    json.loads(stripped)
+                    removed += 1
+                except json.JSONDecodeError:
+                    pass
+            safe_write_text(rpath, "", use_lock=False)
+            return removed
+
+        # Selective rewrite: keep records with rejected_at >= before; preserve
+        # malformed lines verbatim.
+        keep_lines: list[str] = []
         removed = 0
         for line in raw_lines:
             stripped = line.strip()
             if not stripped:
+                keep_lines.append(line)
                 continue
             try:
-                json.loads(stripped)
-                removed += 1
+                rec = json.loads(stripped)
             except json.JSONDecodeError:
-                pass
-        rpath.write_text("", encoding="utf-8")
+                # Preserve malformed line as-is.
+                keep_lines.append(line)
+                continue
+            try:
+                ts = datetime.strptime(rec["rejected_at"], "%Y-%m-%dT%H:%M:%SZ").replace(
+                    tzinfo=timezone.utc
+                )
+            except (KeyError, ValueError):
+                keep_lines.append(line)
+                continue
+            if ts >= before:
+                keep_lines.append(line)
+            else:
+                removed += 1
+
+        safe_write_text(rpath, "".join(keep_lines), use_lock=False)
+
         return removed
-
-    # Selective rewrite: keep records with rejected_at >= before; preserve
-    # malformed lines verbatim.
-    keep_lines: list[str] = []
-    removed = 0
-    for line in raw_lines:
-        stripped = line.strip()
-        if not stripped:
-            keep_lines.append(line)
-            continue
-        try:
-            rec = json.loads(stripped)
-        except json.JSONDecodeError:
-            # Preserve malformed line as-is.
-            keep_lines.append(line)
-            continue
-        try:
-            ts = datetime.strptime(rec["rejected_at"], "%Y-%m-%dT%H:%M:%SZ").replace(
-                tzinfo=timezone.utc
-            )
-        except (KeyError, ValueError):
-            keep_lines.append(line)
-            continue
-        if ts >= before:
-            keep_lines.append(line)
-        else:
-            removed += 1
-
-    # Atomic write.
-    dir_ = rpath.parent
-    fd, tmp_path = tempfile.mkstemp(dir=dir_, suffix=".tmp")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as fh:
-            fh.writelines(keep_lines)
-        os.replace(tmp_path, rpath)
-    except Exception:
-        try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
-        raise
-
-    return removed
 
 
 def is_rejected(
