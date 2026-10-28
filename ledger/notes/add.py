@@ -30,6 +30,7 @@ from ledger.layout import (
 )
 from ledger.config import LedgerConfig, get_config
 from ledger.io.safe_write import append_timeline_entry, safe_write_text
+from ledger.parsing.frontmatter import serialize_frontmatter
 
 
 # Accept the natural variants callers (humans, owa-*) use.
@@ -125,20 +126,18 @@ def _build_frontmatter(
   status: str | None = None,
 ) -> str:
   ts = now.strftime("%Y-%m-%dT%H:%M:%SZ")
-  tag_list = ", ".join(sorted({t.strip() for t in tags if t and t.strip()}))
-  status_line = f"status: {status}\n" if status else ""
-  return (
-    "---\n"
-    f"created: {ts}\n"
-    f"updated: {ts}\n"
-    f"tags: [{tag_list}]\n"
-    f"confidence: {confidence}\n"
-    f"source: {source}\n"
-    f"scope: {scope}\n"
-    f"lang: {lang}\n"
-    f"{status_line}"
-    "---\n\n"
-  )
+  fields = {
+    "created": ts,
+    "updated": ts,
+    "tags": sorted({t.strip() for t in tags if t and t.strip()}),
+    "confidence": confidence,
+    "source": source,
+    "scope": scope,
+    "lang": lang,
+  }
+  if status:
+    fields["status"] = status
+  return serialize_frontmatter(fields) + "\n\n"
 
 
 def _normalize_link(link: str) -> str:
