@@ -15,6 +15,8 @@ be written by hand.
 
 from __future__ import annotations
 
+from ledger.text import slugify
+
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -87,18 +89,9 @@ def normalize_type(note_type: str) -> str:
   )
 
 
-_SLUG_NON_ALNUM = re.compile(r"[^a-z0-9]+")
-_SLUG_TRIM = re.compile(r"^_+|_+$")
-
-
 def derive_slug(seed: str, *, max_length: int = 60) -> str:
   """Derive a filename-safe slug from a free-text seed."""
-  slug = seed.lower()
-  slug = _SLUG_NON_ALNUM.sub("_", slug)
-  slug = _SLUG_TRIM.sub("", slug)
-  if len(slug) > max_length:
-    slug = slug[:max_length].rsplit("_", 1)[0] or slug[:max_length]
-  return slug or "untitled"
+  return slugify(seed, max_length, policy="note")
 
 
 def _extract_title_from_body(body: str) -> str:
