@@ -7,8 +7,9 @@ notes concurrently.
 
 from __future__ import annotations
 
+from ledger.io.hashing import digest
+
 import fcntl
-import hashlib
 import os
 import tempfile
 from contextlib import contextmanager
@@ -356,7 +357,7 @@ def append_timeline_entry(
     elif root_dir is not None:
         physical_note_path = Path(root_dir) / note_path_obj
     if physical_note_path is not None and physical_note_path.is_file():
-        event["content_hash"] = hashlib.sha256(physical_note_path.read_bytes()).hexdigest()
+        event["content_hash"] = digest(physical_note_path.read_bytes())
     if activity_type:
         event["activity_type"] = activity_type
 

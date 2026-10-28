@@ -8,7 +8,8 @@ rejection path.
 
 from __future__ import annotations
 
-import hashlib
+from ledger.io.hashing import digest
+
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -59,7 +60,7 @@ def _relative_candidate_path(candidate: InboxCandidate, notes_dir: Path) -> str:
 
 def candidate_id(candidate: InboxCandidate, notes_dir: Path) -> str:
     relative = _relative_candidate_path(candidate, notes_dir)
-    return hashlib.sha256(relative.encode("utf-8")).hexdigest()[:20]
+    return digest(relative.encode("utf-8"))[:20]
 
 
 def is_source_capture(candidate: InboxCandidate) -> bool:

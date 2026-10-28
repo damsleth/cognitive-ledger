@@ -18,7 +18,6 @@ from ledger.time_utils import now_iso
 import json
 import re
 import sys
-import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Iterable, Mapping, TextIO
 
