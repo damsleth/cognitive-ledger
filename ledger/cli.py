@@ -2143,6 +2143,8 @@ def main(argv=None) -> int:
     subparsers = parser.add_subparsers(dest="command")
     from ledger.learning_cli import register as register_learning
     register_learning(subparsers)
+    from ledger import hubs_cli
+    hubs_cli.register(subparsers)
 
     loops_parser = subparsers.add_parser("loops", help="List loops (default: open)")
     loops_parser.add_argument("loops_command", nargs="?", choices=["sync"], default=None,
@@ -2935,6 +2937,9 @@ def main(argv=None) -> int:
         "ab": lambda a: handle_ab_command(a, ab_parser),
         "mcp": handle_mcp_command,
         "web": handle_web_command,
+        "people": hubs_cli.handle,
+        "projects": hubs_cli.handle,
+        "unreviewed": hubs_cli.handle_unreviewed,
         "audit": learning("handle_audit"),
         "improvements": learning("handle"),
     }

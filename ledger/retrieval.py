@@ -24,6 +24,7 @@ from typing import Any, Union
 
 from ledger.layout import NOTE_LAYOUTS, indices_dir, logical_path, note_index_path, note_type_dir, resolve_path
 from ledger.config import get_config
+from ledger.hubs import unreviewed_count
 from ledger.io import safe_write_text
 from ledger.parsing import (
     extract_link_tokens,
@@ -515,6 +516,11 @@ def _candidate_from_parts(
         s = str(val or "").strip()
         return "" if s in ("null", "~", "None", "[]") else s
 
+    unreviewed = unreviewed_count(frontmatter, body)
+    if unreviewed and not provenance:
+        # Unreviewed agent output is a model's reading, not a stated fact.
+        provenance = "observed"
+
     valid_from = _str_or_empty(frontmatter.get("valid_from", ""))
     valid_to = _str_or_empty(frontmatter.get("valid_to", ""))
     superseded_by = _str_or_empty(frontmatter.get("superseded_by", ""))
@@ -545,6 +551,7 @@ def _candidate_from_parts(
         created_ts=created_ts,
         provenance=provenance,
         via=via,
+        unreviewed=unreviewed,
     )
 
 
@@ -593,6 +600,8 @@ def _candidate_to_json(candidate: RetrievalCandidate) -> dict[str, Any]:
         payload["provenance"] = candidate.provenance
     if candidate.via:
         payload["via"] = candidate.via
+    if candidate.unreviewed:
+        payload["unreviewed"] = candidate.unreviewed
     # Persist created ISO string when available (created_ts is derived from it,
     # mirroring the pattern used for updated / updated_ts).
     if candidate.created_ts is not None:
@@ -657,6 +666,7 @@ def _candidate_from_json(candidate_json: dict[str, Any]) -> RetrievalCandidate:
         # Provenance inputs — absent in older indexes; default to empty string.
         provenance=str(candidate_json.get("provenance", "") or ""),
         via=str(candidate_json.get("via", "") or ""),
+        unreviewed=int(candidate_json.get("unreviewed", 0) or 0),
     )
 
 
