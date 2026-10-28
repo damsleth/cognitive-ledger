@@ -43,8 +43,12 @@ class NoteLayout:
     kind: str = ""
     # Carries valid_from/valid_to (bitemporal lint + migration).
     bitemporal: bool = True
-    # Notes carry a ``status`` field (open loops only).
-    has_status: bool = False
+    # Allowed ``status`` values; empty = the type carries no status field.
+    status_values: frozenset[str] = frozenset()
+
+    @property
+    def has_status(self) -> bool:
+        return bool(self.status_values)
 
     @property
     def logical_dir(self) -> Path:
@@ -68,9 +72,23 @@ NOTE_LAYOUTS: dict[str, NoteLayout] = {
         prefix="loop__",
         kind="open_loop",
         bitemporal=False,
-        has_status=True,
+        status_values=frozenset({"open", "closed", "blocked", "snoozed"}),
     ),
     "concepts": NoteLayout(name="concepts", subdir="06_concepts", label="concept", prefix="concept__", kind="concept"),
+    # Hubs (ledger.hubs): living documents with an append-only ## Log, not
+    # point-in-time claims, so no valid_from/valid_to.
+    "projects": NoteLayout(
+        name="projects",
+        subdir=PROJECTS_SUBDIR,
+        label="project",
+        prefix="project__",
+        kind="project",
+        bitemporal=False,
+        status_values=frozenset({"active", "paused", "done"}),
+    ),
+    "people": NoteLayout(
+        name="people", subdir="10_people", label="person", prefix="person__", kind="person", bitemporal=False
+    ),
 }
 
 # Content types share embedding/import behavior; identity is loaded separately.
@@ -84,7 +102,6 @@ CORE_NOTE_TYPES: tuple[str, ...] = tuple(NOTE_LAYOUTS.keys())
 LEDGER_NOTE_SUBDIRS: tuple[str, ...] = (
     INBOX_SUBDIR,
     *(layout.subdir for layout in NOTE_LAYOUTS.values()),
-    PROJECTS_SUBDIR,
     INDICES_SUBDIR,
     ARCHIVE_SUBDIR,
 )
@@ -99,7 +116,6 @@ BITEMPORAL_SUBDIRS: tuple[str, ...] = (
 # Folder name -> path kind for folders that are not note types.
 _NON_TYPE_KINDS: dict[str, str] = {
     INBOX_SUBDIR: "inbox",
-    PROJECTS_SUBDIR: "project",
     ARCHIVE_SUBDIR: "archive",
 }
 

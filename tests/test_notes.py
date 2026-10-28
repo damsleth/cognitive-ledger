@@ -40,7 +40,8 @@ class TestNoteTypeConfig(unittest.TestCase):
         self.assertEqual(cfg.path_in(Path("/tmp/custom-notes")), Path("/tmp/custom-notes/02_facts"))
 
     def test_core_note_types(self):
-        self.assertEqual(len(CORE_NOTE_TYPES), 6)
+        self.assertEqual(len(CORE_NOTE_TYPES), 8)
+        self.assertIn("people", CORE_NOTE_TYPES)
         self.assertIn("identity", CORE_NOTE_TYPES)
         self.assertIn("facts", CORE_NOTE_TYPES)
 
