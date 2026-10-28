@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ledger.time_utils import now_iso as _utc_now_iso
+
 import argparse
 import hashlib
 import json
@@ -1022,8 +1024,6 @@ def write_markdown(path: Path, payload: dict[str, Any]) -> None:
 # CLI harness (moved from scripts/ledger_ab)
 # ---------------------------------------------------------------------------
 
-def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _run_git(repo_root: Path, *args: str) -> str:
