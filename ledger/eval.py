@@ -7,10 +7,11 @@ from __future__ import annotations
 
 import datetime as dt
 import json
-import re
 import sys
 from pathlib import Path
 from typing import Any, Callable
+
+import yaml
 
 from ledger.config import get_config
 from ledger.errors import EvalCaseValidationError
@@ -59,18 +60,8 @@ def parse_case_as_of(raw: Any) -> dt.datetime | None:
     return parsed.astimezone(dt.timezone.utc)
 
 
-def parse_yaml_scalar(value: str) -> str:
-    """Parse a lightweight YAML scalar used in eval-cases files."""
-    cleaned = value.strip()
-    if cleaned.startswith('"') and cleaned.endswith('"'):
-        return cleaned[1:-1]
-    if cleaned.startswith("'") and cleaned.endswith("'"):
-        return cleaned[1:-1]
-    return cleaned
-
-
 def parse_eval_cases(path: str | Path) -> list[dict[str, Any]]:
-    """Parse retrieval eval cases from lightweight YAML.
+    """Parse retrieval eval cases from safe YAML with stable defaults.
 
     Supports two case shapes:
 
@@ -96,71 +87,36 @@ def parse_eval_cases(path: str | Path) -> list[dict[str, Any]]:
     (archive included, valid-time filtered), for history cases that expect a
     note in ``09_archive``.
     """
+    try:
+        loaded = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
+    except yaml.YAMLError as exc:
+        raise EvalCaseValidationError([f"invalid eval-case YAML: {exc}"]) from exc
+    if loaded is None:
+        return []
+    if isinstance(loaded, dict) and "cases" in loaded:
+        loaded = loaded["cases"]
+    if not isinstance(loaded, list):
+        raise EvalCaseValidationError(["eval cases must be a list"])
+
     cases = []
-    current = None
-    in_expected = False
-
-    for raw_line in Path(path).read_text(encoding="utf-8").splitlines():
-        line = raw_line.rstrip()
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#"):
-            continue
-
-        if stripped.startswith("- query:") or stripped.startswith("- id:"):
-            if current:
-                cases.append(current)
-            current = {
-                "id": "",
-                "query": "",
-                "scope": "all",
-                "as_of": "",
-                "expected_any": [],
-                "expected_none": False,
-            }
-            key, value = stripped[2:].split(":", 1)
-            key = key.strip()
-            if key in _SCALAR_CASE_KEYS:
-                current[key] = parse_yaml_scalar(value)
-            in_expected = key == "expected_any"
-            continue
-
-        if current is None:
-            continue
-
-        field_match = re.match(r"^([A-Za-z0-9_]+):\s*(.*)$", stripped)
-        if field_match:
-            key = field_match.group(1)
-            value = field_match.group(2)
-            if key in _SCALAR_CASE_KEYS:
-                current[key] = parse_yaml_scalar(value)
-                in_expected = False
-                continue
-            if key == "expected_none":
-                parsed_val = parse_yaml_scalar(value).lower()
-                current["expected_none"] = parsed_val in {"true", "yes", "1"}
-                in_expected = False
-                continue
-
-        if re.match(r"^scope:\s*", stripped):
-            current["scope"] = parse_yaml_scalar(stripped.split(":", 1)[1]) or "all"
-            in_expected = False
-            continue
-
-        if re.match(r"^expected_any:\s*$", stripped):
-            in_expected = True
-            continue
-
-        if re.match(r"^expected_none:\s*", stripped):
-            val = parse_yaml_scalar(stripped.split(":", 1)[1]).lower()
-            current["expected_none"] = val in {"true", "yes", "1"}
-            in_expected = False
-            continue
-
-        if in_expected and re.match(r"^-\s+", stripped):
-            current["expected_any"].append(parse_yaml_scalar(stripped[1:].strip()))
-            continue
-
-    if current:
+    for idx, raw in enumerate(loaded, start=1):
+        if not isinstance(raw, dict):
+            raise EvalCaseValidationError([f"case_{idx}: must be a mapping"])
+        current = {
+            "id": "", "query": "", "scope": "all", "as_of": "",
+            "expected_any": [], "expected_none": False,
+        }
+        for key in _SCALAR_CASE_KEYS & raw.keys():
+            value = raw[key]
+            # PyYAML resolves dates and YAML 1.1's Norwegian language code.
+            if key == "lang" and value is False:
+                value = "no"
+            elif isinstance(value, (dt.date, dt.datetime)):
+                value = value.isoformat()
+            current[key] = "" if value is None else str(value)
+        if "expected_any" in raw:
+            current["expected_any"] = raw["expected_any"] or []
+        current["expected_none"] = str(raw.get("expected_none", False)).lower() in {"true", "yes", "1"}
         cases.append(current)
     return cases
 
@@ -709,7 +665,6 @@ def eval_result_to_json(
 
 __all__ = [
     "EvalCaseValidationError",
-    "parse_yaml_scalar",
     "parse_eval_cases",
     "extract_notes_relative_path",
     "path_candidates_from_expected",
