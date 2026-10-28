@@ -373,3 +373,54 @@ def append_timeline_entry(
     ensure_timeline_jsonl(timeline_path, timeline_jsonl_path)
     append_timeline_jsonl(timeline_jsonl_path, event)
     regenerate_timeline_markdown(timeline_jsonl_path, timeline_path)
+
+
+def reap_unheld_locks(
+    notes_dir: Path,
+    apply: bool = False,
+) -> list[str]:
+    """Remove ``*.lock`` files across the notes tree that nobody holds.
+
+    ``FileLock`` deliberately does not unlink on release — unlinking after
+    releasing the flock lets a waiter and a newcomer both believe they hold the
+    lock. The files therefore accumulate, and ``cleanup_inbox`` never caught
+    them: it only looked in ``00_inbox`` and only at locks whose ``.md`` sibling
+    was *missing*. A batch import leaves one lock per note next to a note that
+    very much exists, in whatever typed folder it landed in. 42 of them were
+    sitting in ``05_open_loops/`` when this was written.
+
+    Safe because a lock is only removed if a non-blocking flock succeeds, which
+    proves no process holds it, and the unlink happens while we hold it. A
+    waiter that opened the file before the unlink would then lock an orphaned
+    inode; ``FileLock`` re-checks that the path still names its inode after
+    acquiring and retries if not, so that waiter cannot share the lock with a
+    newcomer.
+    """
+    nd = Path(notes_dir)
+    if not nd.is_dir():
+        return []
+
+    reaped: list[str] = []
+    for lock_file in sorted(nd.rglob("*.lock")):
+        fd = None
+        try:
+            fd = os.open(str(lock_file), os.O_RDWR)
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            continue          # someone holds it — leave it alone
+        except OSError:
+            continue
+        else:
+            reaped.append(str(lock_file.relative_to(nd)))
+            if apply:
+                try:
+                    lock_file.unlink()
+                except OSError:
+                    reaped.pop()
+        finally:
+            if fd is not None:
+                try:
+                    fcntl.flock(fd, fcntl.LOCK_UN)
+                finally:
+                    os.close(fd)
+    return reaped
