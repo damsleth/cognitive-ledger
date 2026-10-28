@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 
+from ledger.layout import INDICES_SUBDIR
 from ledger.conventions import now_iso
 from ledger.io.safe_write import FileLock
 from ledger.parsing.privacy import strip_private_tags
@@ -38,7 +39,7 @@ def _clean(value):
 
 
 def pattern_items(notes_dir: Path) -> list[dict]:
-    signals = read_signals(signals_path=Path(notes_dir) / "08_indices/signals.jsonl")
+    signals = read_signals(signals_path=Path(notes_dir) / f"{INDICES_SUBDIR}/signals.jsonl")
     items = []
     for pattern in mine_patterns(signals)["patterns"]:
         if pattern["category"] != "failure":
@@ -82,7 +83,7 @@ def queue(notes_dir: Path, *, today: date | None = None) -> list[dict]:
     """Merge current signal patterns with durable observations/dispositions."""
     today = today or date.today()
     stored = {}
-    for event in _events(Path(notes_dir) / "08_indices" / LOG):
+    for event in _events(Path(notes_dir) / INDICES_SUBDIR / LOG):
         stored[event["item"]["id"]] = event["item"]
     current = {item["id"]: item for item in pattern_items(notes_dir)}
     result = []
@@ -109,7 +110,7 @@ def _append(path: Path, action: str, item: dict) -> None:
 
 def sync(notes_dir: Path, items: list[dict] | None = None) -> int:
     """Persist new/changed observations. No semantic notes or task writes."""
-    path = Path(notes_dir) / "08_indices" / LOG
+    path = Path(notes_dir) / INDICES_SUBDIR / LOG
     with FileLock(path):
         previous = {e["item"]["id"]: e["item"] for e in _events(path)}
         candidates = queue(notes_dir) if items is None else items
@@ -140,7 +141,7 @@ def transition(notes_dir: Path, ident: str, action: str, *, artifact: str = "",
         raise ValueError("Dismiss requires a reason")
     if action == "defer" and date.fromisoformat(until) <= date.today():
         raise ValueError("Defer date must be in the future")
-    path = Path(notes_dir) / "08_indices" / LOG
+    path = Path(notes_dir) / INDICES_SUBDIR / LOG
     with FileLock(path):
         item = next((i for i in queue(notes_dir) if i["id"] == ident), None)
         if item is None:

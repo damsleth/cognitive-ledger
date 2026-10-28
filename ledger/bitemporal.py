@@ -25,10 +25,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from ledger.layout import (
+    ARCHIVE_SUBDIR,
+    BITEMPORAL_SUBDIRS,
+    NOTE_LAYOUTS,
+    logical_note_path,
+)
 from ledger.config import get_config
 from ledger.errors import NoteNotFoundError, NoteError
 from ledger.io import safe_write_text
-from ledger.layout import logical_path, logical_note_path
 from ledger.parsing.frontmatter import (
     parse_frontmatter_text,
     serialize_frontmatter,
@@ -183,12 +188,12 @@ def _resolve_archived_note_fallback(ref: str, *, ledger_notes_dir: Path) -> Path
     original pre-move ``old_ref`` should therefore be able to find the archived
     note and take the normal idempotency path.
     """
-    if ref.startswith("notes/09_archive/") or "/09_archive/" in ref:
+    if ref.startswith(f"notes/{ARCHIVE_SUBDIR}/") or f"/{ARCHIVE_SUBDIR}/" in ref:
         return None
     name = Path(ref).name
     if not name:
         return None
-    archive_path = (ledger_notes_dir / "09_archive" / name).resolve()
+    archive_path = (ledger_notes_dir / ARCHIVE_SUBDIR / name).resolve()
     if archive_path.exists():
         return archive_path
     return None
@@ -281,11 +286,11 @@ def supersede(
             existing_superseded_by = ""
             break
 
-    archive_dir = ledger_notes_dir / "09_archive"
+    archive_dir = ledger_notes_dir / ARCHIVE_SUBDIR
     archive_path = archive_dir / old_abs.name
 
     # --- 3b. Idempotency / conflict checks ---
-    already_in_archive = "/09_archive/" in str(old_abs)
+    already_in_archive = f"/{ARCHIVE_SUBDIR}/" in str(old_abs)
     already_superseded = existing_superseded_by == new_logical
 
     # Guard: already archived but superseded_by points to a *different* note.
@@ -437,25 +442,12 @@ def supersede(
 # ---------------------------------------------------------------------------
 
 # Folders eligible for bitemporal migration.  00_inbox is intentionally absent.
-_MIGRATE_ELIGIBLE_SUBDIRS: frozenset[str] = frozenset(
-    {
-        "01_identity",
-        "02_facts",
-        "03_preferences",
-        "04_goals",
-        "06_concepts",
-        "09_archive",
-    }
-)
+_MIGRATE_ELIGIBLE_SUBDIRS = frozenset(BITEMPORAL_SUBDIRS)
 
 # Subdir → label used in per-folder counts output.
-_SUBDIR_LABEL: dict[str, str] = {
-    "01_identity": "identity",
-    "02_facts": "facts",
-    "03_preferences": "preferences",
-    "04_goals": "goals",
-    "06_concepts": "concepts",
-    "09_archive": "archive",
+_SUBDIR_LABEL = {
+    **{layout.subdir: layout.name for layout in NOTE_LAYOUTS.values() if layout.bitemporal},
+    ARCHIVE_SUBDIR: "archive",
 }
 
 
@@ -543,7 +535,7 @@ def _migrate_one_note(
     fm, body = parse_frontmatter_text(text)
 
     subdir = abs_path.parent.name
-    is_archive = subdir == "09_archive"
+    is_archive = subdir == ARCHIVE_SUBDIR
 
     if not _note_needs_migration(fm, is_archive=is_archive):
         return False

@@ -14,6 +14,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from ledger.layout import (
+    INBOX_SUBDIR,
+    resolve_path,
+)
 from ledger.config import get_config
 from ledger.inbox import (
     REJECT_REASONS,
@@ -24,7 +28,6 @@ from ledger.inbox import (
     reject_inbox_item,
 )
 from ledger.io.safe_write import safe_write_text
-from ledger.layout import resolve_path
 from ledger.parsing.frontmatter import parse_frontmatter_text, serialize_frontmatter
 from ledger.validation import validate_note_type
 
@@ -50,7 +53,7 @@ class ReviewItem:
 
 
 def _relative_candidate_path(candidate: InboxCandidate, notes_dir: Path) -> str:
-    inbox = (Path(notes_dir) / "00_inbox").resolve()
+    inbox = (Path(notes_dir) / INBOX_SUBDIR).resolve()
     return candidate.path.resolve().relative_to(inbox).as_posix()
 
 

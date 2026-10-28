@@ -33,7 +33,10 @@ resolve_notes_dir() {
 
 NOTES_DIR="$(resolve_notes_dir)"
 
-REPORT_FILE="$NOTES_DIR/08_indices/last_auto_maintenance.md"
+# Folder and prefix values come from the Python registry.
+source "$SCRIPT_DIR/layout.sh"
+
+REPORT_FILE="$NOTES_DIR/${LEDGER_INDICES_SUBDIR}/last_auto_maintenance.md"
 
 echo "# Auto Maintenance Report" > "$REPORT_FILE"
 echo "" >> "$REPORT_FILE"

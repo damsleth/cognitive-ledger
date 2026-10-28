@@ -23,7 +23,11 @@ import json
 from pathlib import Path
 from typing import Any
 
-from ledger.layout import patterns_json_path, patterns_md_path
+from ledger.layout import (
+    ARCHIVE_SUBDIR,
+    patterns_json_path,
+    patterns_md_path,
+)
 from ledger.signals import read_signals, summarize_signals
 
 # Failure-mode kinds
@@ -53,7 +57,7 @@ _ACTIONS = {
         "Review the note; if it is wrong, supersede it with a corrected note "
         "(bitemporal supersede) instead of patching in place."
     ),
-    KIND_STALE: "Refresh the note's content or archive it to 09_archive.",
+    KIND_STALE: f"Refresh the note's content or archive it to {ARCHIVE_SUBDIR}.",
     KIND_CONTRADICTED: (
         "Resolve the contradiction: keep the note that is true now and "
         "supersede the other."

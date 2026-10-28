@@ -17,9 +17,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from ledger.layout import (
+    CONTENT_NOTE_LAYOUTS,
+    INDICES_SUBDIR,
+    logical_path,
+    resolve_path,
+)
 from ledger.config import get_config
 from ledger.eval import parse_eval_cases as _parse_eval_cases
-from ledger.layout import logical_path, resolve_path
 
 EXIT_BENEFICIAL = 0
 EXIT_REGRESSION = 2
@@ -69,21 +74,10 @@ MAINTENANCE_METRIC_KEYS = (
 PROFILE_TOKEN_SCOPES = ("personal", "work", "dev")
 EMBED_BACKENDS = ("local", "openai")
 CORPUS_PATTERNS = (
-    "02_facts/**/*.md",
-    "03_preferences/**/*.md",
-    "04_goals/**/*.md",
-    "05_open_loops/**/*.md",
-    "06_concepts/**/*.md",
-    "08_indices/aliases.json",
+    *(f"{layout.subdir}/**/*.md" for layout in CONTENT_NOTE_LAYOUTS),
+    f"{INDICES_SUBDIR}/aliases.json",
 )
-CORPUS_REQUIRED_DIRS = (
-    "02_facts",
-    "03_preferences",
-    "04_goals",
-    "05_open_loops",
-    "06_concepts",
-    "08_indices",
-)
+CORPUS_REQUIRED_DIRS = (*(layout.subdir for layout in CONTENT_NOTE_LAYOUTS), INDICES_SUBDIR)
 
 
 class InvalidSetupError(Exception):
@@ -125,7 +119,7 @@ def normalize_cases_path(base_root: Path, cases_arg: str) -> Path:
 def normalize_corpus_root(root: Path | str) -> Path:
     candidate = Path(root).expanduser().resolve()
     notes_child = candidate / "notes"
-    if notes_child.is_dir() and not (candidate / "08_indices").is_dir():
+    if notes_child.is_dir() and not (candidate / INDICES_SUBDIR).is_dir():
         return notes_child.resolve()
     return candidate
 
@@ -1137,7 +1131,7 @@ def build_cli_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--candidate-embed-model", default=None)
     parser.add_argument(
         "--cases",
-        default="notes/08_indices/retrieval_eval_cases.yaml",
+        default=f"notes/{INDICES_SUBDIR}/retrieval_eval_cases.yaml",
         help="Logical or corpus-relative path to retrieval eval cases",
     )
     parser.add_argument("--k", type=int, default=3)

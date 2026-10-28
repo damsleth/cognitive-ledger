@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from ledger.layout import INBOX_SUBDIR
 from ledger.importers.state import backend_state_dir, load_json_state, save_json_state
 from ledger.importers.types import DoctorResult, ImportOptions, ImportResult
 
@@ -62,7 +63,7 @@ class FolderBackend:
         if dest is None:
             from ledger.config import get_config
             notes_dir = get_config().ledger_notes_dir
-            dest = notes_dir / "00_inbox"
+            dest = notes_dir / INBOX_SUBDIR
             if state_dir is None:
                 state_dir = backend_state_dir(notes_dir, self.name)
 

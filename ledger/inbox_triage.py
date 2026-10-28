@@ -24,6 +24,10 @@ import shutil
 import sys
 from pathlib import Path
 
+from ledger.layout import (
+    NOTE_LAYOUTS,
+    resolve_path,
+)
 from ledger.config import get_config
 from ledger.inbox import (
     InboxCandidate,
@@ -32,7 +36,6 @@ from ledger.inbox import (
     load_candidates_for_triage,
     triage_suggestions,
 )
-from ledger.layout import resolve_path
 from ledger.validation import validate_note_type
 
 # ---------------------------------------------------------------------------
@@ -341,7 +344,10 @@ def _handle_unset(
 
 
 # Order the `t` key cycles target types through.
-_TYPE_CYCLE = ["facts", "concepts", "preferences", "goals", "loops", "identity"]
+_TYPE_CYCLE = [layout.name for layout in (
+    NOTE_LAYOUTS["facts"], NOTE_LAYOUTS["concepts"], NOTE_LAYOUTS["preferences"],
+    NOTE_LAYOUTS["goals"], NOTE_LAYOUTS["loops"], NOTE_LAYOUTS["identity"],
+)]
 
 _BANNER = (
     "SUBTRACTION MODE — every note is ACCEPTED by default. "

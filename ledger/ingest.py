@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from ledger.layout import INDICES_SUBDIR
 from ledger.config import get_config
 from ledger.io.safe_write import safe_write_text, append_timeline_entry
 
@@ -25,7 +26,7 @@ MANIFEST_FILENAME = "source_manifest.json"
 def _manifest_path(notes_dir: Path | None = None) -> Path:
     config = get_config()
     nd = notes_dir or config.ledger_notes_dir
-    return nd / "08_indices" / MANIFEST_FILENAME
+    return nd / INDICES_SUBDIR / MANIFEST_FILENAME
 
 
 def _sha256(path: Path) -> str:
@@ -209,7 +210,7 @@ def record_ingest(
     append_timeline_entry(
         config.timeline_path,
         "updated",
-        f"notes/08_indices/{MANIFEST_FILENAME}",
+        f"notes/{INDICES_SUBDIR}/{MANIFEST_FILENAME}",
         f"ingested {source_path} -> {len(derived_notes)} note(s)",
         root_dir=config.ledger_root,
         ledger_notes_dir=config.ledger_notes_dir,

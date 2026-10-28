@@ -11,6 +11,7 @@ from __future__ import annotations
 import datetime as dt
 from typing import Any
 
+from ledger.layout import NOTE_LAYOUTS
 from ledger.parsing import strip_private_tags
 
 
@@ -285,7 +286,7 @@ def _contained_note(note: str, notes_dir) -> str:
 
     suffix = note[len("notes/"):] if note.startswith("notes/") else None
     if not suffix or Path(suffix).is_absolute():
-        raise ValueError("note must be a result path like notes/02_facts/fact__x.md")
+        raise ValueError(f"note must be a result path like notes/{NOTE_LAYOUTS['facts'].subdir}/{NOTE_LAYOUTS['facts'].prefix}x.md")
     root = Path(notes_dir).resolve()
     target = (root / suffix).resolve()
     if not target.is_relative_to(root) or not target.is_file():

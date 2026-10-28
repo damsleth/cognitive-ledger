@@ -23,6 +23,8 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from ledger.layout import INDICES_SUBDIR
+
 
 def dup_rate_from_vectors(vectors, threshold: float = 0.95) -> dict:
     """Pure: given note embeddings, count near-duplicate pairs and notes.
@@ -58,7 +60,7 @@ def _note_text(path: Path) -> str:
 def collect_texts(root: str) -> tuple[list[Path], list[str]]:
     base = Path(root).expanduser()
     notes_dir = base / "notes" if (base / "notes").is_dir() else base
-    paths = sorted(p for p in notes_dir.rglob("*.md") if "08_indices" not in p.parts)
+    paths = sorted(p for p in notes_dir.rglob("*.md") if INDICES_SUBDIR not in p.parts)
     return paths, [_note_text(p) for p in paths]
 
 
