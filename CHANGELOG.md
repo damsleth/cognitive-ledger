@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Fixed
+- Candidate-to-result copies preserve all metadata, including provenance, ingest channel and validation count for trust annotation.
+
 ### Added
 - **Learning workflows:** `ledger improvements` gives recurring signal
   failures a durable resolve/dismiss/defer lifecycle, with new matching
