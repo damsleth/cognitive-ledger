@@ -30,7 +30,6 @@ from __future__ import annotations
 from ledger.time_utils import now_iso as _now_iso
 
 import json
-import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any

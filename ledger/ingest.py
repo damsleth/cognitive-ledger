@@ -9,7 +9,8 @@ The LLM does the distillation - this module handles logistics.
 
 from __future__ import annotations
 
-import hashlib
+from ledger.io.hashing import file_digest
+
 import json
 from datetime import datetime, timezone
 from pathlib import Path
@@ -30,11 +31,7 @@ def _manifest_path(notes_dir: Path | None = None) -> Path:
 
 
 def _sha256(path: Path) -> str:
-    hasher = hashlib.sha256()
-    with path.open("rb") as f:
-        for chunk in iter(lambda: f.read(65536), b""):
-            hasher.update(chunk)
-    return hasher.hexdigest()
+    return file_digest(path)
 
 
 def load_manifest(notes_dir: Path | None = None) -> list[dict[str, Any]]:

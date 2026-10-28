@@ -1,8 +1,9 @@
 """Bounded, opt-in instruction audits. Semantic findings must cite exposed evidence."""
 from __future__ import annotations
 
+from ledger.io.hashing import digest as content_digest
+
 import difflib
-import hashlib
 import json
 from pathlib import Path
 
@@ -18,7 +19,7 @@ DESTINATIONS = {"note", "skill", "structural_check", "task"}
 
 
 def digest(value) -> str:
-    return hashlib.sha256(json.dumps(value, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+    return content_digest(json.dumps(value, sort_keys=True, ensure_ascii=False).encode())
 
 
 def numbered_excerpts(raw: str) -> list[dict]:

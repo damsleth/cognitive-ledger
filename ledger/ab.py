@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ledger.io.hashing import file_digest
+
 from ledger.time_utils import now_iso as _utc_now_iso
 
 import argparse
@@ -132,11 +134,7 @@ def is_corpus_root(root: Path | str) -> bool:
 
 
 def sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as fh:
-        for chunk in iter(lambda: fh.read(8192), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+    return file_digest(path)
 
 
 def collect_corpus_paths(worktree_root: Path, cases_rel_path: Path) -> list[Path]:
