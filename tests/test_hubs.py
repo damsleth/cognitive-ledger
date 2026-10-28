@@ -121,3 +121,14 @@ def test_wikilink_must_match_whole_target(notes):
     (notes / "02_facts" / "fact__a.md").write_text("---\ntags: [x]\n---\n[[person__annette]] [[person__ann|Ann]]\n")
     (notes / "02_facts" / "fact__b.md").write_text("---\ntags: [x]\n---\n[[person__annette]]\n")
     assert hubs.connected("people", "ann", notes) == ["notes/02_facts/fact__a.md"]
+
+
+def test_log_refuses_private_and_multiline_frontmatter(notes):
+    path = _hub(notes, "---\nupdated: x\nlast_interaction:\nnote: |\n  a\n---\n# X\n\n## Log\n")
+    hubs.log("people", "x", "fine", date="2026-10-28", notes_dir=notes)  # empty value is single-line
+    with pytest.raises(ValueError):
+        hubs.log("people", "x", "<private>secret</private>", notes_dir=notes)
+    with pytest.raises(ValueError):
+        hubs._patch_frontmatter("---\nlast_interaction: |\n  2026-01-01\n---\n", {"last_interaction": "2026-10-28"})
+    with pytest.raises(ValueError):
+        hubs._patch_frontmatter("---\nspheres:\n  - work\n---\n", {"spheres": ["brkh"]})

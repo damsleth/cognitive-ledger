@@ -94,6 +94,9 @@ def _patch_frontmatter(block: str, set_fields: dict[str, Any], drop: tuple[str, 
     for key, value in set_fields.items():
         line = serialize_frontmatter({key: value}).splitlines()[1]
         pattern = rf"^{re.escape(key)}:.*$"
+        existing = re.search(rf"^{re.escape(key)}:(.*)\r?\n([ \t]+\S)?", block, re.M)
+        if existing and (existing.group(1).strip() in ("|", ">", "|-", ">-", "|+", ">+") or existing.group(2)):
+            raise ValueError(f"frontmatter '{key}' spans several lines; edit it by hand")
         if re.search(pattern, block, re.M):
             block = re.sub(pattern, lambda _m: line, block, count=1, flags=re.M)
         else:
@@ -271,6 +274,9 @@ def log(
     date = date or _today()
     if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date):
         raise ValueError(f"date must be YYYY-MM-DD, got {date!r}")
+    if "<private" in text.lower():
+        # A log line is one line: a private fence would not survive it. Keep it out.
+        raise ValueError("private content does not belong in a hub log")
     line = f"- {date} {AGENT_MARK + ' ' if agent else ''}{' '.join(text.split())}"
     last_field = _LAST_FIELD[kind]
 

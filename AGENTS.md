@@ -552,8 +552,10 @@ Agent-written content is marked: `reviewed: false` frontmatter, `- YYYY-MM-DD
 `note_index.json`; it caps the note's provenance at `inferred` here and makes
 yaams class the item `agent` (weight 0.75) instead of `curated`. `ledger
 unreviewed` lists, `ledger unreviewed --accept <path>` clears. Agents always
-pass `--agent`. `scripts/projects_refresh.sh` (takt job `ledger-projects`)
-refreshes project hubs nightly the same way.
+pass `--agent`. `scripts/projects_refresh.py` (takt job `ledger-projects`)
+refreshes project hubs nightly: fixed read-only evidence commands, then codex in
+its read-only sandbox returns a JSON proposal, which is validated and applied
+with `agent=True`. No model gets a shell while reading ledger/yaams text.
 
 ### Creating a note (convention)
 
