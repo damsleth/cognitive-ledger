@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from ledger.layout import (
-    CONTENT_NOTE_LAYOUTS,
+    ATOMIC_NOTE_LAYOUTS,
     INBOX_SUBDIR,
     INDICES_SUBDIR,
 )
@@ -14,7 +14,7 @@ from .state import migrate_legacy_state
 from .utils import TIMELINE_HEADER
 
 
-LEDGER_NOTE_DIRS = (INBOX_SUBDIR, *(layout.subdir for layout in CONTENT_NOTE_LAYOUTS), INDICES_SUBDIR)
+LEDGER_NOTE_DIRS = (INBOX_SUBDIR, *(layout.subdir for layout in ATOMIC_NOTE_LAYOUTS), INDICES_SUBDIR)
 
 
 def ensure_layout(config: ObsidianLedgerConfig) -> None:

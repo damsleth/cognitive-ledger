@@ -45,6 +45,9 @@ class NoteLayout:
     bitemporal: bool = True
     # Allowed ``status`` values; empty = the type carries no status field.
     status_values: frozenset[str] = frozenset()
+    # Hub (ledger.hubs): structured living document, written through
+    # `ledger people|projects`, never by generic note creation or import.
+    hub: bool = False
 
     @property
     def has_status(self) -> bool:
@@ -85,9 +88,10 @@ NOTE_LAYOUTS: dict[str, NoteLayout] = {
         kind="project",
         bitemporal=False,
         status_values=frozenset({"active", "paused", "done"}),
+        hub=True,
     ),
     "people": NoteLayout(
-        name="people", subdir="10_people", label="person", prefix="person__", kind="person", bitemporal=False
+        name="people", subdir="10_people", label="person", prefix="person__", kind="person", bitemporal=False, hub=True
     ),
 }
 
@@ -95,6 +99,8 @@ NOTE_LAYOUTS: dict[str, NoteLayout] = {
 CONTENT_NOTE_LAYOUTS: tuple[NoteLayout, ...] = tuple(
     layout for layout in NOTE_LAYOUTS.values() if layout.name != "identity"
 )
+# Atomic (one-claim) types: what generic note creation and importers may write.
+ATOMIC_NOTE_LAYOUTS: tuple[NoteLayout, ...] = tuple(layout for layout in CONTENT_NOTE_LAYOUTS if not layout.hub)
 NOTE_PREFIXES: tuple[str, ...] = tuple(layout.prefix for layout in NOTE_LAYOUTS.values())
 
 CORE_NOTE_TYPES: tuple[str, ...] = tuple(NOTE_LAYOUTS.keys())

@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from ledger.layout import (
-    CONTENT_NOTE_LAYOUTS,
+    ATOMIC_NOTE_LAYOUTS,
     INDICES_SUBDIR,
 )
 from ledger.importers.state import backend_state_dir
@@ -105,6 +105,6 @@ class ObsidianLedgerConfig:
         return self.ledger_root / "config.json"
 
 
-NOTE_FOLDERS = {layout.label: layout.subdir for layout in CONTENT_NOTE_LAYOUTS}
+NOTE_FOLDERS = {layout.label: layout.subdir for layout in ATOMIC_NOTE_LAYOUTS}
 
-NOTE_PREFIX = {layout.label: layout.prefix.removesuffix("__") for layout in CONTENT_NOTE_LAYOUTS}
+NOTE_PREFIX = {layout.label: layout.prefix.removesuffix("__") for layout in ATOMIC_NOTE_LAYOUTS}

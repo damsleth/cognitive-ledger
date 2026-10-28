@@ -518,9 +518,10 @@ def _candidate_from_parts(
         return "" if s in ("null", "~", "None", "[]") else s
 
     unreviewed = unreviewed_count(frontmatter, body)
-    if unreviewed and not provenance:
-        # Unreviewed agent output is a model's reading, not a stated fact.
-        provenance = "observed"
+    if unreviewed:
+        # Unreviewed agent output is a model's reading, not a stated fact:
+        # cap it at the lowest trust class whatever the note claims.
+        provenance = "inferred"
 
     valid_from = _str_or_empty(frontmatter.get("valid_from", ""))
     valid_to = _str_or_empty(frontmatter.get("valid_to", ""))

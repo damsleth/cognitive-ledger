@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from ledger.config import get_config
-from ledger.io.safe_write import append_timeline_entry, safe_write_text
+from ledger.io.safe_write import FileLock, append_timeline_entry, safe_write_text
 from ledger.layout import (
     INDICES_SUBDIR,
     LEDGER_NOTE_SUBDIRS,
@@ -38,6 +38,7 @@ from ledger.parsing.frontmatter import parse_frontmatter_text, serialize_frontma
 HUB_KINDS = ("people", "projects")
 AGENT_MARK = "(agent)"
 _AGENT_LINE = re.compile(r"^- \d{4}-\d{2}-\d{2} \(agent\) ", re.M)
+_WIKILINK = re.compile(r"\[\[([^\]|#]+)")
 _LOG_DATE = re.compile(r"^- (\d{4}-\d{2}-\d{2}) ", re.M)
 _SECTIONS = {
     "people": ("Who", "Working with them", "Log"),
@@ -78,9 +79,41 @@ def _read(path: Path) -> tuple[dict[str, Any], str]:
     return parse_frontmatter_text(path.read_text(encoding="utf-8"))
 
 
-def _write(path: Path, frontmatter: dict[str, Any], body: str, notes_dir: Path, action: str, why: str) -> None:
-    safe_write_text(path, serialize_frontmatter(frontmatter) + "\n" + body.lstrip("\n"))
-    append_timeline_entry(timeline_path(notes_dir), action, path, why, ledger_notes_dir=notes_dir)
+def _split(text: str) -> tuple[str, str]:
+    """(frontmatter block incl. ``---`` lines, body). No frontmatter -> ("", text)."""
+    match = re.match(r"---\r?\n.*?\r?\n---[ \t]*(?:\r?\n|\Z)", text, re.S)
+    return (match.group(0), text[match.end():]) if match else ("", text)
+
+
+def _patch_frontmatter(block: str, set_fields: dict[str, Any], drop: tuple[str, ...] = ()) -> str:
+    """Change only the named single-line keys; every other byte of the block is kept."""
+    if not block:
+        block = "---\n---\n"
+    for key in drop:
+        block = re.sub(rf"^{re.escape(key)}:.*\r?\n", "", block, flags=re.M)
+    for key, value in set_fields.items():
+        line = serialize_frontmatter({key: value}).splitlines()[1]
+        pattern = rf"^{re.escape(key)}:.*$"
+        if re.search(pattern, block, re.M):
+            block = re.sub(pattern, lambda _m: line, block, count=1, flags=re.M)
+        else:
+            closing = block.rstrip().rfind("---")
+            block = block[:closing] + line + "\n" + block[closing:]
+    return block
+
+
+def _mutate(path: Path, notes_dir: Path, why: str, edit) -> Any:
+    """Locked read-modify-write: ``edit(fm, block, body) -> (block, body, result)``."""
+    with FileLock(path):
+        if not path.exists():
+            raise FileNotFoundError(f"no hub at {path}")
+        text = path.read_text(encoding="utf-8")
+        block, body = _split(text)
+        fm, _ = parse_frontmatter_text(text)
+        block, body, result = edit(fm, block, body)
+        safe_write_text(path, block + body, use_lock=False)
+    append_timeline_entry(timeline_path(notes_dir), "updated", path, why, ledger_notes_dir=notes_dir)
+    return result
 
 
 def _is_false(value: Any) -> bool:
@@ -99,14 +132,28 @@ def _title(body: str, fallback: str) -> str:
     return fallback
 
 
-def _section_span(body: str, heading: str) -> tuple[int, int] | None:
-    """(start, end) offsets of a ``## heading`` section's content, or None."""
-    match = re.search(rf"^## {re.escape(heading)}[ \t]*\n", body, re.M | re.I)
-    if match is None:
+def _section_span(body: str, heading: str) -> tuple[int, int, int] | None:
+    """(heading start, content start, end) of the one ``## heading`` section, or None.
+
+    The section ends at the next heading of level 1 or 2 (or EOF). Two sections
+    with the same heading are ambiguous and refused.
+    """
+    matches = list(re.finditer(rf"^## {re.escape(heading)}[ \t]*(?:\r?\n|\Z)", body, re.M | re.I))
+    if not matches:
         return None
-    nxt = re.search(r"^## ", body[match.end():], re.M)
+    if len(matches) > 1:
+        raise ValueError(f"note has {len(matches)} '## {heading}' sections; fix it by hand first")
+    match = matches[0]
+    nxt = re.search(r"^#{1,2} ", body[match.end():], re.M)
     end = match.end() + nxt.start() if nxt else len(body)
-    return match.end(), end
+    return match.start(), match.end(), end
+
+
+def _replace_span(body: str, start: int, end: int, content: str) -> str:
+    """Put ``content`` between start and end, keeping one blank line before what follows."""
+    tail = body[end:]
+    content = content.rstrip("\n")
+    return body[:start] + (content + "\n" if content else "") + ("\n" if tail else "") + tail
 
 
 def summary(kind: str, path: Path) -> dict[str, Any]:
@@ -146,7 +193,7 @@ def connected(kind: str, slug: str, notes_dir: Path | None = None) -> list[str]:
     _check_kind(kind)
     root = _notes_dir(notes_dir)
     hub = hub_path(kind, slug, root)
-    link = f"[[{hub.stem}"
+    target = hub.stem.lower()
     out = []
     for path in _iter_notes(root):
         if path == hub:
@@ -155,7 +202,8 @@ def connected(kind: str, slug: str, notes_dir: Path | None = None) -> list[str]:
         fm, body = parse_frontmatter_text(text)
         refs = fm.get(kind)
         refs = refs if isinstance(refs, list) else [refs] if refs else []
-        if slug in [str(r).strip() for r in refs] or link in body:
+        links = {m.strip().lower() for m in _WIKILINK.findall(body)}
+        if slug in [str(r).strip() for r in refs] or target in links:
             out.append(logical_path(path, ledger_notes_dir=root).as_posix())
     return out
 
@@ -197,7 +245,12 @@ def create(
     for heading in _SECTIONS[kind]:
         parts += [f"## {heading}", sections.get(heading, "").strip(), ""]
     path.parent.mkdir(parents=True, exist_ok=True)
-    _write(path, frontmatter, "\n".join(parts), root, "created", f"{NOTE_LAYOUTS[kind].label} hub: {title}")
+    with FileLock(path):
+        if path.exists():
+            raise FileExistsError(f"{path} exists; use log/set to change it")
+        safe_write_text(path, serialize_frontmatter(frontmatter) + "\n" + "\n".join(parts), use_lock=False)
+    append_timeline_entry(timeline_path(root), "created", path, f"{NOTE_LAYOUTS[kind].label} hub: {title}",
+                          ledger_notes_dir=root)
     return path
 
 
@@ -219,18 +272,22 @@ def log(
     if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date):
         raise ValueError(f"date must be YYYY-MM-DD, got {date!r}")
     line = f"- {date} {AGENT_MARK + ' ' if agent else ''}{' '.join(text.split())}"
-    fm, body = _read(path)
-    span = _section_span(body, "Log")
-    if span is None:
-        body = body.rstrip("\n") + f"\n\n## Log\n{line}\n"
-    else:
-        start, end = span
-        content = body[start:end].rstrip("\n")
-        body = body[:start] + (content + "\n" if content else "") + line + "\n" + ("\n" if end < len(body) else "") + body[end:]
-    fm["updated"] = _now()
-    if date >= str(fm.get(_LAST_FIELD[kind], "") or ""):
-        fm[_LAST_FIELD[kind]] = date
-    _write(path, fm, body, root, "updated", f"log: {text[:80]}")
+    last_field = _LAST_FIELD[kind]
+
+    def edit(fm, block, body):
+        span = _section_span(body, "Log")
+        if span is None:
+            body = body.rstrip("\n") + f"\n\n## Log\n{line}\n"
+        else:
+            _h, start, end = span
+            existing = body[start:end].rstrip("\n")
+            body = _replace_span(body, start, end, (existing + "\n" if existing else "") + line)
+        changes = {"updated": _now()}
+        if date >= str(fm.get(last_field, "") or ""):
+            changes[last_field] = date
+        return _patch_frontmatter(block, changes), body, None
+
+    _mutate(path, root, f"log: {text[:80]}", edit)
     return path
 
 
@@ -248,19 +305,23 @@ def set_section(
         raise ValueError("## Log is append-only; use log()")
     root = _notes_dir(notes_dir)
     path = hub_path(kind, slug, root)
-    fm, body = _read(path)
-    span = _section_span(body, heading)
-    if span is None:
-        log_span = _section_span(body, "Log")
-        insert_at = (log_span[0] - len("## Log\n")) if log_span else len(body)
-        body = body[:insert_at].rstrip("\n") + f"\n\n## {heading}\n{text.strip()}\n\n" + body[insert_at:]
-    else:
-        start, end = span
-        body = body[:start] + text.strip() + "\n" + ("\n" if end < len(body) else "") + body[end:]
-    fm["updated"] = _now()
-    if agent:
-        fm["reviewed"] = False
-    _write(path, fm, body, root, "updated", f"{heading}: rewritten{' by agent' if agent else ''}")
+
+    def edit(fm, block, body):
+        span = _section_span(body, heading)
+        if span is None:
+            log_span = _section_span(body, "Log")
+            at = log_span[0] if log_span else len(body)
+            head = body[:at].rstrip("\n")
+            body = head + f"\n\n## {heading}\n{text.strip()}\n\n" + body[at:]
+        else:
+            _h, start, end = span
+            body = _replace_span(body, start, end, text.strip())
+        changes: dict[str, Any] = {"updated": _now()}
+        if agent:
+            changes["reviewed"] = False
+        return _patch_frontmatter(block, changes), body, None
+
+    _mutate(path, root, f"{heading}: rewritten{' by agent' if agent else ''}", edit)
     return path
 
 
@@ -276,24 +337,37 @@ def unreviewed(notes_dir: Path | None = None) -> list[dict[str, Any]]:
     return out
 
 
-def accept(path: Path, notes_dir: Path | None = None) -> int:
-    """Mark a note reviewed: drop ``reviewed: false`` and the ``(agent)`` log marks. Returns marks cleared."""
-    root = _notes_dir(notes_dir)
+def _corpus_note(path: Path | str, root: Path) -> Path:
+    """Resolve a logical (notes/...) or physical path, refusing anything outside the corpus."""
     path = Path(path)
     if not path.is_absolute():
-        rel = path.as_posix().removeprefix("notes/")
-        path = root / rel
-    fm, body = _read(path)
-    n = unreviewed_count(fm, body)
-    if not n:
-        return 0
-    fm.pop("reviewed", None)
-    if fm.get("source") == "assistant":
-        fm["source"] = "user"
-    body = re.sub(r"^(- \d{4}-\d{2}-\d{2}) \(agent\) ", r"\1 ", body, flags=re.M)
-    fm["updated"] = _now()
-    _write(path, fm, body, root, "updated", "reviewed: agent content accepted")
-    return n
+        path = root / path.as_posix().removeprefix("notes/")
+    resolved = path.resolve()
+    try:
+        resolved.relative_to(root.resolve())
+    except ValueError:
+        raise ValueError(f"{path} is outside the ledger corpus {root}") from None
+    if resolved.suffix != ".md" or not resolved.is_file():
+        raise ValueError(f"{path} is not a note")
+    return resolved
+
+
+def accept(path: Path | str, notes_dir: Path | None = None) -> int:
+    """Mark a note reviewed: drop ``reviewed: false`` and the ``(agent)`` log marks. Returns marks cleared."""
+    root = _notes_dir(notes_dir)
+    path = _corpus_note(path, root)
+
+    def edit(fm, block, body):
+        n = unreviewed_count(fm, body)
+        if not n:
+            return block, body, 0
+        changes: dict[str, Any] = {"updated": _now()}
+        if fm.get("source") == "assistant":
+            changes["source"] = "user"
+        body = re.sub(r"^(- \d{4}-\d{2}-\d{2}) \(agent\) ", r"\1 ", body, flags=re.M)
+        return _patch_frontmatter(block, changes, drop=("reviewed",)), body, n
+
+    return _mutate(path, root, "reviewed: agent content accepted", edit)
 
 
 def resolve(kind: str, name: str, notes_dir: Path | None = None) -> str | None:

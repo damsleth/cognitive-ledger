@@ -37,7 +37,7 @@ from ledger.io.safe_write import append_timeline_entry, safe_write_text
 # except identity/loops which are already singular-shaped or plural-shaped
 # correctly).
 _TYPE_ALIASES = {
-  **{alias: layout.name for layout in NOTE_LAYOUTS.values()
+  **{alias: layout.name for layout in NOTE_LAYOUTS.values() if not layout.hub
      for alias in (layout.name, layout.label, layout.kind) if alias != NOTE_LAYOUTS["loops"].kind},
   "prefs": NOTE_LAYOUTS["preferences"].name,
 }
