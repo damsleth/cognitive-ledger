@@ -5,8 +5,11 @@ This module replaces the legacy bash `scripts/sheep` implementation.
 
 from __future__ import annotations
 
+from ledger.io.hashing import digest
+
+from ledger.io.hashing import file_digest
+
 import argparse
-import hashlib
 import json
 import math
 import re
@@ -153,11 +156,7 @@ def _sync_acceptance_path() -> Path:
 
 
 def _sha256_path(path: Path) -> str:
-    hasher = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(65536), b""):
-            hasher.update(chunk)
-    return hasher.hexdigest()
+    return file_digest(path)
 
 
 def _timeline_prefix_sha256(events: list[dict[str, Any]], count: int | None = None) -> str:
@@ -166,7 +165,7 @@ def _timeline_prefix_sha256(events: list[dict[str, Any]], count: int | None = No
         json.dumps(event, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
         for event in prefix
     )
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    return digest(canonical.encode("utf-8"))
 
 
 def _tracked_note_snapshot() -> dict[str, str]:
@@ -512,7 +511,7 @@ def _append_sync_acceptance(report: dict[str, Any], blockers: list[str]) -> None
         "action": "accept_drift",
         "blockers": blockers,
         "unlogged_change_count": len(paths),
-        "unlogged_paths_sha256": hashlib.sha256("\n".join(paths).encode()).hexdigest(),
+        "unlogged_paths_sha256": digest("\n".join(paths).encode()),
         "timeline_rewound": bool(report["timeline_rewound"]),
         "state_invalid": bool(report["state_invalid"]),
     }

@@ -32,6 +32,8 @@ because the source frontmatter is a different shape.
 
 from __future__ import annotations
 
+from ledger.time_utils import now_iso as _now_iso
+
 import json
 import re
 import shutil
@@ -419,8 +421,6 @@ def _rewrite_links(body: str, resolution: dict[str, str]) -> tuple[str, int]:
     return _WIKILINK.sub(repl, body), resolved
 
 
-def _now_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _stat_iso(ts: float) -> str:

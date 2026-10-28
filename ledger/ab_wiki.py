@@ -27,8 +27,9 @@ history is safe and is exactly what ``Wiki.open`` does, so a stale or deleted
 
 from __future__ import annotations
 
+from ledger.time_utils import now_iso as _now_iso
+
 import json
-import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -58,8 +59,6 @@ _VERDICT_RANK = {
 }
 
 
-def _now_iso() -> str:
-    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
 
 @dataclass
