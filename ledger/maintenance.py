@@ -1838,7 +1838,7 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_sleep(as_json=as_json)
     if args.command == "sync":
         if args.accept_drift and not args.apply:
-            sync_parser.error("--accept-drift requires --apply")
+            parser.error("--accept-drift requires --apply")
         return _wrap_sync(
             apply=bool(args.apply),
             accept_drift=bool(args.accept_drift),
