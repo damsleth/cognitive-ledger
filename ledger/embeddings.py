@@ -7,6 +7,8 @@ be reused by query/eval/discovery flows and tested independently.
 
 from __future__ import annotations
 
+from ledger.time_utils import now_iso
+
 import datetime as dt
 import json
 import os
@@ -90,8 +92,6 @@ def apply_query_template(text: str, template: str) -> str:
     return text
 
 
-def now_iso() -> str:
-    return dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def sanitize_model_key(model: str) -> str:

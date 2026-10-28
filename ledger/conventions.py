@@ -13,6 +13,8 @@ otherwise-shared plumbing.
 
 from __future__ import annotations
 
+from ledger.time_utils import now_iso
+
 import json
 import re
 import sys
@@ -78,8 +80,6 @@ def redact(text: Any) -> str:
   return text
 
 
-def now_iso() -> str:
-  return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
 
 # --- internals -------------------------------------------------------------
