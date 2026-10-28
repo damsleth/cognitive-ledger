@@ -76,3 +76,48 @@ def test_hub_notes_validate_and_index_unreviewed(notes):
     proj = hubs.create("projects", "q", "Q", fields={"status": "someday"}, notes_dir=notes)
     fm, _ = _fm(proj)
     assert "invalid status: someday" in validate_frontmatter_fields(fm, "notes/07_projects/project__q.md")
+
+
+def _hub(notes: Path, text: str) -> Path:
+    path = notes / "10_people" / "person__x.md"
+    path.parent.mkdir(exist_ok=True)
+    path.write_text(text)
+    return path
+
+
+def test_mutations_keep_untouched_frontmatter_bytes(notes):
+    fm = '---\ncreated: 2026-01-01T00:00:00Z\nupdated: 2026-01-01T00:00:00Z\nentity: "O\'Brien \\"OB\\""\nnote: |\n  multi\n  line\n---\n'
+    path = _hub(notes, fm + "# X\n\n## Log\n")
+    hubs.log("people", "x", "hi", date="2026-10-28", agent=True, notes_dir=notes)
+    text = path.read_text()
+    assert 'entity: "O\'Brien \\"OB\\""\nnote: |\n  multi\n  line\n' in text
+    assert text.count("## Log") == 1 and text.endswith("## Log\n- 2026-10-28 (agent) hi\n")
+    hubs.accept("notes/10_people/person__x.md", notes)
+    assert "note: |\n  multi\n  line\n" in path.read_text()
+
+
+def test_section_edges(notes):
+    path = _hub(notes, "---\nupdated: x\n---\n# X\n\n## Who   \nold\n# Appendix\nkeep\n\n## Log   \n- 2026-01-01 a\n")
+    hubs.set_section("people", "x", "Who", "new", notes_dir=notes)
+    hubs.set_section("people", "x", "Working with them", "calm", notes_dir=notes)
+    body = path.read_text()
+    assert "## Who   \nnew\n\n# Appendix\nkeep\n" in body
+    assert "## Working with them\ncalm\n\n## Log   \n- 2026-01-01 a\n" in body
+    _hub(notes, "---\nupdated: x\n---\n# X\n## Log\n- a\n## Log\n- b\n")
+    with pytest.raises(ValueError):
+        hubs.log("people", "x", "c", notes_dir=notes)
+
+
+def test_accept_refuses_paths_outside_corpus(notes, tmp_path_factory):
+    outside = tmp_path_factory.mktemp("elsewhere") / "x.md"
+    outside.write_text("---\nreviewed: false\n---\n")
+    for bad in (outside, "notes/../../x.md"):
+        with pytest.raises(ValueError):
+            hubs.accept(bad, notes)
+
+
+def test_wikilink_must_match_whole_target(notes):
+    hubs.create("people", "ann", "Ann", notes_dir=notes)
+    (notes / "02_facts" / "fact__a.md").write_text("---\ntags: [x]\n---\n[[person__annette]] [[person__ann|Ann]]\n")
+    (notes / "02_facts" / "fact__b.md").write_text("---\ntags: [x]\n---\n[[person__annette]]\n")
+    assert hubs.connected("people", "ann", notes) == ["notes/02_facts/fact__a.md"]
