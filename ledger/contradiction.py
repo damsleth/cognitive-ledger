@@ -204,14 +204,6 @@ def decide(
 # Note body extraction (strip frontmatter)
 # ---------------------------------------------------------------------------
 
-def _extract_body(text: str) -> str:
-    """Return the note body with frontmatter stripped.
-
-    Falls back to the full text if no frontmatter boundary is found.
-    """
-    _, body = parse_frontmatter_text(text)
-    return body.strip()
-
 
 # ---------------------------------------------------------------------------
 # Temporal ordering
@@ -484,23 +476,6 @@ def _build_conflict_note(
         f"- [ ] Both are wrong / outdated\n"
     )
     return content
-
-
-def _existing_conflict_note(
-    pair_key: str,
-    inbox_dir: Path,
-) -> Path | None:
-    """Return the path of an already-written conflict note for this pair, or None."""
-    if not inbox_dir.is_dir():
-        return None
-    for path in inbox_dir.glob("conflict__*.md"):
-        text = path.read_text(encoding="utf-8")
-        fm, _ = parse_frontmatter_text(text)
-        # Body contains the pair's rel_paths; check membership
-        parts = pair_key.split("|")
-        if all(p in text for p in parts):
-            return path
-    return None
 
 
 # ---------------------------------------------------------------------------
