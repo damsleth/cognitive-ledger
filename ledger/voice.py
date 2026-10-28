@@ -11,13 +11,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from ledger.layout import (
+    NOTE_LAYOUTS,
+    note_type_dir,
+)
 from ledger.config import get_config
-from ledger.layout import note_type_dir
 from ledger.io.safe_write import safe_write_text, append_timeline_entry
 from ledger.parsing.frontmatter import parse_frontmatter_text, serialize_frontmatter
 
 
-VOICE_NOTE_FILENAME = "id__voice_dna.md"
+VOICE_NOTE_FILENAME = f"{NOTE_LAYOUTS['identity'].prefix}voice_dna.md"
 
 
 def _voice_note_path(notes_dir: Path | None = None) -> Path:

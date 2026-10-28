@@ -2,6 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from ledger.layout import (
+    CONTENT_NOTE_LAYOUTS,
+    INBOX_SUBDIR,
+    INDICES_SUBDIR,
+)
 from ledger.io import safe_write_text
 
 from .models import ObsidianLedgerConfig
@@ -9,15 +14,7 @@ from .state import migrate_legacy_state
 from .utils import TIMELINE_HEADER
 
 
-LEDGER_NOTE_DIRS = (
-    "00_inbox",
-    "02_facts",
-    "03_preferences",
-    "04_goals",
-    "05_open_loops",
-    "06_concepts",
-    "08_indices",
-)
+LEDGER_NOTE_DIRS = (INBOX_SUBDIR, *(layout.subdir for layout in CONTENT_NOTE_LAYOUTS), INDICES_SUBDIR)
 
 
 def ensure_layout(config: ObsidianLedgerConfig) -> None:

@@ -9,6 +9,7 @@ import sys
 import traceback
 from pathlib import Path
 
+from ledger.layout import ARCHIVE_SUBDIR, INBOX_SUBDIR, INDICES_SUBDIR, NOTE_LAYOUTS
 from ledger.config import LedgerConfig, get_config
 from ledger.validation import validate_query, validate_scope, validate_limit
 from ledger.errors import QueryValidationError, ScopeValidationError
@@ -687,7 +688,7 @@ def _resolve_baseline_output(raw: str) -> Path:
             f"({notes_dir}) or the ledger root ({root})",
             file=sys.stderr,
         )
-        print("hint: use a logical path like 'notes/08_indices/baseline.json'", file=sys.stderr)
+        print(f"hint: use a logical path like 'notes/{INDICES_SUBDIR}/baseline.json'", file=sys.stderr)
         raise SystemExit(2)
     return candidate
 
@@ -869,7 +870,7 @@ def handle_context_command(args):
     elif fmt == "identity":
         identity = get_notes("identity", notes_dir=notes_dir)
         if not identity:
-            print("No identity notes found in notes/01_identity/")
+            print(f"No identity notes found in notes/{NOTE_LAYOUTS['identity'].subdir}/")
             return
         for note in identity:
             print(f"- `{note.path.name}` - {shorten(note.statement or note.title, 160)}")
@@ -1691,7 +1692,7 @@ def handle_loops_sync(args) -> None:
     # completed. Anything still named loop__*.md in the archive is a retired
     # loop, which is all this needs to know.
     closed_slugs |= {
-        p.stem for p in (Path(notes_dir) / "09_archive").glob("loop__*.md")
+        p.stem for p in (Path(notes_dir) / ARCHIVE_SUBDIR).glob(f"{NOTE_LAYOUTS['loops'].prefix}*.md")
     }
     # Snoozed loops are neither active nor closed. Without their own set they
     # fall through to the orphan branch and get flagged as if deleted.
@@ -1940,7 +1941,7 @@ def handle_notes_add_command(args):
         }
         print(json.dumps(payload, ensure_ascii=False))
     else:
-        location = "00_inbox" if result.inbox else result.note_type
+        location = INBOX_SUBDIR if result.inbox else result.note_type
         print(f"created {result.path} ({location})")
 
 
@@ -2173,13 +2174,14 @@ def main(argv=None) -> int:
     notes_subparsers = notes_parser.add_subparsers(dest="notes_subcommand")
     notes_add_parser = notes_subparsers.add_parser(
         "add",
-        help="Create a new note (defaults to 00_inbox; --no-inbox writes to typed folder)",
+        help=f"Create a new note (defaults to {INBOX_SUBDIR}; --no-inbox writes to typed folder)",
     )
     # Accept singular + plural; canonical mapping happens inside add_note().
     _add_type_choices = sorted({
         *cfg.note_types.keys(),
-        "fact", "pref", "preference", "prefs",
-        "goal", "loop", "concept", "id",
+        *(alias for layout in NOTE_LAYOUTS.values()
+          for alias in (layout.label, layout.kind) if alias != NOTE_LAYOUTS["loops"].kind),
+        "prefs",
     })
     notes_add_parser.add_argument(
         "--type",
@@ -2192,7 +2194,7 @@ def main(argv=None) -> int:
         dest="inbox",
         action="store_false",
         default=True,
-        help="Write straight to the typed folder, skipping 00_inbox/",
+        help=f"Write straight to the typed folder, skipping {INBOX_SUBDIR}/",
     )
     notes_add_parser.add_argument("--slug", default=None, help="Filename slug override")
     notes_add_parser.add_argument("--title", default=None, help="H1 heading override")
@@ -2263,7 +2265,7 @@ def main(argv=None) -> int:
         metavar="DATE",
         help=(
             "Retrieve notes valid at DATE (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ). "
-            "Widens the corpus to include 09_archive notes. "
+            f"Widens the corpus to include {ARCHIVE_SUBDIR} notes. "
             "Default: current-validity only (expired notes hidden)."
         ),
     )
@@ -2653,7 +2655,7 @@ def main(argv=None) -> int:
     import_cm_parser.add_argument(
         "--direct",
         action="store_true",
-        help="Write straight to typed folders instead of 00_inbox/",
+        help=f"Write straight to typed folders instead of {INBOX_SUBDIR}/",
     )
     import_cm_parser.add_argument(
         "--apply",
@@ -2697,7 +2699,7 @@ def main(argv=None) -> int:
     signal_patterns_parser = signal_subparsers.add_parser(
         "patterns",
         help="Mine failure/strategy patterns from the signal log into "
-             "08_indices/patterns.{json,md} (WikiSkill-style wiki maintainer)",
+             f"{INDICES_SUBDIR}/patterns.{{json,md}} (WikiSkill-style wiki maintainer)",
     )
     signal_patterns_parser.add_argument(
         "--min-misses",

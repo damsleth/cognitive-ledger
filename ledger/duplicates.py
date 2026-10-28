@@ -13,6 +13,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from ledger.layout import ARCHIVE_SUBDIR, INDICES_SUBDIR
+
 
 @dataclass
 class DuplicateFinding:
@@ -103,7 +105,7 @@ def scan_duplicates(
     title_threshold: float = 0.75,
     include_exact: bool = True,
     glob: str = "**/*.md",
-    exclude_dirs: frozenset[str] = frozenset({"08_indices", "09_archive"}),
+    exclude_dirs: frozenset[str] = frozenset({INDICES_SUBDIR, ARCHIVE_SUBDIR}),
 ) -> list[DuplicateFinding]:
     """Scan *notes_dir* for duplicate notes.
 

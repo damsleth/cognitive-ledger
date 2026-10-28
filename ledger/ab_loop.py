@@ -41,6 +41,7 @@ from typing import Any
 
 import yaml
 
+from ledger.layout import INDICES_SUBDIR
 from ledger import ab
 from ledger.ab_wiki import WIKI_DIRNAME, Wiki
 from ledger.config import get_config
@@ -343,7 +344,7 @@ def run_loop(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    idx = "08_indices"
+    idx = INDICES_SUBDIR
     parser = argparse.ArgumentParser(
         prog="ledger ab loop",
         description="Autonomous propose/screen/holdout A/B optimization loop",

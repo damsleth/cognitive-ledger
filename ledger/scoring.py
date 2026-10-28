@@ -25,6 +25,8 @@ import datetime as dt
 from dataclasses import dataclass
 from typing import Any
 
+from ledger.layout import NOTE_LAYOUTS
+
 
 # ---------------------------------------------------------------------------
 # QueryCtx
@@ -176,7 +178,7 @@ def intent_adjustments(
         elif cond == "preference_non_pref_demote":
             # 'fact' notes are NOT demoted even in preference mode — they
             # are neutral.  Only non-pref, non-fact types are penalised.
-            fired = preference_mode and candidate_type not in {"pref", "fact"}
+            fired = preference_mode and candidate_type not in {NOTE_LAYOUTS["preferences"].label, NOTE_LAYOUTS["facts"].label}
         # coarse-only rungs
         elif cond == "coarse_scope_boost":
             fired = query_scope != "all" and sm >= 1.0
@@ -289,21 +291,10 @@ def derive_provenance(source: str, via: str, provenance: str) -> str:
 
 # Canonicalise note-type labels so per-type config accepts either the folder
 # name (``preferences``) or the candidate label (``pref``).
-_TYPE_ALIASES: dict[str, str] = {
-    "facts": "fact",
-    "fact": "fact",
-    "preferences": "pref",
-    "preference": "pref",
-    "pref": "pref",
-    "loops": "loop",
-    "open_loops": "loop",
-    "loop": "loop",
-    "goals": "goal",
-    "goal": "goal",
-    "concepts": "concept",
-    "concept": "concept",
-    "identity": "id",
-    "id": "id",
+_TYPE_ALIASES = {
+    alias: layout.label
+    for layout in NOTE_LAYOUTS.values()
+    for alias in (layout.name, layout.label, layout.kind if not layout.has_status else layout.subdir.split("_", 1)[1])
 }
 
 

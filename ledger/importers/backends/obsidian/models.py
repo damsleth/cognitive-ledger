@@ -3,6 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from ledger.layout import (
+    CONTENT_NOTE_LAYOUTS,
+    INDICES_SUBDIR,
+)
 from ledger.importers.state import backend_state_dir
 
 
@@ -70,7 +74,7 @@ class ObsidianLedgerConfig:
 
     @property
     def indices_root(self) -> Path:
-        return self.notes_root / "08_indices"
+        return self.notes_root / INDICES_SUBDIR
 
     @property
     def bases_root(self) -> Path:
@@ -101,18 +105,6 @@ class ObsidianLedgerConfig:
         return self.ledger_root / "config.json"
 
 
-NOTE_FOLDERS: dict[str, str] = {
-    "fact": "02_facts",
-    "pref": "03_preferences",
-    "goal": "04_goals",
-    "loop": "05_open_loops",
-    "concept": "06_concepts",
-}
+NOTE_FOLDERS = {layout.label: layout.subdir for layout in CONTENT_NOTE_LAYOUTS}
 
-NOTE_PREFIX: dict[str, str] = {
-    "fact": "fact",
-    "pref": "pref",
-    "goal": "goal",
-    "loop": "loop",
-    "concept": "concept",
-}
+NOTE_PREFIX = {layout.label: layout.prefix.removesuffix("__") for layout in CONTENT_NOTE_LAYOUTS}

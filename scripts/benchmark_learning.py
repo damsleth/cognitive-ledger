@@ -18,6 +18,7 @@ import tempfile
 import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from ledger.layout import INDICES_SUBDIR
 from ledger.behaviour import run_suite
 from ledger.improvements import queue, sync, transition
 from ledger.instruction_audit import build_bundle, audit_prompt, validate_findings
@@ -77,11 +78,11 @@ def main():
     # Mutations exercise only a scratch copy of signal/lifecycle data.
     with tempfile.TemporaryDirectory(prefix="ledger-lifecycle-benchmark-") as temp:
         scratch = Path(temp)
-        (scratch / "08_indices").mkdir()
+        (scratch / INDICES_SUBDIR).mkdir()
         for name in ("signals.jsonl", "improvements.jsonl"):
-            source = root / "08_indices" / name
+            source = root / INDICES_SUBDIR / name
             if source.exists():
-                shutil.copy2(source, scratch / "08_indices" / name)
+                shutil.copy2(source, scratch / INDICES_SUBDIR / name)
         observed = sync(scratch)
         stable = sync(scratch)
         first = next((i for i in queue(scratch) if i["state"] == "open"), None)

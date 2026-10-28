@@ -8,8 +8,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from ledger.layout import (
+    INDICES_SUBDIR,
+    NOTE_LAYOUTS,
+    logical_path,
+)
 from ledger.config import get_config
-from ledger.layout import logical_path
 from ledger.notes import get_notes
 from ledger.parsing import parse_timestamp, shorten
 from ledger.retrieval import canonical_scope, compute_recency_component
@@ -18,11 +22,8 @@ from ledger.retrieval import canonical_scope, compute_recency_component
 SCOPES = ("personal", "work", "dev")
 ACTIVE_LOOP_STATUSES = {"open", "blocked", "snoozed"}
 NOTE_TYPE_MAP = {
-    "identity": "identity",
-    "facts": "fact",
-    "preferences": "preference",
-    "goals": "goal",
-    "loops": "loop",
+    name: (layout.kind if not layout.has_status else layout.label)
+    for name, layout in NOTE_LAYOUTS.items() if name != "concepts"
 }
 
 
@@ -146,12 +147,12 @@ def build_context(notes_dir: Path) -> str:
         "## When to Search Deeper",
         "",
         "Before responding about:",
-        "- Identity, mission, beliefs, strategies -> search `notes/01_identity/`",
-        "- Personal details, history, family -> search `notes/02_facts/`",
-        "- Past decisions or commitments -> search `notes/02_facts/` and `notes/08_indices/timeline.md`",
-        "- User preferences or style -> search `notes/03_preferences/`",
-        "- Ongoing threads or open questions -> search `notes/05_open_loops/`",
-        "- Defined concepts or frameworks -> search `notes/06_concepts/`",
+        f"- Identity, mission, beliefs, strategies -> search `notes/{NOTE_LAYOUTS['identity'].subdir}/`",
+        f"- Personal details, history, family -> search `notes/{NOTE_LAYOUTS['facts'].subdir}/`",
+        f"- Past decisions or commitments -> search `notes/{NOTE_LAYOUTS['facts'].subdir}/` and `notes/{INDICES_SUBDIR}/timeline.md`",
+        f"- User preferences or style -> search `notes/{NOTE_LAYOUTS['preferences'].subdir}/`",
+        f"- Ongoing threads or open questions -> search `notes/{NOTE_LAYOUTS['loops'].subdir}/`",
+        f"- Defined concepts or frameworks -> search `notes/{NOTE_LAYOUTS['concepts'].subdir}/`",
         "",
         "Rule: if about to guess or assume something about the user, search first.",
         "",
@@ -303,7 +304,7 @@ def render_profile(scope: str, items: list[ContextProfileItem]) -> tuple[str, di
             "## When to Search Deeper",
             "",
             "Before responding:",
-            f"- Start with this profile: `notes/08_indices/context_profile_{scope}.md`",
+            f"- Start with this profile: `notes/{INDICES_SUBDIR}/context_profile_{scope}.md`",
             "- Expand to canonical notes via `ledger query \"<topic>\" --scope <scope>`",
             "- Verify critical claims in source notes before committing to an answer",
             "",

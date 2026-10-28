@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from ledger.layout import CONTENT_NOTE_LAYOUTS
+
 
 class LedgerError(Exception):
     """Base exception for all Cognitive Ledger errors.
@@ -124,7 +126,7 @@ class InvalidNoteTypeError(NoteError):
     """Raised when an invalid note type is specified."""
 
     def __init__(self, note_type: str, valid_types: tuple[str, ...] | None = None) -> None:
-        valid = valid_types or ("facts", "preferences", "goals", "loops", "concepts")
+        valid = valid_types or tuple(layout.name for layout in CONTENT_NOTE_LAYOUTS)
         super().__init__(
             f"Invalid note type: {note_type!r}. Valid types: {', '.join(valid)}",
             note_type=note_type,

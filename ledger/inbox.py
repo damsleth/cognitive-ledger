@@ -16,6 +16,7 @@ from typing import Any, Literal
 
 from ledger.config import get_config
 from ledger.layout import (
+    NOTE_LAYOUTS,
     inbox_dir as layout_inbox_dir,
     is_logical_note_path,
     note_type_dir,
@@ -34,11 +35,11 @@ REJECT_REASONS: tuple[str, ...] = ("discarded", "duplicate", "merged", "not_dura
 
 # Heuristics for suggesting target type from content
 _TYPE_SIGNALS: list[tuple[str, list[str]]] = [
-    ("preferences", ["prefer", "always", "never", "style", "habit", "going forward"]),
-    ("facts", ["decided", "confirmed", "learned", "discovered", "is a", "was a"]),
-    ("goals", ["goal", "objective", "target", "achieve", "milestone"]),
-    ("loops", ["todo", "revisit", "unresolved", "blocked", "next step", "investigate"]),
-    ("concepts", ["concept", "framework", "model", "definition", "pattern"]),
+    (NOTE_LAYOUTS["preferences"].name, ["prefer", "always", "never", "style", "habit", "going forward"]),
+    (NOTE_LAYOUTS["facts"].name, ["decided", "confirmed", "learned", "discovered", "is a", "was a"]),
+    (NOTE_LAYOUTS["goals"].name, ["goal", "objective", "target", "achieve", "milestone"]),
+    (NOTE_LAYOUTS["loops"].name, ["todo", "revisit", "unresolved", "blocked", "next step", "investigate"]),
+    (NOTE_LAYOUTS["concepts"].name, ["concept", "framework", "model", "definition", "pattern"]),
 ]
 
 

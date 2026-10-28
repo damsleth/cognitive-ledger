@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from ledger.layout import INDICES_SUBDIR, NOTE_LAYOUTS
 from ledger.io.safe_write import FileLock, safe_append_line, safe_write_text
 
 TIMELINE_MARKDOWN_HEADER = """# Timeline
@@ -30,19 +31,10 @@ MARKDOWN_LINE_RE = re.compile(
 
 def _infer_type(path: str) -> str:
     normalized = str(path or "").strip()
-    if normalized.startswith("notes/01_identity/"):
-        return "identity"
-    if normalized.startswith("notes/02_facts/"):
-        return "fact"
-    if normalized.startswith("notes/03_preferences/"):
-        return "preference"
-    if normalized.startswith("notes/04_goals/"):
-        return "goal"
-    if normalized.startswith("notes/05_open_loops/"):
-        return "loop"
-    if normalized.startswith("notes/06_concepts/"):
-        return "concept"
-    if normalized.startswith("notes/08_indices/"):
+    for layout in NOTE_LAYOUTS.values():
+        if normalized.startswith(f"{layout.logical_dir.as_posix()}/"):
+            return layout.label if layout.has_status else layout.kind
+    if normalized.startswith(f"notes/{INDICES_SUBDIR}/"):
         return "index"
     return "other"
 

@@ -16,8 +16,12 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
+from ledger.layout import (
+    CORE_NOTE_TYPES as LAYOUT_CORE_NOTE_TYPES,
+    NOTE_LAYOUTS,
+    logical_path,
+)
 from ledger.config import get_config
-from ledger.layout import NOTE_LAYOUTS, CORE_NOTE_TYPES as LAYOUT_CORE_NOTE_TYPES, logical_path
 from ledger.parsing import (
     parse_frontmatter_text,
     parse_sections,
@@ -39,16 +43,16 @@ from ledger.parsing import (
 class NoteType(Enum):
     """Note type categories."""
 
-    IDENTITY = "id"
-    FACT = "fact"
-    PREF = "pref"
-    GOAL = "goal"
-    LOOP = "loop"
-    CONCEPT = "concept"
+    IDENTITY = NOTE_LAYOUTS["identity"].label
+    FACT = NOTE_LAYOUTS["facts"].label
+    PREF = NOTE_LAYOUTS["preferences"].label
+    GOAL = NOTE_LAYOUTS["goals"].label
+    LOOP = NOTE_LAYOUTS["loops"].label
+    CONCEPT = NOTE_LAYOUTS["concepts"].label
 
     @property
     def prefix(self) -> str:
-        return f"{self.value}__"
+        return next(layout.prefix for layout in NOTE_LAYOUTS.values() if layout.label == self.value)
 
     @property
     def folder(self) -> str:
@@ -329,7 +333,7 @@ class LoopNote(BaseNote):
         question = sections.get("question or task", "")
         title = extract_title(body)
         if not question:
-            question = title or path.name.replace("loop__", "").replace("_", " ")
+            question = title or path.name.replace(NOTE_LAYOUTS['loops'].prefix, "").replace("_", " ")
 
         next_action_text = sections.get("next action", "")
         if not next_action_text:

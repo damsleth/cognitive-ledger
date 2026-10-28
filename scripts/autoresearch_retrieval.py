@@ -59,6 +59,7 @@ if str(_REPO_ROOT) not in sys.path:
 # Ledger imports
 # ---------------------------------------------------------------------------
 
+from ledger.layout import INDICES_SUBDIR
 from ledger.config import get_config  # noqa: E402
 from ledger import eval as eval_lib  # noqa: E402
 from ledger import semantic as semantic_lib  # noqa: E402
@@ -191,7 +192,7 @@ def run_eval_timed(
 
 def _state_path() -> Path:
     cfg = get_config()
-    return Path(cfg.ledger_notes_dir) / "08_indices" / STATE_FILENAME
+    return Path(cfg.ledger_notes_dir) / INDICES_SUBDIR / STATE_FILENAME
 
 
 def write_state(metrics: dict, tag: str, split: str) -> None:
@@ -261,7 +262,7 @@ def main(argv: list[str] | None = None) -> int:
     cfg = get_config()
     notes_dir = Path(cfg.ledger_notes_dir)
     cases_filename = SPLITS[args.split]
-    cases_path = notes_dir / "08_indices" / cases_filename
+    cases_path = notes_dir / INDICES_SUBDIR / cases_filename
 
     if not cases_path.exists():
         print(f"error: cases file not found: {cases_path}", file=sys.stderr)

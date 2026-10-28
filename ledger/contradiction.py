@@ -44,8 +44,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
+from ledger.layout import (
+    INBOX_SUBDIR,
+    INDICES_SUBDIR,
+    NOTE_LAYOUTS,
+)
 from ledger.config import get_config
-from ledger.layout import NOTE_LAYOUTS
 from ledger.parsing.frontmatter import parse_frontmatter_text, serialize_frontmatter
 from ledger.parsing.privacy import strip_private_tags
 from ledger.scoring import canonical_scope
@@ -61,13 +65,16 @@ STATE_FILENAME = "contradiction_state.json"
 
 # NLI-compatible note types: only types that carry factual claims.
 # loops / preferences are excluded because they are intentionally evolving.
-_SCAN_NOTE_TYPES = frozenset({"facts", "identity", "goals", "concepts"})
+_SCAN_NOTE_TYPES = frozenset(
+    layout.name for layout in NOTE_LAYOUTS.values()
+    if layout.bitemporal and layout is not NOTE_LAYOUTS["preferences"]
+)
 
 # Folder subdir names for note types that may be auto-superseded.
 # identity is excluded here: it goes to review only (hard rule 1).
-_AUTO_SUPERSEDE_SUBTYPES = frozenset({"facts", "goals", "concepts"})
+_AUTO_SUPERSEDE_SUBTYPES = _SCAN_NOTE_TYPES - {NOTE_LAYOUTS["identity"].name}
 
-_IDENTITY_SUBDIR = "01_identity"
+_IDENTITY_SUBDIR = NOTE_LAYOUTS['identity'].subdir
 
 _TIMESTAMP_FMT = "%Y-%m-%dT%H:%M:%SZ"
 
@@ -574,8 +581,8 @@ def run_contradiction_scan(
         )
 
     ledger_notes_dir = config.ledger_notes_dir
-    indices_dir = ledger_notes_dir / "08_indices"
-    inbox_dir = ledger_notes_dir / "00_inbox"
+    indices_dir = ledger_notes_dir / INDICES_SUBDIR
+    inbox_dir = ledger_notes_dir / INBOX_SUBDIR
 
     # Load scan state
     state = load_state(indices_dir)
@@ -701,7 +708,7 @@ def run_contradiction_scan(
                     )
                     safe_write_text(inbox_dir / filename, content)
                     _conflict_note_texts[str(inbox_dir / filename)] = content
-                    _append_conflict_timeline(f"notes/00_inbox/{filename}", rel_a, rel_b, 1.0)
+                    _append_conflict_timeline(f"notes/{INBOX_SUBDIR}/{filename}", rel_a, rel_b, 1.0)
                 scan_result.pair_results.append(PairResult(
                     candidate_ref=rel_a, neighbor_ref=rel_b, contradiction_score=1.0,
                     decision=Decision.REVIEW, action_taken="slot_conflict_noted",
@@ -935,7 +942,7 @@ def run_contradiction_scan(
                         # same run, finds it instead of writing a duplicate.
                         _conflict_note_texts[str(conflict_path_fb)] = content_fb
                         _append_conflict_timeline(
-                            f"notes/00_inbox/{filename_fb}",
+                            f"notes/{INBOX_SUBDIR}/{filename_fb}",
                             candidate_ref,
                             neighbor_rel,
                             score,
@@ -987,7 +994,7 @@ def run_contradiction_scan(
             # Update in-memory cache so subsequent pairs in this run see it.
             _conflict_note_texts[str(conflict_path)] = conflict_content
             _append_conflict_timeline(
-                f"notes/00_inbox/{filename}",
+                f"notes/{INBOX_SUBDIR}/{filename}",
                 candidate_ref,
                 neighbor_rel,
                 score,
@@ -1011,7 +1018,7 @@ def run_contradiction_scan(
                         "neighbor": neighbor_rel,
                         "score": round(score, 3),
                         "action": "conflict_noted",
-                        "inbox": f"notes/00_inbox/{filename}",
+                        "inbox": f"notes/{INBOX_SUBDIR}/{filename}",
                     },
                     ensure_ascii=False,
                 ),
@@ -1126,7 +1133,7 @@ def cmd_sleep_contradictions(*, apply: bool = False) -> int:
     print(f"Candidates scanned: {result.candidates_scanned}")
     print(f"Pairs evaluated:    {result.pairs_evaluated}")
     print(f"Supersessions:      {result.supersessions} ({'written' if apply else 'would write'})")
-    print(f"Conflict notes:     {result.conflict_notes} ({'written to 00_inbox' if apply else 'would write'})")
+    print(f"Conflict notes:     {result.conflict_notes} ({'written to {INBOX_SUBDIR}' if apply else 'would write'})")
     print(f"Ignored:            {result.ignored}")
     print("")
 

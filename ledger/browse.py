@@ -7,8 +7,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from ledger.layout import (
+    NOTE_LAYOUTS,
+    logical_path,
+    note_type_dir,
+)
 from ledger.config import get_config
-from ledger.layout import logical_path, note_type_dir
 from ledger.parsing import (
     extract_title,
     first_checkbox,
@@ -77,7 +81,7 @@ def loop_item(path: str | Path) -> BrowseItem:
     question = "\n".join(sections.get("question or task", [])).strip()
     title = extract_title(body)
     if not question:
-        question = title or Path(path).name.replace("loop__", "").replace("_", " ")
+        question = title or Path(path).name.replace(NOTE_LAYOUTS['loops'].prefix, "").replace("_", " ")
 
     next_action_text = "\n".join(sections.get("next action", [])).strip()
     if not next_action_text:

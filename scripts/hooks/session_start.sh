@@ -30,8 +30,11 @@ resolve_notes_dir() {
 
 NOTES_DIR="$(resolve_notes_dir)"
 
+# Folder and prefix values come from the Python registry.
+source "$SCRIPT_DIR/../layout.sh"
+
 # Record session baseline for end-of-session capture
-BASELINE_FILE="$NOTES_DIR/08_indices/.session_baseline"
+BASELINE_FILE="$NOTES_DIR/${LEDGER_INDICES_SUBDIR}/.session_baseline"
 mkdir -p "$(dirname "$BASELINE_FILE")"
 {
     echo "{"
@@ -65,11 +68,11 @@ echo "# Session Boot Context"
 echo ""
 
 # Identity notes (always load - small and high-signal)
-IDENTITY_DIR="$NOTES_DIR/01_identity"
+IDENTITY_DIR="$NOTES_DIR/${LEDGER_IDENTITY_SUBDIR}"
 if [ -d "$IDENTITY_DIR" ] && [ -n "$(ls -A "$IDENTITY_DIR"/*.md 2>/dev/null)" ]; then
     echo "## Identity"
     echo ""
-    for f in "$IDENTITY_DIR"/id__*.md; do
+    for f in "$IDENTITY_DIR"/"$LEDGER_IDENTITY_PREFIX"*.md; do
         [ -f "$f" ] || continue
         name=$(basename "$f")
         summary=$(sed -n '/^---$/,/^---$/d; /^#/d; /^$/d; p' "$f" | head -1)
@@ -91,7 +94,7 @@ ledger sleep status 2>/dev/null || echo "- (could not check status)"
 echo ""
 
 # Signal stats
-SIGNALS_FILE="$NOTES_DIR/08_indices/signals.jsonl"
+SIGNALS_FILE="$NOTES_DIR/${LEDGER_INDICES_SUBDIR}/signals.jsonl"
 if [ -f "$SIGNALS_FILE" ]; then
     count=$(wc -l < "$SIGNALS_FILE" | tr -d ' ')
     corrections=$(grep -c '"correction"' "$SIGNALS_FILE" 2>/dev/null || echo "0")
