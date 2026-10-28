@@ -2179,12 +2179,9 @@ def main(argv=None) -> int:
         help=f"Create a new note (defaults to {INBOX_SUBDIR}; --no-inbox writes to typed folder)",
     )
     # Accept singular + plural; canonical mapping happens inside add_note().
-    _add_type_choices = sorted({
-        *cfg.note_types.keys(),
-        *(alias for layout in NOTE_LAYOUTS.values()
-          for alias in (layout.label, layout.kind) if alias != NOTE_LAYOUTS["loops"].kind),
-        "prefs",
-    })
+    # Hubs (people, projects) are written by `ledger people|projects add`.
+    from ledger.notes.add import _TYPE_ALIASES
+    _add_type_choices = sorted(_TYPE_ALIASES)
     notes_add_parser.add_argument(
         "--type",
         required=True,

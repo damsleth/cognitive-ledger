@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from ledger.layout import (
-    CONTENT_NOTE_LAYOUTS,
+    ATOMIC_NOTE_LAYOUTS,
     INBOX_SUBDIR,
 )
 from ledger.parsing import extract_title, parse_frontmatter_text, parse_sections
@@ -65,7 +65,7 @@ def sync_queue(config: ObsidianLedgerConfig) -> dict[str, int]:
             continue
 
         kind = str(frontmatter.get("ledger_kind", "")).strip().lower()
-        if kind not in {layout.label for layout in CONTENT_NOTE_LAYOUTS}:
+        if kind not in {layout.label for layout in ATOMIC_NOTE_LAYOUTS}:
             pending += 1
             continue
 

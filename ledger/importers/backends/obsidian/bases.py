@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from ledger.layout import (
-    CONTENT_NOTE_LAYOUTS,
+    ATOMIC_NOTE_LAYOUTS,
     INBOX_SUBDIR,
 )
 from ledger.io import safe_write_text
@@ -42,7 +42,7 @@ views:
 
 _NOTE_FILTER = " || ".join(
     f'file.path.startsWith("cognitive-ledger/notes/{layout.subdir}/")'
-    for layout in CONTENT_NOTE_LAYOUTS
+    for layout in ATOMIC_NOTE_LAYOUTS
 )
 
 NOTES_BASE = f"""filters:
