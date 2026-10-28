@@ -375,8 +375,10 @@ notes/03_preferences/  user preferences / policies
 notes/04_goals/        long-lived objectives
 notes/05_open_loops/   durable unresolved items (status lifecycle)
 notes/06_concepts/     definitions / frameworks / mental models
+notes/07_projects/     project hubs (ledger projects): Goal, State, Decisions, append-only Log
 notes/08_indices/      timeline, logs, import state, generated indexes, signals
 notes/09_archive/      superseded notes (do not delete)
+notes/10_people/       person hubs (ledger people): Who, Working with them, append-only Log
 ```
 
 ---
@@ -476,9 +478,10 @@ purpose:
 | `05_open_loops/`  | Unresolved questions or tasks with next actions.         |
 | `06_concepts/`    | Definitions of frameworks or models (e.g. cognitive      |
 |                   | lightcone).                                              |
-| `07_projects/`    | Subfolders for project-specific notes. Create as needed. |
+| `07_projects/`    | Project hubs, one per multi-week effort (`ledger projects`). |
 | `08_indices/`     | Generated indices like timelines or tag maps.            |
 | `09_archive/`     | Superseded or obsolete notes.                            |
+| `10_people/`      | Person hubs, one per person who matters (`ledger people`). |
 
 ## Note conventions
 
@@ -522,6 +525,35 @@ Pattern: `{type}__{slug}.md` where slug is lowercase with underscores.
 | open loop  | `loop__`    | `notes/05_open_loops/`              |
 | concept    | `concept__` | `notes/06_concepts/`                |
 | capture    | `note__`    | `notes/00_inbox/` (untyped; triaged or retired to `09_archive/`) |
+| project    | `project__` | `notes/07_projects/` (hub)          |
+| person     | `person__`  | `notes/10_people/` (hub)            |
+
+### Note types live in one registry
+
+`ledger/layout.py` `NOTE_LAYOUTS` is the single source for folders, prefixes,
+labels, kinds, bitemporal/status/hub behaviour. No other module may spell out a
+folder name or prefix (`tests/test_layout_registry.py` enforces it). Adding a type
+= one `NOTE_LAYOUTS` entry + its `schema.yaml` `types:` entry (a test checks they
+agree) + a template. `CONTENT_NOTE_LAYOUTS` (everything but identity) drives
+embeddings and the A/B corpus; `ATOMIC_NOTE_LAYOUTS` (no hubs) drives
+`ledger notes add` and the importers.
+
+### Hubs and unreviewed agent content
+
+Hubs (`ledger/hubs.py`) are living documents: people and projects. Write them
+only through `ledger people|projects add|log|set` (or MCP `ledger_hub_log`),
+never by hand-building frontmatter: mutations take the file lock and patch
+single frontmatter lines so the rest stays byte-identical. Other notes point at
+a hub with `people: [slug]` / `projects: [slug]` or a wikilink; `ledger people
+show` computes the Connected list at read time.
+
+Agent-written content is marked: `reviewed: false` frontmatter, `- YYYY-MM-DD
+(agent) …` log lines. The candidate's `unreviewed` count is persisted in
+`note_index.json`; it caps the note's provenance at `inferred` here and makes
+yaams class the item `agent` (weight 0.75) instead of `curated`. `ledger
+unreviewed` lists, `ledger unreviewed --accept <path>` clears. Agents always
+pass `--agent`. `scripts/projects_refresh.sh` (takt job `ledger-projects`)
+refreshes project hubs nightly the same way.
 
 ### Creating a note (convention)
 
