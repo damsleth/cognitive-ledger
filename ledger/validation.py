@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from ledger.config import get_config
+from ledger.layout import NOTE_LAYOUTS, layout_for_path, path_kind
 from ledger.errors import (
     QueryValidationError,
     ScopeValidationError,
@@ -284,26 +285,7 @@ def infer_note_type_from_path(rel_path: str) -> str | None:
     folder is not recognised.  This is intentionally a *heuristic* — callers
     should not rely on exhaustive coverage.
     """
-    normed = f"/{rel_path}".replace("\\", "/")
-    if "/00_inbox/" in normed:
-        return "inbox"
-    if "/01_identity/" in normed:
-        return "identity"
-    if "/02_facts/" in normed:
-        return "fact"
-    if "/03_preferences/" in normed:
-        return "preference"
-    if "/04_goals/" in normed:
-        return "goal"
-    if "/05_open_loops/" in normed:
-        return "open_loop"
-    if "/06_concepts/" in normed:
-        return "concept"
-    if "/07_projects/" in normed:
-        return "project"
-    if "/09_archive/" in normed:
-        return "archive"
-    return None
+    return path_kind(rel_path)
 
 
 def validate_frontmatter_fields(
@@ -326,7 +308,8 @@ def validate_frontmatter_fields(
         if not frontmatter.get(field) and field not in frontmatter:
             issues.append(f"missing '{field}'")
 
-    is_loop = "/05_open_loops/" in f"/{rel_path}"
+    layout = layout_for_path(rel_path)
+    is_loop = layout is not None and layout.has_status
     if is_loop and "status" not in frontmatter:
         issues.append("open loop missing 'status'")
 
@@ -365,7 +348,7 @@ def validate_frontmatter_fields(
         issues.append(f"invalid provenance: {provenance} [warning]")
 
     # schema.yaml: identity_type is required on identity notes.
-    if "/01_identity/" in f"/{rel_path}":
+    if layout is NOTE_LAYOUTS["identity"]:
         identity_type = str(frontmatter.get("identity_type", "")).strip().lower()
         if not identity_type:
             issues.append("identity note missing 'identity_type' [warning]")
@@ -374,11 +357,7 @@ def validate_frontmatter_fields(
 
     # status belongs to open loops; on a fact or preference it reads as a
     # task state that nothing tracks. (Archive keeps closed loops' status.)
-    in_typed_folder = any(
-        f"/{folder}/" in f"/{rel_path}"
-        for folder in ("01_identity", "02_facts", "03_preferences", "04_goals", "06_concepts")
-    )
-    if in_typed_folder and status:
+    if layout is not None and not layout.has_status and status:
         issues.append(f"'status: {status}' on a non-loop note (status is for open loops) [warning]")
 
     # --- tags ---
@@ -443,8 +422,10 @@ def validate_note_body(
         issues.append(f"large file ({words} words) [warning]")
 
     # --- open-loop structural checks ---
+    layout = layout_for_path(rel_path)
     is_open_loop = (
-        "/05_open_loops/" in f"/{rel_path}"
+        layout is not None
+        and layout.has_status
         and str(frontmatter.get("status", "open")).strip().lower() == "open"
     )
     sections = parse_sections(body)

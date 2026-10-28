@@ -21,6 +21,8 @@ from pathlib import Path
 NOTES_ROOT_NAME = "notes"
 INBOX_SUBDIR = "00_inbox"
 INDICES_SUBDIR = "08_indices"
+PROJECTS_SUBDIR = "07_projects"
+ARCHIVE_SUBDIR = "09_archive"
 TIMELINE_FILENAME = "timeline.md"
 TIMELINE_JSONL_FILENAME = "timeline.jsonl"
 REJECTED_CANDIDATES_FILENAME = "rejected_candidates.jsonl"
@@ -37,6 +39,12 @@ class NoteLayout:
     subdir: str
     label: str
     prefix: str
+    # Value returned by ``validation.infer_note_type_from_path``.
+    kind: str = ""
+    # Carries valid_from/valid_to (bitemporal lint + migration).
+    bitemporal: bool = True
+    # Notes carry a ``status`` field (open loops only).
+    has_status: bool = False
 
     @property
     def logical_dir(self) -> Path:
@@ -47,12 +55,22 @@ class NoteLayout:
 
 
 NOTE_LAYOUTS: dict[str, NoteLayout] = {
-    "identity": NoteLayout(name="identity", subdir="01_identity", label="id", prefix="id__"),
-    "facts": NoteLayout(name="facts", subdir="02_facts", label="fact", prefix="fact__"),
-    "preferences": NoteLayout(name="preferences", subdir="03_preferences", label="pref", prefix="pref__"),
-    "goals": NoteLayout(name="goals", subdir="04_goals", label="goal", prefix="goal__"),
-    "loops": NoteLayout(name="loops", subdir="05_open_loops", label="loop", prefix="loop__"),
-    "concepts": NoteLayout(name="concepts", subdir="06_concepts", label="concept", prefix="concept__"),
+    "identity": NoteLayout(name="identity", subdir="01_identity", label="id", prefix="id__", kind="identity"),
+    "facts": NoteLayout(name="facts", subdir="02_facts", label="fact", prefix="fact__", kind="fact"),
+    "preferences": NoteLayout(
+        name="preferences", subdir="03_preferences", label="pref", prefix="pref__", kind="preference"
+    ),
+    "goals": NoteLayout(name="goals", subdir="04_goals", label="goal", prefix="goal__", kind="goal"),
+    "loops": NoteLayout(
+        name="loops",
+        subdir="05_open_loops",
+        label="loop",
+        prefix="loop__",
+        kind="open_loop",
+        bitemporal=False,
+        has_status=True,
+    ),
+    "concepts": NoteLayout(name="concepts", subdir="06_concepts", label="concept", prefix="concept__", kind="concept"),
 }
 
 CORE_NOTE_TYPES: tuple[str, ...] = tuple(NOTE_LAYOUTS.keys())
@@ -60,10 +78,55 @@ CORE_NOTE_TYPES: tuple[str, ...] = tuple(NOTE_LAYOUTS.keys())
 LEDGER_NOTE_SUBDIRS: tuple[str, ...] = (
     INBOX_SUBDIR,
     *(layout.subdir for layout in NOTE_LAYOUTS.values()),
-    "07_projects",
+    PROJECTS_SUBDIR,
     INDICES_SUBDIR,
-    "09_archive",
+    ARCHIVE_SUBDIR,
 )
+
+# Folders whose notes carry valid_from/valid_to: bitemporal types plus the
+# archive (superseded notes keep their window). 00_inbox is exempt.
+BITEMPORAL_SUBDIRS: tuple[str, ...] = (
+    *(layout.subdir for layout in NOTE_LAYOUTS.values() if layout.bitemporal),
+    ARCHIVE_SUBDIR,
+)
+
+# Folder name -> path kind for folders that are not note types.
+_NON_TYPE_KINDS: dict[str, str] = {
+    INBOX_SUBDIR: "inbox",
+    PROJECTS_SUBDIR: "project",
+    ARCHIVE_SUBDIR: "archive",
+}
+
+
+def path_subdir(path: str | Path) -> str | None:
+    """Return the ledger folder (``02_facts`` ...) a note path lives in, if any."""
+    parts = str(path).replace("\\", "/").split("/")
+    known = set(LEDGER_NOTE_SUBDIRS)
+    for part in parts[:-1]:
+        if part in known:
+            return part
+    return None
+
+
+def layout_for_path(path: str | Path) -> NoteLayout | None:
+    """Return the note type a path belongs to, by folder."""
+    subdir = path_subdir(path)
+    for layout in NOTE_LAYOUTS.values():
+        if layout.subdir == subdir:
+            return layout
+    return None
+
+
+def path_kind(path: str | Path) -> str | None:
+    """Folder kind of a path: a type's ``kind``, or inbox/project/archive."""
+    layout = layout_for_path(path)
+    if layout is not None:
+        return layout.kind
+    return _NON_TYPE_KINDS.get(path_subdir(path) or "")
+
+
+def in_subdir(path: str | Path, subdir: str) -> bool:
+    return path_subdir(path) == subdir
 
 
 def note_type_metadata() -> dict[str, dict[str, str]]:
@@ -103,7 +166,7 @@ def typed_archive_notes(ledger_notes_dir: Path) -> list[Path]:
     would treat each as valid for all time and flood the pool. Decided by
     filename so callers on the query path pay no file reads.
     """
-    archive = Path(ledger_notes_dir) / "09_archive"
+    archive = Path(ledger_notes_dir) / ARCHIVE_SUBDIR
     if not archive.is_dir():
         return []
     prefixes = tuple(layout.prefix for layout in NOTE_LAYOUTS.values())
