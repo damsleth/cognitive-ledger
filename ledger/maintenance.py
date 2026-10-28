@@ -586,13 +586,6 @@ def _lint_warn(path: Path, message: str) -> None:
     print(f"WARN: {_relative(path)} - {message}")
 
 
-def _is_open_loop(path: Path, frontmatter: dict[str, Any]) -> bool:
-    rel = _relative(path)
-    if f"/{NOTE_LAYOUTS['loops'].subdir}/" not in f"/{rel}":
-        return False
-    return str(frontmatter.get("status", "open")).strip().lower() == "open"
-
-
 # Folders eligible for bitemporal field validation (00_inbox is exempt).
 _BITEMPORAL_ELIGIBLE_FOLDERS = frozenset(f"/{subdir}/" for subdir in BITEMPORAL_SUBDIRS)
 
@@ -1901,44 +1894,6 @@ def _cmd_duplicates(threshold: float = 0.65, as_json: bool = False) -> int:
             for k, v in f.details.items():
                 print(f"    {k}: {v}")
     return 0
-
-
-def _wrap_data_cmd(command: str, fn, as_json: bool) -> int:
-    """Run a print-heavy data command, optionally capturing stdout into a
-    structured envelope so --json consumers see a stable shape.
-
-    The captured human text becomes ``stats.human_lines`` (a list of
-    rstrip'd lines). The command's return code becomes the exit code.
-    Reserved-key contract: success documents have no top-level `ok`.
-    """
-    if not as_json:
-        return fn()
-    import io as _io
-    import json as _json
-    import sys as _sys
-    from contextlib import redirect_stdout
-    buf = _io.StringIO()
-    try:
-        with redirect_stdout(buf):
-            rc = fn()
-    except Exception as exc:
-        _sys.stdout.write(_json.dumps({
-            "tool": "sheep",
-            "command": command,
-            "ok": False,
-            "error": {"code": "command_failed", "message": str(exc)},
-        }, ensure_ascii=False) + "\n")
-        _sys.stdout.flush()
-        return 1
-    payload = {
-        "tool": "sheep",
-        "command": command,
-        "exit_code": int(rc or 0),
-        "human_lines": [line.rstrip() for line in buf.getvalue().splitlines() if line.strip()],
-    }
-    _sys.stdout.write(_json.dumps(payload, ensure_ascii=False) + "\n")
-    _sys.stdout.flush()
-    return int(rc or 0)
 
 
 def _wrap_sync(apply: bool, accept_drift: bool, as_json: bool) -> int:

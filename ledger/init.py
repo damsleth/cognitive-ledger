@@ -144,7 +144,6 @@ def _build_config_content(
         "# score_weight_confidence: 0.10",
         "",
         "# Knowledge compounding",
-        "# auto_file_synthesis: false",
         "",
     ])
     return "\n".join(lines)

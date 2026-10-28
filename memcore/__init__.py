@@ -9,7 +9,7 @@ the retrieval seam instead of carrying ported duplicates:
 - ``memcore.trust``: trust verdicts and ``attach_trust_verdicts``
 
 Hard rule: memcore is **stdlib-only**. ``pip install memcore`` must never
-pull another package. Anything that needs numpy/sklearn stays in ``ledger``;
+pull another package. Anything that needs numpy stays in ``ledger``;
 ``memcore.rerank`` needs sentence-transformers only at *call* time (lazy
 import), never at import or install time.
 """
