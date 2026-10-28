@@ -36,6 +36,16 @@ types:
     prefix: "concept__"
     folder: "notes/06_concepts"
     description: "Definitions, frameworks, models"
+  project:
+    prefix: "project__"
+    folder: "notes/07_projects"
+    description: "Hub for one multi-week effort: Goal, State, Decisions, append-only Log (ledger projects)"
+    extra_fields: [status, profile, repos, ado, people, last_activity, reviewed]
+  person:
+    prefix: "person__"
+    folder: "notes/10_people"
+    description: "Hub for one person who matters: Who, Working with them, append-only Log; identity stays in yaams (ledger people)"
+    extra_fields: [entity, spheres, orgs, aliases, last_interaction, reviewed]
 
 # Frontmatter specification
 frontmatter:
@@ -52,11 +62,14 @@ frontmatter:
   # Conditional fields
   conditional:
     status:
-      when: "type == loop"
+      when: "type in (loop, project)"
       required: true
     identity_type:
       when: "type == identity"
       required: true
+    entity:
+      when: "type == person"
+      required: true   # yaams canonical name (warning when missing)
 
   # Optional provenance fields (the "provenance triad"). Written by the
   # external importers (ledger import obsidian, import-claude-memory, YAAMS
@@ -131,6 +144,10 @@ frontmatter:
       - closed     # resolved
       - blocked    # waiting on external
       - snoozed    # deferred intentionally
+    project_status:  # status values for type == project
+      - active
+      - paused
+      - done
     identity_type:
       - mission    # north-star purpose
       - beliefs    # core worldview axioms

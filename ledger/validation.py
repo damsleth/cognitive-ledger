@@ -309,9 +309,11 @@ def validate_frontmatter_fields(
             issues.append(f"missing '{field}'")
 
     layout = layout_for_path(rel_path)
-    is_loop = layout is not None and layout.has_status
-    if is_loop and "status" not in frontmatter:
-        issues.append("open loop missing 'status'")
+    has_status = layout is not None and layout.has_status
+    if has_status and "status" not in frontmatter:
+        issues.append(f"{layout.label} missing 'status'" if layout.name != "loops" else "open loop missing 'status'")
+    if layout is NOTE_LAYOUTS["people"] and not str(frontmatter.get("entity", "")).strip():
+        issues.append("person hub missing 'entity' (yaams canonical name) [warning]")
 
     # --- timestamp format ---
     created = str(frontmatter.get("created", "")).strip()
@@ -336,7 +338,7 @@ def validate_frontmatter_fields(
         issues.append(f"invalid lang: {lang}")
 
     status = str(frontmatter.get("status", "")).strip().lower()
-    if is_loop and status and status not in STATUS_VALUES:
+    if has_status and status and status not in layout.status_values:
         issues.append(f"invalid status: {status}")
 
     via = str(frontmatter.get("via", "")).strip().lower()
@@ -424,8 +426,7 @@ def validate_note_body(
     # --- open-loop structural checks ---
     layout = layout_for_path(rel_path)
     is_open_loop = (
-        layout is not None
-        and layout.has_status
+        layout is NOTE_LAYOUTS["loops"]
         and str(frontmatter.get("status", "open")).strip().lower() == "open"
     )
     sections = parse_sections(body)

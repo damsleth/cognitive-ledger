@@ -71,6 +71,9 @@ class RetrievalCandidate:
     via: str = ""
     """Ingest channel (claude-memory|obsidian|yaams|folder|manual). Used to derive
     a default provenance for legacy notes; empty when unknown."""
+    unreviewed: int = 0
+    """Agent-written content the owner has not reviewed (ledger.hubs.unreviewed_count).
+    Persisted in note_index.json; yaams ranks such notes below curated ones."""
     validation_count: float = 0.0
     """Per-note affirmation count snapshot. Forward-compatible field; the live
     score path reads the authoritative count from the signal summary and only

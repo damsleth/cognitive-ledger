@@ -20,6 +20,7 @@ from typing import Any
 from ledger.layout import (
     CONTENT_NOTE_LAYOUTS,
     INDICES_SUBDIR,
+    NOTE_LAYOUTS,
     logical_path,
     resolve_path,
 )
@@ -77,7 +78,9 @@ CORPUS_PATTERNS = (
     *(f"{layout.subdir}/**/*.md" for layout in CONTENT_NOTE_LAYOUTS),
     f"{INDICES_SUBDIR}/aliases.json",
 )
-CORPUS_REQUIRED_DIRS = (*(layout.subdir for layout in CONTENT_NOTE_LAYOUTS), INDICES_SUBDIR)
+# Enough to recognise a corpus; newer type folders (people, projects) may not
+# exist yet in an older corpus and their globs simply match nothing.
+CORPUS_REQUIRED_DIRS = (NOTE_LAYOUTS["facts"].subdir, NOTE_LAYOUTS["loops"].subdir, INDICES_SUBDIR)
 
 
 class InvalidSetupError(Exception):
