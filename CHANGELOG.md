@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Fixed
+- Candidate-to-result copies preserve all metadata, including provenance, ingest channel and validation count for trust annotation.
+
 ### Added
 - **Inbox dedupe gate:** `promote()` (and so triage accept and `/review`)
   refuses an inbox candidate that duplicates an existing ledger note (exact

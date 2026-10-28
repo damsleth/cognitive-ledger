@@ -11,6 +11,7 @@ All lexical retrieval behavior should live here so CLI/TUI/tests can reuse it.
 
 from __future__ import annotations
 
+from dataclasses import fields
 import datetime as dt
 import hashlib
 import heapq
@@ -110,35 +111,24 @@ def _candidate_label(note_type: str) -> str:
     return str(_note_types()[note_type]["label"])
 
 
+def _candidate_fields(candidate: CandidateLike) -> dict[str, Any]:
+    """Copy the complete candidate contract, normalizing legacy dictionaries."""
+    values = {}
+    coercers = {"str": str, "float": float, "int": int, "bool": bool,
+                "list[str]": list, "set[str]": set}
+    for field in fields(RetrievalCandidate):
+        value = _candidate_value(candidate, field.name)
+        coerce = coercers.get(field.type)
+        if isinstance(candidate, dict) and coerce is not None:
+            value = coerce(value) if value else coerce()
+        elif isinstance(value, (list, set)):
+            value = value.copy()
+        values[field.name] = value
+    return values
+
+
 def _copy_candidate(candidate: CandidateLike) -> RetrievalCandidate:
-    return RetrievalCandidate(
-        path=str(_candidate_value(candidate, "path", "") or ""),
-        rel_path=str(_candidate_value(candidate, "rel_path", "") or ""),
-        type=str(_candidate_value(candidate, "type", "") or ""),
-        title=str(_candidate_value(candidate, "title", "") or ""),
-        statement=str(_candidate_value(candidate, "statement", "") or ""),
-        body=str(_candidate_value(candidate, "body", "") or ""),
-        updated=str(_candidate_value(candidate, "updated", "") or ""),
-        updated_ts=_candidate_value(candidate, "updated_ts"),
-        confidence=float(_candidate_value(candidate, "confidence", 0.0) or 0.0),
-        source=str(_candidate_value(candidate, "source", "") or ""),
-        scope=str(_candidate_value(candidate, "scope", "") or ""),
-        status=str(_candidate_value(candidate, "status", "") or ""),
-        tags=list(_candidate_value(candidate, "tags", []) or []),
-        note_tokens=set(_candidate_value(candidate, "note_tokens", set()) or set()),
-        tag_tokens=set(_candidate_value(candidate, "tag_tokens", set()) or set()),
-        attention_tokens=set(_candidate_value(candidate, "attention_tokens", set()) or set()),
-        snippet=str(_candidate_value(candidate, "snippet", "") or ""),
-        has_next_action_checkbox=bool(_candidate_value(candidate, "has_next_action_checkbox", False)),
-        word_count=int(_candidate_value(candidate, "word_count", 0) or 0),
-        valid_from=str(_candidate_value(candidate, "valid_from", "") or ""),
-        valid_to=str(_candidate_value(candidate, "valid_to", "") or ""),
-        superseded_by=str(_candidate_value(candidate, "superseded_by", "") or ""),
-        created_ts=_candidate_value(candidate, "created_ts"),
-        provenance=str(_candidate_value(candidate, "provenance", "") or ""),
-        via=str(_candidate_value(candidate, "via", "") or ""),
-        validation_count=float(_candidate_value(candidate, "validation_count", 0.0) or 0.0),
-    )
+    return RetrievalCandidate(**_candidate_fields(candidate))
 
 
 def _scored_result(
@@ -147,31 +137,8 @@ def _scored_result(
     reasons: list[str],
     components: ScoreComponents,
 ) -> ScoredResult:
-    base = _copy_candidate(candidate)
     return ScoredResult(
-        path=base.path,
-        rel_path=base.rel_path,
-        type=base.type,
-        title=base.title,
-        statement=base.statement,
-        body=base.body,
-        updated=base.updated,
-        updated_ts=base.updated_ts,
-        confidence=base.confidence,
-        source=base.source,
-        scope=base.scope,
-        status=base.status,
-        tags=list(base.tags),
-        note_tokens=set(base.note_tokens),
-        tag_tokens=set(base.tag_tokens),
-        attention_tokens=set(base.attention_tokens),
-        snippet=base.snippet,
-        has_next_action_checkbox=base.has_next_action_checkbox,
-        word_count=base.word_count,
-        valid_from=base.valid_from,
-        valid_to=base.valid_to,
-        superseded_by=base.superseded_by,
-        created_ts=base.created_ts,
+        **_candidate_fields(candidate),
         score=score,
         reasons=list(reasons),
         components=components,
