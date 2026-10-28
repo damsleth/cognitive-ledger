@@ -2870,6 +2870,75 @@ def main(argv=None) -> int:
     mcp_parser.add_argument("--with-yaams", action="store_true", dest="with_yaams",
                             help="Expose a yaams_query tool (requires yaams on PATH)")
 
+    def handle_loops(command_args):
+        if getattr(command_args, "loops_command", None) == "sync":
+            return handle_loops_sync(command_args)
+        lister = verbose_items if command_args.verbose else list_items
+        return lister(command_args, "loops", loop_status=command_args.status)
+
+    def handle_notes(command_args):
+        if getattr(command_args, "notes_subcommand", None) == "add":
+            return handle_notes_add_command(command_args)
+        if command_args.type is None:
+            notes_parser.error("the following arguments are required: --type")
+        lister = verbose_items if command_args.verbose else list_items
+        return lister(command_args, command_args.type)
+
+    def handle_eval(command_args):
+        if command_args.eval_kind == "behaviour":
+            from ledger.learning_cli import handle_behaviour
+            return handle_behaviour(command_args)
+        return handle_eval_command(command_args)
+
+    def handle_embed(command_args):
+        handler = {
+            "build": handle_embed_build_command,
+            "status": handle_embed_status_command,
+            "clean": handle_embed_clean_command,
+            "search": handle_embed_search_command,
+        }.get(command_args.embed_command)
+        if handler is None:
+            embed_parser.print_help()
+            return 0
+        return handler(command_args)
+
+    def learning(name):
+        def run(command_args):
+            from ledger import learning_cli
+            return getattr(learning_cli, name)(command_args)
+        return run
+
+    # One table: command name -> handler. Handlers return an exit code or None (= 0).
+    handlers = {
+        "loops": handle_loops,
+        "notes": handle_notes,
+        "query": handle_query_command,
+        "answer": handle_answer_command,
+        "discover-source": handle_discover_source_command,
+        "eval": handle_eval,
+        "context": handle_context_command,
+        "paths": handle_paths_command,
+        "embed": handle_embed,
+        "signal": handle_signal_command,
+        "review": handle_review_command,
+        "init": handle_init_command,
+        "ingest": handle_ingest_command,
+        "import": lambda a: _handle_import_command(a, import_parser),
+        "links": handle_links_command,
+        "briefing": handle_briefing_command,
+        "changed": handle_changed_command,
+        "inbox": handle_inbox_command,
+        "import-claude-memory": handle_import_claude_memory_command,
+        "voice-dna": handle_voice_dna_command,
+        "migrate": lambda a: handle_migrate_command(a, migrate_parser),
+        "sleep": handle_sleep_command,
+        "ab": lambda a: handle_ab_command(a, ab_parser),
+        "mcp": handle_mcp_command,
+        "web": handle_web_command,
+        "audit": learning("handle_audit"),
+        "improvements": learning("handle"),
+    }
+
     args = parser.parse_args(argv)
 
     # If config was unsafe, --version/--help already ran during parse_args on
@@ -2883,132 +2952,11 @@ def main(argv=None) -> int:
         print(f"error: {_config_error}")
         return 2
 
-    def handle_listing_command(command_args):
-        if command_args.command == "loops":
-            if getattr(command_args, "loops_command", None) == "sync":
-                handle_loops_sync(command_args)
-                return
-            if command_args.verbose:
-                verbose_items(command_args, "loops", loop_status=command_args.status)
-            else:
-                list_items(command_args, "loops", loop_status=command_args.status)
-            return
-
-        if command_args.command == "notes":
-            if getattr(command_args, "notes_subcommand", None) == "add":
-                return handle_notes_add_command(command_args)
-            if command_args.type is None:
-                notes_parser.error("the following arguments are required: --type")
-            if command_args.verbose:
-                verbose_items(command_args, command_args.type)
-            else:
-                list_items(command_args, command_args.type)
-            return
-
-    command_handlers = {
-        "query": handle_query_command,
-        "answer": handle_answer_command,
-        "discover-source": handle_discover_source_command,
-        "eval": handle_eval_command,
-        "context": handle_context_command,
-        "paths": handle_paths_command,
-    }
-    embed_handlers = {
-        "build": handle_embed_build_command,
-        "status": handle_embed_status_command,
-        "clean": handle_embed_clean_command,
-        "search": handle_embed_search_command,
-    }
-
     try:
-        if args.command == "eval" and args.eval_kind == "behaviour":
-            from ledger.learning_cli import handle_behaviour
-            return handle_behaviour(args)
-        if args.command == "audit":
-            from ledger.learning_cli import handle_audit
-            return handle_audit(args)
-        if args.command == "improvements":
-            from ledger.learning_cli import handle
-            return handle(args)
-        if args.command in {"loops", "notes"}:
-            handle_listing_command(args)
-            return 0
-
-        if args.command == "embed":
-            embed_handler = embed_handlers.get(args.embed_command)
-            if embed_handler is not None:
-                embed_handler(args)
-                return 0
-            embed_parser.print_help()
-            return 0
-
-        if args.command == "signal":
-            handle_signal_command(args)
-            return 0
-
-        if args.command == "review":
-            handle_review_command(args)
-            return 0
-
-        if args.command == "init":
-            handle_init_command(args)
-            return 0
-
-        if args.command == "ingest":
-            handle_ingest_command(args)
-            return 0
-
-        if args.command == "import":
-            return _handle_import_command(args, import_parser)
-
-        if args.command == "links":
-            handle_links_command(args)
-            return 0
-
-        if args.command == "briefing":
-            handle_briefing_command(args)
-            return 0
-
-        if args.command == "changed":
-            handle_changed_command(args)
-            return 0
-
-        if args.command == "inbox":
-            handle_inbox_command(args)
-            return 0
-
-        if args.command == "import-claude-memory":
-            handle_import_claude_memory_command(args)
-            return 0
-
-        if args.command == "voice-dna":
-            handle_voice_dna_command(args)
-            return 0
-
-        if args.command == "migrate":
-            handle_migrate_command(args, migrate_parser)
-            return 0
-
-        if args.command == "sleep":
-            handle_sleep_command(args)
-            return 0
-
-        if args.command == "ab":
-            handle_ab_command(args, ab_parser)
-            return 0
-
-        if args.command == "mcp":
-            handle_mcp_command(args)
-            return 0
-
-        if args.command == "web":
-            handle_web_command(args)
-            return 0
-
-        handler = command_handlers.get(args.command)
+        handler = handlers.get(args.command)
         if handler is not None:
-            handler(args)
-            return 0
+            rc = handler(args)
+            return rc if isinstance(rc, int) else 0
 
     except RuntimeError as exc:
         print(f"error: {exc}")
