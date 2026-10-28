@@ -108,7 +108,9 @@ def path_subdir(path: str | Path) -> str | None:
     """Return the ledger folder (``02_facts`` ...) a note path lives in, if any."""
     parts = str(path).replace("\\", "/").split("/")
     known = set(LEDGER_NOTE_SUBDIRS)
-    for part in parts[:-1]:
+    # Nearest folder wins: a parent dir that happens to share a ledger folder
+    # name (/tmp/08_indices/notes/05_open_loops/...) must not mask it.
+    for part in reversed(parts[:-1]):
         if part in known:
             return part
     return None

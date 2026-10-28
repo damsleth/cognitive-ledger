@@ -60,3 +60,12 @@ def test_schema_yaml_types_agree_with_registry():
     by_prefix = {spec["prefix"]: spec["folder"] for spec in schema["types"].values()}
     for layout in NOTE_LAYOUTS.values():
         assert by_prefix.get(layout.prefix) == f"{NOTES_ROOT_NAME}/{layout.subdir}", layout.name
+
+
+def test_path_kind_uses_nearest_ledger_folder():
+    from ledger.layout import path_kind
+
+    assert path_kind("/tmp/08_indices/notes/05_open_loops/loop__x.md") == "open_loop"
+    assert path_kind("notes/07_projects/demo/05_open_loops/loop__x.md") == "open_loop"
+    assert path_kind("C:\\ledger\\02_facts\\fact__x.md") == "fact"
+    assert path_kind("notes/02_facts") is None  # a folder name as the last part is a file name, not a folder
