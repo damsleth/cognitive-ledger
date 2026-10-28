@@ -162,6 +162,14 @@ def create_server(*, config=None, allow_write: bool = False, with_yaams: bool = 
         from ledger.context import build_context
         return scrub_for_egress({"context": build_context(get_config().ledger_notes_dir)})
 
+    @mcp.tool()
+    def ledger_hub_show(kind: str, name: str) -> dict:
+        """Show a person or project hub (kind: people | projects) and the notes that
+        point at it. `name` is a slug, title, yaams canonical name or alias."""
+        from ledger import hubs
+        slug = hubs.resolve(kind, name) or name
+        return scrub_for_egress(hubs.show(kind, slug))
+
     # Only advertise a cited answer when something can write one: with the
     # default `dummy` backend the tool returned a placeholder, never citations.
     if str(get_config().synth_backend or "dummy").strip().lower() != "dummy":
@@ -182,6 +190,21 @@ def create_server(*, config=None, allow_write: bool = False, with_yaams: bool = 
                 raise ValueError("text must not be empty")
             scope = validate_scope(scope, allow_all=False)
             return scrub_for_egress(_write_inbox_note(text, title=title, tags=tags, scope=scope))
+
+        @mcp.tool()
+        def ledger_hub_log(kind: str, name: str, text: str, date: str = "") -> dict:
+            """Append one dated observation to a person or project hub's ## Log
+            (kind: people | projects; write-gated). The bar is low on purpose: small,
+            durable observations about a person ("prefers SMS", "took over vakt in
+            November") belong here. Lines are marked (agent) until the owner reviews
+            them. `date` is YYYY-MM-DD (default today)."""
+            from ledger import hubs
+            text = str(text or "").strip()
+            if not text or len(text) > 2000:
+                raise ValueError("text must be 1..2000 characters")
+            slug = hubs.resolve(kind, name) or name
+            path = hubs.log(kind, slug, text, agent=True, date=date or None)
+            return {"ok": True, "path": str(path)}
 
         @mcp.tool()
         def ledger_signal(signal_type: str, note: str = "", query: str = "",
