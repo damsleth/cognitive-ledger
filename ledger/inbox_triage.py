@@ -598,7 +598,7 @@ def run_interactive_triage(notes_dir: Path | None = None) -> int:
         # warn, never lose it.
         print("Refreshing the semantic index for promoted notes...")
         try:
-            from ledger.maintenance import _generate_semantic_index
+            from ledger.maintenance.index import _generate_semantic_index
             _generate_semantic_index()
         except Exception as exc:  # noqa: BLE001
             print(f"WARN: index refresh failed ({exc}); run `ledger sleep index`.")

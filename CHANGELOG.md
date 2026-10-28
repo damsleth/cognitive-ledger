@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Changed
+- Split Electric Sheep maintenance into a package organized by responsibility.
+
 ### Removed
 - Unused config fields and migration shims; obsolete config keys are ignored and only the canonical XDG config is read.
 - Unreferenced private helpers, unused eval state and the unused scikit-learn dependency. Watch mode now uses the `obsidian` extra.
