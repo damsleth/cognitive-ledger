@@ -23,17 +23,6 @@ from ledger.layout import (
 )
 
 
-REMOVED_CONFIG_KEYS = {
-    "root_dir": "ledger_root",
-    "notes_dir": "ledger_notes_dir",
-    "source_root": "source_notes_dir",
-}
-
-REMOVED_ENV_VARS = {
-    "LEDGER_ROOT_DIR": "LEDGER_ROOT",
-    "LEDGER_SOURCE_ROOT": "LEDGER_SOURCE_NOTES_DIR",
-}
-
 PATH_FIELDS = frozenset({"ledger_root", "ledger_notes_dir", "source_notes_dir"})
 
 
@@ -115,40 +104,6 @@ def _xdg_config_path() -> Path:
     return Path(base).expanduser() / "ledger" / "config.yaml"
 
 
-def _legacy_xdg_config_path() -> Path:
-    """Deprecated pre-rename config location (``ledger`` was ``cognitive-ledger``).
-
-    Read as a low-priority fallback so existing installs keep working; the
-    canonical :func:`_xdg_config_path` overrides it.
-    """
-    base = os.getenv("XDG_CONFIG_HOME") or str(Path.home() / ".config")
-    return Path(base).expanduser() / "cognitive-ledger" / "config.yaml"
-
-
-def _raise_migration_error(items: list[str]) -> None:
-    raise RuntimeError("\n".join(items))
-
-
-def _fail_on_removed_config_keys(data: dict[str, Any], path: Path) -> None:
-    removed = [
-        f"config key '{old}' in {path} has been removed; use '{new}' instead"
-        for old, new in REMOVED_CONFIG_KEYS.items()
-        if old in data
-    ]
-    if removed:
-        _raise_migration_error(removed)
-
-
-def _fail_on_removed_env_vars() -> None:
-    removed = [
-        f"environment variable '{old}' has been removed; use '{new}' instead"
-        for old, new in REMOVED_ENV_VARS.items()
-        if os.getenv(old) is not None
-    ]
-    if removed:
-        _raise_migration_error(removed)
-
-
 def _coerce_value(key: str, value: Any, current: Any) -> Any:
     if key in PATH_FIELDS:
         return Path(str(value)).expanduser()
@@ -197,7 +152,6 @@ def _load_yaml_data(path: Path) -> dict[str, Any] | None:
         return {}
     if not isinstance(data, dict):
         raise RuntimeError(f"Expected {path} to contain a mapping at the top level.")
-    _fail_on_removed_config_keys(data, path)
     return data
 
 
@@ -211,7 +165,6 @@ def _apply_yaml_config(config: "LedgerConfig", path: Path) -> "LedgerConfig":
 
 def _apply_env_overrides(config: "LedgerConfig") -> "LedgerConfig":
     """Apply environment variable overrides to an existing config instance."""
-    _fail_on_removed_env_vars()
 
     path_mappings = {
         "LEDGER_ROOT": "ledger_root",
@@ -231,8 +184,6 @@ def _apply_env_overrides(config: "LedgerConfig") -> "LedgerConfig":
     int_mappings = {
         "LEDGER_SHORTLIST_MIN": "shortlist_min_candidates",
         "LEDGER_SHORTLIST_MAX": "shortlist_max_candidates",
-        "LEDGER_ATTENTION_MIN": "attention_shortlist_min",
-        "LEDGER_ATTENTION_MAX": "attention_shortlist_max",
         "LEDGER_REASONS_LIMIT": "detailed_reasons_limit",
         "LEDGER_EMBED_BATCH_SIZE": "embed_batch_size",
         "LEDGER_CONTRADICTION_NEIGHBORS_K": "contradiction_neighbors_k",
@@ -336,7 +287,6 @@ def _apply_env_overrides(config: "LedgerConfig") -> "LedgerConfig":
         "LEDGER_SYNTH_COMMAND": "synth_command",
         "LEDGER_SYNTH_MODEL": "synth_model",
         "LEDGER_SYNTH_HOST": "synth_host",
-        "LEDGER_THINGS3_DB_PATH": "things3_db_path",
         "LEDGER_THINGS3_DEFAULT_PROJECT": "things3_default_project",
         "LEDGER_THINGS3_BLOCKED_PROJECT": "things3_blocked_project",
         "LEDGER_THINGS3_MARKER_PREFIX": "things3_marker_prefix",
@@ -430,24 +380,6 @@ class LedgerConfig:
     Rationale: For limit=8, we want ~24 candidates to ensure
     the true top-8 are likely included after re-ranking.
     """
-
-    attention_shortlist_min: int = 32
-    """Minimum candidates for attention-based scoring.
-
-    Rationale: Higher than standard shortlist because attention
-    scoring has more discriminative power and benefits from
-    a larger candidate pool.
-    """
-
-    attention_shortlist_max: int = 72
-    """Maximum candidates for attention-based scoring.
-
-    Rationale: Attention scoring is more expensive, so we cap
-    higher to allow broader semantic coverage.
-    """
-
-    attention_shortlist_limit_multiplier: int = 2
-    """Multiplier for attention shortlist."""
 
     detailed_reasons_limit: int = 20
     """Above this limit, skip reason generation for performance.
@@ -653,14 +585,6 @@ class LedgerConfig:
     ``{preferences: 90, loops: 60, goals: 180, facts: 365, concepts: 365,
     identity: 540}``. A/B-validate before flipping defaults. Env override:
     ``LEDGER_HALF_LIFE_BY_TYPE="preferences:90,facts:365"``.
-    """
-
-    auto_file_synthesis: bool = False
-    """Whether to automatically file synthesized answers as notes.
-
-    When True, query answers that synthesize from 2+ notes and produce
-    new insight will be automatically filed as concept/fact notes.
-    When False (default), the agent asks the user before filing.
     """
 
     signal_min_entries: int = 20
@@ -1040,16 +964,6 @@ class LedgerConfig:
     """Stopwords to exclude from tokenization."""
 
     # =========================================================================
-    # Embedding Configuration
-    # =========================================================================
-
-    default_local_model: str = "TaylorAI/bge-micro-v2"
-    """Default model for local embedding backend."""
-
-    default_openai_model: str = "text-embedding-3-small"
-    """Default model for OpenAI embedding backend."""
-
-    # =========================================================================
     # Things3 Sync Integration
     # =========================================================================
 
@@ -1059,14 +973,6 @@ class LedgerConfig:
     Off by default: no subprocess calls are made when this is False.
     Enable in config.yaml once Things3 is installed and the Things CLI
     (https://culturedcode.com/things/support/articles/2803573/) is on PATH.
-    """
-
-    things3_db_path: str = ""
-    """Path to Things3 SQLite database (leave empty to use CLI reads only).
-
-    Usually ~/Library/Group Containers/JLMPQHK86H.com.culturedcode.ThingsMac/
-    ThingsData-xxx/Things Database.thingsdatabase/main.sqlite
-    Leave empty — the Things CLI handles DB access.
     """
 
     things3_default_project: str = ""
@@ -1274,15 +1180,13 @@ class LedgerConfig:
         """Load the user config file (if present) with env var overrides.
 
         Lookup order (later sources override earlier ones):
-        1. ``$XDG_CONFIG_HOME/cognitive-ledger/config.yaml`` (deprecated; pre-rename)
-        2. ``$XDG_CONFIG_HOME/ledger/config.yaml`` (canonical user config)
-        3. Environment variables (LEDGER_ROOT, LEDGER_NOTES_DIR, etc.)
+        1. ``$XDG_CONFIG_HOME/ledger/config.yaml`` (canonical user config)
+        2. Environment variables (LEDGER_ROOT, LEDGER_NOTES_DIR, etc.)
 
         A ``config.yaml`` inside the source checkout is intentionally NOT read:
         config belongs to the installation, not the codebase.
         """
         config = cls()
-        config = _apply_yaml_config(config, _legacy_xdg_config_path())
         config = _apply_yaml_config(config, _xdg_config_path())
         return _guard_notes_dir(_apply_env_overrides(config))
 
@@ -1296,7 +1200,6 @@ class LedgerConfig:
             try:
                 data = json.loads(path.read_text(encoding="utf-8"))
                 if isinstance(data, dict):
-                    _fail_on_removed_config_keys(data, path)
                     _apply_dict(config, data)
             except (json.JSONDecodeError, OSError, TypeError, ValueError):
                 raise
