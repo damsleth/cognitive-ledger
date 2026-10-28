@@ -60,8 +60,6 @@ class TestLedgerConfig(_LedgerEnvIsolation, unittest.TestCase):
 
         self.assertEqual(config.shortlist_min_candidates, 24)
         self.assertEqual(config.shortlist_max_candidates, 36)
-        self.assertEqual(config.attention_shortlist_min, 32)
-        self.assertEqual(config.attention_shortlist_max, 72)
         self.assertEqual(config.detailed_reasons_limit, 20)
         self.assertEqual(config.progressive_rationale_top, 3)
         self.assertEqual(config.retrieval_mode, "semantic_hybrid")
@@ -160,13 +158,13 @@ class TestLedgerConfig(_LedgerEnvIsolation, unittest.TestCase):
             self.assertEqual(config.ledger_notes_dir, notes.resolve())
             self.assertEqual(config.source_notes_dir, source.resolve())
 
-    def test_removed_env_var_fails_with_migration_error(self):
-        os.environ["LEDGER_ROOT_DIR"] = "/tmp/legacy-root"
-
-        with self.assertRaises(RuntimeError) as ctx:
-            LedgerConfig.from_env()
-
-        self.assertIn("LEDGER_ROOT", str(ctx.exception))
+    def test_removed_env_var_is_ignored(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            os.environ["LEDGER_ROOT_DIR"] = "/tmp/legacy-root"
+            os.environ["LEDGER_ROOT"] = tmpdir
+            os.environ["XDG_CONFIG_HOME"] = tmpdir
+            config = LedgerConfig.from_env()
+            self.assertEqual(config.ledger_root, Path(tmpdir).resolve())
 
     def test_yaml_with_canonical_path_keys_loads(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -224,14 +222,25 @@ class TestLedgerConfig(_LedgerEnvIsolation, unittest.TestCase):
 
             self.assertEqual(config.retrieval_mode, "two_stage")
 
-    def test_removed_yaml_key_fails_with_migration_error(self):
+    def test_removed_config_keys_are_ignored(self):
+        import json
+
+        removed = ["root_dir", "notes_dir", "source_root",
+                   "attention_shortlist_min", "attention_shortlist_max",
+                   "attention_shortlist_limit_multiplier", "default_local_model",
+                   "default_openai_model", "things3_db_path", "auto_file_synthesis"]
         with tempfile.TemporaryDirectory() as tmpdir:
-            self._write_user_config(Path(tmpdir) / "xdg", "root_dir: ~/legacy-ledger\n")
-
-            with self.assertRaises(RuntimeError) as ctx:
-                LedgerConfig.from_env()
-
-            self.assertIn("ledger_root", str(ctx.exception))
+            data = {key: "obsolete" for key in removed}
+            data.update(ledger_notes_dir=tmpdir, shortlist_min_candidates=17)
+            for suffix in ("yaml", "json"):
+                with self.subTest(suffix=suffix):
+                    path = Path(tmpdir) / f"config.{suffix}"
+                    # JSON mappings are valid YAML too.
+                    path.write_text(json.dumps(data), encoding="utf-8")
+                    config = LedgerConfig.from_file(path)
+                    self.assertEqual(config.shortlist_min_candidates, 17)
+                    self.assertEqual(config.ledger_notes_dir, Path(tmpdir).resolve())
+                    self.assertFalse(any(hasattr(config, key) for key in removed))
 
     def test_missing_yaml_support_fails_loudly(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -268,13 +277,15 @@ class TestLedgerConfig(_LedgerEnvIsolation, unittest.TestCase):
             # The repo config's retrieval_mode is ignored; default stands.
             self.assertEqual(config.retrieval_mode, "semantic_hybrid")
 
-    def test_canonical_xdg_overrides_legacy_xdg(self):
+    def test_legacy_xdg_is_ignored(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             base = Path(tmpdir) / "xdg"
             os.environ["XDG_CONFIG_HOME"] = str(base)
             legacy = base / "cognitive-ledger" / "config.yaml"
             legacy.parent.mkdir(parents=True, exist_ok=True)
             legacy.write_text("retrieval_mode: legacy\n", encoding="utf-8")
+            os.environ["LEDGER_ROOT"] = tmpdir
+            self.assertEqual(LedgerConfig.from_env().retrieval_mode, "semantic_hybrid")
             canonical = base / "ledger" / "config.yaml"
             canonical.parent.mkdir(parents=True, exist_ok=True)
             canonical.write_text(
@@ -338,7 +349,6 @@ class TestThings3Config(_LedgerEnvIsolation, unittest.TestCase):
     def test_defaults(self):
         config = LedgerConfig()
         self.assertFalse(config.things3_sync_enabled)
-        self.assertEqual(config.things3_db_path, "")
         self.assertEqual(config.things3_default_project, "")
         self.assertEqual(config.things3_blocked_project, "")
         self.assertEqual(config.things3_scope_routing, {})

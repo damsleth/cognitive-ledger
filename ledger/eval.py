@@ -99,7 +99,6 @@ def parse_eval_cases(path: str | Path) -> list[dict[str, Any]]:
     cases = []
     current = None
     in_expected = False
-    in_expected_none = False  # currently unused (flag, not list)
 
     for raw_line in Path(path).read_text(encoding="utf-8").splitlines():
         line = raw_line.rstrip()
@@ -123,7 +122,6 @@ def parse_eval_cases(path: str | Path) -> list[dict[str, Any]]:
             if key in _SCALAR_CASE_KEYS:
                 current[key] = parse_yaml_scalar(value)
             in_expected = key == "expected_any"
-            in_expected_none = False
             continue
 
         if current is None:
@@ -136,31 +134,26 @@ def parse_eval_cases(path: str | Path) -> list[dict[str, Any]]:
             if key in _SCALAR_CASE_KEYS:
                 current[key] = parse_yaml_scalar(value)
                 in_expected = False
-                in_expected_none = False
                 continue
             if key == "expected_none":
                 parsed_val = parse_yaml_scalar(value).lower()
                 current["expected_none"] = parsed_val in {"true", "yes", "1"}
                 in_expected = False
-                in_expected_none = False
                 continue
 
         if re.match(r"^scope:\s*", stripped):
             current["scope"] = parse_yaml_scalar(stripped.split(":", 1)[1]) or "all"
             in_expected = False
-            in_expected_none = False
             continue
 
         if re.match(r"^expected_any:\s*$", stripped):
             in_expected = True
-            in_expected_none = False
             continue
 
         if re.match(r"^expected_none:\s*", stripped):
             val = parse_yaml_scalar(stripped.split(":", 1)[1]).lower()
             current["expected_none"] = val in {"true", "yes", "1"}
             in_expected = False
-            in_expected_none = False
             continue
 
         if in_expected and re.match(r"^-\s+", stripped):

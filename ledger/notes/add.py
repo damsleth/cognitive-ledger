@@ -114,10 +114,6 @@ def _extract_title_from_body(body: str) -> str:
   return "untitled"
 
 
-def _has_frontmatter(text: str) -> bool:
-  return text.lstrip().startswith("---")
-
-
 def _build_frontmatter(
   *,
   now: datetime,

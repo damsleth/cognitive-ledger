@@ -131,6 +131,7 @@ This creates a `cognitive-ledger/` subdirectory inside your notes tree. Source n
 ### Keeping it in sync
 
 ```bash
+# Watch mode requires: pip install 'cognitive-ledger[obsidian]'
 ledger import obsidian watch --vault /path/to/vault          # live sync
 ledger import obsidian daemon start --vault /path/to/vault    # macOS background service
 ledger import obsidian queue sync --vault /path/to/vault      # manual sync
