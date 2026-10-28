@@ -35,9 +35,10 @@ The file has a version field; version mismatch causes a clean re-scan.
 
 from __future__ import annotations
 
+from ledger.io.hashing import digest
+
 import datetime as dt
 import enum
-import hashlib
 import json
 import re
 from dataclasses import dataclass, field
@@ -97,7 +98,7 @@ def _from_iso(s: str) -> dt.datetime | None:
 
 
 def _content_hash(text: str) -> str:
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+    return digest(text.encode("utf-8"))[:16]
 
 
 # ---------------------------------------------------------------------------

@@ -5,8 +5,9 @@ Commands run in disposable workspaces, not a security sandbox.
 """
 from __future__ import annotations
 
+from ledger.io.hashing import digest
+
 from datetime import datetime, timezone
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -31,7 +32,7 @@ def _relative(value: str) -> Path:
 
 
 def _hash(text: str) -> str:
-    return hashlib.sha256(text.encode()).hexdigest()
+    return digest(text.encode())
 
 
 def load_cases(path: Path) -> list[dict]:

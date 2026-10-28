@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-import hashlib
+from ledger.io.hashing import digest
+
 import os
 import platform
 import subprocess
@@ -18,7 +19,7 @@ def _require_macos() -> None:
 
 
 def _vault_hash(vault_root: Path) -> str:
-    return hashlib.sha1(str(vault_root.resolve()).encode("utf-8")).hexdigest()[:12]
+    return digest(str(vault_root.resolve()).encode("utf-8"), "sha1")[:12]
 
 
 def daemon_label(config: ObsidianLedgerConfig) -> str:

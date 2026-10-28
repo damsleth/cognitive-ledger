@@ -7,7 +7,8 @@ No ML model required; suitable for pre-embed bootstrapping.
 
 from __future__ import annotations
 
-import hashlib
+from ledger.io.hashing import digest
+
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -59,7 +60,7 @@ def _normalize_title(text: str) -> str:
 def _content_hash(text: str) -> str:
     """SHA-1 hex digest of normalised body content."""
     normalised = re.sub(r"\s+", " ", text.strip().lower())
-    return hashlib.sha1(normalised.encode("utf-8")).hexdigest()
+    return digest(normalised.encode("utf-8"), "sha1")
 
 
 def _word_set(text: str) -> set[str]:
