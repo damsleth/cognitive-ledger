@@ -28,27 +28,11 @@ def sha1_file(path: Path) -> str:
     return file_digest(path, "sha1")
 
 
-def slugify(value: str, max_len: int = 80, *, policy: str = "import") -> str:
-    """Make an ASCII slug with the caller's persisted naming policy.
-
-    Import slugs join quoted words; note slugs truncate at word boundaries;
-    conflict slugs permit an empty result and retain trailing truncation underscores.
-    """
-    if policy not in {"import", "note", "conflict"}:
-        raise ValueError(f"Unknown slug policy: {policy}")
-    value = value.strip().lower()
-    if policy == "import":
-        value = re.sub(r"['`\"]+", "", value)
-    slug = re.sub(r"[^a-z0-9]+", "_", value).strip("_")
-    if policy == "conflict":
-        return slug[:max_len]
-    if policy == "note" and len(slug) > max_len:
-        slug = slug[:max_len].rsplit("_", 1)[0] or slug[:max_len]
-    else:
-        slug = slug[:max_len]
-    if policy == "import":
-        slug = slug.strip("_")
-    return slug or "untitled"
+def slugify(value: str, max_len: int = 80) -> str:
+    slug = re.sub(r"['`\"]+", "", value.strip().lower())
+    slug = re.sub(r"[^a-z0-9]+", "_", slug)
+    slug = re.sub(r"_+", "_", slug).strip("_")
+    return (slug[:max_len] or "untitled").strip("_") or "untitled"
 
 
 def normalize_statement(value: str) -> str:
