@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Removed
+- Unused config fields and migration shims; obsolete config keys are ignored and only the canonical XDG config is read.
+- Unreferenced private helpers, unused eval state and the unused scikit-learn dependency. Watch mode now uses the `obsidian` extra.
+
 ### Fixed
 - Candidate-to-result copies preserve all metadata, including provenance, ingest channel and validation count for trust annotation.
 
