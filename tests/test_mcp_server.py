@@ -89,6 +89,19 @@ class TestToolsAgainstCorpus:
         assert "hunter2" not in text
         assert "deploy" in text.lower()
 
+    def test_hub_log_is_write_gated_and_marked_agent(self, ledger, monkeypatch):
+        from ledger import hubs
+        monkeypatch.setattr(hubs, "_yaams_canonical", lambda name: None)
+        (ledger.ledger_notes_dir / "08_indices").mkdir(exist_ok=True)
+        hubs.create("people", "ola", "Ola Nordmann", fields={"entity": "Ola Nordmann"})
+        assert "ledger_hub_log" not in _tool_names(create_server(config=ledger))
+        server = create_server(config=ledger, allow_write=True)
+        asyncio.run(server.call_tool("ledger_hub_log", {"kind": "people", "name": "Ola Nordmann",
+                                                        "text": "Prefers mornings.", "date": "2026-10-28"}))
+        assert "- 2026-10-28 (agent) Prefers mornings." in hubs.hub_path("people", "ola").read_text()
+        shown = str(asyncio.run(server.call_tool("ledger_hub_show", {"kind": "people", "name": "ola"})))
+        assert "Prefers mornings." in shown
+
     def test_remember_writes_to_inbox(self, ledger):
         server = create_server(config=ledger, allow_write=True)
         asyncio.run(server.call_tool("ledger_remember", {"text": "remember to ship", "tags": "todo"}))
