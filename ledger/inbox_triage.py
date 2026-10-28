@@ -20,6 +20,8 @@ non-TUI callers.
 """
 from __future__ import annotations
 
+from ledger.parsing.frontmatter import parse_frontmatter_text
+
 import shutil
 import sys
 from pathlib import Path
@@ -273,8 +275,7 @@ def _render_side_by_side(candidate: InboxCandidate) -> None:
             target_statement = "\n".join(stmt_lines).strip()
         if not target_statement:
             # Fallback: first non-empty paragraph of body
-            parts = target_text.split("---", 2)
-            body_text = parts[2] if len(parts) >= 3 else target_text
+            _, body_text = parse_frontmatter_text(target_text)
             for para in body_text.split("\n\n"):
                 stripped = para.strip()
                 if stripped and not stripped.startswith("#"):

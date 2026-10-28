@@ -8,7 +8,10 @@ without creating cycles.
 
 from __future__ import annotations
 
-import hashlib
+from ledger.io.hashing import digest
+
+from ledger.io.hashing import file_digest
+
 import re
 from pathlib import Path
 from typing import Any
@@ -18,15 +21,11 @@ from ledger.parsing.frontmatter import serialize_frontmatter
 
 
 def sha1_text(text: str) -> str:
-    return hashlib.sha1(text.encode("utf-8")).hexdigest()
+    return digest(text.encode("utf-8"), "sha1")
 
 
 def sha1_file(path: Path) -> str:
-    hasher = hashlib.sha1()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(65536), b""):
-            hasher.update(chunk)
-    return hasher.hexdigest()
+    return file_digest(path, "sha1")
 
 
 def slugify(value: str, max_len: int = 80) -> str:

@@ -1,9 +1,10 @@
 """Actionable pattern lifecycle. Reads are pure; only explicit actions append events."""
 from __future__ import annotations
 
+from ledger.io.hashing import digest
+
 from collections import Counter
 from datetime import date
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -25,7 +26,7 @@ SIGNAL_TYPES = {
 
 
 def stable_id(kind: str, subject: str) -> str:
-    return hashlib.sha256(f"{kind}\0{subject}".encode()).hexdigest()[:20]
+    return digest(f"{kind}\0{subject}".encode())[:20]
 
 
 def _clean(value):
@@ -49,7 +50,7 @@ def pattern_items(notes_dir: Path) -> list[dict]:
         matching = [s for s in signals if s.get("type") == SIGNAL_TYPES[kind]
                     and s.get(key) == subject]
         # Multiset counts catch identical events and same-timestamp recurrences.
-        evidence = dict(Counter(hashlib.sha256(json.dumps(s, sort_keys=True).encode()).hexdigest()
+        evidence = dict(Counter(digest(json.dumps(s, sort_keys=True).encode())
                                 for s in matching))
         items.append(_clean({**pattern, "id": stable_id(kind, subject),
                              "destination": "note", "evidence_checkpoint": evidence}))

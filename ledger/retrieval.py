@@ -11,9 +11,10 @@ All lexical retrieval behavior should live here so CLI/TUI/tests can reuse it.
 
 from __future__ import annotations
 
+from ledger.io.hashing import digest
+
 from dataclasses import fields
 import datetime as dt
-import hashlib
 import heapq
 import json
 import os
@@ -406,7 +407,7 @@ def read_note_for_retrieval(path: Path) -> tuple[dict[str, Any], str]:
 
 
 def _sha256_text(text: str) -> str:
-    return f"sha256:{hashlib.sha256(text.encode('utf-8')).hexdigest()}"
+    return f"sha256:{digest(text.encode('utf-8'))}"
 
 
 def build_attention_tokens(
