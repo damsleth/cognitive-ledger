@@ -35,8 +35,6 @@ The file has a version field; version mismatch causes a clean re-scan.
 
 from __future__ import annotations
 
-from ledger.text import slugify
-
 from ledger.io.hashing import digest
 
 import datetime as dt
@@ -418,10 +416,11 @@ def _label_to_name(label: str | None) -> str | None:
 
 _CONFLICT_TAG = "conflict"
 
+_SLUG_RE = re.compile(r"[^a-z0-9]+")
 
 
 def _slug(text: str) -> str:
-    return slugify(text, 40, policy="conflict")
+    return _SLUG_RE.sub("_", text.lower()).strip("_")[:40]
 
 
 def _make_conflict_note_filename(rel_a: str, rel_b: str, now: dt.datetime) -> str:
