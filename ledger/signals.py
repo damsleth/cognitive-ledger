@@ -7,6 +7,8 @@ and consolidation.
 
 from __future__ import annotations
 
+from ledger.time_utils import now_iso as _now_iso
+
 import datetime as dt
 import enum
 import json
@@ -52,8 +54,6 @@ SIGNAL_TYPES = (
 SIGNAL_USAGE_FLOOR = 0.5
 
 
-def _now_iso() -> str:
-    return dt.datetime.now(tz=dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def append_signal(

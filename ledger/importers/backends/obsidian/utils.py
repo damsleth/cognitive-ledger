@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ledger.time_utils import now_iso
+
 import json
 import os
 import re
@@ -34,8 +36,6 @@ Format: `<ISO timestamp> | <action> | <path> | <description>`
 RESERVED_YAML_SCALARS = {"yes", "no", "true", "false", "null", "~"}
 
 
-def now_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def infer_scope_from_relpath(path_rel: str) -> str:

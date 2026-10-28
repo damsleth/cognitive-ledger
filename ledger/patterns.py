@@ -18,6 +18,8 @@ flow) a concrete next action.
 
 from __future__ import annotations
 
+from ledger.time_utils import now_iso as _now_iso
+
 import datetime as dt
 import json
 from pathlib import Path
@@ -69,8 +71,6 @@ _ACTIONS = {
 }
 
 
-def _now_iso() -> str:
-    return dt.datetime.now(tz=dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _seen_window(
