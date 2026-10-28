@@ -11,8 +11,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from ledger.layout import (
+    INDICES_SUBDIR,
+    LEDGER_NOTE_SUBDIRS,
+    NOTE_LAYOUTS,
+    indices_dir,
+    timeline_jsonl_path,
+    timeline_path,
+)
 from ledger.config import LedgerConfig, get_config, set_config
-from ledger.layout import LEDGER_NOTE_SUBDIRS, indices_dir, timeline_jsonl_path, timeline_path
 from ledger.io.safe_write import safe_write_text
 
 
@@ -20,9 +27,9 @@ NOTE_DIRS = list(LEDGER_NOTE_SUBDIRS)
 LEDGER_NOTES_GITIGNORE_LINES = (
     ".DS_Store",
     "*.lock",
-    "08_indices/.session_baseline",
-    "08_indices/.last_dirty_paths_hash",
-    "08_indices/note_index.json",
+    f"{INDICES_SUBDIR}/.session_baseline",
+    f"{INDICES_SUBDIR}/.last_dirty_paths_hash",
+    f"{INDICES_SUBDIR}/note_index.json",
     ".smart-env/",  # embedding index: rebuildable, binary, several MB
 )
 
@@ -165,7 +172,7 @@ def _ensure_notes_gitignore(notes_dir: Path) -> bool:
 
 DEMO_NOTES: list[tuple[str, str]] = [
     (
-        "02_facts/fact__cognitive_ledger_demo.md",
+        f"{NOTE_LAYOUTS['facts'].subdir}/{NOTE_LAYOUTS['facts'].prefix}cognitive_ledger_demo.md",
         """\
 ---
 created: {ts}
@@ -192,7 +199,7 @@ Demonstrates the fact note type: stable truths sourced from the user.
 """,
     ),
     (
-        "03_preferences/pref__demo_preference.md",
+        f"{NOTE_LAYOUTS['preferences'].subdir}/{NOTE_LAYOUTS['preferences'].prefix}demo_preference.md",
         """\
 ---
 created: {ts}
@@ -216,7 +223,7 @@ Demo preference created by `ledger init --demo`.
 """,
     ),
     (
-        "04_goals/goal__demo_goal.md",
+        f"{NOTE_LAYOUTS['goals'].subdir}/{NOTE_LAYOUTS['goals'].prefix}demo_goal.md",
         """\
 ---
 created: {ts}
@@ -240,7 +247,7 @@ Demo goal created by `ledger init --demo`.
 """,
     ),
     (
-        "05_open_loops/loop__demo_loop.md",
+        f"{NOTE_LAYOUTS['loops'].subdir}/{NOTE_LAYOUTS['loops'].prefix}demo_loop.md",
         """\
 ---
 created: {ts}
@@ -266,7 +273,7 @@ Demo notes are placeholders; real notes make retrieval useful.
 """,
     ),
     (
-        "06_concepts/concept__cognitive_ledger.md",
+        f"{NOTE_LAYOUTS['concepts'].subdir}/{NOTE_LAYOUTS['concepts'].prefix}cognitive_ledger.md",
         """\
 ---
 created: {ts}
@@ -422,15 +429,15 @@ def init_ledger(
     if not timeline_md.is_file():
         from ledger.timeline import TIMELINE_MARKDOWN_HEADER
         safe_write_text(timeline_md, TIMELINE_MARKDOWN_HEADER)
-        report["created"].append("notes/08_indices/timeline.md")
+        report["created"].append(f"notes/{INDICES_SUBDIR}/timeline.md")
     else:
-        report["skipped"].append("notes/08_indices/timeline.md")
+        report["skipped"].append(f"notes/{INDICES_SUBDIR}/timeline.md")
 
     if not timeline_jsonl.is_file():
         timeline_jsonl.touch()
-        report["created"].append("notes/08_indices/timeline.jsonl")
+        report["created"].append(f"notes/{INDICES_SUBDIR}/timeline.jsonl")
     else:
-        report["skipped"].append("notes/08_indices/timeline.jsonl")
+        report["skipped"].append(f"notes/{INDICES_SUBDIR}/timeline.jsonl")
 
     # 6. Optionally write demo notes
     if demo:

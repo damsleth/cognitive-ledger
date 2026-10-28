@@ -2,14 +2,18 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from ledger.layout import (
+    CONTENT_NOTE_LAYOUTS,
+    INBOX_SUBDIR,
+)
 from ledger.io import safe_write_text
 
 from .models import ObsidianLedgerConfig
 
 
-CANDIDATES_BASE = """filters:
+CANDIDATES_BASE = f"""filters:
   and:
-    - 'file.path.startsWith("cognitive-ledger/notes/00_inbox/")'
+    - 'file.path.startsWith("cognitive-ledger/notes/{INBOX_SUBDIR}/")'
 properties:
   review_status:
     displayName: Review
@@ -36,9 +40,14 @@ views:
 """
 
 
-NOTES_BASE = """filters:
+_NOTE_FILTER = " || ".join(
+    f'file.path.startsWith("cognitive-ledger/notes/{layout.subdir}/")'
+    for layout in CONTENT_NOTE_LAYOUTS
+)
+
+NOTES_BASE = f"""filters:
   and:
-    - 'file.path.startsWith("cognitive-ledger/notes/02_facts/") || file.path.startsWith("cognitive-ledger/notes/03_preferences/") || file.path.startsWith("cognitive-ledger/notes/04_goals/") || file.path.startsWith("cognitive-ledger/notes/05_open_loops/") || file.path.startsWith("cognitive-ledger/notes/06_concepts/")'
+    - '{_NOTE_FILTER}'
 properties:
   scope:
     displayName: Scope

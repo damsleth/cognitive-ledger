@@ -20,9 +20,18 @@ from itertools import combinations
 from pathlib import Path
 from typing import Any
 
+from ledger.layout import (
+    ARCHIVE_SUBDIR,
+    BITEMPORAL_SUBDIRS,
+    INBOX_SUBDIR,
+    INDICES_SUBDIR,
+    NOTE_LAYOUTS,
+    NOTE_PREFIXES,
+    indices_dir as layout_indices_dir,
+    logical_path,
+)
 from ledger.config import get_config
 from ledger import context as context_lib
-from ledger.layout import indices_dir as layout_indices_dir, logical_path
 from ledger.parsing import (
     parse_frontmatter_text,
     parse_sections,
@@ -94,7 +103,7 @@ def _iter_note_files(include_indices: bool = False):
     notes_dir, _indices_dir, _timeline = _config_paths()
     for path in sorted(notes_dir.rglob("*.md")):
         rel = _relative(path)
-        if not include_indices and "/08_indices/" in f"/{rel}":
+        if not include_indices and f"/{INDICES_SUBDIR}/" in f"/{rel}":
             continue
         if "/templates/" in f"/{rel}":
             continue
@@ -186,7 +195,7 @@ def _is_tracked_path(rel_path: str) -> bool:
     if not normalized.endswith(".md"):
         return False
     wrapped = f"/{normalized}"
-    if "/08_indices/" in wrapped:
+    if f"/{INDICES_SUBDIR}/" in wrapped:
         return False
     if "/templates/" in wrapped:
         return False
@@ -579,22 +588,13 @@ def _lint_warn(path: Path, message: str) -> None:
 
 def _is_open_loop(path: Path, frontmatter: dict[str, Any]) -> bool:
     rel = _relative(path)
-    if "/05_open_loops/" not in f"/{rel}":
+    if f"/{NOTE_LAYOUTS['loops'].subdir}/" not in f"/{rel}":
         return False
     return str(frontmatter.get("status", "open")).strip().lower() == "open"
 
 
 # Folders eligible for bitemporal field validation (00_inbox is exempt).
-_BITEMPORAL_ELIGIBLE_FOLDERS = frozenset(
-    {
-        "/01_identity/",
-        "/02_facts/",
-        "/03_preferences/",
-        "/04_goals/",
-        "/06_concepts/",
-        "/09_archive/",
-    }
-)
+_BITEMPORAL_ELIGIBLE_FOLDERS = frozenset(f"/{subdir}/" for subdir in BITEMPORAL_SUBDIRS)
 
 
 def _lint_bitemporal(
@@ -617,7 +617,7 @@ def _lint_bitemporal(
     """
     rel = _relative(path)
     # 00_inbox is exempt from bitemporal validation entirely.
-    if "/00_inbox/" in f"/{rel}":
+    if f"/{INBOX_SUBDIR}/" in f"/{rel}":
         return
 
     is_eligible = any(folder in f"/{rel}" for folder in _BITEMPORAL_ELIGIBLE_FOLDERS)
@@ -686,10 +686,8 @@ def _lint_bitemporal(
     # A typed archive note is embedded for --as-of reads; without valid_to it
     # reads as valid for all time, so a closed loop or retired fact comes back
     # as current history. (Untyped note__ ingest summaries are not embedded.)
-    if "/09_archive/" in f"/{rel}" and not valid_to_raw:
-        from ledger.layout import NOTE_LAYOUTS
-
-        if path.name.startswith(tuple(item.prefix for item in NOTE_LAYOUTS.values())):
+    if f"/{ARCHIVE_SUBDIR}/" in f"/{rel}" and not valid_to_raw:
+        if path.name.startswith(NOTE_PREFIXES):
             _lint_warn(path, "archived note has no valid_to; run `ledger migrate bitemporal --check`")
             counters.warnings += 1
 
@@ -857,9 +855,9 @@ def _lint_identity_count(notes_dir: Path, counters: LintCounters) -> None:
     """Identity notes load at every boot, so their number is capped (types may repeat)."""
     from ledger.schema_values import MAX_IDENTITY_NOTES
 
-    identity = sorted((Path(notes_dir) / "01_identity").glob("*.md"))
+    identity = sorted((Path(notes_dir) / NOTE_LAYOUTS['identity'].subdir).glob("*.md"))
     if len(identity) > MAX_IDENTITY_NOTES:
-        print(f"WARN: 01_identity - {len(identity)} identity notes (max {MAX_IDENTITY_NOTES}); merge or demote some")
+        print(f"WARN: {NOTE_LAYOUTS['identity'].subdir} - {len(identity)} identity notes (max {MAX_IDENTITY_NOTES}); merge or demote some")
         counters.warnings += 1
 
 
@@ -1221,12 +1219,8 @@ def _generate_content_index(indices_dir: Path) -> None:
 
     # Build markdown
     type_labels = {
-        "identity": "Identity",
-        "facts": "Facts",
-        "preferences": "Preferences",
-        "goals": "Goals",
-        "loops": "Open Loops",
-        "concepts": "Concepts",
+        **{layout.name: layout.subdir.split("_", 1)[1].replace("_", " ").title()
+           for layout in NOTE_LAYOUTS.values()},
         "other": "Other",
     }
     md_lines = [
@@ -1363,7 +1357,7 @@ def _generate_semantic_index() -> None:
     if code == 0:
         model_key = f"{backend}__{sanitize_model_key(model)}"
         print(f"  -> {_relative(config.semantic_root / 'ledger' / model_key)}/{{index.json,vectors.npy}}")
-        print("  -> notes/08_indices/semantic_manifest.json")
+        print(f"  -> notes/{INDICES_SUBDIR}/semantic_manifest.json")
         return
 
     print("WARN: semantic index build skipped (optional deps missing or build failed)")
@@ -1542,19 +1536,19 @@ def cmd_sleep(as_json: bool = False) -> int:
         {
             "step": 1,
             "title": "Triage inbox",
-            "command": "fd . notes/00_inbox",
+            "command": f"fd . notes/{INBOX_SUBDIR}",
             "guidance": "Promote, archive, or delete each item",
         },
         {
             "step": 2,
             "title": "Review open loops",
-            "command": "fd loop__ notes/05_open_loops",
+            "command": f"fd {NOTE_LAYOUTS['loops'].prefix} notes/{NOTE_LAYOUTS['loops'].subdir}",
             "guidance": "Close resolved, snooze stale, ensure next actions exist",
         },
         {
             "step": 3,
             "title": "Check for duplicates",
-            "command": "sheep index && head -20 notes/08_indices/sizes.md",
+            "command": f"sheep index && head -20 notes/{INDICES_SUBDIR}/sizes.md",
             "guidance": "Merge similar notes, archive duplicates",
         },
         {
@@ -1625,15 +1619,15 @@ def cmd_sleep(as_json: bool = False) -> int:
     print("Use judgment; this is a guide, not a script.")
     print("")
     print("1. Triage inbox")
-    print("   fd . notes/00_inbox")
+    print(f"   fd . notes/{INBOX_SUBDIR}")
     print("   -> Promote, archive, or delete each item")
     print("")
     print("2. Review open loops")
-    print("   fd loop__ notes/05_open_loops")
+    print(f"   fd {NOTE_LAYOUTS['loops'].prefix} notes/{NOTE_LAYOUTS['loops'].subdir}")
     print("   -> Close resolved, snooze stale, ensure next actions exist")
     print("")
     print("3. Check for duplicates")
-    print("   sheep index && head -20 notes/08_indices/sizes.md")
+    print(f"   sheep index && head -20 notes/{INDICES_SUBDIR}/sizes.md")
     print("   -> Merge similar notes, archive duplicates")
     print("")
     print("4. Regenerate indices")

@@ -16,7 +16,8 @@ if [ -z "${CORPUS:-}" ]; then
   CORPUS="$(mktemp -d)/notes"
   cp -R "$(pwd)/tests/fixtures/corpus/notes" "$CORPUS"
 fi
-CASES="${CASES:-08_indices/retrieval_eval_cases.yaml}"
+source "$(dirname "${BASH_SOURCE[0]}")/layout.sh"
+CASES="${CASES:-${LEDGER_INDICES_SUBDIR}/retrieval_eval_cases.yaml}"
 BASELINE_REF="${BASELINE_REF:-main}"
 
 set --

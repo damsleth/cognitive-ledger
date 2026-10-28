@@ -32,8 +32,11 @@ resolve_notes_dir() {
 
 NOTES_DIR="$(resolve_notes_dir)"
 
-SIGNALS_FILE="$NOTES_DIR/08_indices/signals.jsonl"
-SUMMARY_FILE="$NOTES_DIR/08_indices/signal_summary.json"
+# Folder and prefix values come from the Python registry.
+source "$SCRIPT_DIR/../layout.sh"
+
+SIGNALS_FILE="$NOTES_DIR/${LEDGER_INDICES_SUBDIR}/signals.jsonl"
+SUMMARY_FILE="$NOTES_DIR/${LEDGER_INDICES_SUBDIR}/signal_summary.json"
 
 # Rebuild signal summary if signals have been added since last summary
 if [ -f "$SIGNALS_FILE" ]; then
@@ -57,7 +60,7 @@ if git -C "$NOTES_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
         {
             printf '%s\n' "$tracked"
             printf '%s\n' "$untracked"
-        } | awk 'NF && $0 !~ /^08_indices\//' | wc -l | tr -d ' '
+        } | awk -v indices="$LEDGER_INDICES_SUBDIR/" 'NF && index($0, indices) != 1' | wc -l | tr -d ' '
     )
 fi
 

@@ -21,9 +21,9 @@ import warnings as _warnings
 from pathlib import Path
 from typing import Any, Union
 
+from ledger.layout import NOTE_LAYOUTS, indices_dir, logical_path, note_index_path, note_type_dir, resolve_path
 from ledger.config import get_config
 from ledger.io import safe_write_text
-from ledger.layout import NOTE_LAYOUTS, indices_dir, logical_path, note_index_path, note_type_dir, resolve_path
 from ledger.parsing import (
     extract_link_tokens,
     extract_title,
@@ -1233,11 +1233,11 @@ def prefilter_candidates_by_scope_and_type(
 
         if query_scope != "all" and not scope_matches(str(_candidate_value(candidate, "scope", "") or ""), query_scope) and not token_overlap:
             continue
-        if preference_mode and candidate_type not in {"pref", "concept"} and not token_overlap:
+        if preference_mode and candidate_type not in {NOTE_LAYOUTS["preferences"].label, NOTE_LAYOUTS["concepts"].label} and not token_overlap:
             continue
-        if loop_mode and candidate_type not in {"loop", "goal"} and not token_overlap:
+        if loop_mode and candidate_type not in {NOTE_LAYOUTS["loops"].label, NOTE_LAYOUTS["goals"].label} and not token_overlap:
             continue
-        if history_mode and candidate_type not in {"loop", "fact", "concept"} and not token_overlap:
+        if history_mode and candidate_type not in {NOTE_LAYOUTS["loops"].label, NOTE_LAYOUTS["facts"].label, NOTE_LAYOUTS["concepts"].label} and not token_overlap:
             continue
 
         filtered.append(candidate)

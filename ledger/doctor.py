@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import sys
 
+from ledger.layout import INDICES_SUBDIR
 from ledger.conventions import DoctorFinding, DoctorPayload
 
 
@@ -149,7 +150,7 @@ def run_doctor(config_path_arg: str | None = None, fix: bool = False) -> DoctorP
     if notes_dir_p:
       notes_dir_p = Path(notes_dir_p)
       if notes_dir_p.exists():
-        index_dir = notes_dir_p / "08_indices"
+        index_dir = notes_dir_p / INDICES_SUBDIR
         index_md = index_dir / "index.md"
         index_json = index_dir / "note_index.json"
         for idx_path, check_id in [
@@ -237,7 +238,7 @@ def run_doctor(config_path_arg: str | None = None, fix: bool = False) -> DoctorP
     notes_dir_p = getattr(cfg, "ledger_notes_dir", None)
     if notes_dir_p:
       notes_dir_p = Path(notes_dir_p)
-      index_json = notes_dir_p / "08_indices" / "note_index.json"
+      index_json = notes_dir_p / INDICES_SUBDIR / "note_index.json"
       if index_json.is_file():
         raw = index_json.read_text(encoding="utf-8", errors="replace")
         lowered = raw.lower()

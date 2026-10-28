@@ -19,8 +19,14 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from ledger.layout import (
+    ARCHIVE_SUBDIR,
+    CONTENT_NOTE_LAYOUTS,
+    logical_path,
+    note_type_dir,
+    typed_archive_notes,
+)
 from ledger.config import get_config
-from ledger.layout import logical_path, note_type_dir, typed_archive_notes
 from ledger.io import append_timeline_entry as append_timeline_entry_safe
 from ledger.parsing import extract_title, parse_frontmatter_text, strip_private_tags
 from ledger.text import sha1_text
@@ -32,15 +38,11 @@ DEFAULT_LOCAL_MODEL = "TaylorAI/bge-micro-v2"
 DEFAULT_OPENAI_MODEL = "text-embedding-3-small"
 
 LEDGER_EMBED_NOTE_TYPES = {
-    "notes/02_facts": "fact",
-    "notes/03_preferences": "pref",
-    "notes/04_goals": "goal",
-    "notes/05_open_loops": "loop",
-    "notes/06_concepts": "concept",
-    "notes/09_archive": "archive",
+    **{layout.logical_dir.as_posix(): layout.label for layout in CONTENT_NOTE_LAYOUTS},
+    f"notes/{ARCHIVE_SUBDIR}": "archive",
 }
-ARCHIVE_REL_PREFIX = "notes/09_archive/"
-LEDGER_EMBED_LAYOUT_NAMES = ("facts", "preferences", "goals", "loops", "concepts")
+ARCHIVE_REL_PREFIX = f"notes/{ARCHIVE_SUBDIR}/"
+LEDGER_EMBED_LAYOUT_NAMES = tuple(layout.name for layout in CONTENT_NOTE_LAYOUTS)
 
 INDEX_ITEM_FIELDS = (
     "id",

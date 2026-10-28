@@ -17,6 +17,7 @@
   against a live corpus while checking its content remains unchanged.
 
 ### Changed
+- Note folders, prefixes and type metadata now derive from `ledger.layout` across runtime code and scripts, preserving existing behavior.
 - Maintenance setup in AGENTS.md follows the owner's scheduler preference
   rather than prescribing a raw crontab entry.
 - **`ledger eval` breaks hit@k down by case `lang`.** It prints the breakdown

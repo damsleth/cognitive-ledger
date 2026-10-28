@@ -73,6 +73,12 @@ NOTE_LAYOUTS: dict[str, NoteLayout] = {
     "concepts": NoteLayout(name="concepts", subdir="06_concepts", label="concept", prefix="concept__", kind="concept"),
 }
 
+# Content types share embedding/import behavior; identity is loaded separately.
+CONTENT_NOTE_LAYOUTS: tuple[NoteLayout, ...] = tuple(
+    layout for layout in NOTE_LAYOUTS.values() if layout.name != "identity"
+)
+NOTE_PREFIXES: tuple[str, ...] = tuple(layout.prefix for layout in NOTE_LAYOUTS.values())
+
 CORE_NOTE_TYPES: tuple[str, ...] = tuple(NOTE_LAYOUTS.keys())
 
 LEDGER_NOTE_SUBDIRS: tuple[str, ...] = (
@@ -169,7 +175,7 @@ def typed_archive_notes(ledger_notes_dir: Path) -> list[Path]:
     archive = Path(ledger_notes_dir) / ARCHIVE_SUBDIR
     if not archive.is_dir():
         return []
-    prefixes = tuple(layout.prefix for layout in NOTE_LAYOUTS.values())
+    prefixes = NOTE_PREFIXES
     return sorted(p for p in archive.glob("*.md") if p.name.startswith(prefixes))
 
 

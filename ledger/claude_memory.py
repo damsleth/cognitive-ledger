@@ -40,16 +40,19 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from ledger.layout import (
+    INBOX_SUBDIR,
+    INDICES_SUBDIR,
+    NOTE_LAYOUTS,
+    NOTE_PREFIXES,
+    inbox_dir,
+    indices_dir,
+    note_type_dir,
+)
 from ledger.config import LedgerConfig, get_config
 from ledger.io import safe_write_text
 from ledger.io.safe_write import append_timeline_entry
 from ledger.importers.state import backend_state_dir, relocate_legacy_file
-from ledger.layout import (
-    NOTE_LAYOUTS,
-    indices_dir,
-    inbox_dir,
-    note_type_dir,
-)
 from ledger.parsing import strip_private_tags
 from ledger.text import infer_lang, sha1_file, sha1_text, slugify, write_markdown
 
@@ -351,7 +354,7 @@ class ImportPlan:
 
 
 _WIKILINK = re.compile(r"\[\[([^\]]+)\]\]")
-_NOTE_PREFIXES = tuple(layout.prefix for layout in NOTE_LAYOUTS.values())
+_NOTE_PREFIXES = NOTE_PREFIXES
 
 
 def _resolution_key(text: str) -> str:
@@ -379,7 +382,7 @@ def _build_link_resolution(notes: list[PlannedNote], cfg: LedgerConfig) -> dict[
     notes_dir = cfg.ledger_notes_dir
     if notes_dir and Path(notes_dir).is_dir():
         for path in Path(notes_dir).rglob("*.md"):
-            if path.name == "MEMORY.md" or "08_indices" in path.parts:
+            if path.name == "MEMORY.md" or INDICES_SUBDIR in path.parts:
                 continue
             stem = path.stem
             resolution.setdefault(_resolution_key(_strip_note_prefix(stem)), path.name)
@@ -480,7 +483,7 @@ def existing_external_ids(cfg: LedgerConfig) -> dict[str, str]:
     if not notes_dir or not Path(notes_dir).is_dir():
         return found
     for path in sorted(Path(notes_dir).glob("*/*.md")):
-        if path.parent.name == "00_inbox":
+        if path.parent.name == INBOX_SUBDIR:
             continue
         try:
             meta, _ = parse_frontmatter_text(path.read_text(encoding="utf-8"))
@@ -534,7 +537,7 @@ def build_plan(
         slug = slugify(name)
         prefix = NOTE_LAYOUTS[cls.note_type].prefix
         subdir = NOTE_LAYOUTS[cls.note_type].subdir
-        target_subdir = "00_inbox" if mode == "inbox" else subdir
+        target_subdir = INBOX_SUBDIR if mode == "inbox" else subdir
         target_rel = f"{target_subdir}/{prefix}{slug}.md"
         external_id = f"{ctx.project + '/' if ctx.project else ''}{name}"
 
@@ -648,7 +651,7 @@ def run_import(
     entries = state.setdefault("entries", {})
 
     for note in plan.planned:
-        subdir = "00_inbox" if mode == "inbox" else NOTE_LAYOUTS[note.note_type].subdir
+        subdir = INBOX_SUBDIR if mode == "inbox" else NOTE_LAYOUTS[note.note_type].subdir
         if mode == "inbox":
             target_dir = inbox_dir(cfg.ledger_notes_dir)
         else:

@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from ledger.layout import (
+    CONTENT_NOTE_LAYOUTS,
+    INBOX_SUBDIR,
+)
 from ledger.parsing import extract_title, parse_frontmatter_text, parse_sections
 from ledger.io import safe_write_text
 
@@ -35,7 +39,7 @@ def _candidate_statement(frontmatter: dict[str, object], body: str) -> str:
 
 
 def sync_queue(config: ObsidianLedgerConfig) -> dict[str, int]:
-    inbox_dir = config.notes_root / "00_inbox"
+    inbox_dir = config.notes_root / INBOX_SUBDIR
     inbox_dir.mkdir(parents=True, exist_ok=True)
 
     state = load_state(config)
@@ -61,7 +65,7 @@ def sync_queue(config: ObsidianLedgerConfig) -> dict[str, int]:
             continue
 
         kind = str(frontmatter.get("ledger_kind", "")).strip().lower()
-        if kind not in {"fact", "pref", "goal", "loop", "concept"}:
+        if kind not in {layout.label for layout in CONTENT_NOTE_LAYOUTS}:
             pending += 1
             continue
 

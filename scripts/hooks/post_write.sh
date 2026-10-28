@@ -30,6 +30,9 @@ resolve_notes_dir() {
 
 NOTES_DIR="$(resolve_notes_dir)"
 
+# Folder and prefix values come from the Python registry.
+source "$SCRIPT_DIR/../layout.sh"
+
 case "$NOTE_PATH" in
     "$NOTES_DIR"/*) ;;
     notes/*) ;;
@@ -52,8 +55,8 @@ elif [[ "$REL_PATH" == "$ROOT_DIR/"* ]]; then
 fi
 
 TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-TIMELINE_MD="$NOTES_DIR/08_indices/timeline.md"
-TIMELINE_JSONL="$NOTES_DIR/08_indices/timeline.jsonl"
+TIMELINE_MD="$NOTES_DIR/${LEDGER_INDICES_SUBDIR}/timeline.md"
+TIMELINE_JSONL="$NOTES_DIR/${LEDGER_INDICES_SUBDIR}/timeline.jsonl"
 
 # Append to markdown timeline
 if [ -f "$TIMELINE_MD" ]; then

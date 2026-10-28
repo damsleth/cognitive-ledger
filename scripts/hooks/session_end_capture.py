@@ -18,16 +18,17 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+
 try:
     from ledger.config import get_config
-    from ledger.layout import inbox_dir, indices_dir
+    from ledger.layout import INBOX_SUBDIR, INDICES_SUBDIR, inbox_dir, indices_dir
     from ledger.io.safe_write import safe_write_text, append_timeline_entry
     from ledger.parsing.frontmatter import serialize_frontmatter
 except ImportError:
     # Fallback for running directly from a clone without `pip install -e .`
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
     from ledger.config import get_config
-    from ledger.layout import inbox_dir, indices_dir
+    from ledger.layout import INBOX_SUBDIR, INDICES_SUBDIR, inbox_dir, indices_dir
     from ledger.io.safe_write import safe_write_text, append_timeline_entry
     from ledger.parsing.frontmatter import serialize_frontmatter
 
@@ -104,7 +105,7 @@ def _notes_dirty_paths() -> list[str]:
         normalized = rel.strip().replace("\\", "/")
         if not normalized:
             continue
-        if normalized.startswith("08_indices/") or normalized.startswith("00_inbox/"):
+        if normalized.startswith(f"{INDICES_SUBDIR}/") or normalized.startswith(f"{INBOX_SUBDIR}/"):
             continue
         if normalized.endswith(".lock"):
             continue

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from ledger.layout import INBOX_SUBDIR
 from ledger.io import safe_write_text
 
 from .extraction import (
@@ -250,7 +251,7 @@ def _write_candidate_note(
     key: str,
     candidate_score: float,
 ) -> str:
-    folder = config.notes_root / "00_inbox"
+    folder = config.notes_root / INBOX_SUBDIR
     folder.mkdir(parents=True, exist_ok=True)
     slug = slugify(candidate.statement)
     file_name = f"candidate__{slug}.md"
@@ -284,7 +285,7 @@ def _write_candidate_note(
 
 def _preview_candidate_relpath(candidate: Candidate) -> str:
     slug = slugify(candidate.statement)
-    return f"cognitive-ledger/notes/00_inbox/candidate__{slug}.md"
+    return f"cognitive-ledger/notes/{INBOX_SUBDIR}/candidate__{slug}.md"
 
 
 def _filter_file_candidates(path: Path, content: str, file_candidates: list[Candidate]) -> list[Candidate]:
