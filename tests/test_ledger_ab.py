@@ -9,6 +9,7 @@ import unittest
 from unittest import mock
 
 from ledger import ab as ab_lib
+from ledger.ab import cli as ab_cli
 
 ROOT = Path(__file__).resolve().parents[1]
 LEDGER_AB_INVOKE: list[str] = [sys.executable, "-m", "ledger", "ab", "run"]
@@ -792,7 +793,7 @@ class LedgerABRepoRootTests(unittest.TestCase):
 
             with mock.patch("ledger.config.get_config", return_value=FakeConfig()), \
                 mock.patch(
-                    "ledger.ab.subprocess.check_output",
+                    "ledger.ab.worktree.subprocess.check_output",
                     side_effect=subprocess.CalledProcessError(1, "git"),
                 ):
                 with self.assertRaises(ab_lib.InvalidSetupError):
@@ -836,13 +837,13 @@ class LedgerABSameRefWorktreeTests(unittest.TestCase):
                 created_worktrees.append(str(target_path))
                 Path(target_path).mkdir(parents=True, exist_ok=True)
 
-            with mock.patch.object(ab_lib, "_ensure_git_available"), \
-                mock.patch.object(ab_lib, "_resolve_repo_root", return_value=ROOT), \
-                mock.patch.object(ab_lib, "_resolve_ref", return_value=ref_commit), \
-                mock.patch.object(ab_lib, "_resolve_head_commit", return_value=head_commit), \
-                mock.patch.object(ab_lib, "_create_worktree", side_effect=fake_create), \
-                mock.patch.object(ab_lib, "_remove_worktree"), \
-                mock.patch.object(ab_lib, "run_probe_for_side", side_effect=fake_probe):
+            with mock.patch.object(ab_cli, "_ensure_git_available"), \
+                mock.patch.object(ab_cli, "_resolve_repo_root", return_value=ROOT), \
+                mock.patch.object(ab_cli, "_resolve_ref", return_value=ref_commit), \
+                mock.patch.object(ab_cli, "_resolve_head_commit", return_value=head_commit), \
+                mock.patch.object(ab_cli, "_create_worktree", side_effect=fake_create), \
+                mock.patch.object(ab_cli, "_remove_worktree"), \
+                mock.patch.object(ab_cli, "run_probe_for_side", side_effect=fake_probe):
                 exit_code = ab_lib.run_cli_harness(args)
 
             report = json.loads((out_dir / "ab_eval.json").read_text(encoding="utf-8"))
@@ -878,10 +879,10 @@ class LedgerABSameRefWorktreeTests(unittest.TestCase):
             def fake_resolve_ref(repo_root, ref):
                 raise ab_lib.InvalidSetupError("fatal: Needed a single revision")
 
-            with mock.patch.object(ab_lib, "_ensure_git_available"), \
-                mock.patch.object(ab_lib, "_resolve_repo_root", return_value=ROOT), \
-                mock.patch.object(ab_lib, "_resolve_ref", side_effect=fake_resolve_ref), \
-                mock.patch.object(ab_lib, "run_probe_for_side") as probe_mock:
+            with mock.patch.object(ab_cli, "_ensure_git_available"), \
+                mock.patch.object(ab_cli, "_resolve_repo_root", return_value=ROOT), \
+                mock.patch.object(ab_cli, "_resolve_ref", side_effect=fake_resolve_ref), \
+                mock.patch.object(ab_cli, "run_probe_for_side") as probe_mock:
                 exit_code = ab_lib.run_cli_harness(args)
 
             self.assertEqual(exit_code, ab_lib.EXIT_INVALID_SETUP)
