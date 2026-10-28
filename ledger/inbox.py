@@ -92,11 +92,7 @@ def _triage_text(raw: str) -> str:
     "Modell:" line or a prose "pattern" — must not hijack the bucket. Notes
     without a Statement section fall back to the whole body.
     """
-    body = raw
-    if body.startswith("---"):
-        parts = body.split("---", 2)
-        if len(parts) == 3:
-            body = parts[2]
+    _, body = parse_frontmatter_text(raw)
 
     title = ""
     statement: list[str] = []
