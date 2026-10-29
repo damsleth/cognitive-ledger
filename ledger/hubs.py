@@ -123,9 +123,21 @@ def _is_false(value: Any) -> bool:
     return value is False or str(value).strip().lower() == "false"
 
 
+def _is_true(value: Any) -> bool:
+    return value is True or str(value).strip().lower() == "true"
+
+
 def unreviewed_count(frontmatter: dict[str, Any], body: str) -> int:
-    """Agent-written content the owner has not reviewed: agent log lines + 1 for ``reviewed: false``."""
-    return len(_AGENT_LINE.findall(body)) + (1 if _is_false(frontmatter.get("reviewed")) else 0)
+    """Agent-written content the owner has not reviewed.
+
+    Agent log lines, plus 1 for the note itself when it is ``reviewed: false`` or
+    was written by an agent (``source: assistant``) and never marked ``reviewed: true``.
+    """
+    reviewed = frontmatter.get("reviewed")
+    agent_note = _is_false(reviewed) or (
+        str(frontmatter.get("source", "")).strip().lower() == "assistant" and not _is_true(reviewed)
+    )
+    return len(_AGENT_LINE.findall(body)) + (1 if agent_note else 0)
 
 
 def _title(body: str, fallback: str) -> str:
@@ -367,11 +379,10 @@ def accept(path: Path | str, notes_dir: Path | None = None) -> int:
         n = unreviewed_count(fm, body)
         if not n:
             return block, body, 0
-        changes: dict[str, Any] = {"updated": _now()}
-        if fm.get("source") == "assistant":
-            changes["source"] = "user"
+        # source stays as written (who wrote it); reviewed: true records that the owner looked.
+        changes: dict[str, Any] = {"updated": _now(), "reviewed": True}
         body = re.sub(r"^(- \d{4}-\d{2}-\d{2}) \(agent\) ", r"\1 ", body, flags=re.M)
-        return _patch_frontmatter(block, changes, drop=("reviewed",)), body, n
+        return _patch_frontmatter(block, changes), body, n
 
     return _mutate(path, root, "reviewed: agent content accepted", edit)
 
