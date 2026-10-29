@@ -144,3 +144,13 @@ def test_legacy_assistant_notes_count_as_unreviewed_until_accepted(notes):
     assert hubs.accept("notes/02_facts/fact__legacy.md", notes) == 1
     assert "reviewed: true" in path.read_text() and hubs.unreviewed(notes) == []
     assert hubs.unreviewed_count({"source": "user"}, "") == 0
+
+
+def test_accept_keeps_updated_and_logs_a_reviewed_event(notes):
+    import json
+    path = notes / "02_facts" / "fact__old.md"
+    path.write_text("---\nupdated: 2025-01-01T00:00:00Z\nsource: assistant\n---\n# Old\n")
+    hubs.accept(path, notes)
+    assert "updated: 2025-01-01T00:00:00Z" in path.read_text()
+    events = [json.loads(line) for line in (notes / "08_indices" / "timeline.jsonl").read_text().splitlines()]
+    assert events[-1]["action"] == "reviewed"

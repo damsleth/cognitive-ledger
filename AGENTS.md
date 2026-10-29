@@ -550,7 +550,8 @@ show` computes the Connected list at read time.
 Agent-written content is marked: `reviewed: false` frontmatter, `- YYYY-MM-DD
 (agent) …` log lines, and any `source: assistant` note without `reviewed: true`
 (so notes agents wrote before hubs existed count too). `--accept` sets
-`reviewed: true` and keeps `source` as written. The candidate's `unreviewed` count is persisted in
+`reviewed: true`, keeps `source` and `updated` as written (a review is not a content
+edit), and logs timeline action `reviewed`, which briefings and the sleep-due count ignore. The candidate's `unreviewed` count is persisted in
 `note_index.json`; it caps the note's provenance at `inferred` here and makes
 yaams class the item `agent` (weight 0.75) instead of `curated`. `ledger
 unreviewed` lists, `ledger unreviewed --accept <path>` clears. Agents always

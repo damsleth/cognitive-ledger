@@ -315,7 +315,7 @@ def append_timeline_entry(
 
     Args:
         timeline_path: Path to the generated timeline.md view
-        action: Action type (created|updated|archived|deleted|closed|sleep)
+        action: Action type (created|updated|archived|deleted|closed|sleep|linked|reviewed)
         note_path: Path to the affected note
         description: Brief description of the change
         root_dir: Root directory for making paths relative (optional)

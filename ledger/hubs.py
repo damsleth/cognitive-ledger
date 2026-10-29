@@ -105,7 +105,7 @@ def _patch_frontmatter(block: str, set_fields: dict[str, Any], drop: tuple[str, 
     return block
 
 
-def _mutate(path: Path, notes_dir: Path, why: str, edit) -> Any:
+def _mutate(path: Path, notes_dir: Path, why: str, edit, action: str = "updated") -> Any:
     """Locked read-modify-write: ``edit(fm, block, body) -> (block, body, result)``."""
     with FileLock(path):
         if not path.exists():
@@ -115,7 +115,7 @@ def _mutate(path: Path, notes_dir: Path, why: str, edit) -> Any:
         fm, _ = parse_frontmatter_text(text)
         block, body, result = edit(fm, block, body)
         safe_write_text(path, block + body, use_lock=False)
-    append_timeline_entry(timeline_path(notes_dir), "updated", path, why, ledger_notes_dir=notes_dir)
+    append_timeline_entry(timeline_path(notes_dir), action, path, why, ledger_notes_dir=notes_dir)
     return result
 
 
@@ -379,12 +379,13 @@ def accept(path: Path | str, notes_dir: Path | None = None) -> int:
         n = unreviewed_count(fm, body)
         if not n:
             return block, body, 0
-        # source stays as written (who wrote it); reviewed: true records that the owner looked.
-        changes: dict[str, Any] = {"updated": _now(), "reviewed": True}
+        # A review is not a content edit: `updated` (the note's age for ranking and
+        # briefings) stays; source stays as written; reviewed: true records the look.
+        changes: dict[str, Any] = {"reviewed": True}
         body = re.sub(r"^(- \d{4}-\d{2}-\d{2}) \(agent\) ", r"\1 ", body, flags=re.M)
         return _patch_frontmatter(block, changes), body, n
 
-    return _mutate(path, root, "reviewed: agent content accepted", edit)
+    return _mutate(path, root, "agent content accepted", edit, action="reviewed")
 
 
 def resolve(kind: str, name: str, notes_dir: Path | None = None) -> str | None:

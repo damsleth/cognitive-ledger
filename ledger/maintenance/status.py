@@ -67,7 +67,8 @@ def _status_payload() -> dict:
         {
             path
             for _lineno, _ts, _action, path, _desc in entries_since_sleep
-            if _is_tracked_path(path)
+            # A review pass (`ledger unreviewed --accept`) changes no content.
+            if _is_tracked_path(path) and _action != "reviewed"
         }
     )
     last_dt = parse_timestamp(last_sleep_ts)
