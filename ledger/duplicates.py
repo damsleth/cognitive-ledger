@@ -221,3 +221,51 @@ def scan_duplicates(
 
     findings.sort(key=lambda f: f.score, reverse=True)
     return findings
+
+
+def find_duplicate_of(
+    candidate: str | Path,
+    notes_dir: str | Path,
+    *,
+    jaccard_threshold: float = 0.65,
+    title_threshold: float = 0.75,
+    exclude_dirs: frozenset[str] = frozenset({"00_inbox", "08_indices", "09_archive"}),
+) -> DuplicateFinding | None:
+    """Best existing ledger note that *candidate* duplicates, or None.
+
+    Same three passes as :func:`scan_duplicates`, but one-against-all, so the
+    inbox can be checked before a candidate is promoted into the ledger.
+    """
+    candidate = Path(candidate).expanduser().resolve()
+    notes_dir = Path(notes_dir).expanduser().resolve()
+    text = candidate.read_text(encoding="utf-8", errors="replace")
+    c_title, c_hash, c_words = _extract_title(text, candidate), _content_hash(text), _word_set(text)
+    c_title_words = set(c_title.split())
+
+    best: DuplicateFinding | None = None
+    for p in sorted(notes_dir.glob("**/*.md")):
+        if not p.is_file() or p.resolve() == candidate:
+            continue
+        rel = p.relative_to(notes_dir)
+        if set(rel.parts[:-1]) & exclude_dirs:
+            continue
+        try:
+            other = p.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        finding: DuplicateFinding | None = None
+        if _content_hash(other) == c_hash:
+            finding = DuplicateFinding(str(candidate), "notes/" + rel.as_posix(), "exact_content", 1.0)
+        else:
+            title_j = _jaccard(c_title_words, set(_extract_title(other, p).split()))
+            if len(c_title_words) >= 2 and title_j >= title_threshold:
+                finding = DuplicateFinding(str(candidate), "notes/" + rel.as_posix(), "title_overlap", round(title_j, 4))
+            else:
+                o_words = _word_set(other)
+                if len(c_words) >= 20 and len(o_words) >= 20:
+                    content_j = _jaccard(c_words, o_words)
+                    if content_j >= jaccard_threshold:
+                        finding = DuplicateFinding(str(candidate), "notes/" + rel.as_posix(), "content_overlap", round(content_j, 4))
+        if finding and (best is None or finding.score > best.score):
+            best = finding
+    return best
