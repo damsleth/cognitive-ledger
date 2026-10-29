@@ -55,7 +55,8 @@ def test_agent_created_project_and_state_rewrite_are_unreviewed(notes):
     assert fm["reviewed"] is False and fm["source"] == "assistant" and fm["status"] == "active"
     hubs.accept(path, notes)
     fm, _ = _fm(path)
-    assert "reviewed" not in fm and fm["source"] == "user"
+    assert fm["reviewed"] is True and fm["source"] == "assistant"
+    assert hubs.unreviewed_count(fm, "") == 0
 
     hubs.set_section("projects", "nocos", "State", "Prod release 06.10 done.", agent=True, notes_dir=notes)
     fm, body = _fm(path)
@@ -132,3 +133,14 @@ def test_log_refuses_private_and_multiline_frontmatter(notes):
         hubs._patch_frontmatter("---\nlast_interaction: |\n  2026-01-01\n---\n", {"last_interaction": "2026-10-28"})
     with pytest.raises(ValueError):
         hubs._patch_frontmatter("---\nspheres:\n  - work\n---\n", {"spheres": ["brkh"]})
+
+
+def test_legacy_assistant_notes_count_as_unreviewed_until_accepted(notes):
+    path = notes / "02_facts" / "fact__legacy.md"
+    path.write_text("---\nupdated: 2026-01-01T00:00:00Z\nsource: assistant\n---\n# Legacy\n")
+    fm, body = _fm(path)
+    assert hubs.unreviewed_count(fm, body) == 1
+    assert hubs.unreviewed(notes) == [{"path": "notes/02_facts/fact__legacy.md", "unreviewed": 1}]
+    assert hubs.accept("notes/02_facts/fact__legacy.md", notes) == 1
+    assert "reviewed: true" in path.read_text() and hubs.unreviewed(notes) == []
+    assert hubs.unreviewed_count({"source": "user"}, "") == 0

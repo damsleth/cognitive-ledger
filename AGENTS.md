@@ -548,7 +548,9 @@ a hub with `people: [slug]` / `projects: [slug]` or a wikilink; `ledger people
 show` computes the Connected list at read time.
 
 Agent-written content is marked: `reviewed: false` frontmatter, `- YYYY-MM-DD
-(agent) …` log lines. The candidate's `unreviewed` count is persisted in
+(agent) …` log lines, and any `source: assistant` note without `reviewed: true`
+(so notes agents wrote before hubs existed count too). `--accept` sets
+`reviewed: true` and keeps `source` as written. The candidate's `unreviewed` count is persisted in
 `note_index.json`; it caps the note's provenance at `inferred` here and makes
 yaams class the item `agent` (weight 0.75) instead of `curated`. `ledger
 unreviewed` lists, `ledger unreviewed --accept <path>` clears. Agents always
