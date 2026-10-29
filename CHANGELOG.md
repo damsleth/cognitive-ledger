@@ -3,6 +3,11 @@
 ## Unreleased
 
 ### Added
+- **Inbox dedupe gate:** `promote()` (and so triage accept and `/review`)
+  refuses an inbox candidate that duplicates an existing ledger note (exact
+  content, title overlap or content overlap, via `find_duplicate_of`). The row
+  fails with the existing note's path and stays in the inbox for merge or
+  reject; `force=True` overrides.
 - **Learning workflows:** `ledger improvements` gives recurring signal
   failures a durable resolve/dismiss/defer lifecycle, with new matching
   evidence reopening issues and a compact briefing summary.

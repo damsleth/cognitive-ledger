@@ -303,23 +303,42 @@ def cleanup_inbox(
     }
 
 
+class DuplicateCandidateError(ValueError):
+    """The inbox candidate duplicates a note already in the ledger."""
+
+    def __init__(self, source: Path, existing: str, reason: str, score: float) -> None:
+        self.existing = existing
+        super().__init__(
+            f"{source.name} duplicates {existing} ({reason}, {score:.2f}); "
+            "merge into it or reject as duplicate"
+        )
+
+
 def promote(
     path: str | Path,
     target_type: str,
     notes_dir: Path | None = None,
+    *,
+    force: bool = False,
 ) -> Path:
     """Promote an inbox item to a proper note type.
 
     Moves the file to the correct folder with the correct prefix,
-    updates the timeline.
+    updates the timeline. Refuses a candidate that duplicates an existing
+    ledger note (see :func:`ledger.duplicates.find_duplicate_of`) unless
+    ``force`` is set.
 
     Args:
         path: Path to the inbox note.
         target_type: Target note type (facts, preferences, goals, loops, concepts).
         notes_dir: Optional notes directory override.
+        force: Promote even when a duplicate exists.
 
     Returns:
         Path to the promoted note.
+
+    Raises:
+        DuplicateCandidateError: the candidate duplicates an existing note.
     """
     config = get_config()
     nd = notes_dir or config.ledger_notes_dir
@@ -327,6 +346,13 @@ def promote(
 
     if not source.is_file():
         raise FileNotFoundError(f"Inbox item not found: {source}")
+
+    if not force:
+        from ledger.duplicates import find_duplicate_of
+
+        dup = find_duplicate_of(source, nd)
+        if dup is not None:
+            raise DuplicateCandidateError(source, dup.path_b, dup.reason, dup.score)
 
     type_config = config.note_types.get(target_type)
     if type_config is None:
