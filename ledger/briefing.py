@@ -110,8 +110,9 @@ def _note_last_activity(timeline_jsonl_path: Path) -> dict[str, str]:
     for event in timeline_lib.load_timeline_jsonl(timeline_jsonl_path):
         path = str(event.get("path", "")).replace("\\", "/").strip()
         ts = str(event.get("ts", "")).strip()
-        # "linked" is `sleep links` maintenance, not work on the note.
-        if path and path != "-" and event.get("action") != "linked" and ts > latest.get(path, ""):
+        # "linked" (`sleep links`) and "reviewed" (`ledger unreviewed --accept`)
+        # are maintenance, not work on the note.
+        if path and path != "-" and event.get("action") not in ("linked", "reviewed") and ts > latest.get(path, ""):
             latest[path] = ts
     return latest
 

@@ -25,7 +25,7 @@ Format: `<ISO timestamp> | <action> | <path> | <description>`
 """
 
 MARKDOWN_LINE_RE = re.compile(
-    r"^([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z) \| (created|updated|archived|deleted|closed|sleep|linked) \| (.+?) \| (.*)$"
+    r"^([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z) \| (created|updated|archived|deleted|closed|sleep|linked|reviewed) \| (.+?) \| (.*)$"
 )
 
 

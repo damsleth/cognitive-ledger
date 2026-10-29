@@ -14,7 +14,7 @@ from .inventory import _config_paths, _iter_note_files, _relative
 
 
 TIMELINE_LINE_PATTERN = re.compile(
-    r"^([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z) \| (created|updated|archived|deleted|closed|sleep|linked) \| (.+?) \| (.*)$"
+    r"^([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z) \| (created|updated|archived|deleted|closed|sleep|linked|reviewed) \| (.+?) \| (.*)$"
 )
 
 
