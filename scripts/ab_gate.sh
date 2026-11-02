@@ -9,6 +9,8 @@
 # harness requires the cases file to live inside the corpus.
 # BASELINE_REF: what HEAD is compared against. CI passes origin/main on a PR
 # (a PR checkout has no local `main`) and the pre-push commit on a push.
+# Candidate is the SHA, not HEAD: `ledger` resolves refs in its own repo root,
+# so HEAD from a worktree would name the main checkout and compare it to itself.
 # MODE: pin both arms to one retrieval mode (CI uses legacy: no embeddings).
 # The run rewrites derived files (note_index.json) inside the corpus, so the
 # default is a throwaway copy of the fixture corpus, not the tracked one.
@@ -28,7 +30,7 @@ fi
 LEDGER_NOTES_DIR="$CORPUS" ledger ab run \
   --corpus "$CORPUS" \
   --baseline-ref "$BASELINE_REF" \
-  --candidate-ref HEAD \
+  --candidate-ref "$(git rev-parse HEAD)" \
   --cases "$CASES" \
   --k 3 \
   --eval-runs 5 \

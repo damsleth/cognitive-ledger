@@ -10,7 +10,7 @@ read -r LEDGER_INDICES_SUBDIR LEDGER_IDENTITY_SUBDIR LEDGER_IDENTITY_PREFIX <<< 
 from ledger.layout import INDICES_SUBDIR, NOTE_LAYOUTS
 identity = NOTE_LAYOUTS["identity"]
 print(INDICES_SUBDIR, identity.subdir, identity.prefix)
-'
+' 2>/dev/null
 )"
 # ponytail: hooks must not write into the corpus root if Python is broken.
 : "${LEDGER_INDICES_SUBDIR:=08_indices}" "${LEDGER_IDENTITY_SUBDIR:=01_identity}" "${LEDGER_IDENTITY_PREFIX:=id__}"
