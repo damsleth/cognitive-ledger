@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from ledger.layout import ARCHIVE_SUBDIR, INDICES_SUBDIR
+from ledger.layout import ARCHIVE_SUBDIR, INBOX_SUBDIR, INDICES_SUBDIR
 
 
 @dataclass
@@ -232,7 +232,7 @@ def find_duplicate_of(
     *,
     jaccard_threshold: float = 0.65,
     title_threshold: float = 0.75,
-    exclude_dirs: frozenset[str] = frozenset({"00_inbox", "08_indices", "09_archive"}),
+    exclude_dirs: frozenset[str] = frozenset({INBOX_SUBDIR, INDICES_SUBDIR, ARCHIVE_SUBDIR}),
 ) -> DuplicateFinding | None:
     """Best existing ledger note that *candidate* duplicates, or None.
 
