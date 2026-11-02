@@ -29,7 +29,5 @@ config.yaml
 .coverage
 # uxl artifacts (screenshots, reports, logs)
 .uxl/
-.plans/ab_results/
-.plans/done/
-.plans/DONE.md
 *.egg-info/
+.plans/
