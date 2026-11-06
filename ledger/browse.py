@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 import textwrap
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -197,7 +198,7 @@ def compact_loop_line(item: BrowseItem, width: int, *, show_path: bool = False) 
     base = f"{status} | {question} - next: {next_action} (updated {updated_short}{conf})"
     if show_path:
         base = f"{base} [{_rel_display_path(item.path)}]"
-    return shorten(base, width)
+    return _fit(base, width)
 
 
 def compact_generic_line(item: BrowseItem, width: int, *, show_path: bool = False) -> str:
@@ -216,13 +217,21 @@ def compact_generic_line(item: BrowseItem, width: int, *, show_path: bool = Fals
         except ValueError:
             pass
 
-    base = f"{title} - {statement} (updated {updated_short}{conf})"
+    # Titles are often a truncated copy of the statement; don't print it twice.
+    head = statement if " ".join(statement.split()).startswith(title.strip()) else f"{title} - {statement}"
+    base = f"{head} (updated {updated_short}{conf})"
     if show_path:
         base = f"{base} [{_rel_display_path(item.path)}]"
-    return shorten(base, width)
+    return _fit(base, width)
+
+
+def _fit(text: str, width: int) -> str:
+    """Width 0 (the CLI default) prints the full text on one line."""
+    return shorten(text, width) if width > 0 else " ".join(text.split())
 
 
 def format_detail(item: BrowseItem, width: int) -> list[str]:
+    width = width if width > 0 else shutil.get_terminal_size().columns
     fm = item.frontmatter
     lines = [
         f"Path: {_rel_display_path(item.path)}",

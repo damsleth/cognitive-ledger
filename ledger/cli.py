@@ -1642,7 +1642,8 @@ def main(argv=None) -> int:
     loops_parser.add_argument("--dry-run", action="store_true",
                               help="Preview sync actions without writing anything (sync only)")
     loops_parser.add_argument("--limit", type=int, default=100)
-    loops_parser.add_argument("--width", type=int, default=120)
+    loops_parser.add_argument("--width", type=int, default=0,
+                              help="Truncate each line to N chars (default 0: full text)")
     loops_parser.add_argument("--paths", action="store_true")
     loops_parser.add_argument("--status", choices=list(cfg.loop_statuses) + ["all"], default="open")
     loops_parser.add_argument("--verbose", action="store_true")
@@ -1658,7 +1659,8 @@ def main(argv=None) -> int:
         help="Note type to list (required when not using a subcommand)",
     )
     notes_parser.add_argument("--limit", type=int, default=100)
-    notes_parser.add_argument("--width", type=int, default=120)
+    notes_parser.add_argument("--width", type=int, default=0,
+                              help="Truncate each line to N chars (default 0: full text)")
     notes_parser.add_argument("--paths", action="store_true")
     notes_parser.add_argument("--verbose", action="store_true")
     notes_parser.add_argument("--json", action="store_true", dest="json")
