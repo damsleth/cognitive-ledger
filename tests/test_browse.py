@@ -54,3 +54,19 @@ def test_sorted_items_and_formatting_use_typed_browse_items(tmp_path):
         assert any("Path: notes/05_open_loops/loop__release.md" == line for line in detail)
     finally:
         reset_config()
+
+
+def test_compact_line_full_text_by_default_and_no_repeated_title():
+    item = browse.BrowseItem(
+        path="notes/02_facts/fact__x.md",
+        type="facts",
+        frontmatter={"updated": "2026-01-01T00:00:00Z"},
+        body="",
+        title="Alice runs the deploy on",
+        statement="Alice runs the deploy on Fridays " + "word " * 60,
+    )
+    full = browse.compact_line(item, width=0)
+    assert full.startswith("Alice runs the deploy on Fridays")
+    assert full.count("Alice runs") == 1
+    assert "..." not in full and len(full) > 300
+    assert len(browse.compact_line(item, width=80)) <= 80

@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Changed
+- `ledger loops` and `ledger notes` print each note's full text by default; `--width N` still truncates. A title that is just a cut-off copy of the statement is no longer printed twice.
 - Split Electric Sheep maintenance into a package organized by responsibility.
 
 ### Removed
