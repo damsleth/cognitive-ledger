@@ -327,12 +327,28 @@ def _get_local_encoder(model: str, device: str | None = None) -> Any:
     if resolved_device is not None:
         kwargs["device"] = resolved_device
     try:
-        # Cached weights first: an online load pays a Hub metadata round trip
-        # (several seconds per CLI call) even when nothing needs downloading.
+        import huggingface_hub.constants as hub_constants  # ships with sentence-transformers
+    except ImportError:
+        hub_constants = None
+
+    # Cached weights first: an online load pays Hub round trips (several
+    # seconds per CLI call) even when nothing needs downloading.
+    # local_files_only alone is not enough: transformers still asks the Hub
+    # whether a .bin checkpoint has a safetensors conversion. The hub's offline
+    # flag stops that too, so it is raised for the cached attempt only.
+    encoder = None
+    hub_was_offline = getattr(hub_constants, "HF_HUB_OFFLINE", False)
+    if hub_constants is not None:
+        hub_constants.HF_HUB_OFFLINE = True
+    try:
         encoder = SentenceTransformer(model, local_files_only=True, **kwargs)
     except Exception:
         if offline:
             raise
+    finally:
+        if hub_constants is not None:
+            hub_constants.HF_HUB_OFFLINE = hub_was_offline
+    if encoder is None:
         encoder = SentenceTransformer(model, local_files_only=False, **kwargs)
     _LOCAL_ENCODER_CACHE[cache_key] = encoder
     return encoder

@@ -46,7 +46,7 @@ Rebuild with `ledger sleep index` (which also regenerates the semantic index) or
 `ledger inbox triage` rebuilds by itself when it promotes notes; a failed build
 there only warns, the triage stays applied.
 
-**Model loading is cache-first.** The local encoder loads from the Hugging Face cache (`local_files_only=True`) and goes to the Hub only when the model is not cached; an online load costs a metadata round trip of several seconds per CLI call even when nothing needs downloading. Set `LEDGER_EMBEDDINGS_OFFLINE` (`1`, `true`, `yes`, `on`) to forbid the Hub fallback entirely, for air-gapped machines or to rule out a download during `ledger embed build`.
+**Model loading is cache-first.** The local encoder loads from the Hugging Face cache with the Hub switched off for that attempt, and goes online only when the model is not cached. An online load costs several seconds of Hub requests per CLI call even when nothing needs downloading, and `local_files_only=True` alone still leaves some of them (transformers asks whether a `.bin` checkpoint has a safetensors conversion). Set `LEDGER_EMBEDDINGS_OFFLINE` (`1`, `true`, `yes`, `on`) to forbid the Hub fallback entirely, for air-gapped machines or to rule out a download during `ledger embed build`.
 
 **Usage log (opt-in).** `query_log_enabled: true` in `config.yaml` (or `LEDGER_QUERY_LOG=1`) appends one line per `ledger query`, `ledger answer` and web search to `08_indices/query_log.jsonl`: timestamp, source (`cli`, `answer`, `web`), raw query text, scope, mode, top 3 paths, latency. Eval and A/B runs are never logged. `ledger signal seed --from-history` reads this file. Check it before tuning retrieval: it shows which surfaces and modes are used at all.
 
