@@ -10,7 +10,6 @@ import traceback
 from pathlib import Path
 
 from ledger.layout import ARCHIVE_SUBDIR, INBOX_SUBDIR, INDICES_SUBDIR, NOTE_LAYOUTS
-from ledger.integrations.things3_cli import handle_loops_sync
 from ledger.inbox_cli import handle_inbox_command
 from ledger.config import LedgerConfig, get_config
 from ledger.validation import validate_query, validate_scope, validate_limit
@@ -1523,23 +1522,6 @@ def handle_sleep_command(args):
     raise SystemExit(maint.main(subargs))
 
 
-def handle_mcp_command(args):
-    """Launch the Model Context Protocol server over stdio (plan 44)."""
-    try:
-        from ledger import mcp as mcp_pkg
-    except (ImportError, RuntimeError) as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        raise SystemExit(2)
-    try:
-        mcp_pkg.run(
-            allow_write=getattr(args, "allow_write", False),
-            with_yaams=getattr(args, "with_yaams", False),
-        )
-    except RuntimeError as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        raise SystemExit(2)
-
-
 def handle_web_command(args):
     try:
         from ledger import web as web_pkg
@@ -1637,10 +1619,6 @@ def main(argv=None) -> int:
     hubs_cli.register(subparsers)
 
     loops_parser = subparsers.add_parser("loops", help="List loops (default: open)")
-    loops_parser.add_argument("loops_command", nargs="?", choices=["sync"], default=None,
-                              help="Sub-command: sync (Things3 sync)")
-    loops_parser.add_argument("--dry-run", action="store_true",
-                              help="Preview sync actions without writing anything (sync only)")
     loops_parser.add_argument("--limit", type=int, default=100)
     loops_parser.add_argument("--width", type=int, default=0,
                               help="Truncate each line to N chars (default 0: full text)")
@@ -2355,15 +2333,7 @@ def main(argv=None) -> int:
         help="uvicorn log level (default: info)",
     )
 
-    mcp_parser = subparsers.add_parser("mcp", help="Launch the Model Context Protocol server (stdio)")
-    mcp_parser.add_argument("--allow-write", action="store_true", dest="allow_write",
-                            help="Enable the ledger_remember tool (captures to inbox; default off)")
-    mcp_parser.add_argument("--with-yaams", action="store_true", dest="with_yaams",
-                            help="Expose a yaams_query tool (requires yaams on PATH)")
-
     def handle_loops(command_args):
-        if getattr(command_args, "loops_command", None) == "sync":
-            return handle_loops_sync(command_args)
         lister = verbose_items if command_args.verbose else list_items
         return lister(command_args, "loops", loop_status=command_args.status)
 
@@ -2424,7 +2394,6 @@ def main(argv=None) -> int:
         "migrate": lambda a: handle_migrate_command(a, migrate_parser),
         "sleep": handle_sleep_command,
         "ab": lambda a: handle_ab_command(a, ab_parser),
-        "mcp": handle_mcp_command,
         "web": handle_web_command,
         "people": hubs_cli.handle,
         "projects": hubs_cli.handle,

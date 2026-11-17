@@ -228,7 +228,9 @@ class TestLedgerConfig(_LedgerEnvIsolation, unittest.TestCase):
         removed = ["root_dir", "notes_dir", "source_root",
                    "attention_shortlist_min", "attention_shortlist_max",
                    "attention_shortlist_limit_multiplier", "default_local_model",
-                   "default_openai_model", "things3_db_path", "auto_file_synthesis"]
+                   "default_openai_model", "things3_db_path", "auto_file_synthesis",
+                   "things3_sync_enabled", "things3_default_project",
+                   "things3_scope_routing", "things3_orphan_action"]
         with tempfile.TemporaryDirectory() as tmpdir:
             data = {key: "obsolete" for key in removed}
             data.update(ledger_notes_dir=tmpdir, shortlist_min_candidates=17)
@@ -337,53 +339,8 @@ class TestConfigSingleton(unittest.TestCase):
         self.assertIs(config1, config2)
 
 
-class TestThings3Config(_LedgerEnvIsolation, unittest.TestCase):
-    """Tests for Things3 sync config keys."""
-
-    def _write_user_config(self, base_dir: Path, content: str) -> None:
-        os.environ["XDG_CONFIG_HOME"] = str(base_dir)
-        config_path = Path(base_dir) / "ledger" / "config.yaml"
-        config_path.parent.mkdir(parents=True, exist_ok=True)
-        config_path.write_text(content, encoding="utf-8")
-
-    def test_defaults(self):
-        config = LedgerConfig()
-        self.assertFalse(config.things3_sync_enabled)
-        self.assertEqual(config.things3_default_project, "")
-        self.assertEqual(config.things3_blocked_project, "")
-        self.assertEqual(config.things3_scope_routing, {})
-        self.assertEqual(config.things3_marker_prefix, "ledger:")
-        self.assertEqual(config.things3_completed_maps_to, "closed")
-        self.assertEqual(config.things3_canceled_maps_to, "snoozed")
-        self.assertEqual(config.things3_orphan_action, "ignore")
-
-    def test_scope_routing_yaml_load(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            self._write_user_config(Path(tmpdir), (
-                f"ledger_notes_dir: {tmpdir}\n"
-                "things3_sync_enabled: true\n"
-                "things3_scope_routing:\n"
-                "  work: Work Tasks\n"
-                "  dev: Dev\n"
-            ))
-            config = LedgerConfig.from_env()
-            self.assertTrue(config.things3_sync_enabled)
-            self.assertEqual(config.things3_scope_routing.get("work"), "Work Tasks")
-            self.assertEqual(config.things3_scope_routing.get("dev"), "Dev")
-
-    def test_env_overrides(self):
-        os.environ["LEDGER_THINGS3_SYNC_ENABLED"] = "true"
-        os.environ["LEDGER_THINGS3_DEFAULT_PROJECT"] = "My Project"
-        os.environ["LEDGER_THINGS3_ORPHAN_ACTION"] = "cancel"
-        os.environ["LEDGER_THINGS3_COMPLETED_MAPS_TO"] = "snoozed"
-        with tempfile.TemporaryDirectory() as tmpdir:
-            os.environ["XDG_CONFIG_HOME"] = str(Path(tmpdir) / "empty")
-            os.environ["LEDGER_NOTES_DIR"] = tmpdir
-            config = LedgerConfig.from_env()
-        self.assertTrue(config.things3_sync_enabled)
-        self.assertEqual(config.things3_default_project, "My Project")
-        self.assertEqual(config.things3_orphan_action, "cancel")
-        self.assertEqual(config.things3_completed_maps_to, "snoozed")
+class TestConfigSingletonExtras(_LedgerEnvIsolation, unittest.TestCase):
+    """Singleton reset / injection tests."""
 
     def test_reset_config_clears_singleton(self):
         """Test that reset_config clears the singleton."""

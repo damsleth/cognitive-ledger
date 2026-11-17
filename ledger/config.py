@@ -112,7 +112,7 @@ def _coerce_value(key: str, value: Any, current: Any) -> Any:
     if isinstance(current, (tuple, frozenset)):
         return current
     if isinstance(current, dict):
-        # Pass dict values (e.g. things3_scope_routing) through unchanged
+        # Pass dict values through unchanged
         return value if isinstance(value, dict) else current
     return value
 
@@ -248,7 +248,6 @@ def _apply_env_overrides(config: "LedgerConfig") -> "LedgerConfig":
         "LEDGER_PROVENANCE_WEIGHTING": "provenance_weighting_enabled",
         "LEDGER_SHOW_TRUST_VERDICT": "show_trust_verdict",
         "LEDGER_PRF_ENABLED": "prf_enabled",
-        "LEDGER_THINGS3_SYNC_ENABLED": "things3_sync_enabled",
     }
     for env_var, attr in bool_mappings.items():
         if (value := os.getenv(env_var)) is None:
@@ -287,12 +286,6 @@ def _apply_env_overrides(config: "LedgerConfig") -> "LedgerConfig":
         "LEDGER_SYNTH_COMMAND": "synth_command",
         "LEDGER_SYNTH_MODEL": "synth_model",
         "LEDGER_SYNTH_HOST": "synth_host",
-        "LEDGER_THINGS3_DEFAULT_PROJECT": "things3_default_project",
-        "LEDGER_THINGS3_BLOCKED_PROJECT": "things3_blocked_project",
-        "LEDGER_THINGS3_MARKER_PREFIX": "things3_marker_prefix",
-        "LEDGER_THINGS3_COMPLETED_MAPS_TO": "things3_completed_maps_to",
-        "LEDGER_THINGS3_CANCELED_MAPS_TO": "things3_canceled_maps_to",
-        "LEDGER_THINGS3_ORPHAN_ACTION": "things3_orphan_action",
     }
     for env_var, attr in string_mappings.items():
         if (value := os.getenv(env_var)) is None:
@@ -962,71 +955,6 @@ class LedgerConfig:
         "with", "you",
     })
     """Stopwords to exclude from tokenization."""
-
-    # =========================================================================
-    # Things3 Sync Integration
-    # =========================================================================
-
-    things3_sync_enabled: bool = False
-    """Master switch for the Things3 ⇄ open-loops sync.
-
-    Off by default: no subprocess calls are made when this is False.
-    Enable in config.yaml once Things3 is installed and the Things CLI
-    (https://culturedcode.com/things/support/articles/2803573/) is on PATH.
-    """
-
-    things3_default_project: str = ""
-    """Things project name (or UUID) for new loop tasks (scope: any not mapped).
-
-    Leave empty to create tasks in the Things Inbox.
-    """
-
-    things3_blocked_project: str = ""
-    """Things project name (or UUID) for loops with status:blocked.
-
-    Leave empty to use things3_default_project for blocked loops too.
-    """
-
-    things3_scope_routing: dict = field(default_factory=dict)
-    """Map of ledger scope → Things project name for new task creation.
-
-    Example YAML::
-
-        things3_scope_routing:
-          work: "Work Tasks"
-          dev:  "Dev"
-          home: "Home"
-
-    Scopes not listed fall back to things3_default_project.
-    """
-
-    things3_marker_prefix: str = "ledger:"
-    """Prefix embedded in Things task Notes field to link back to a loop.
-
-    Format: ``ledger:<slug> status:<status>``
-    Do not change after first sync — existing tasks use this prefix.
-    """
-
-    things3_completed_maps_to: str = "closed"
-    """Ledger loop status to set when a Things task is marked completed.
-
-    Allowed values: closed | snoozed (or any value in loop_statuses).
-    """
-
-    things3_canceled_maps_to: str = "snoozed"
-    """Ledger loop status to set when a Things task is marked cancelled.
-
-    Allowed values: closed | snoozed (or any value in loop_statuses).
-    """
-
-    things3_orphan_action: str = "ignore"
-    """What to do with Things tasks whose ledger loop has been deleted.
-
-    Allowed values:
-      - ``flag``: prefix the Things task title with "[orphan]" (one-way; there is no un-flag)
-      - ``cancel``: cancel the orphaned task in Things
-      - ``ignore``: leave orphans untouched (default)
-    """
 
     # =========================================================================
     # Profiles (named scope presets)

@@ -120,13 +120,6 @@ class TestFenceAndTagForms:
         note = "x\n```privateer\nkeep\n```\ny"
         assert _strip_private_fences(note) == note
 
-    def test_mcp_egress_scrubs_fence_form(self):
-        from ledger.mcp.server import scrub_for_egress
-
-        payload = {"results": [{"snippet": "ok\n```private\nMCP_SECRET\n```\nfine"}]}
-        out = scrub_for_egress(payload)["results"][0]["snippet"]
-        assert "MCP_SECRET" not in out and "ok" in out and "fine" in out
-
 
 class TestPrivateFenceStripping:
     def test_strip_removes_fenced_block(self):

@@ -18,7 +18,7 @@ STATUS_VALUES: frozenset[str] = frozenset({"open", "closed", "blocked", "snoozed
 # artifact and `external_id` is a stable upstream key enabling idempotent
 # re-import. See schema.yaml (frontmatter.optional) and
 # docs/claude-memory-import.md.
-VIA_VALUES: frozenset[str] = frozenset({"claude-memory", "obsidian", "yaams", "manual", "mcp"})
+VIA_VALUES: frozenset[str] = frozenset({"claude-memory", "obsidian", "yaams", "manual"})
 PROVENANCE_FIELDS: frozenset[str] = frozenset({"via", "origin", "external_id"})
 
 # `provenance:` frontmatter field: origin-act trust class (plan 42). Not to be

@@ -4,39 +4,10 @@ Each test fails against the pre-fix code.
 """
 from __future__ import annotations
 
-import datetime as dt
-
 import pytest
 
-from ledger.mcp.server import _parse_date
 from ledger.scoring import scope_matches, trust_verdict
 from ledger.validation import ScopeValidationError, validate_scope
-
-
-class TestParseDate:
-    """_parse_date fell through to date.fromisoformat, which rejects times."""
-
-    @pytest.mark.parametrize(
-        "raw",
-        [
-            "2026-01-15T10:00:00Z",
-            "2026-01-15T10:00:00+01:00",
-            "2026-01-15T10:00:00.123Z",
-            "2026-01-15T10:00:00",
-            "2026-01-15",
-        ],
-    )
-    def test_accepts_documented_iso_forms(self, raw):
-        assert _parse_date(raw) is not None
-
-    def test_naive_input_is_assumed_utc(self):
-        assert _parse_date("2026-01-15T10:00:00").tzinfo == dt.timezone.utc
-
-    def test_offset_is_preserved(self):
-        assert _parse_date("2026-01-15T10:00:00+01:00").utcoffset() == dt.timedelta(hours=1)
-
-    def test_empty_is_none(self):
-        assert _parse_date("") is None and _parse_date(None) is None
 
 
 class TestScopeAlias:
@@ -58,9 +29,8 @@ class TestScopeAlias:
         assert scope_matches(note, query) is expected
 
 
-class TestMcpScopeValidation:
-    """The CLI validated scope; the MCP tools did not, so a typo silently
-    returned an empty result set instead of an error."""
+class TestScopeValidation:
+    """A scope typo must raise instead of silently returning an empty result set."""
 
     def test_alias_canonicalises(self):
         assert validate_scope("life") == "personal"

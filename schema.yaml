@@ -14,7 +14,7 @@ types:
   capture:
     prefix: "note__"
     folder: "notes/00_inbox"
-    description: "Untyped inbox capture (MCP ledger_remember, ingest summaries); triaged into a typed note or retired to 09_archive"
+    description: "Untyped inbox capture (ingest summaries); triaged into a typed note or retired to 09_archive"
   fact:
     prefix: "fact__"
     folder: "notes/02_facts"
@@ -78,14 +78,10 @@ frontmatter:
   # and the upstream artifact. Tolerated by lint; documented here so they
   # are first-class rather than incidental.
   optional:
-    via:         # ingest channel: claude-memory | obsidian | yaams | manual | mcp
+    via:         # ingest channel: claude-memory | obsidian | yaams | manual
     origin:      # locator for the upstream artifact (file path / URI)
     external_id: # stable upstream key, e.g. "<project>/<name>" — enables
                  # idempotent re-import (match-and-update, not duplicate)
-    things_uuid: # Things3 task UUID written by `ledger loops sync`; used as
-                 # the primary key for round-trip sync (slug is the fallback)
-    things_list_id: # loops only: Things area/project UUID that routes this
-                 # loop's task, overriding things3_scope_routing
     provenance:  # origin-act trust class (plan 42); see enums.provenance below.
                  # Distinct from `source` (who) and `via` (channel): this answers
                  # "how trustworthy is the act that created this note". Absent =

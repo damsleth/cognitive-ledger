@@ -35,7 +35,6 @@ Private content must not appear in:
 - LLM-judge prompts (signals, contradiction, eval)
 - Web search snippets (`/search` endpoint)
 - `backlinks` fields in JSON responses
-- MCP tool output (`ledger mcp`)
 
 An index built before a note gained a private section, or before the fence
 syntax was honoured (2026-10), may still hold that text. Rebuild with

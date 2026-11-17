@@ -210,23 +210,6 @@ ledger answer "what did I decide about the scoring weights?"
 ledger answer "open questions on deployment" --limit 5 --backend claude --json
 ```
 
-### Use the ledger from an MCP client (Claude Desktop, Cursor, …)
-
-`ledger mcp` runs a stdio Model Context Protocol server exposing the ledger's
-read verbs (query, recall-as-of, changed-since, context, plus answer when a
-`synth_backend` is configured). `limit` is capped at 50. Install the extra and
-point your client at it:
-
-```bash
-pip install 'cognitive-ledger[mcp]'
-# client config: command = "ledger", args = ["mcp"]
-ledger mcp --allow-write    # also expose ledger_remember (inbox capture) and ledger_signal (retrieval feedback)
-ledger mcp --with-yaams     # also expose a yaams_query tool (tier-1 search)
-```
-
-Every tool response passes a private-content egress gate; writes (when enabled)
-land in the inbox for human triage, never directly in typed folders.
-
 ### Semantic search (recommended)
 
 Build the embedding index to activate `semantic_hybrid` (the default retrieval mode). Without this, queries fall back to `precomputed_index`.
@@ -351,7 +334,7 @@ ledger notes --type identity       # browse identity notes
 
 ## Privacy Fences
 
-Wrap sensitive content in `<private>...</private>` tags, or in a fenced block opened with ```` ```private ````, to prevent it from entering the retrieval index, search results, MCP output, or generated artifacts:
+Wrap sensitive content in `<private>...</private>` tags, or in a fenced block opened with ```` ```private ````, to prevent it from entering the retrieval index, search results, or generated artifacts:
 
 ```markdown
 Public context here.
