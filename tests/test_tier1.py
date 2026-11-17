@@ -25,7 +25,7 @@ from ledger.tier1 import Tier1Result, fetch_yaams_results, fuse_results
 
 _YAAMS_RESPONSE = {
     "query_id": "q_20260610T033047_929d71d1",
-    "question": "akershus",
+    "question": "dugnad",
     "retrieval_ms": 191.8,
     "synthesis_ms": 0.0,
     "results": [
@@ -77,7 +77,7 @@ def _make_t2_payload(n: int = 2) -> dict:
             "reasons": ["lexical"],
         })
     return {
-        "query": "akershus",
+        "query": "dugnad",
         "scope": "all",
         "retrieval_mode": "legacy",
         "results": results,
@@ -94,7 +94,7 @@ class FetchYaamsResultsTests(unittest.TestCase):
         """fetch_yaams_results must pass --tier raw --no-parse --no-log --json."""
         with patch("shutil.which", return_value="/usr/local/bin/yaams"), \
              patch("subprocess.run", return_value=_make_proc(json.dumps(_YAAMS_RESPONSE))) as mock_run:
-            fetch_yaams_results("akershus", limit=5)
+            fetch_yaams_results("dugnad", limit=5)
             cmd = mock_run.call_args[0][0]
         self.assertIn("--tier", cmd)
         self.assertIn("raw", cmd)
@@ -106,7 +106,7 @@ class FetchYaamsResultsTests(unittest.TestCase):
         """--top-k must be passed as str(limit)."""
         with patch("shutil.which", return_value="/usr/local/bin/yaams"), \
              patch("subprocess.run", return_value=_make_proc(json.dumps(_YAAMS_RESPONSE))) as mock_run:
-            fetch_yaams_results("akershus", limit=7)
+            fetch_yaams_results("dugnad", limit=7)
             cmd = mock_run.call_args[0][0]
         idx = cmd.index("--top-k")
         self.assertEqual(cmd[idx + 1], "7")
@@ -147,7 +147,7 @@ class FetchYaamsResultsTests(unittest.TestCase):
         """Results below min_score threshold are dropped."""
         with patch("shutil.which", return_value="/usr/local/bin/yaams"), \
              patch("subprocess.run", return_value=_make_proc(json.dumps(_YAAMS_RESPONSE))):
-            results, reason = fetch_yaams_results("akershus", limit=10, min_score=0.03)
+            results, reason = fetch_yaams_results("dugnad", limit=10, min_score=0.03)
         self.assertIsNone(reason)
         # score 0.0355 passes; 0.0210 is below 0.03
         self.assertEqual(len(results), 1)
@@ -194,7 +194,7 @@ class FetchYaamsResultsTests(unittest.TestCase):
         """content_preview field must be mapped to Tier1Result.content."""
         with patch("shutil.which", return_value="/usr/local/bin/yaams"), \
              patch("subprocess.run", return_value=_make_proc(json.dumps(_YAAMS_RESPONSE))):
-            results, _ = fetch_yaams_results("akershus", limit=10)
+            results, _ = fetch_yaams_results("dugnad", limit=10)
         self.assertIn("imessage 2025-10-20", results[0].content)
 
 
@@ -283,7 +283,7 @@ class CrossTierCliTests(unittest.TestCase):
 
     def _make_args(self, **overrides):
         defaults = dict(
-            text="akershus",
+            text="dugnad",
             scope="all",
             limit=5,
             retrieval_mode="legacy",
@@ -326,7 +326,7 @@ class CrossTierCliTests(unittest.TestCase):
             })
         from ledger.retrieval_types import RetrievalResult, TimingInfo
         return RetrievalResult(
-            query="akershus",
+            query="dugnad",
             scope="all",
             retrieval_mode="legacy",
             effective_retrieval_mode="legacy",
