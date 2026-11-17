@@ -2,11 +2,20 @@
 
 ## Unreleased
 
+### Added
+- **Usage log:** `query_log_enabled: true` (or `LEDGER_QUERY_LOG=1`) appends one line per `ledger query`, `ledger answer` and web search to `08_indices/query_log.jsonl`, with the calling surface in `source`. It now covers every retrieval mode (the old env-only hook fired in lexical modes only) and no longer records eval or A/B runs. Off by default.
+- `docs/retrieval.md`, `docs/maintenance.md` and `docs/setup.md` hold the reference detail that used to live in AGENTS.md.
+
 ### Changed
+- **Embedding model loads cache-first.** The local encoder reads the Hugging Face cache and goes to the Hub only when the model is not cached, which removes a metadata round trip of several seconds from every `ledger query`. `LEDGER_EMBEDDINGS_OFFLINE` now means "never fall back to the Hub".
+- AGENTS.md is a third of its former size: rules and conventions stay, tuning detail moved to `docs/` behind pointers.
+- The test suite points `XDG_CONFIG_HOME` at a temp dir, so a developer's own `config.yaml` no longer changes what the tests exercise.
 - `ledger loops` and `ledger notes` print each note's full text by default; `--width N` still truncates. A title that is just a cut-off copy of the statement is no longer printed twice.
 - Split Electric Sheep maintenance into a package organized by responsibility.
 
 ### Removed
+- **MCP server:** `ledger mcp`, the `ledger/mcp/` package, the `mcp` extra and the `mcp` value of the `via` enum. The ledger has no server process; agents use the CLI (`ledger query`, `ledger signal add`, `ledger people|projects add|log|set`).
+- **Things3 ⇄ open-loops sync:** `ledger loops sync` (and `loops --dry-run`), the `ledger/integrations/` package, the `things3_*` config keys with their `LEDGER_THINGS3_*` env overrides, and the `things_uuid` / `things_list_id` schema fields. Leftover config keys are ignored; notes that still carry the frontmatter keys parse and lint as before.
 - Unused config fields and migration shims; obsolete config keys are ignored and only the canonical XDG config is read.
 - Unreferenced private helpers, unused eval state and the unused scikit-learn dependency. Watch mode now uses the `obsidian` extra.
 

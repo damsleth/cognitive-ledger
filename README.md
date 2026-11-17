@@ -373,7 +373,7 @@ Hook scripts under `scripts/hooks/` automate common session patterns:
 bash scripts/hooks/session_start.sh          # manual invocation
 ```
 
-For Claude Code, configure hooks in `.claude/settings.json`. See `AGENTS.md` for integration details.
+For Claude Code, configure hooks in `.claude/settings.json`. See `docs/setup.md` for integration details.
 
 ## Consolidation ("Electric Sheep")
 
@@ -386,7 +386,7 @@ ledger sleep contradictions --check   # dry-run NLI contradiction scan
 ledger sleep contradictions --apply   # auto-supersede or route conflicts to 00_inbox
 ```
 
-Sleep merges duplicates, promotes patterns into stable notes, updates indices, and tightens open loops. The contradiction scan uses a local NLI classifier to detect contradicting note pairs; off by default (`contradiction_enabled: false` in `~/.config/ledger/config.yaml`). See `AGENTS.md` for config keys, thresholds, and the Norwegian-accuracy caveat.
+Sleep merges duplicates, promotes patterns into stable notes, updates indices, and tightens open loops. The contradiction scan uses a local NLI classifier to detect contradicting note pairs; off by default (`contradiction_enabled: false` in `~/.config/ledger/config.yaml`). See `docs/maintenance.md` for config keys, thresholds, and the Norwegian-accuracy caveat.
 
 ## Web UI
 

@@ -1,539 +1,114 @@
 # Agent Instructions (Cognitive Ledger)
 
-## Quick Reference
+A file-based memory system: atomic Markdown notes with YAML frontmatter, plus
+the `ledger` CLI that retrieves, lints and consolidates them. Goal: **turn
+verified context into curated, durable memory that agents can trust across
+sessions**, readable by any agent (Claude Code, Codex, ...) with no chat context.
 
-Machine-readable spec: `schema.yaml`. Note templates: `templates/`.
+Detail lives behind these pointers; read one when its trigger applies:
 
-Resolve the active physical corpus path with `ledger paths --field ledger_notes_dir`.
-Logical note references remain `notes/...` even when the corpus lives outside this repo.
-
-The canonical `/notes` agent skill is maintained in a separate repository:
-https://github.com/damsleth/SKILLS. Install it from there rather than
-duplicating its contents here.
-
-### Boot
-
-```bash
-LEDGER_NOTES_DIR="$(ledger paths --field ledger_notes_dir)"
-ledger context --format boot         # full boot payload (identity + loops + status)
-tail -20 "$LEDGER_NOTES_DIR/08_indices/timeline.md"          # recent changes
-rg "<keyword>" "$LEDGER_NOTES_DIR" -n                        # search content (show matches)
-fd "id__" "$LEDGER_NOTES_DIR/01_identity"                    # identity notes
-fd "pref__" "$LEDGER_NOTES_DIR/03_preferences" && fd "concept__" "$LEDGER_NOTES_DIR/06_concepts"  # search by type
-```
-
-**Two-tier lookup strategy:**
-- `context.md` for boot (compact summary, always loaded at session start)
-- `notes/08_indices/index.md` / `index.json` as a lookup table for deeper searches
-  (do NOT load into context at boot - on a mature ledger it would become the bottleneck)
-
-**Voice DNA:** If `notes/01_identity/id__voice_dna.md` exists, read it at boot.
-Apply the voice profile to tone, sentence structure, and vocabulary when writing notes.
-
-**Non-negotiables:**
-
-- No chat transcripts — ever
-- No invented facts — use `source: inferred` + `confidence < 0.7`
-- Always bump `updated` timestamp when editing
-- Always append through `append_timeline_entry`; `timeline.jsonl` is the source of truth and `timeline.md` is generated
-
-### Should I write?
-
-Persist only if it's **durable** and **re-usable** (Decision / Preference / Correction / Goal / Concept / Open loop).
-If none apply: don't write. Noise kills retrieval.
-
-### Create or update a note
-
-1. **Search first**: `rg "<topic>" notes -l`
-2. **Create/update the right type** (atomic, one idea per file; use the right folder + prefix)
-3. **Frontmatter required**: `created`, `updated`, `tags`, `confidence`, `source`, `scope`, `lang` (+ `status` for loops)
-4. **No transcripts**: never store raw chat logs; summarize into atomic notes
-5. **Append timeline**: `.venv/bin/python -c "from ledger.embeddings import append_timeline_entry; append_timeline_entry('<verb>', '<path>', '<why>')"`
-
-### Python env
-
-```bash
-./scripts/setup-venv.sh                                       # default: base + dev + embeddings
-./scripts/setup-venv.sh --python python3.12 --recreate        # if torch wheels are missing
-./scripts/setup-venv.sh --minimal                             # base-only fallback
-```
-
-### Obsidian Drop-In
-
-```bash
-pipx install cognitive-ledger
-ledger import obsidian init --vault /path/to/obsidian-vault
-ledger import obsidian import --vault /path/to/obsidian-vault
-ledger import obsidian bootstrap --vault /path/to/obsidian-vault
-ledger import obsidian watch --vault /path/to/obsidian-vault
-ledger import obsidian queue sync --vault /path/to/obsidian-vault
-ledger import obsidian doctor --vault /path/to/obsidian-vault
-ledger import obsidian daemon start|status|stop --vault /path/to/vault   # macOS
-```
-
-The drop-in writes a **standalone ledger inside the vault**
-(`<vault>/cognitive-ledger/notes/`), not into `ledger_notes_dir`. It is for
-vaults with no separate ledger. Where a ledger already exists and YAAMS indexes
-the vault, do not run it against that vault — it would start a second,
-parallel ledger.
-
-### Retrieve & Eval
-
-```bash
-ledger query "<topic>" --scope all --limit 8
-ledger query "<topic>" --scope all --limit 8 --retrieval-mode <mode>
-ledger query "<topic>" --scope all --limit 8 --prf   # per-query PRF (dense path only)
-ledger query "<topic>" --scope dev --bundle
-ledger query "<topic>" --as-of 2025-06-01   # notes valid on that date (includes archive)
-ledger discover-source "<topic>" --source-notes-dir <root> --limit 20
-ledger embed build --target ledger --backend local --model TaylorAI/bge-micro-v2
-ledger embed status --target both
-ledger embed search --query "<topic>" --json
-printf '%s\n' '{"query":"<a>"}' '{"query":"<b>"}' | ledger embed search --batch   # one encoder load, JSONL out
-ledger eval --cases "$(ledger paths --field ledger_notes_dir)/08_indices/retrieval_eval_cases.yaml" --k 3 --strict-cases
-ledger signal patterns       # mine failure/strategy patterns from the signal log (docs/wikiskill.md)
-ledger loops                 # compact list (default)
-ledger notes --type <all|identity|facts|preferences|goals|loops|concepts>
-ledger context --format boot # session boot payload
-ledger context --format identity  # identity notes only
-```
-
-**Stale-index warning.** In `semantic_hybrid` the semantic half of the score
-comes from the embedding index: a note that was never embedded scores 0 there
-and survives only on lexical overlap (so it usually loses to embedded notes),
-and an edited one ranks on its old content. Candidates themselves come from the
-notes on disk (`build_candidates`), so the note is reachable, just badly ranked.
-The failure is silent — which makes "I imported it and the query
-still misses" look like bad retrieval rather than a stale index. `ledger query`
-therefore checks the mtimes of the notes the index embeds (facts, preferences,
-goals, loops, concepts — not inbox, identity or archive) against the index build
-time and warns on **stderr** (so `--json` output stays clean):
-
-```
-warning: 2 note(s) changed since the semantic index was built (...). In
-semantic_hybrid the candidate pool comes from the index, so a new note is
-unreachable and an edited one ranks on its old content. Rebuild with:
-ledger sleep index
-```
-
-Rebuild with `ledger sleep index` (which also regenerates the semantic index) or
-`ledger embed build --target ledger`. The check is one `stat` per note.
-`ledger inbox triage` rebuilds by itself when it promotes notes; a failed build
-there only warns, the triage stays applied.
-
-**`LEDGER_EMBEDDINGS_OFFLINE`** — set to `1` or `true` to skip model downloads and use only locally cached sentence-transformer weights (`local_files_only=True`). Useful in air-gapped environments or to avoid accidental downloads during `ledger embed build`. Accepted values: `1`, `true`, `yes`, `on`.
-
-### Bitemporal validity
-
-```bash
-ledger migrate bitemporal --check     # preview back-fill (no writes)
-ledger migrate bitemporal --apply     # write valid_from / valid_to + timeline entry
-ledger sleep lint                     # flags invalid timestamps, ordering errors, dangling refs
-```
-
-`migrate bitemporal` does **not** bump `updated`. A validity back-fill is
-metadata, not a content edit; bumping it re-dated 591 notes for the recency
-prior and cost hit@1 (0.783 → 0.761 on a copy of the live corpus, 2026-10-14).
-
-Four optional frontmatter fields track *when a fact was true* (valid-time), separate from
-`created`/`updated` (transaction time). Applicable to `01_identity`, `02_facts`,
-`03_preferences`, `04_goals`, `06_concepts`, and `09_archive`; `00_inbox` is exempt.
-All fields are optional — notes without them lint clean and retrieve identically to today.
-
-| Field | Meaning |
+| Read | When |
 |---|---|
-| `valid_from` | ISO 8601 UTC: when the fact became true. Absent on legacy notes is lint-clean; missing only warns when other bitemporal fields exist. |
-| `valid_to` | ISO 8601 UTC: when the fact ceased to be true. `null` = currently valid (open interval). |
-| `superseded_by` | Logical `notes/…/note.md` path to the replacement note. Requires `valid_to` to be set. |
-| `supersedes` | List of logical `notes/…/note.md` paths this note replaces. Written by `supersede()`. |
+| `schema.yaml`, `templates/` | writing a note type you have not written before; adding a field or type |
+| `docs/retrieval.md` | changing or tuning retrieval, eval cases, signals, bitemporal `--as-of`, the stale-index warning, the usage log |
+| `docs/maintenance.md` | running or changing sleep, lint, lock reaping, link proposals, the contradiction scan |
+| `docs/setup.md` | wiring hooks or the scheduler; the Obsidian drop-in |
+| `docs/privacy.md`, `docs/trust-boundaries.md` | anything that sends note text out of the corpus (embeddings API, LLM prompts, web, JSON output) |
+| `memcore/README.md` | touching `memcore/` or a JSON seam yaams consumes |
 
-**Supersession:** when a fact is replaced, use the `supersede()` primitive in `ledger/bitemporal.py`.
-It sets `valid_to` on the old note, writes `superseded_by`, copies `supersedes` onto the new note,
-and moves the old file to `09_archive/`. The old note is never deleted.
-Default retrieval hides notes with an expired `valid_to`; use `--as-of` to query historical state.
-A query with an explicit past year after a preposition ("in 2023", "i 2023") engages
-`--as-of <year>-07-01` by itself and says so on stderr; a bare year or a relative cue
-("before I moved") does not. Typed archive notes (`fact__`, `pref__`, ... in `09_archive/`)
-are embedded so an as-of read can rank them, but `embed search` and the contradiction scan
-never see them — YAAMS dedups promotions through `embed search`.
-
-**Prior score (cold-start ranking, always-on, applied as a TIE-BREAKER).** Before signal feedback accrues, a prior combining note confidence, half-life recency decay (default 180 days), and query relevance breaks ties between near-equal candidates. It is *not* a flat additive bonus: each candidate's prior contribution scales continuously to zero as its base (pre-prior) score gap to the local leader exceeds `prior_tie_band` (default 0.02, a 2% relative gap), so a clear semantic/lexical winner keeps rank-1 regardless of its prior. The blend is implemented once in `apply_prior_tiebreak` (in `ledger/retrieval.py`) and used by both the lexical and `semantic_hybrid` paths. Config keys (all optional, safe defaults): `prior_enabled` (true), `prior_weight` (0.10), `prior_tie_band` (0.02), `prior_w_importance` (0.30), `prior_w_recency` (0.30), `prior_w_relevance` (0.40), `prior_recency_half_life_days` (180.0). Env overrides: `LEDGER_PRIOR_ENABLED`, `LEDGER_PRIOR_WEIGHT`, `LEDGER_PRIOR_TIE_BAND`, `LEDGER_PRIOR_W_IMPORTANCE/RECENCY/RELEVANCE`, `LEDGER_PRIOR_HALF_LIFE`. Set `prior_enabled: false` to reproduce pre-prior scores as an A/B baseline.
-
-**Fusion mode (`semantic_hybrid`).** `fusion: weighted_sum` (default, byte-identical to previous behaviour) or `fusion: rrf` (Reciprocal Rank Fusion — merges independent lexical + semantic rank lists over the full candidate pool). `rrf_k` controls the smoothing constant (default 60). Env: `LEDGER_FUSION`. **Keep `fusion: weighted_sum`: on the real corpus RRF measures worse (2026-10-14 `ledger ab run`, live cases: hit@1 0.652 vs 0.783, hit@3 0.848 vs 0.870, mrr 0.755 vs 0.830) — `k=60` flattens rank differences on small candidate pools. RRF remains opt-in pending a genuine improvement.**
-
-**YAAMS raw-store invariant.** Raw YAAMS items are immutable and append-only: deterministic ID = `sha256(source:source_id)`, persisted with `INSERT OR IGNORE`. Never compress or rewrite the raw tier; improve retrieval and promote curated atomic notes instead.
-
-**PRF — Pseudo-Relevance Feedback (dense path, default off).** Expands the query vector via the Rocchio formula using top-m pseudo-positive and bottom-n pseudo-negative results before re-ranking. Config: `prf_enabled` (false), `prf_top_m` (3), `prf_bottom_n` (5), `prf_alpha` (1.0), `prf_beta` (0.75), `prf_gamma` (0.15). Env: `LEDGER_PRF_ENABLED`, `LEDGER_PRF_ALPHA/BETA/GAMMA`. Per-query: `--prf` flag. **Keep `prf_enabled: false` until `ledger ab run` proves improvement.** Last run (2026-10-14, live cases, semantic_hybrid): regression, hit@1 0.739 vs 0.783, mrr 0.810 vs 0.830.
-
-### Signals (Feedback Loop)
+## Boot
 
 ```bash
-ledger signal add --type retrieval_hit --query "deploy" --note notes/02_facts/fact__k8s.md
-ledger signal add --type correction --note notes/03_preferences/pref__x.md --detail "outdated"
-ledger signal add --type rating --rating 8
-ledger signal summarize      # rebuild signal_summary.json
-ledger signal stats          # show signal counts, top notes, gaps (reports real_total)
-
-# Bootstrapping the signal gate via LLM judge
-ledger signal seed --from-history          # read queries from query_log.jsonl
-ledger signal seed --queries-file queries.txt --backend subprocess --judge-command "claude -p"
-ledger signal purge --synthetic            # roll back all seeded events
+LEDGER_NOTES_DIR="$(ledger paths --field ledger_notes_dir)"   # physical corpus; logical refs stay notes/...
+ledger context --format boot                                  # identity + open loops + status + write policy
+tail -20 "$LEDGER_NOTES_DIR/08_indices/timeline.md"           # recent changes
+ledger query "<topic>" --scope all --limit 8                  # ranked retrieval
+rg "<keyword>" "$LEDGER_NOTES_DIR" -n                         # exact search
 ```
 
-Signal types: `retrieval_hit`, `retrieval_miss`, `correction`, `affirmation`,
-`stale_flag`, `preference_applied`, `rating`, `llm_judged`, plus the
-ledger-written `supersession` and `contradiction_flagged`. Agents connected
-over MCP log the feedback types through `ledger_signal` (needs `--allow-write`).
-
-**Synthetic signals and the activation gate.** `ledger signal seed` writes events tagged `synthetic: true`. These are down-weighted by `synthetic_weight` (default 0.5) in `summarize_signals` — a seeded hit counts as half a real hit. The 20-signal gate (`signal_min_entries`) counts only real (non-synthetic) signals so seeding cannot artificially unlock ranking. `signal stats` reports `real_total` alongside the overall count. Roll back with `ledger signal purge --synthetic` then `ledger signal summarize`.
-
-**PRF and RRF stay off until A/B validation.** `prf_enabled` and `fusion: rrf` default to off. Enable only after `ledger ab run` shows recall@k improvement without latency regression — same discipline as `score_weight_signal`.
-
-**Scan-and-judge review (TUI):** `ledger review` walks a *prioritized* queue —
-the notes most worth judging surface first (corrections pending →
-high-traffic-but-never-affirmed → never reviewed → stale-by-age → low
-confidence / inferred). One keystroke per note:
-
-```
-k keep (affirmation)   w wrong (correction, asks reason)   s stale (stale_flag)
-1-9 rate               space/enter skip                    u undo   q quit & save
-```
-
-Signals are buffered and flushed (with a summary rebuild) on exit.
-
-```bash
-ledger review                       # full queue, interactive TUI
-ledger review --type facts --stale-days 90 --unjudged-only
-ledger review --queue               # print the prioritized list, no TUI
-ledger review --stats               # signal dashboard: coverage, score dist, gaps
-```
-
-**Use-time capture (opt-in):** set `signals_auto_capture: true` in
-`~/.config/ledger/config.yaml` (or `LEDGER_SIGNALS_AUTO_CAPTURE=1`) and queries
-auto-log `retrieval_miss` when nothing scores above `signals_miss_score_floor`
-(both CLI `ledger query` and the web `/search`). `ledger query "<topic>" --pick`
-prompts for the result that helped and logs a `retrieval_hit`; opening a note
-from a web search result does the same. Off by default to avoid noise; even when
-on, signal feedback stays inert for ranking until `signal_min_entries` (20)
-accrue and `score_weight_signal` is raised above 0.
-
-**Activating signal-aware ranking (validate, don't guess):** the `--stats`
-dashboard (and `ledger signal stats`, and the web `/signals` page) reports an
-**activation** line — `accruing` (below threshold), `ready` (enough signals but
-weight still 0, so ignored), or `active` (weight > 0). When it reads `ready`,
-prove the weight helps before flipping it, using the A/B harness with
-`LEDGER_WEIGHT_SIGNAL` (wired into the env overrides):
-
-```bash
-# baseline = current behavior (weight 0); candidate = signal scoring on
-ledger ab run --baseline-ref HEAD --candidate-ref HEAD \
-  --candidate-env LEDGER_WEIGHT_SIGNAL=0.1 \
-  --cases "$(ledger paths --field ledger_notes_dir)/08_indices/retrieval_eval_cases.yaml" --k 3
-```
-
-Only raise `score_weight_signal` in `config.yaml` if recall@k improves without a
-latency regression.
-
-`<mode>`: `legacy`, `two_stage`, `scope_type_prefilter`, `precomputed_index`, `progressive_disclosure`, `semantic_hybrid`.
-
-### A/B Testing — Mandatory Eval Gate
-
-**Retrieval-affecting PRs** (touching `ledger/retrieval.py`, `ledger/query.py`, `ledger/scoring.py`, `ledger/signals.py`, or `ledger/config.py`) **must** run `scripts/ab_gate.sh` and paste the output into the PR body. Exit code 2 is a hard stop — do not merge.
-
-```bash
-bash scripts/ab_gate.sh   # 0 = beneficial, 3 = neutral (ok if change is off-by-default), 2 = STOP
-```
-
-The same gate runs automatically via `.github/workflows/retrieval-gate.yml`:
-on PRs, on push to `main` (against the previous commit), and on manual
-dispatch. CI pins lexical mode (`MODE=legacy`) because it has no embedding
-model. A quality tie is exit 3 even when latency misses its band: latency is
-advisory until the harness interleaves its runs (improvement plan I8).
-
-```bash
-ledger ab run --baseline-ref main --candidate-ref HEAD   # uses ledger_notes_dir from config.yaml
-ledger ab run --corpus ~/Code/ledger-notes --baseline-ref main --candidate-ref HEAD
-ledger ab run --baseline-ref main --candidate-ref HEAD --eval-runs 7 --query-runs 5
-ledger ab run --baseline-ref main --candidate-ref HEAD --query-runs 5 --cold-query
-```
-
-Exit codes: `0` beneficial, `2` regression, `3` neutral, `4` invalid setup.
-
-### Electric Sheep (sleep / consolidation)
-
-```bash
-ledger sleep status
-ledger sleep sync --check && ledger sleep sync --apply
-ledger sleep sleep
-ledger sleep lint
-ledger sleep index
-ledger sleep links                     # propose [[links]] for notes changed since last sleep (--all, --apply)
-ledger sleep contradictions --check    # dry-run NLI contradiction scan (requires contradiction_enabled=true)
-ledger sleep contradictions --apply    # execute: auto-supersede or write conflict notes to 00_inbox
-ledger migrate bitemporal --check   # preview valid_from / valid_to back-fill
-ledger migrate bitemporal --apply   # write back-fill + append timeline entry
-```
-
-**Lock files.** `FileLock` deliberately does **not** unlink on release: unlinking
-after dropping the flock lets a waiter and a newcomer both believe they hold the
-lock. `*.lock` files therefore accumulate across note and importer directories.
-`ledger inbox cleanup` reaps them recursively (`unheld_locks` in its result),
-including nested and non-Markdown locks, removing a lock only when a
-non-blocking flock succeeds, which proves nobody holds it:
-
-```bash
-ledger inbox cleanup           # dry run — lists what would go
-ledger inbox cleanup --apply   # reap
-```
-
-Safe because this is an explicit maintenance sweep, not the write path. Expect
-locks held by the running process to survive, including timeline, index, or
-importer state locks.
-
-**Link proposals** (`ledger sleep links`) suggest `[[links]]` between related notes from the vectors already in the semantic index (no model load): top 5 neighbours with cosine in [0.80, 0.97), both directions, minus links that exist. Above 0.97 a pair is a near-duplicate for `sleep duplicates`, not a link. Dry run by default; `--apply` appends `- [[stem]]` under `## Links`, bumps `updated`, and logs a `linked` timeline event — which the briefing does not count as activity. Links only: nothing rewrites what a note says.
-
-**Contradiction scan** (`ledger sleep contradictions`) uses a local NLI classifier to detect pairs of notes whose content contradicts each other. Three outcomes:
-
-- **review** (the default for every contradiction) — score ≥ `contradiction_review_threshold` (default 0.60) → writes a **conflict note** to `notes/00_inbox/` (filename `conflict__{timestamp}__{stem_a}__{stem_b}.md`, tags `[conflict, nli, review]`, checklist for human resolver). List them with `ledger inbox conflicts`.
-- **auto-supersede** — opt-in only (`contradiction_auto_supersede: true`): score ≥ `contradiction_auto_threshold` (default 0.85) + candidate strictly newer + no confidence inversion + neither note `lang:no` → calls `supersede()`, moves old note to `09_archive/`. **Keep it off.** On the T2 fixture (2026-09-23, `python -m ledger.contradiction --eval tests/fixtures/contradiction_t2.yaml`) the default model scored `lang:en` precision **0.862** at both 0.60 and 0.85 (recall 1.0) — below the 0.9 floor for any auto-resolution, i.e. about one auto-archive in seven would retire a note that is still true.
-- **ignore** — score below review threshold → no action.
-
-**Attribute slots.** A note may carry `attribute: <slug>` (`employer`, `kim.residence`; qualify with a subject when the note is about someone else). Two live notes on the same slot are filed as a conflict note before the NLI pass — this catches implicit conflicts NLI misses, needs no model, and never auto-resolves.
-
-Hard rules (not config-overridable): identity notes are never auto-superseded; duplicate conflict inbox records for the same pair are not created; re-running on an already-resolved pair is a no-op.
-
-**Norwegian caveat.** The default model (`MoritzLaurer/mDeBERTa-v3-base-mnli-xnli`) is trained on MNLI + XNLI (15 languages); Norwegian is not among them. NLI accuracy on `lang:no` notes is unvalidated, so a pair involving a `lang:no` note never auto-resolves, even with auto-supersede on. (The 14 Norwegian T2 pairs scored precision 1.0 / recall 0.875 — too few to trust.)
-
-The scan is off by default (`contradiction_enabled: false`). Enable in `~/.config/ledger/config.yaml` once the NLI model is downloaded and validated.
-
-**Config keys:**
-
-| Key | Default | Env override |
-|---|---|---|
-| `contradiction_enabled` | `false` | `LEDGER_CONTRADICTION_ENABLED` |
-| `contradiction_model` | `MoritzLaurer/mDeBERTa-v3-base-mnli-xnli` | `LEDGER_CONTRADICTION_MODEL` |
-| `contradiction_neighbors_k` | `8` | `LEDGER_CONTRADICTION_NEIGHBORS_K` |
-| `contradiction_auto_threshold` | `0.85` | `LEDGER_CONTRADICTION_AUTO_THRESHOLD` |
-| `contradiction_review_threshold` | `0.60` | `LEDGER_CONTRADICTION_REVIEW_THRESHOLD` |
-| `contradiction_auto_supersede` | `false` | `LEDGER_CONTRADICTION_AUTO_SUPERSEDE` |
-| `contradiction_protect_higher_confidence` | `true` | `LEDGER_CONTRADICTION_PROTECT_HIGHER_CONFIDENCE` |
-
-### Things3 ⇄ Open Loops Sync
-
-Bidirectional sync between `notes/05_open_loops/` and Things3 tasks. Each loop gets a Things task; task completion/cancellation propagates back to the loop's `status` field.
-
-```bash
-ledger loops sync             # one-shot sync (reads config, applies deltas)
-ledger loops sync --dry-run   # preview without writing anything
-```
-
-**How it works:**
-
-1. For each open loop not yet in Things: creates a task with title = loop title, notes = `ledger:<slug> status:<status>`.
-2. For each loop already in Things (matched by `things_uuid` frontmatter key, or `ledger:<slug>` marker): updates task title/notes if they drifted.
-3. For each completed/cancelled Things task: sets the loop's `status` to `things3_completed_maps_to` / `things3_canceled_maps_to` and writes `things_uuid` back to frontmatter. (*reverse* direction: Things → ledger)
-4. For each task whose loop is **closed** in the ledger: completes the task. (*forward* direction: ledger → Things) Closing a loop is finished work, so its task is completed rather than left open — see below.
-5. Tasks with a `ledger:` marker whose loop **no longer exists at all**: handled per `things3_orphan_action` (flag / cancel / ignore).
-
-**Closed ≠ deleted.** Steps 4 and 5 are different events and must not be
-conflated. `reconcile()` receives only open/blocked loops in its desired set, so
-a closed loop is absent from it — and for a long time that made a closed loop
-look *deleted*, leaving its task open until it got flagged `[orphan]`, which
-reads as a mistake rather than as done. `reconcile()` now also takes
-`closed_slugs` and emits a `forward_complete` action for those. Tasks already in
-the logbook are skipped so history does not churn.
-
-**Confirmation is by absence.** `get_task_by_uuid` scans `things tasks --json`,
-which lists *active* tasks only. A complete/cancel is therefore confirmed by the
-task having **left** that list, not by re-reading it there — the presence check
-made every completion report a false error, which would equally have masked a
-real failed write.
-
-**Config keys** (`~/.config/ledger/config.yaml`):
-
-| Key | Default | Env override |
-|---|---|---|
-| `things3_sync_enabled` | `false` | `LEDGER_THINGS3_SYNC_ENABLED` |
-| `things3_default_project` | `""` (Inbox) | `LEDGER_THINGS3_DEFAULT_PROJECT` |
-| `things3_blocked_project` | `""` (same as default) | `LEDGER_THINGS3_BLOCKED_PROJECT` |
-| `things3_scope_routing` | `{}` | — (YAML only) |
-| `things3_marker_prefix` | `"ledger:"` | `LEDGER_THINGS3_MARKER_PREFIX` |
-| `things3_completed_maps_to` | `"closed"` | `LEDGER_THINGS3_COMPLETED_MAPS_TO` |
-| `things3_canceled_maps_to` | `"snoozed"` | `LEDGER_THINGS3_CANCELED_MAPS_TO` |
-| `things3_orphan_action` | `"ignore"` | `LEDGER_THINGS3_ORPHAN_ACTION` |
-
-**Prerequisites:** Things3 app + Things CLI on PATH. Install the CLI from Things → Settings → General → "Enable Things URLs" is NOT required; the CLI is a separate tool: https://culturedcode.com/things/support/articles/2803573/
-
-**Frontmatter key:** `things_uuid` — written by sync, used as primary key on re-sync. Do not edit manually.
-
-### Folder map
-
-```
-notes/01_identity/     core identity: mission, beliefs, models, strategies, narratives
-notes/02_facts/        stable truths / decisions
-notes/03_preferences/  user preferences / policies
-notes/04_goals/        long-lived objectives
-notes/05_open_loops/   durable unresolved items (status lifecycle)
-notes/06_concepts/     definitions / frameworks / mental models
-notes/07_projects/     project hubs (ledger projects): Goal, State, Decisions, append-only Log
-notes/08_indices/      timeline, logs, import state, generated indexes, signals
-notes/09_archive/      superseded notes (do not delete)
-notes/10_people/       person hubs (ledger people): Who, Working with them, append-only Log
-```
-
----
-
-### Recommended Setup
-
-**Claude Code hooks** (`.claude/settings.json`):
-```json
-{
-  "hooks": {
-    "SessionStart": [
-      {"type": "command", "command": "bash scripts/hooks/session_start.sh"}
-    ],
-    "Notification": [
-      {"type": "command", "command": "bash scripts/hooks/session_end_capture.sh"}
-    ]
-  }
-}
-```
-
-**Codex** (`AGENTS.md` in repo root already covers this).
-
-**Automated maintenance:** use the owner's configured scheduler and current
-scheduling preferences (for example, `takt`). Schedule the following command
-daily; inspect the scheduler's help for its registration syntax:
-```
-/path/to/cognitive-ledger/scripts/sheep-auto.sh
-```
-
-**Troubleshooting:**
-- If hooks don't fire: check that scripts are executable (`chmod +x scripts/hooks/*.sh`)
-- If venv is missing: run `./scripts/setup-venv.sh`
-- If session_start is slow: ensure `.venv` exists (avoids pip install on each run)
-- If capture creates too many inbox items: review and triage with `ledger inbox triage`
-
----
-
-## Purpose
-
-This repository implements a **Cognitive Ledger**: a persistent, file-based
-memory system to extend the temporal reach of language models and their users.
-Agents interacting with this repo are responsible for maintaining the
-integrity, readability and usefulness of the notes. The goal is to build a
-rich, inspectable history of reasoning, preferences, decisions and concepts
-that can be reused across sessions without blowing up context windows.
-
-### North Star (how this is used in practice)
-
-Long-standing goal: **Turn verified context into curated, durable memory that agents can trust across sessions.**
-
-When the cog-led skill is active, the agent should:
-
-1. **Interpret the conversation as it happens** and decide whether to persist durable artifacts (facts/prefs/goals/concepts/loops).
-2. **Use the ledger as externalized memory** (metadata + `rg`/`fd` + indices) to avoid bloating the context window.
-3. Provide **ledger-enriched answers**: continuity, suggestions, and knowledge informed by relevant artifacts.
-
-The ledger should maintain cohesion as it grows via periodic consolidation (“Electric Sheep”).
+`context.md` is the boot summary. `08_indices/index.md` / `index.json` are lookup
+tables for deeper searches; they are too large to load whole. Identity notes
+(`01_identity/`, at most 6, each with an `identity_type`) are always relevant:
+load them early. If `01_identity/id__voice_dna.md` exists, write notes in that voice.
 
 ## Golden rules
 
-1. **Never store raw chat logs.** Summarize conversations into atomic
-   notes (facts/preferences/goals/concepts/open loops). Full transcripts
-   are prohibited.
-2. **Never invent facts.** If you are unsure about a claim, write it as a
-   hypothesis with a confidence < 0.7. Only facts from the user or tools
-   should have high confidence.
-3. **One idea per file.** Keep notes atomic so they are easy to find,
-   update and reason about. Use relative links to connect ideas.
-4. **Search before you write.** Use command-line tools (e.g. `rg` or
-   `fd`) to look for existing notes with similar titles or tags. If a
-   related note exists, update or link to it instead of creating a
-   duplicate.
-5. **Respect scopes and the user's personalization preferences.**
-   This ledger may store user-specific details and personal analytics when it is useful.
-   Avoid needless hoarding; prefer durable, structured facts/preferences.
-   If a detail feels unusually sensitive or ambiguous, ask.
-6. **Append before overwrite.** When updating a note, bump the `updated`
-   timestamp and adjust sections; avoid deleting history. If a note is
-   superseded, use the `supersede()` primitive (or `ledger migrate bitemporal`)
-   to move it to `09_archive/` with `valid_to` and `superseded_by` set — never
-   delete superseded notes.
+1. **Summaries, never transcripts.** Raw chat logs are prohibited; distil into atomic notes.
+2. **Facts come from the user or a tool.** Anything you infer is `source: inferred` with `confidence < 0.7`.
+3. **One idea per file**, connected by `[[wikilinks]]`.
+4. **Search before you write** (`rg "<topic>" "$LEDGER_NOTES_DIR" -l`). Update or link an existing note over creating a near-duplicate.
+5. **Append before overwrite.** Bump `updated` on every content edit. A replaced fact goes through `supersede()` (`ledger/bitemporal.py`), which closes `valid_to`, sets `superseded_by` and moves the old note to `09_archive/`.
+6. **The timeline is appended through `append_timeline_entry`.** `timeline.jsonl` is the source of truth; `timeline.md` is generated.
+7. **Forget means hard delete.** When the user asks to delete or forget a note: remove the file, fix links to it, append a `deleted` timeline event. This is the one case that skips the archive.
+8. **Respect scope and sensitivity.** Store personal detail when it is durable and useful; ask when something is unusually sensitive or ambiguous.
 
-## Folder layout
+## When to write
 
-The repository is organised under `notes/`. Subfolders group notes by
-purpose:
+Persist only what is **durable and reusable**: a decision, a stable preference,
+a correction, a long-lived goal or constraint, a new concept, an open loop that
+spans sessions, or an identity change (mission, belief, heuristic, narrative →
+`01_identity/`). When none applies, write nothing: noise kills retrieval.
 
-| Folder            | Purpose                                                  |
-| ----------------- | -------------------------------------------------------- |
-| `00_inbox/`       | Temporary capture zone. Notes here should be reviewed    |
-|                   | and either promoted or discarded during consolidation.   |
-| `01_identity/`    | Core identity documents (mission, beliefs, mental        |
-|                   | models, strategies, narratives, voice). Max 6 files.     |
-| `02_facts/`       | Stable truths sourced from the user or external tools.   |
-| `03_preferences/` | Recorded user preferences, styles or habits.             |
-| `04_goals/`       | Long-term objectives and commitments.                    |
-| `05_open_loops/`  | Unresolved questions or tasks with next actions.         |
-| `06_concepts/`    | Definitions of frameworks or models (e.g. cognitive      |
-|                   | lightcone).                                              |
-| `07_projects/`    | Project hubs, one per multi-week effort (`ledger projects`). |
-| `08_indices/`     | Generated indices like timelines or tag maps.            |
-| `09_archive/`     | Superseded or obsolete notes.                            |
-| `10_people/`      | Person hubs, one per person who matters (`ledger people`). |
+"Remember this" / "hold that thought": persist the smallest artifact that
+preserves the thread. To resume later, write an open loop with a clear next
+action and an exit condition, so another agent can pick it up from 1–3 notes.
 
-## Note conventions
+Write policy comes from `ledger context --format boot` (`write_policy.mode`:
+`auto-write`, `silent-write`, `ask-to-write`; default auto-write + silent,
+asking only for ambiguous items). After writing, report one line per created
+or updated note (path + what changed); paste note contents only on request.
 
-### Frontmatter
+## Writing a note
 
-All atomic notes require YAML frontmatter. See `schema.yaml` for machine-readable
-specification. Required fields:
+```
+1. SEARCH    rg "<topic>" "$LEDGER_NOTES_DIR" -l
+2. PATH      notes/{folder}/{prefix}{slug}.md     slug: lowercase, underscores
+3. WRITE     frontmatter + body, from the matching file in templates/
+4. TIMELINE  .venv/bin/python -c "from ledger.embeddings import append_timeline_entry; append_timeline_entry('created', '{path}', '{desc}')"
+5. VERIFY    git diff
+```
 
-| Field         | Format       | Notes                                                                |
-| ------------- | ------------ | -------------------------------------------------------------------- |
-| created       | ISO 8601 UTC | `2026-01-20T12:00:00Z`                                               |
-| updated       | ISO 8601 UTC | bump on every edit                                                   |
-| tags          | list         | lowercase, no spaces                                                 |
-| confidence    | 0.0–1.0      | <0.7 = hypothesis                                                    |
-| source        | enum         | user, tool, assistant, inferred                                      |
-| scope         | enum         | home, work, dev, personal, life (alias), meta                        |
-| lang          | enum         | en, no, mixed                                                        |
-| status        | enum         | **loops only**: open, closed, blocked, snoozed                       |
-| valid_from    | ISO 8601 UTC | *optional* — when the fact became true; see "Bitemporal validity"    |
-| valid_to      | ISO 8601 UTC | *optional* — when the fact ceased; null = currently valid            |
-| superseded_by | string       | *optional* — logical path to replacement; requires `valid_to`        |
-| supersedes    | list         | *optional* — logical paths this note replaces; written by supersede()|
-| identity_type | enum         | **identity only**: mission, beliefs, models, strategies, narratives, voice |
-| via           | enum         | *optional* ingest channel: claude-memory, obsidian, yaams, manual, mcp |
-| origin        | string       | *optional* — locator of the upstream artifact                        |
-| external_id   | string       | *optional* — stable upstream key for idempotent re-import            |
-| provenance    | enum         | *optional* trust class: explicit_statement, validated, corrected, observed, imported, inferred |
-| attribute     | slug         | *optional* — state slot (`employer`, `kim.residence`); see contradiction scan |
-| things_uuid / things_list_id | string | *loops*: written by / routing for `ledger loops sync`  |
+`ledger notes add --type <type> ...` does steps 2–4 for atomic notes. Timeline
+actions: created, updated, archived, deleted, closed, sleep, reviewed, linked.
 
-### File naming
+| Type | Prefix | Folder | Holds |
+|---|---|---|---|
+| capture | `note__` | `00_inbox/` | untyped capture; triaged or retired to the archive |
+| identity | `id__` | `01_identity/` | mission, beliefs, models, strategies, narratives, voice |
+| fact | `fact__` | `02_facts/` | stable truths and decisions |
+| preference | `pref__` | `03_preferences/` | preferences, styles, policies |
+| goal | `goal__` | `04_goals/` | long-lived objectives |
+| open loop | `loop__` | `05_open_loops/` | unresolved items with a `status` and a `## Next action` checkbox |
+| concept | `concept__` | `06_concepts/` | definitions, frameworks, mental models |
+| project | `project__` | `07_projects/` | hub: Goal, State, Decisions, append-only Log |
+| (generated) | | `08_indices/` | timeline, indexes, signals, eval cases, import state |
+| (any) | | `09_archive/` | superseded notes; kept forever |
+| person | `person__` | `10_people/` | hub: Who, Working with them, append-only Log |
 
-Pattern: `{type}__{slug}.md` where slug is lowercase with underscores.
+Frontmatter (full spec in `schema.yaml`):
 
-| Type       | Prefix      | Folder                              |
-| ---------- | ----------- | ----------------------------------- |
-| identity   | `id__`      | `notes/01_identity/`                |
-| fact       | `fact__`    | `notes/02_facts/`                   |
-| preference | `pref__`    | `notes/03_preferences/`             |
-| goal       | `goal__`    | `notes/04_goals/`                   |
-| open loop  | `loop__`    | `notes/05_open_loops/`              |
-| concept    | `concept__` | `notes/06_concepts/`                |
-| capture    | `note__`    | `notes/00_inbox/` (untyped; triaged or retired to `09_archive/`) |
-| project    | `project__` | `notes/07_projects/` (hub)          |
-| person     | `person__`  | `notes/10_people/` (hub)            |
+| Field | Format | Notes |
+|---|---|---|
+| created, updated | ISO 8601 UTC | `2026-01-20T12:00:00Z`; bump `updated` on every content edit |
+| tags | list | lowercase, no spaces, at most 10 |
+| confidence | 0.0–1.0 | below 0.7 = hypothesis |
+| source | enum | user, tool, assistant, inferred |
+| scope | enum | home, work, dev, personal, life (alias), meta |
+| lang | enum | en, no, mixed |
+| status | enum | **loops only**: open, closed, blocked, snoozed |
+| identity_type | enum | **identity only**: mission, beliefs, models, strategies, narratives, voice |
+| valid_from, valid_to | ISO 8601 UTC | *optional* valid-time; `valid_to: null` = still true |
+| superseded_by, supersedes | path / list | *optional*; written by `supersede()` |
+| via, origin, external_id | enum / string | *optional* ingest channel (claude-memory, obsidian, yaams, manual), upstream locator, idempotency key |
+| provenance | enum | *optional*: explicit_statement, validated, corrected, observed, imported, inferred |
+| attribute | slug | *optional* state slot (`employer`, `kim.residence`); two live notes on one slot are filed as a conflict |
 
 ### Note types live in one registry
 
 `ledger/layout.py` `NOTE_LAYOUTS` is the single source for folders, prefixes,
-labels, kinds, bitemporal/status/hub behaviour. No other module may spell out a
-folder name or prefix (`tests/test_layout_registry.py` enforces it). Adding a type
-= one `NOTE_LAYOUTS` entry + its `schema.yaml` `types:` entry (a test checks they
+labels, kinds, bitemporal/status/hub behaviour. Every other module derives
+from it (`tests/test_layout_registry.py` enforces this). Adding a type = one
+`NOTE_LAYOUTS` entry + its `schema.yaml` `types:` entry (a test checks they
 agree) + a template. `CONTENT_NOTE_LAYOUTS` (everything but identity) drives
 embeddings and the A/B corpus; `ATOMIC_NOTE_LAYOUTS` (no hubs) drives
 `ledger notes add` and the importers.
@@ -541,336 +116,118 @@ embeddings and the A/B corpus; `ATOMIC_NOTE_LAYOUTS` (no hubs) drives
 ### Hubs and unreviewed agent content
 
 Hubs (`ledger/hubs.py`) are living documents: people and projects. Write them
-only through `ledger people|projects add|log|set` (or MCP `ledger_hub_log`),
-never by hand-building frontmatter: mutations take the file lock and patch
-single frontmatter lines so the rest stays byte-identical. Other notes point at
-a hub with `people: [slug]` / `projects: [slug]` or a wikilink; `ledger people
-show` computes the Connected list at read time.
+through `ledger people|projects add|log|set` only: mutations take the file lock
+and patch single frontmatter lines so the rest stays byte-identical. Other
+notes point at a hub with `people: [slug]` / `projects: [slug]` or a wikilink;
+`ledger people show` computes the Connected list at read time.
 
-Agent-written content is marked: `reviewed: false` frontmatter, `- YYYY-MM-DD
-(agent) …` log lines, and any `source: assistant` note without `reviewed: true`
-(so notes agents wrote before hubs existed count too). `--accept` sets
-`reviewed: true`, keeps `source` and `updated` as written (a review is not a content
-edit), and logs timeline action `reviewed`, which briefings and the sleep-due count ignore. The candidate's `unreviewed` count is persisted in
-`note_index.json`; it caps the note's provenance at `inferred` here and makes
-yaams class the item `agent` (weight 0.75) instead of `curated`. `ledger
-unreviewed` lists, `ledger unreviewed --accept <path>` clears. Agents always
-pass `--agent`. `scripts/projects_refresh.py` (takt job `ledger-projects`)
-refreshes project hubs nightly: fixed read-only evidence commands, then codex in
-its read-only sandbox returns a JSON proposal, which is validated and applied
-with `agent=True`. No model gets a shell while reading ledger/yaams text.
+Agent-written content is marked, and agents always pass `--agent`:
+`reviewed: false` frontmatter, `- YYYY-MM-DD (agent) …` log lines, and any
+`source: assistant` note without `reviewed: true`. `ledger unreviewed` lists
+them; `ledger unreviewed --accept <path>` sets `reviewed: true`, keeps `source`
+and `updated` (a review is not a content edit) and logs timeline action
+`reviewed`, which briefings and the sleep-due count ignore. An unreviewed note
+has its provenance capped at `inferred`, and yaams classes it `agent` (weight
+0.75) instead of `curated`.
 
-### Creating a note (convention)
+`scripts/projects_refresh.py` (takt job `ledger-projects`) refreshes project
+hubs: fixed read-only evidence commands, then codex in its read-only sandbox
+returns a JSON proposal, which is validated and applied with `agent=True`. No
+model gets a shell while reading ledger or yaams text.
 
-```
-1. SEARCH    rg "<topic>" notes -l && fd "<topic>" notes
-2. DECIDE    If exists: update. If not: create.
-3. PATH      notes/{folder}/{type}__{slug}.md
-4. WRITE     Frontmatter + content (use template as reference)
-5. TIMELINE  .venv/bin/python -c "from ledger.embeddings import append_timeline_entry; append_timeline_entry('created', '{path}', '{desc}')"
-6. VERIFY    git diff
-```
+## Signals
 
-Timeline format: `{ISO timestamp} | {action} | {path} | {description}`
-Actions: created, updated, archived, deleted, closed, sleep, linked (written only by `ledger sleep links --apply`)
+Log feedback with `ledger signal add --type <type> [--query <q>] [--note <path>]`
+when it actually happened: a retrieved note was used in the answer
+(`retrieval_hit`), a search found nothing useful (`retrieval_miss`), the user
+corrected your use of a note (`correction`), confirmed it (`affirmation`), or a
+note you used was outdated (`stale_flag`). Log on clear user feedback or
+deliberate note use; skip trivial queries.
 
-### Templates
+## Retrieval rules
 
-Reusable Markdown templates are provided under `templates/` for convenience:
+Measured verdicts; the numbers and the knobs are in `docs/retrieval.md`. Change
+one only with a fresh `ledger ab run` that beats it on the live cases.
 
-- `generic_note_template.md` – for atomic notes (facts, preferences,
-  goals, concepts). Contains sections for Statement, Context, Implications
-  and Links.
-- `open_loop_template.md` – for unresolved questions or tasks, including
-  status and next actions.
+- `retrieval_mode: semantic_hybrid` with `fusion: weighted_sum`. RRF measured worse.
+- `prf_enabled: false`. PRF measured worse.
+- `score_weight_signal: 0`. Signals are collected but stay out of ranking: no weight helped signal cases without regressing the general ones.
+- `contradiction_enabled: false` and `contradiction_auto_supersede: false`. Precision is below the 0.9 floor for auto-resolution, and Norwegian is unvalidated.
+- `migrate bitemporal` leaves `updated` alone: a validity back-fill is metadata, and re-dating notes cost hit@1.
+- A note added or edited after the last index build ranks badly in `semantic_hybrid` until `ledger sleep index` runs. `ledger query` warns on stderr when that is the case.
 
-Agents may copy from these templates when creating new notes, but should
-always customise the content and metadata.
+**Mandatory eval gate.** A change touching `ledger/retrieval.py`, `query.py`,
+`scoring.py`, `signals.py` or `config.py` runs `bash scripts/ab_gate.sh` and
+records the output with the change. Exit 0 = beneficial, 3 = neutral (fine for
+an off-by-default or behaviour-neutral change), **2 = regression: stop, do not
+merge**, 4 = invalid setup. CI runs the same gate on push and PR, pinned to
+lexical mode. The live-corpus check is:
 
-## Triggers for writing
-
-Write or update a note when any of the following events occur:
-
-1. **Decision** – A concrete choice is made (e.g. selecting a name or
-   adopting a strategy).
-2. **Preference** – The user expresses a stable preference or style.
-3. **Correction** – A prior belief is corrected or clarified.
-4. **Long-lived goal or constraint** – A new objective or invariant is set.
-5. **New concept or framework** – You define or discover a useful concept.
-6. **Open loop** – An unresolved question or task arises that spans
-   sessions.
-7. **Identity change** – The user expresses a core belief, mission shift,
-   strategic heuristic, or narrative reframing → persist to identity layer.
-
-If none of these triggers fire, do not persist anything. Noise kills
-future context.
-
-### Signal capture (feedback loop)
-
-In addition to note writes, capture feedback signals when:
-
-- A retrieved note was **used** in a response → `retrieval_hit`
-- A search found **nothing useful** → `retrieval_miss`
-- The user **corrects** the agent's use of a note → `correction`
-- The user **confirms** the agent got it right → `affirmation`
-- A note is referenced but its content is **outdated** → `stale_flag`
-
-Capture via: `ledger signal add --type <type> [--query <q>] [--note <path>]`
-
-Do NOT capture signals speculatively or for trivial queries. Only log when
-there is clear user feedback or deliberate note usage.
-
-## Cross-agent handoff (cross-agentism)
-
-This ledger is designed to be **cross-agentic** (Codex / VSCode / Claude Code / future agents).
-Notes must be understandable and useful without prior chat context.
-
-When the user says “remember this”, “hold that thought”, “store this”, or similar:
-
-- Persist the **smallest durable artifact(s)** that preserve the thread.
-- Prefer atomic notes + links over long summaries.
-- If the thread should be resumed later, create or update an open loop with:
-  - a clear next action,
-  - and an exit condition.
-
-Goal: another agent can resume by searching (`rg`/`fd`), reading 1–3 atomic notes,
-and continuing without loading a large context window.
-
-## Operating loop for each interaction
-
-Agents should follow this loop on every user interaction:
-
-1. **Search** – Identify relevant context:
-   - Use `fd` to locate candidate files by name or tag; use `rg` to search
-     within files for keywords. Combine tag filters and keywords to
-     narrow down the search space.
-   - Load only what is necessary; avoid concatenating entire archives into
-     the prompt. Keep the working set small to preserve context window.
-   - Identity notes (`notes/01_identity/`) are always relevant context;
-     load them early in the session if not already loaded.
-2. **Respond** – Generate the user-facing answer or action.
-3. **Persist** – If a trigger fires:
-   - Draft a new note using the appropriate template, or update an
-     existing note. Populate the frontmatter and relevant sections.
-   - Update the `updated` timestamp whenever modifying a note.
-   - For open loops, add a `next action` checklist item to guide the
-     resolution.
-   - Keep cross-agent readability in mind: write so a different agent can pick up the thread
-     using only the ledger + search tools.
-4. **Signal** – If user feedback occurred (correction, affirmation, or
-   explicit rating), or a retrieved note was used in the response, log a
-   signal via `ledger signal add`. See "Signal capture" above.
-5. **Report** – Summarise what you changed. In the chat, list any
-   created or updated files with a one-line description. Do not dump
-   the full note contents unless the user asks.
-
-## Session Lifecycle Hooks
-
-Hook scripts under `scripts/hooks/` automate common session patterns:
-
-| Hook               | Script                          | Purpose                                      |
-| ------------------ | ------------------------------- | -------------------------------------------- |
-| **session-start**  | `scripts/hooks/session_start.sh` | Load boot context: identity + loops + status |
-| **post-write**     | `scripts/hooks/post_write.sh`   | Append timeline entry after note operations  |
-| **session-end**    | `scripts/hooks/session_end.sh`  | Flush signals, report session activity       |
-
-Manual invocation: `bash scripts/hooks/session_start.sh`
-
-For Claude Code integration, configure in `.claude/settings.json`:
-```jsonc
-{
-  "hooks": {
-    "SessionStart": [{"type": "command", "command": "bash scripts/hooks/session_start.sh"}]
-  }
-}
+```bash
+ledger eval --cases "$(ledger paths --field ledger_notes_dir)/08_indices/retrieval_eval_cases.yaml" --k 3 --strict-cases
 ```
 
-## Identity Layer
+## Sleep (consolidation)
 
-Identity notes in `notes/01_identity/` capture *who the user is* — their
-mission, beliefs, mental models, decision strategies, and personal narratives.
-These are high-signal, small files that provide rich context for interpreting
-requests.
-
-- At most 6 files (`limits.max_identity_notes`). Each carries an `identity_type`
-  (mission, beliefs, models, strategies, narratives, voice); types may repeat.
-  Lint warns past the cap.
-- Always loaded at boot (via context profile or session-start hook)
-- Receive a retrieval score boost (identity notes surface above similarly-relevant notes)
-- Distinct from `06_concepts/` (general frameworks) — identity is *personal* axioms
-
-When to update: mission shifts, new beliefs, changed decision heuristics, or
-narrative reframing. Flag identity notes >90 days old during consolidation.
-
-## Tooling hints
-
-To operate efficiently without exhausting context windows, lean on
-standard command-line tools:
-
-- **`fd`** – Fast, user-friendly file finder. Example: `fd open_loop pref__`.
-- **`rg` (ripgrep)** – Recursively search for keywords or tags inside files.
-  Example: `rg "tags: \[.*ai.*\]"` to find notes tagged with `ai`.
-- **`git diff`** – Inspect uncommitted changes before reporting them.
-- **`git log`** – Review history and reconstruct timelines. Combined with
-  commit messages, this forms an append-only ledger.
-- **`wc`** – Estimate token counts quickly (`wc -w`) to avoid exceeding
-  context limits.
-
-Prefer these tools to complex frameworks. Simplicity makes it easier for
-future agents to understand and extend the system.
-
-## Learned Patterns
-
-### Python / Test Runner
-- **Never use `python`, `python3`, or bare `pytest`** - all fail. Always use `.venv/bin/python -m pytest` (or `.venv/bin/pytest`) for this repo.
-- For the YAAMS repo (`~/code/yaams`), use `~/code/yaams/.venv/bin/python -m pytest` - it has its own isolated venv.
-
-### Write Tool Safety
-- Always **Read a file before Writing it** if the file might already exist on disk. The Write tool will error with "File has not been read yet" otherwise. Files that are frequently written without a prior read: `CHANGELOG.md`, `.plans/TODO.md`, `pyproject.toml`, test files.
-
-### Ledger Data Paths
-- Ledger data root: `~/brain/ledger/` - inbox at `~/brain/ledger/00_inbox/`, indices at `~/brain/ledger/08_indices/` (signals.jsonl, timeline.jsonl).
-- Notes vault root: `~/brain/notes/` - use absolute paths; relative paths like `notes/00_inbox` fail with fd/find.
-- `ledger paths --field` only accepts: `ledger_root`, `ledger_notes_dir`, `source_notes_dir`, `timeline_path`.
-
-### CLI Command Correctness
-- `hugr stats` (not `hugr status`) - `status` is not a valid hugr subcommand.
-- Workflow scripts must be **plain JavaScript, not TypeScript** - type annotations like `: string[]` cause parse errors at runtime.
+`ledger sleep status` says when a pass is due (many changes, duplicates,
+fragmented concepts, loops without next actions, or a week since the last
+one). A pass merges duplicates (oldest note stays canonical), promotes repeated
+patterns into concepts or preferences, rebuilds indices, tightens open loops,
+and surfaces conflicts as inbox conflict notes for a human. Flag identity notes
+older than 90 days. Commands and their safety rules: `docs/maintenance.md`.
 
 ## memcore (shared retrieval contract)
 
-`memcore/` at the repo root is a separately installable package
-(`pip install -e ./memcore`) holding the retrieval contract shared with the
-**yaams** sibling repo: the `ScoredResult` schema (`memcore.schema`), RRF
-fusion (`memcore.rrf`), the cross-encoder reranker (`memcore.rerank`), and
-trust verdicts (`memcore.trust`). yaams used to carry ported copies of these;
-it now imports memcore instead, so every public symbol and dataclass field in
-memcore is a cross-repo contract — additive changes only, and coordinate a
-yaams update for anything else.
+`memcore/` is a separately installable package holding the contract shared with
+the sibling **yaams** repo: the `ScoredResult` schema, RRF fusion, the
+cross-encoder reranker and trust verdicts. Every public symbol and dataclass
+field in it is cross-repo API: additive changes only, and coordinate a yaams
+update for anything else.
 
-Rules:
-
-- **memcore is stdlib-only.** No runtime dependencies, ever. Anything needing
-  numpy/sklearn stays in `ledger/`. (`memcore.rerank` imports
-  sentence-transformers lazily, at call time only.)
-- The ledger re-exports memcore at the old import paths
-  (`ledger.retrieval_types`, `ledger.rerank`, `ledger.query
-  .reciprocal_rank_fusion`, `ledger.scoring.trust_verdict`,
-  `ledger.retrieval.attach_trust_verdicts`) — import from those inside
-  ledger code; the shims are the compatibility seam.
+- **memcore is stdlib-only.** Anything needing numpy stays in `ledger/`.
+  (`memcore.rerank` imports sentence-transformers lazily, at call time.)
+- Inside ledger code, import through the re-export shims
+  (`ledger.retrieval_types`, `ledger.rerank`,
+  `ledger.query.reciprocal_rank_fusion`, `ledger.scoring.trust_verdict`,
+  `ledger.retrieval.attach_trust_verdicts`); they are the compatibility seam.
 - The JSON seams yaams shells out to (`ledger embed search --json`/`--batch`,
-  `ledger paths --json`) are shape-locked by `tests/test_seam_golden.py`.
-  If that test fails, you are breaking yaams — fix the shape or update both
-  repos together.
+  `ledger paths --json`) are shape-locked by `tests/test_seam_golden.py`. A
+  failure there means yaams breaks: fix the shape or update both repos together.
+- yaams raw items are immutable and append-only. Improve retrieval and promote
+  curated notes; leave the raw tier as written.
 
-See `memcore/README.md` for details.
+## Learned patterns
 
-## Electric Sheep (sleep / consolidation)
-
-The ledger must maintain cohesion as it grows. Consolidation ("sleep") is the primary tool for preventing drift and fragmentation. Commands are listed in the Quick Reference above.
-
-Run sleep when:
-
-- many new artifacts were created recently,
-- duplicates start appearing,
-- concepts are fragmented across many notes,
-- open loops proliferate without clear next actions,
-- or on a periodic schedule (see `schema.yaml` limits: sleep interval and change threshold).
-
-Expected behaviors:
-
-- merge duplicates (preserve provenance; prefer oldest canonical note),
-- promote repeated patterns into stable concepts/preferences,
-- update indices (timeline, tags, loop summaries),
-- clarify open loops (tighten statements; add next actions; adjust status),
-- surface conflicts as explicit open loops ("needs decision").
-
-## Safety & control
-
-At any point, the user may request to delete or forget a note. When this
-happens:
-
-1. Remove the file from its current location.
-2. Remove or update any links pointing to it.
-3. Append a `deleted` event through `append_timeline_entry` (never edit generated `timeline.md`).
-4. Do not move the note to `09_archive/` for delete/forget requests; treat these as hard-deletes.
-
-If you are unsure whether to persist something, either ask the user or
-store it as a low-confidence hypothesis. Respect the user's privacy and
-preferences throughout.
-
-## Write modes (interaction policy)
-
-Different environments may prefer different degrees of visibility.
-The active policy is available at runtime via `ledger context --format boot`.
-
-| Mode | Config value | Behaviour |
-|------|-------------|-----------|
-| Auto-write | `auto-write` | Persist high-confidence durable artifacts without asking. |
-| Silent write | `silent-write` | Do not show diffs by default; rely on git for reversibility. |
-| Ask-to-write | `ask-to-write` | Ask before persisting when uncertain or sensitive. |
-
-**Report levels** (controls how verbose post-write reports are):
-
-| Level | Config value | Output |
-|-------|-------------|--------|
-| Summary | `summary` | One-line per change (default). |
-| Verbose | `verbose` | Full diff shown after each write. |
-| Silent | `silent` | No write report; minimal feedback. |
-
-Configure in `~/.config/ledger/config.yaml`:
-
-```yaml
-write_policy:
-  mode: auto-write
-  report_level: summary
-```
-
-Default preference (unless the user requests otherwise): **Auto-write + Silent write**,
-asking only for genuinely ambiguous items.
-
-## Output expectations
-
-When you modify the ledger within a session:
-
-- Provide a succinct summary of changes. Include the relative path of
-  each created or updated note and a one-line description. For example:
-
-  > Created `02_facts/fact__cognitive_ledger.md` – defined the Cognitive Ledger concept
-
-  > Updated `03_preferences/pref__concise_answers.md` – lowered confidence to 0.6
-
-- Do **not** paste entire file contents unless explicitly requested.
-
-If the user has requested silent operation, keep the report minimal (e.g. “logged to cog-led”),
-but still remain correct and reversible via git history.
-
-These conventions maintain transparency without flooding the user or
-future agents with unnecessary text.
+- **Tests run as `.venv/bin/python -m pytest`.** Bare `python`, `python3` and
+  `pytest` all fail here. yaams has its own venv: `~/code/yaams/.venv/bin/python -m pytest`.
+- The suite points `LEDGER_NOTES_DIR` and `XDG_CONFIG_HOME` at temp dirs
+  (`tests/conftest.py`), so it never reads the developer's config or corpus.
+  Keep it that way: tests use fixture corpora.
+- Read a file before Writing it when it may already exist (`CHANGELOG.md`,
+  `pyproject.toml`, test files); the Write tool refuses otherwise.
+- Corpus paths: use absolute paths from `ledger paths` (`--field` accepts
+  `ledger_root`, `ledger_notes_dir`, `source_notes_dir`, `timeline_path`).
+  Relative `notes/...` paths fail with `fd`/`find` because the corpus lives
+  outside this repo.
+- `hugr stats`, not `hugr status`.
+- Workflow scripts are plain JavaScript; TypeScript annotations fail at runtime.
+- The repo is public. Fixtures, docs and examples use invented people, orgs
+  and note names; real corpus content and machine paths stay out of tracked files.
 
 ## Keeping docs in sync
 
-When you make changes to the ledger's **infrastructure** (new note types,
-config parameters, retrieval modes, CLI subcommands, schema changes, hooks,
-or other user-facing features):
-
-1. **`CHANGELOG.md`** – Append an entry under the current date. Use
-   `### Added`, `### Changed`, `### Fixed`, or `### Removed` headings
-   (keep-a-changelog style). One bullet per distinct change.
-2. **`README.md`** – Update if the change affects getting-started steps,
-   folder layout, CLI examples, or introduces a new top-level feature
-   section. Keep the README concise; link to `AGENTS.md` or `schema.yaml`
-   for details.
-
-Do **not** update these files for routine note operations (creating,
-updating, or archiving individual notes). Only infrastructure and tooling
-changes warrant doc updates.
+Infrastructure changes (note types, config keys, retrieval modes, CLI verbs,
+schema, hooks) get a `CHANGELOG.md` bullet under `## Unreleased`
+(`### Added|Changed|Fixed|Removed`), and a `README.md` edit only when a
+getting-started step, CLI example or top-level feature changes. The README
+describes the present; history belongs in the changelog. Durable instructions
+for agents go here or in the `docs/` file the table above points at. Routine
+note operations touch neither.
 
 ## Releasing
 
-When the user says something like **"cut a major/minor/patch version and
-publish"**, it always means this full sequence (semver: major = X, minor =
-Y, patch = Z in `vX.Y.Z`):
+"Cut a major/minor/patch version and publish" always means this full sequence
+(`vX.Y.Z`):
 
 1. **Bump the version** in BOTH `pyproject.toml` (`version = "..."`) and
    `ledger/__init__.py` (`__version__ = "..."`). Move the `## Unreleased`
@@ -881,8 +238,7 @@ Y, patch = Z in `vX.Y.Z`):
    before computing its hash. The tag push also triggers
    `.github/workflows/release.yml`, which runs the tests, rebuilds the wheel +
    sdist with `uv build`, and creates the GitHub Release with both artifacts
-   attached. That workflow does **not** publish to PyPI - step 4 does that
-   locally.
+   attached. That workflow does **not** publish to PyPI; step 4 does that locally.
 3. **Update the homebrew-tap formula** at `~/code/homebrew-tap/Formula/cognitive-ledger.rb`:
    point `url` at `.../archive/refs/tags/vX.Y.Z.tar.gz` and set `sha256` to
    `curl -sL <url> | shasum -a 256`. Commit and push the tap repo
@@ -892,12 +248,10 @@ Y, patch = Z in `vX.Y.Z`):
    export UV_PUBLISH_TOKEN="$(grep -E '^UV_PUBLISH_TOKEN=' ~/code/owa-piggy/.env | cut -d= -f2- | tr -d '"')"
    rm -rf dist/ && uv build && uv publish
    ```
-   (`uv build` fails on tracked absolute/external symlinks — keep dev-only
-   symlinks like `scripts/ledger` untracked + gitignored.)
+   (`uv build` fails on tracked absolute/external symlinks: keep dev-only
+   symlinks like `scripts/ledger` untracked and gitignored.)
 
-**Brew guard — do NOT run `brew install` / `brew upgrade` / `brew reinstall`**
-if `where ledger` resolves to anything other than the Homebrew bin (e.g. the
-dev symlink at `~/.local/bin/ledger`). The user runs the CLI from a local
-editable install; reinstalling via brew would shadow it and reintroduce
-version skew. Validating the formula end-to-end is only safe on a machine
-that doesn't use the dev install.
+**Brew guard.** Run `brew install` / `upgrade` / `reinstall` for this formula
+only on a machine where `where ledger` resolves to the Homebrew bin. On a
+machine with the dev install (`~/.local/bin/ledger` → the editable venv), brew
+would shadow it and reintroduce version skew.
