@@ -31,3 +31,5 @@ config.yaml
 .uxl/
 *.egg-info/
 .plans/
+# Owner's working notes; they name real corpus content.
+NEXT_STEPS.md
