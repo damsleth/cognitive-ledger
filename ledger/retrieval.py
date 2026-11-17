@@ -1510,19 +1510,29 @@ def apply_progressive_disclosure(
     return output
 
 
-def _maybe_log_query(result: "RetrievalResult") -> None:
-    """Append a JSONL telemetry line if LEDGER_QUERY_LOG=1."""
-    if os.environ.get("LEDGER_QUERY_LOG") != "1":
+def log_query(result: "RetrievalResult", source: str) -> None:
+    """Append one JSONL usage line when ``query_log_enabled`` is set.
+
+    Called from the consumer seams (CLI ``query``, ``answer``, web search),
+    not from the rankers, so eval and A/B runs never land in the log and every
+    retrieval mode is covered. ``source`` names the seam.
+    """
+    if not _cfg().query_log_enabled:
         return
+    # A usage log must never fail the query it describes, hence the broad except.
     try:
         log_path = indices_dir(_cfg().ledger_notes_dir) / "query_log.jsonl"
         entry = json.dumps(
             {
                 "ts": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "source": source,
                 "query": result.query,
                 "scope": result.scope,
                 "mode": result.retrieval_mode,
-                "top_3": [r.rel_path for r in result.results[:3]],
+                "top_3": [
+                    r.get("rel_path") if isinstance(r, dict) else r.rel_path
+                    for r in result.results[:3]
+                ],
                 "latency_ms": round(result.timing.total_ms, 1),
                 "candidates": result.candidate_pool_size,
             },
@@ -1530,7 +1540,7 @@ def _maybe_log_query(result: "RetrievalResult") -> None:
         )
         with open(log_path, "a", encoding="utf-8") as f:
             f.write(entry + "\n")
-    except OSError:
+    except Exception:
         pass
 
 
@@ -1731,7 +1741,6 @@ def rank_lexical(
             total_ms=(t_score - t0) * 1000.0,
         ),
     )
-    _maybe_log_query(result)
     return result
 
 

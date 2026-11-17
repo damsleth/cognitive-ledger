@@ -29,6 +29,11 @@ _TEST_NOTES_DIR = os.environ.setdefault(
     "LEDGER_NOTES_DIR", tempfile.mkdtemp(prefix="ledger-tests-")
 )
 
+# The developer's own config.yaml must not leak into the suite either: a key
+# set there (retrieval mode, query log, signal capture) would change what the
+# tests exercise. An empty config dir makes a local run match CI.
+os.environ["XDG_CONFIG_HOME"] = tempfile.mkdtemp(prefix="ledger-tests-xdg-")
+
 
 @pytest.fixture
 def temp_notes_dir() -> Generator[Path, None, None]:

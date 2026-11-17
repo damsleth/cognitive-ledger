@@ -21,6 +21,7 @@ from ledger import query as query_lib
 from ledger import semantic as semantic_lib
 from ledger.parsing import extract_link_tokens, normalize_section_name, shorten
 from ledger.retrieval import (
+    log_query,
     now_utc,
     resolve_retrieval_mode,
     resolve_embed_backend,
@@ -70,10 +71,6 @@ compact_line = browse_lib.compact_line
 compact_loop_line = browse_lib.compact_loop_line
 compact_generic_line = browse_lib.compact_generic_line
 format_detail = browse_lib.format_detail
-
-
-def maybe_log_query_telemetry(**_kwargs):
-    pass
 
 
 def rank_query(*args, **kwargs):
@@ -295,6 +292,7 @@ def handle_query_command(args):
         changed_since=changed_since,
         prf_enabled=True if getattr(args, "prf", False) else None,
     )
+    log_query(payload, "cli")
 
     view = getattr(args, "view", "context")
     results = query_lib.payload_results(payload)
@@ -1017,7 +1015,7 @@ def _handle_signal_seed(args):
         if not log_path.is_file():
             print(
                 f"No query history found at {log_path}.\n"
-                "Enable query logging first: LEDGER_QUERY_LOG=1 ledger query <q>\n"
+                "Enable query logging first: query_log_enabled: true in config.yaml\n"
                 "Or supply queries directly: ledger signal seed --queries-file <path>"
             )
             raise SystemExit(1)

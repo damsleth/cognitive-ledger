@@ -356,6 +356,44 @@ class LedgerEmbeddingsTests(unittest.TestCase):
         self.assertEqual(first.shape, (1, 2))
         self.assertEqual(second.shape, (1, 2))
 
+    def test_local_encoder_tries_cache_before_the_hub(self):
+        attempts = []
+
+        class UncachedSentenceTransformer:
+            def __init__(self, model, local_files_only=False, **kwargs):
+                attempts.append(local_files_only)
+                if local_files_only:
+                    raise OSError("model is not in the local cache")
+
+        fake_module = types.ModuleType("sentence_transformers")
+        fake_module.SentenceTransformer = UncachedSentenceTransformer
+        original_module = sys.modules.get("sentence_transformers")
+        original_env = os.environ.pop("LEDGER_EMBEDDINGS_OFFLINE", None)
+        sys.modules["sentence_transformers"] = fake_module
+
+        try:
+            # Not cached: the cache-only load fails, then the Hub is tried.
+            self.embeddings.clear_runtime_caches()
+            self.embeddings._get_local_encoder("fake-model")
+            self.assertEqual(attempts, [True, False])
+
+            # Offline: the cache-only failure is final.
+            attempts.clear()
+            self.embeddings.clear_runtime_caches()
+            os.environ["LEDGER_EMBEDDINGS_OFFLINE"] = "1"
+            with self.assertRaises(OSError):
+                self.embeddings._get_local_encoder("fake-model")
+            self.assertEqual(attempts, [True])
+        finally:
+            self.embeddings.clear_runtime_caches()
+            os.environ.pop("LEDGER_EMBEDDINGS_OFFLINE", None)
+            if original_env is not None:
+                os.environ["LEDGER_EMBEDDINGS_OFFLINE"] = original_env
+            if original_module is None:
+                del sys.modules["sentence_transformers"]
+            else:
+                sys.modules["sentence_transformers"] = original_module
+
 
 if __name__ == "__main__":
     unittest.main()

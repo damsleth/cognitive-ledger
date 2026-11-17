@@ -351,17 +351,14 @@ class LedgerUnitTests(unittest.TestCase):
 
     def test_query_telemetry_writes_jsonl_when_enabled(self):
         from ledger.config import LedgerConfig, set_config, reset_config
-        from ledger.retrieval import _maybe_log_query, clear_candidate_cache
+        from ledger.retrieval import log_query
         from ledger.retrieval_types import RetrievalResult, TimingInfo
 
-        original = os.environ.get("LEDGER_QUERY_LOG")
-        os.environ["LEDGER_QUERY_LOG"] = "1"
         try:
             with tempfile.TemporaryDirectory() as temp_dir:
                 tmp = Path(temp_dir)
                 (tmp / "notes" / "08_indices").mkdir(parents=True)
-                config = LedgerConfig(ledger_root=tmp)
-                set_config(config)
+                log_path = tmp / "notes" / "08_indices" / "query_log.jsonl"
                 result = RetrievalResult(
                     query="calendar constraints",
                     scope="work",
@@ -379,18 +376,20 @@ class LedgerUnitTests(unittest.TestCase):
                         shortlist_ms=0, score_ms=0, total_ms=42.6,
                     ),
                 )
-                _maybe_log_query(result)
-                log_path = tmp / "notes" / "08_indices" / "query_log.jsonl"
+                # Off by default: nothing is written.
+                set_config(LedgerConfig(ledger_root=tmp))
+                log_query(result, "cli")
+                self.assertFalse(log_path.exists())
+
+                set_config(LedgerConfig(ledger_root=tmp, query_log_enabled=True))
+                log_query(result, "cli")
                 content = log_path.read_text(encoding="utf-8")
+                self.assertIn('"source": "cli"', content)
                 self.assertIn('"query": "calendar constraints"', content)
                 self.assertIn('"scope": "work"', content)
                 self.assertIn('"latency_ms": 42.6', content)
         finally:
             reset_config()
-            if original is None:
-                del os.environ["LEDGER_QUERY_LOG"]
-            else:
-                os.environ["LEDGER_QUERY_LOG"] = original
 
     def test_extract_link_tokens_captures_markdown_and_wiki_refs(self):
         body = (

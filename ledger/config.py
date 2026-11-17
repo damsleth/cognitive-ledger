@@ -241,6 +241,7 @@ def _apply_env_overrides(config: "LedgerConfig") -> "LedgerConfig":
     # Boolean overrides ("1", "true", "yes", "on" -> True; else False)
     bool_mappings = {
         "LEDGER_SIGNALS_AUTO_CAPTURE": "signals_auto_capture",
+        "LEDGER_QUERY_LOG": "query_log_enabled",
         "LEDGER_CONTRADICTION_ENABLED": "contradiction_enabled",
         "LEDGER_CONTRADICTION_AUTO_SUPERSEDE": "contradiction_auto_supersede",
         "LEDGER_CONTRADICTION_PROTECT_HIGHER_CONFIDENCE": "contradiction_protect_higher_confidence",
@@ -595,6 +596,16 @@ class LedgerConfig:
     Even when on, signal feedback stays inert for ranking until
     ``signal_min_entries`` (20) accrue and ``score_weight_signal`` is
     raised above 0 — so turning this on is safe and reversible.
+    """
+
+    query_log_enabled: bool = False
+    """Whether ``ledger query``, ``ledger answer`` and web search append a
+    usage line to ``08_indices/query_log.jsonl`` (query text, source, mode,
+    top 3 paths, latency).
+
+    Off by default: the log holds raw query text. Turn it on to learn which
+    surfaces and modes are used before tuning retrieval. Eval and A/B runs
+    are never logged. Env: ``LEDGER_QUERY_LOG``.
     """
 
     signals_miss_score_floor: float = 0.15

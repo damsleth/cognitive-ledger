@@ -323,10 +323,17 @@ def _get_local_encoder(model: str, device: str | None = None) -> Any:
         ) from exc
 
     offline = os.getenv("LEDGER_EMBEDDINGS_OFFLINE", "").strip().lower() in {"1", "true", "yes", "on"}
-    kwargs: dict[str, Any] = {"local_files_only": offline}
+    kwargs: dict[str, Any] = {}
     if resolved_device is not None:
         kwargs["device"] = resolved_device
-    encoder = SentenceTransformer(model, **kwargs)
+    try:
+        # Cached weights first: an online load pays a Hub metadata round trip
+        # (several seconds per CLI call) even when nothing needs downloading.
+        encoder = SentenceTransformer(model, local_files_only=True, **kwargs)
+    except Exception:
+        if offline:
+            raise
+        encoder = SentenceTransformer(model, local_files_only=False, **kwargs)
     _LOCAL_ENCODER_CACHE[cache_key] = encoder
     return encoder
 

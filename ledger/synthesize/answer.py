@@ -255,6 +255,7 @@ def answer(
     """Retrieve sources for *question* and synthesize a grounded, cited answer."""
     from ledger.config import get_config
     from ledger.query import rank_query
+    from ledger.retrieval import log_query
     from ledger.synthesize.llm import adapter_from_ledger_config
 
     cfg = get_config()
@@ -267,6 +268,7 @@ def answer(
         now_dt=now_dt,
         as_of=as_of,
     )
+    log_query(payload, "answer")
     results = list(getattr(payload, "results", []))
 
     voice_dna = None

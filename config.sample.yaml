@@ -100,6 +100,11 @@ first_run: true
 # prf_beta: 0.75
 # prf_gamma: 0.15
 
+# Usage log: `ledger query`, `ledger answer` and web search append one line per
+# query to 08_indices/query_log.jsonl (raw query text, source, mode, top 3
+# paths, latency). Off by default. Eval and A/B runs are never logged.
+# query_log_enabled: false
+
 # LLM-judged signal seeding (Mechanism 3 — bootstrap the signal gate)
 # Run: ledger signal seed --from-history  (or --queries-file <path>)
 # Seeded events carry synthetic:true and are down-weighted by synthetic_weight.

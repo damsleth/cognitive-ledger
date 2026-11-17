@@ -16,6 +16,7 @@ from typing import Any
 from ledger.config import get_config
 from ledger.parsing import shorten
 from ledger.query import rank_query as cli_rank_query, payload_results, result_get
+from ledger.retrieval import log_query
 
 
 UI_MODES: dict[str, str] = {
@@ -115,6 +116,7 @@ class Searcher:
             embed_backend=cfg.embed_backend,
             embed_model=cfg.embed_model,
         )
+        log_query(payload, "web")
         elapsed_ms = (time.monotonic() - t0) * 1000.0
 
         hits: list[SearchHit] = []
