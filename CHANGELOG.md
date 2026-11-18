@@ -20,6 +20,7 @@
 - Unreferenced private helpers, unused eval state and the unused scikit-learn dependency. Watch mode now uses the `obsidian` extra.
 
 ### Fixed
+- Require token authentication for all web UI routes and explicit opt-in for remote binding. Limit retrieval-gate workflow permissions to read-only contents.
 - Candidate-to-result copies preserve all metadata, including provenance, ingest channel and validation count for trust annotation.
 
 ### Added

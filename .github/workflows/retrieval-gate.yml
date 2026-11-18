@@ -32,6 +32,9 @@ on:
       - scripts/ab_gate.sh
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   ab-gate:
     runs-on: ubuntu-latest

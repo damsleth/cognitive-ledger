@@ -398,6 +398,8 @@ ledger web                                 # binds http://127.0.0.1:8765
 ledger web --port 9000 --reload            # custom port + autoreload (dev)
 ```
 
+Open the token URL printed at startup to authenticate your browser. All routes require authentication. Set `LEDGER_WEB_TOKEN` to supply a stable token; API clients can send `Authorization: Bearer <token>`. Non-loopback binding requires `LEDGER_WEB_ALLOW_REMOTE=1`; use HTTPS through a trusted proxy for remote access.
+
 Routes:
 
 - `/` and `/browse` - recent activity across all types

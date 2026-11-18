@@ -144,4 +144,5 @@ def client(web_ledger_root: Path) -> Generator[TestClient, None, None]:
     """FastAPI TestClient over the Phase 1 app."""
     app = create_app()
     with TestClient(app) as c:
+        c.headers["Authorization"] = f"Bearer {app.state.auth_token}"
         yield c

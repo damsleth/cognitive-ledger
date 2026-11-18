@@ -11,11 +11,15 @@ so they remain easy to test with a custom corpus.
 
 from __future__ import annotations
 
+import hmac
+import ipaddress
 import logging
+import os
 import secrets
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
+from urllib.parse import urlencode
 
 from ledger.config import LedgerConfig, get_config
 from ledger.web.services.corpus import Corpus
@@ -81,6 +85,38 @@ def create_app(
     app.state.corpus = corpus or Corpus(cfg)
     app.state.templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
     app.state.review_csrf_token = secrets.token_urlsafe(32)
+
+    from starlette.responses import JSONResponse
+
+    token = os.environ.get("LEDGER_WEB_TOKEN") or secrets.token_urlsafe(32)
+    app.state.auth_token = token
+
+    @app.middleware("http")
+    async def authenticate(request, call_next):
+        query_token = request.query_params.get("token", "")
+        scheme, _, bearer = request.headers.get("authorization", "").partition(" ")
+
+        def matches(value: str) -> bool:
+            return hmac.compare_digest(value.encode("utf-8"), token.encode("utf-8"))
+
+        query_authenticated = matches(query_token)
+        if not (
+            query_authenticated
+            or (scheme.lower() == "bearer" and matches(bearer))
+            or matches(request.cookies.get("ledger_web_auth", ""))
+        ):
+            return JSONResponse(
+                {"detail": "Authentication required"}, status_code=401,
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        response = await call_next(request)
+        response.headers["Referrer-Policy"] = "no-referrer"
+        if query_authenticated:
+            response.set_cookie(
+                "ledger_web_auth", token, httponly=True, samesite="strict",
+                secure=request.url.scheme == "https",
+            )
+        return response
 
     # Inject statusbar data as Jinja2 globals so base.html can render without
     # each route having to pass it explicitly.  The corpus reference is captured
@@ -166,33 +202,48 @@ def run(
 ) -> None:
     """Launch uvicorn against :func:`create_app` (synchronous, blocking).
 
-    ``--host`` defaults to loopback. If the caller passes a non-loopback
-    host we print a warning so a stray ``--host 0.0.0.0`` doesn't quietly
-    expose the corpus.
+    Remote binding requires explicit opt-in via LEDGER_WEB_ALLOW_REMOTE.
     """
+    try:
+        loopback = ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        loopback = host.lower() == "localhost"
+    if not loopback and os.environ.get("LEDGER_WEB_ALLOW_REMOTE", "").lower() not in {
+        "1", "true", "yes", "on",
+    }:
+        raise ValueError("Non-loopback binding requires LEDGER_WEB_ALLOW_REMOTE=1")
+
     uvicorn = _require_uvicorn()
     cfg = get_config()
-
-    if host not in {"127.0.0.1", "localhost", "::1"}:
-        print(
-            f"warning: binding to non-loopback host {host!r}; the ledger has no auth.",
-            file=sys.stderr,
-        )
+    token = os.environ.get("LEDGER_WEB_TOKEN") or secrets.token_urlsafe(32)
+    # The reload subprocess must use the same token printed by its parent.
+    previous_token = os.environ.get("LEDGER_WEB_TOKEN")
 
     notes_dir = cfg.ledger_notes_dir
-    print(f"Serving cognitive-ledger at http://{host}:{port}", file=sys.stderr)
+    url_host = f"[{host}]" if ":" in host else host
+    print(
+        f"Serving cognitive-ledger at http://{url_host}:{port}/?{urlencode({'token': token})}",
+        file=sys.stderr,
+    )
     print(f"  notes_dir = {notes_dir}", file=sys.stderr)
     print("Press Ctrl+C to stop.", file=sys.stderr)
 
-    if reload:
-        # uvicorn's reload mode needs an import string, not a factory call.
-        uvicorn.run(
-            "ledger.web.server:create_app",
-            host=host,
-            port=port,
-            reload=True,
-            log_level=log_level,
-            factory=True,
-        )
-    else:
-        uvicorn.run(create_app(), host=host, port=port, log_level=log_level)
+    os.environ["LEDGER_WEB_TOKEN"] = token
+    try:
+        if reload:
+            # uvicorn's reload mode needs an import string, not a factory call.
+            uvicorn.run(
+                "ledger.web.server:create_app",
+                host=host,
+                port=port,
+                reload=True,
+                log_level=log_level,
+                factory=True,
+            )
+        else:
+            uvicorn.run(create_app(), host=host, port=port, log_level=log_level)
+    finally:
+        if previous_token is None:
+            os.environ.pop("LEDGER_WEB_TOKEN", None)
+        else:
+            os.environ["LEDGER_WEB_TOKEN"] = previous_token

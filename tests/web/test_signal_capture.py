@@ -27,6 +27,7 @@ def capture_client(web_ledger_root: Path) -> Generator[TestClient, None, None]:
     cfg.signals_auto_capture = True
     app = create_app(config=cfg)
     with TestClient(app) as c:
+        c.headers["Authorization"] = f"Bearer {app.state.auth_token}"
         yield c
 
 
